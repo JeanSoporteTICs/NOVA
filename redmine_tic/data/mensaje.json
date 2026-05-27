@@ -1,0 +1,23 @@
+[
+    {
+        "id": "ff35d7ba-2eb2-4a02-b8eb-790ef49ef1b7",
+        "numero": "+56000000000",
+        "mensaje": "test conexion webhook NOVA",
+        "fecha": "22-05-2026",
+        "hora": "15:46:25",
+        "fecha_inicio": "22-05-2026",
+        "fecha_fin": "22-05-2026",
+        "tipo": "Soporte",
+        "prioridad": "NORMAL",
+        "estado": "pendiente",
+        "hora_extra": "0",
+        "tiempo_estimado": "",
+        "categoria": "Equipos",
+        "unidad": "HBV",
+        "unidad_solicitante": "HBV",
+        "solicitante": "",
+        "asunto": "test conexion webhook NOVA \/ HBV",
+        "asignado_a": "",
+        "asignado_nombre": ""
+    }
+]

@@ -1,0 +1,18 @@
+[
+    {
+        "id": "37b09510419d",
+        "created_at": "2026-05-15T12:14:32-04:00",
+        "expires_at": "2026-05-16T12:14:32-04:00",
+        "users": [],
+        "created_users": [],
+        "existing_users": [
+            {
+                "userid": "19006667",
+                "displayName": "Jean Cortes Lorca",
+                "email": "jcortes@coresalud.cl",
+                "group": "Informática",
+                "password": "1900Jean7!26"
+            }
+        ]
+    }
+]

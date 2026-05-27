@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <?php $pageTitle = 'Login'; $includeTheme = false; include APP_BASE_PATH . '/views/partials/bootstrap-head.php'; ?>
+  <style>
+    body { background: linear-gradient(135deg, #4e73df 0%, #36b9cc 100%); min-height: 100vh; }
+    .card { border: none; border-radius: 14px; box-shadow: 0 16px 30px rgba(0,0,0,0.18); }
+    .form-control:focus { box-shadow: 0 0 0 .2rem rgba(78,115,223,.25); }
+  </style>
+</head>
+<body>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+      <div class="card">
+        <div class="card-body p-4">
+          <div class="text-center mb-3">
+            <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-inline-flex align-items-center justify-content-center" style="width:56px;height:56px;font-size:1.4rem;">
+              <i class="bi bi-shield-lock"></i>
+            </div>
+            <h4 class="mt-2 mb-0">Iniciar sesión</h4>
+            <small class="text-muted">Usa tu ID o RUT y tu Contraseña</small>
+          </div>
+          <?php if (!empty($error)): ?>
+            <div class="alert alert-danger" id="alert-msg"><?= htmlspecialchars((string) $error, ENT_QUOTES, 'UTF-8') ?></div>
+          <?php endif; ?>
+          <form method="post" class="needs-validation" novalidate>
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) $csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+            <div class="mb-3">
+              <label class="form-label">Usuario (ID o RUT)</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                <input name="username" class="form-control" autocomplete="username" required autofocus>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Contraseña</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                <input name="password" type="password" class="form-control" autocomplete="current-password" required>
+              </div>
+              <div class="form-text">Recuerda: diferencia mayusculas/minusculas.</div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              
+              <a class="small text-muted" href="#" onclick="alert('Contacta al administrador para restablecer.');return false;">Olvidaste tu Contraseña?</a>
+            </div>
+            <div class="d-grid">
+              <button class="btn btn-primary btn-lg" type="submit">
+                <i class="bi bi-box-arrow-in-right"></i> Ingresar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<?php include APP_BASE_PATH . '/views/partials/bootstrap-scripts.php'; ?>
+<script>
+const alertMsg = document.getElementById('alert-msg');
+if (alertMsg) setTimeout(() => alertMsg.classList.add('d-none'), 5000);
+</script>
+</body>
+</html>

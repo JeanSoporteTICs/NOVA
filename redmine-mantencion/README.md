@@ -1,0 +1,21 @@
+# Redmine Mantencion
+
+Aplicacion web en PHP para gestionar reportes, pendientes, usuarios, configuracion y paneles internos de mantencion.
+
+## Estructura actual
+
+- `app/Controllers`: controladores MVC nuevos para entrypoints raiz.
+- `app/Models`: acceso a datos y chequeos de sistema.
+- `app/Views`: vistas nuevas desacopladas de los entrypoints.
+- `app/Core`: clases base para controlador y render de vistas.
+- `app/Support`: bootstrap y helpers compartidos.
+- `controllers/`: capa legacy que todavia usan varios modulos existentes.
+- `views/`: vistas legacy existentes del sistema.
+- `assets/`: CSS, JS e imagenes.
+- `data/`: archivos JSON, reportes y logs.
+
+## Estado de la migracion
+
+El proyecto ahora tiene una base MVC incremental. Los entrypoints `index.php`, `login.php`, `logout.php`, `session_extend.php` y `health.php` ya cargan la nueva capa `app/`.
+
+Las pantallas internas en `views/` y buena parte de `controllers/` siguen en modo legacy para mantener compatibilidad mientras se migra por modulo.
