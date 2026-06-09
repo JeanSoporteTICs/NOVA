@@ -5,6 +5,7 @@ use App\Http\Controllers\ModuleAdminController;
 use App\Http\Controllers\NovaAdministrationController;
 use App\Http\Controllers\NovaAuthController;
 use App\Http\Controllers\NovaUserController;
+use App\Http\Controllers\TelegramController;
 use App\Support\Modules\ModuleRegistry;
 use App\Support\Modules\ProjectAccessGuard;
 use App\Support\Nova\NovaAccessRepository;
@@ -60,17 +61,26 @@ Route::post('/admin/modules', [ModuleAdminController::class, 'update'])->name('m
 Route::get('/administracion', [NovaAdministrationController::class, 'index'])->name('administracion.index');
 Route::get('/administracion/{section}', [NovaAdministrationController::class, 'index'])->name('administracion.section');
 Route::post('/administracion/configuracion', [NovaAdministrationController::class, 'updateSettings'])->name('administracion.config.update');
+Route::post('/administracion/respaldos', [NovaAdministrationController::class, 'createBackup'])->name('administracion.backups.create');
+Route::post('/administracion/telegram/listener', [NovaAdministrationController::class, 'telegramListener'])->name('administracion.telegram.listener');
 Route::post('/administracion/usuarios', [NovaAdministrationController::class, 'updateUsers'])->name('administracion.users.update');
 Route::post('/administracion/accesos', [NovaAdministrationController::class, 'updateAccess'])->name('administracion.access.update');
 Route::get('/admin/users', fn () => redirect()->route('administracion.section', 'usuarios'))->name('nova-users.index');
 Route::post('/admin/users', [NovaAdministrationController::class, 'updateUsers'])->name('nova-users.update');
 Route::get('/usuarios_nova', fn () => redirect()->route('administracion.section', 'usuarios'))->name('nova-users.project');
+Route::get('/telegram', [TelegramController::class, 'index'])->name('telegram.index');
+Route::get('/telegram/admin', fn () => redirect()->route('administracion.section', 'telegram'))->name('telegram.admin');
+Route::get('/telegram/mensajes', fn () => redirect()->route('administracion.section', 'telegram-mensajes'))->name('telegram.messages');
+Route::post('/telegram/configuracion', [TelegramController::class, 'update'])->name('telegram.update');
+Route::post('/telegram/admin/configuracion', [TelegramController::class, 'updateAdmin'])->name('telegram.admin.update');
+Route::post('/telegram/admin/listener', [TelegramController::class, 'listener'])->name('telegram.admin.listener');
+Route::post('/telegram/test', [TelegramController::class, 'test'])->name('telegram.test');
 
 Route::get('/redmine_tic/health.php', fn () => response()->json([
     'ok' => true,
     'module' => 'redmine_tic',
     'type' => 'native',
-    'base_path' => base_path('redmine_tic'),
+    'base_path' => data_get(config('modules.redmine_tic', []), 'path', base_path('redmine_tic')),
 ]))->name('redmine.health');
 Route::get('/redmine_tic/nativo', fn () => redirect()->route('redmine.native.dashboard'));
 Route::get('/redmine_tic/nativo/{section}', fn (string $section) => redirect()->route('redmine.native.section', ['section' => $section]));
@@ -85,6 +95,7 @@ Route::post('/redmine_tic/app/unidades', [RedmineDashboardController::class, 'un
 Route::post('/redmine_tic/app/configuracion', [RedmineDashboardController::class, 'configurationAction'])->name('redmine.native.config.action');
 Route::post('/redmine_tic/app/configuracion/importar', [RedmineDashboardController::class, 'configurationImportAction'])->name('redmine.native.config.import');
 Route::post('/redmine_tic/app/configuracion/exportar', [RedmineDashboardController::class, 'configurationExportAction'])->name('redmine.native.config.export');
+Route::get('/redmine_tic/app/historico/estados', [RedmineDashboardController::class, 'historyStatuses'])->name('redmine.native.history.statuses');
 Route::post('/redmine_tic/app/historico', [RedmineDashboardController::class, 'historyAction'])->name('redmine.native.history.action');
 Route::post('/redmine_tic/app/horas-extra', [RedmineDashboardController::class, 'hoursAction'])->name('redmine.native.hours.action');
 Route::post('/redmine_tic/app/actividad', [RedmineDashboardController::class, 'activityAction'])->name('redmine.native.activity.action');
@@ -97,12 +108,12 @@ Route::get('/redmine-mantencion/health.php', fn () => response()->json([
     'ok' => true,
     'module' => 'redmine-mantencion',
     'type' => 'native',
-    'base_path' => base_path('redmine-mantencion'),
+    'base_path' => data_get(config('modules.redmine-mantencion', []), 'path', base_path('redmine-mantencion')),
 ]))->name('redmine.mantencion.health');
 Route::get('/redmine-mantencion', fn () => redirect()->route('redmine.mantencion.dashboard'));
-Route::get('/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'index.php'))
+Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'index.php'))
     ->name('redmine.mantencion.dashboard');
-Route::get('/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
+Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
     $path = match ($section) {
         'dashboard', 'reportes' => 'index.php',
         'manual', 'pendiente-manual' => 'views/Pendientes/manual.php',
@@ -128,10 +139,12 @@ Route::get('/redmine/app', fn () => redirect()->route('redmine.dashboard'));
 Route::get('/redmine/app/{section}', fn (string $section) => redirect()->route('redmine.native.section', ['section' => $section]));
 Route::get('/redmine/health.php', fn () => redirect()->route('redmine.health'));
 
-Route::get('/{project}', [LegacyProjectController::class, 'index'])
-    ->where('project', $legacyModulePattern);
+if ($legacyModulePattern !== '') {
+    Route::get('/{project}', [LegacyProjectController::class, 'index'])
+        ->where('project', $legacyModulePattern);
 
-Route::match(['GET', 'POST'], '/{project}/{path}', [LegacyProjectController::class, 'passthrough'])
-    ->where('project', $legacyModulePattern)
-    ->where('path', '.*');
+    Route::match(['GET', 'POST'], '/{project}/{path}', [LegacyProjectController::class, 'passthrough'])
+        ->where('project', $legacyModulePattern)
+        ->where('path', '.*');
+}
 });

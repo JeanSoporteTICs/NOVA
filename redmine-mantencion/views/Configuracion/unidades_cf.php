@@ -4,7 +4,7 @@ auth_require_login('/redmine-mantencion/login.php');
 require_once __DIR__ . '/../../controllers/storage.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
 if (!auth_can('configuracion')) {
-  header('Location: /redmine-mantencion');
+  header('Location: ' . legacy_app_url());
   exit;
 }
 

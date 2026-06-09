@@ -1,7 +1,7 @@
 @php
     $activeUsers = collect($users)->filter(fn ($user) => (($user['estado_usuario'] ?? $user['estado'] ?? 'activo') === 'activo'))->count();
     $bannedUsers = collect($users)->filter(fn ($user) => (($user['estado_usuario'] ?? $user['estado'] ?? '') === 'baneado'))->count();
-    $usersWithPhone = collect($users)->filter(fn ($user) => trim((string) ($user['numero_celular'] ?? $user['telefono'] ?? $user['anexo'] ?? '')) !== '')->count();
+    $usersWithTelegram = collect($users)->filter(fn ($user) => trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', ''))) !== '')->count();
 @endphp
 
 <section class="row g-3 mb-4" aria-label="Resumen usuarios">
@@ -16,8 +16,8 @@
     <div class="col-12 col-md-4">
         <article class="card nova-card rm-stat-card">
             <div class="card-body d-flex align-items-center gap-3">
-                <span class="rm-stat-icon is-pending"><i class="bi bi-phone"></i></span>
-                <div><strong class="fs-2 lh-1">{{ $usersWithPhone }}</strong><div class="fw-bold nova-muted mt-2">Con telefono</div></div>
+                <span class="rm-stat-icon is-pending"><i class="bi bi-telegram"></i></span>
+                <div><strong class="fs-2 lh-1">{{ $usersWithTelegram }}</strong><div class="fw-bold nova-muted mt-2">Con Chat ID</div></div>
             </div>
         </article>
     </div>
@@ -53,7 +53,7 @@
                 <thead>
                     <tr>
                         <th>Nombre</th>
-                        <th>Telefono</th>
+                        <th>Telegram</th>
                         <th>RUT</th>
                         <th>Rol</th>
                         <th>Estado</th>
@@ -65,10 +65,11 @@
                     @php
                         $name = trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: 'Sin nombre';
                         $state = $user['estado_usuario'] ?? $user['estado'] ?? 'sin estado';
+                        $telegramChatId = trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', '')));
                     @endphp
                     <tr>
                         <td><strong>{{ $name }}</strong><div class="small nova-muted">ID: {{ $user['id'] ?? '-' }}</div></td>
-                        <td>{{ $user['numero_celular'] ?? $user['telefono'] ?? $user['anexo'] ?? '-' }}</td>
+                        <td>{{ $telegramChatId !== '' ? $telegramChatId : '-' }}</td>
                         <td>{{ $user['rut'] ?? $user['rut_sin_dv'] ?? '-' }}</td>
                         <td><span class="nova-badge">{{ $user['rol'] ?? 'sin rol' }}</span></td>
                         <td><span class="nova-badge {{ $state === 'activo' ? 'is-success' : '' }}">{{ $state }}</span></td>
@@ -80,7 +81,7 @@
                                     data-rut="{{ $user['rut'] ?? '' }}"
                                     data-nombre="{{ $user['nombre'] ?? '' }}"
                                     data-apellido="{{ $user['apellido'] ?? '' }}"
-                                    data-telefono="{{ $user['numero_celular'] ?? $user['telefono'] ?? $user['anexo'] ?? '' }}"
+                                    data-telegram-chat-id="{{ $telegramChatId }}"
                                     data-rol="{{ $user['rol'] ?? 'usuario' }}"
                                     data-estado="{{ $state }}"
                                     data-api="{{ $user['api'] ?? '' }}"
@@ -106,14 +107,20 @@
     </div>
 </section>
 
-<div class="modal fade" id="usuario-modal" tabindex="-1" aria-labelledby="user-form-title" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+<div class="modal fade detail-drawer-modal" id="usuario-modal" tabindex="-1" aria-labelledby="user-form-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
         <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.users.action') }}" id="user-form">
             @csrf
             <input type="hidden" name="action" value="save">
             <input type="hidden" name="_creating" value="1">
             <div class="modal-header">
-                <h2 class="modal-title fs-5" id="user-form-title">Nuevo usuario</h2>
+                <div>
+                    <p class="detail-drawer-kicker">Usuario TICS</p>
+                    <h2 class="modal-title" id="user-form-title">
+                        <span class="detail-drawer-icon"><i class="bi bi-person-gear"></i></span>
+                        <span data-user-form-title-text>Nuevo usuario</span>
+                    </h2>
+                </div>
                 <button type="button" class="btn-close" data-nova-modal-close aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
@@ -127,8 +134,8 @@
                         <input class="form-control" id="user-rut" name="rut">
                     </div>
                     <div class="col-12 col-md-4">
-                        <label class="form-label" for="user-telefono">Telefono</label>
-                        <input class="form-control" id="user-telefono" name="numero_celular" placeholder="+569...">
+                        <label class="form-label" for="user-telegram-chat-id">Chat ID Telegram</label>
+                        <input class="form-control" id="user-telegram-chat-id" name="telegram_chat_id" placeholder="7449883192">
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="user-nombre">Nombre</label>
@@ -160,7 +167,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close>Cancelar</button>
+                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close><i class="bi bi-x-lg"></i>Cancelar</button>
                 <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar usuario</button>
             </div>
         </form>
@@ -170,7 +177,7 @@
 <script>
     (() => {
         const form = document.getElementById('user-form');
-        const title = document.getElementById('user-form-title');
+        const title = document.querySelector('[data-user-form-title-text]');
         const modal = document.getElementById('usuario-modal');
         const newButton = document.getElementById('new-user-button');
         if (!form) return;
@@ -206,7 +213,7 @@
                 setValue('rut', button.dataset.rut);
                 setValue('nombre', button.dataset.nombre);
                 setValue('apellido', button.dataset.apellido);
-                setValue('numero_celular', button.dataset.telefono);
+                setValue('telegram_chat_id', button.dataset.telegramChatId);
                 setValue('rol', button.dataset.rol || 'usuario');
                 setValue('estado_usuario', button.dataset.estado || 'activo');
                 setValue('api', button.dataset.api);
@@ -217,4 +224,3 @@
         });
     })();
 </script>
-

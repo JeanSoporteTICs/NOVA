@@ -4,6 +4,8 @@ namespace App\Support\Nova;
 
 use App\Support\Auth\NovaUserRepository;
 use App\Support\Modules\ModuleRegistry;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class NovaAccessRepository
 {
@@ -188,6 +190,10 @@ final class NovaAccessRepository
      */
     private function projectUserExists(string $moduleKey, array $sessionUser): bool
     {
+        if ($this->novaProjectUserExists($moduleKey, $sessionUser)) {
+            return true;
+        }
+
         try {
             $module = $this->modules->get($moduleKey);
         } catch (\Throwable) {
@@ -237,15 +243,65 @@ final class NovaAccessRepository
     }
 
     /**
+     * @param array<string,mixed> $sessionUser
+     */
+    private function novaProjectUserExists(string $moduleKey, array $sessionUser): bool
+    {
+        $rows = json_decode((string) @file_get_contents(storage_path('app/nova/users.json')), true);
+        if (!is_array($rows)) {
+            return false;
+        }
+
+        $needles = array_filter(array_map([$this, 'normalize'], [
+            $sessionUser['username'] ?? '',
+            $sessionUser['redmine_id'] ?? '',
+            $sessionUser['id'] ?? '',
+            $sessionUser['rut'] ?? '',
+            $sessionUser['rut_sin_dv'] ?? '',
+            $sessionUser['core_user'] ?? '',
+        ]));
+
+        foreach ($rows as $row) {
+            if (!is_array($row) || $this->isBlocked($row)) {
+                continue;
+            }
+
+            $project = is_array(data_get($row, 'projects.' . $moduleKey)) ? data_get($row, 'projects.' . $moduleKey) : [];
+            if ($project === [] || $this->isBlocked($project)) {
+                continue;
+            }
+
+            $candidates = array_filter(array_map([$this, 'normalize'], [
+                $row['username'] ?? '',
+                $row['redmine_id'] ?? '',
+                $row['id'] ?? '',
+                $row['rut'] ?? '',
+                $row['rut_sin_dv'] ?? '',
+                $row['core_user'] ?? '',
+                $project['id'] ?? '',
+            ]));
+
+            if (array_intersect($needles, $candidates) !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array<string,array<string,bool>>
      */
     private function overrides(): array
     {
+        $databaseOverrides = $this->databaseOverrides();
         $raw = (string) @file_get_contents($this->path());
         $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw) ?? $raw;
         $data = json_decode($raw, true);
 
-        return is_array($data) ? $data : [];
+        $fileOverrides = is_array($data) ? $data : [];
+
+        return array_replace_recursive($fileOverrides, $databaseOverrides);
     }
 
     /**
@@ -253,12 +309,186 @@ final class NovaAccessRepository
      */
     private function write(array $overrides): void
     {
+        $this->writeDatabaseOverrides($overrides);
+
         $directory = dirname($this->path());
         if (!is_dir($directory)) {
             mkdir($directory, 0777, true);
         }
 
         file_put_contents($this->path(), json_encode($overrides, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+    }
+
+    /**
+     * @return array<string,array<string,bool>>
+     */
+    private function databaseOverrides(): array
+    {
+        if (!$this->accessTablesAvailable()) {
+            return [];
+        }
+
+        try {
+            $rows = DB::table('permisos_usuario_modulo')
+                ->join('usuarios_nova', 'usuarios_nova.id', '=', 'permisos_usuario_modulo.usuario_id')
+                ->join('modulos_nova', 'modulos_nova.id', '=', 'permisos_usuario_modulo.modulo_id')
+                ->select([
+                    'usuarios_nova.uuid',
+                    'usuarios_nova.usuario',
+                    'usuarios_nova.rut',
+                    'usuarios_nova.redmine_id',
+                    'usuarios_nova.usuario_core',
+                    'modulos_nova.clave_modulo',
+                    'permisos_usuario_modulo.permitido',
+                ])
+                ->get();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $overrides = [];
+        foreach ($rows as $row) {
+            $identity = $this->identity([
+                'username' => $row->usuario ?? '',
+                'rut' => $row->rut ?? '',
+                'rut_sin_dv' => $row->usuario ?? '',
+                'redmine_id' => $row->redmine_id ?? '',
+                'id' => $row->uuid ?? '',
+                'core_user' => $row->usuario_core ?? '',
+            ]);
+            $moduleKey = trim((string) ($row->clave_modulo ?? ''));
+            if ($identity === '' || $moduleKey === '') {
+                continue;
+            }
+
+            $overrides[$identity][$moduleKey] = (bool) ($row->permitido ?? false);
+        }
+
+        return $overrides;
+    }
+
+    /**
+     * @param array<string,array<string,bool>> $overrides
+     */
+    private function writeDatabaseOverrides(array $overrides): void
+    {
+        if (!$this->accessTablesAvailable()) {
+            return;
+        }
+
+        $users = $this->users->all();
+        $modules = $this->manageableModules();
+
+        foreach ($overrides as $identity => $moduleOverrides) {
+            $userId = $this->databaseUserIdForIdentity((string) $identity, $users);
+            if ($userId === null) {
+                continue;
+            }
+
+            foreach ($moduleOverrides as $moduleKey => $allowed) {
+                if (!array_key_exists((string) $moduleKey, $modules)) {
+                    continue;
+                }
+                $moduleId = $this->databaseModuleId((string) $moduleKey, $modules[(string) $moduleKey]);
+                if ($moduleId === null) {
+                    continue;
+                }
+
+                DB::table('permisos_usuario_modulo')->updateOrInsert(
+                    ['usuario_id' => $userId, 'modulo_id' => $moduleId],
+                    [
+                        'permitido' => (bool) $allowed ? 1 : 0,
+                        'actualizado_at' => now(),
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $users
+     */
+    private function databaseUserIdForIdentity(string $identity, array $users): ?int
+    {
+        $identity = $this->normalize($identity);
+        if ($identity === '') {
+            return null;
+        }
+
+        foreach ($users as $user) {
+            if ($this->identity($user) !== $identity) {
+                continue;
+            }
+
+            return $this->databaseUserId($user);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    private function databaseUserId(array $user): ?int
+    {
+        try {
+            foreach (['id' => 'uuid', 'username' => 'usuario', 'rut' => 'rut', 'redmine_id' => 'redmine_id', 'core_user' => 'usuario_core'] as $field => $column) {
+                $value = trim((string) ($user[$field] ?? ''));
+                if ($value === '') {
+                    continue;
+                }
+
+                $id = DB::table('usuarios_nova')->where($column, $value)->value('id');
+                if ($id !== null) {
+                    return (int) $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $module
+     */
+    private function databaseModuleId(string $moduleKey, array $module): ?int
+    {
+        try {
+            $id = DB::table('modulos_nova')->where('clave_modulo', $moduleKey)->value('id');
+            if ($id !== null) {
+                return (int) $id;
+            }
+
+            DB::table('modulos_nova')->insert([
+                'clave_modulo' => $moduleKey,
+                'nombre' => (string) ($module['name'] ?? $moduleKey),
+                'descripcion' => (string) ($module['description'] ?? ''),
+                'icono' => (string) ($module['icon'] ?? ''),
+                'tipo' => (string) ($module['type'] ?? 'native'),
+                'ruta' => (string) ($module['route'] ?? $module['path'] ?? ''),
+                'entrada' => (string) ($module['entry'] ?? ''),
+                'activo' => !empty($module['enabled']) ? 1 : 0,
+                'orden' => (int) ($module['order'] ?? 100),
+                'creado_at' => now(),
+                'actualizado_at' => now(),
+            ]);
+
+            return (int) DB::getPdo()->lastInsertId();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function accessTablesAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('usuarios_nova')
+                && Schema::hasTable('modulos_nova')
+                && Schema::hasTable('permisos_usuario_modulo');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

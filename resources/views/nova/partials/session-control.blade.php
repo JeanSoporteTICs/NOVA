@@ -177,6 +177,13 @@
                 }
             });
 
+            sessionModalElement.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+                if (!sessionModalElement.classList.contains('show')) return;
+                event.preventDefault();
+                if (extendButton && !extendButton.disabled) extendButton.click();
+            });
+
             document.addEventListener('visibilitychange', restartSessionTimer);
             window.addEventListener('focus', restartSessionTimer);
             restartSessionTimer();

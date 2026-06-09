@@ -2,7 +2,10 @@
 
 namespace App\Support\Auth;
 
+use App\Models\NovaUser;
 use App\Support\Modules\ModuleRegistry;
+use App\Support\Integrations\UserIntegrationRepository;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class NovaUserRepository
@@ -18,7 +21,17 @@ final class NovaUserRepository
     {
         $this->ensureSeeded();
         $this->syncProjectUsers();
-        $users = $this->readUsersFile();
+        $fileUsers = $this->readUsersFile();
+        $users = $this->usersFromDatabase($fileUsers);
+        if ($users === []) {
+            $users = $fileUsers;
+        }
+
+        $deduplicated = $this->deduplicateUsers($users);
+        if ($deduplicated !== $users) {
+            $this->write($deduplicated);
+            $users = $deduplicated;
+        }
 
         return is_array($users) ? array_values(array_filter($users, 'is_array')) : [];
     }
@@ -46,7 +59,13 @@ final class NovaUserRepository
             $valid = true;
         }
 
-        return $valid ? $this->toSessionUser($user) : null;
+        if (!$valid) {
+            return null;
+        }
+
+        $this->markLastLogin($user);
+
+        return $this->toSessionUser($user);
     }
 
     public function find(string $username): ?array
@@ -81,24 +100,33 @@ final class NovaUserRepository
             $id = (string) Str::uuid();
         }
 
-        $rut = trim((string) ($payload['rut'] ?? ''));
-        $username = $this->rutAccessUser($rut);
-        $name = trim((string) ($payload['name'] ?? ''));
-        $apellido = trim((string) ($payload['apellido'] ?? ''));
-        if ($rut === '' || $username === '' || $name === '' || $apellido === '') {
-            return ['ok' => false, 'error' => 'RUT, nombre y apellidos son obligatorios.'];
-        }
-
-        if (!$this->isValidRut($rut)) {
-            return ['ok' => false, 'error' => 'El RUT ingresado no es valido.'];
-        }
-
         $index = null;
         foreach ($users as $i => $user) {
             if ((string) ($user['id'] ?? '') === $id) {
                 $index = $i;
                 break;
             }
+        }
+
+        $current = $index !== null ? $users[$index] : [];
+        $rut = trim((string) ($payload['rut'] ?? $current['rut'] ?? ''));
+        $username = $this->rutAccessUser($rut);
+        if ($username === '' && !$isNew) {
+            $username = trim((string) ($payload['username'] ?? $current['username'] ?? $current['redmine_id'] ?? ''));
+        }
+
+        $name = trim((string) ($payload['name'] ?? $current['name'] ?? ''));
+        $apellido = trim((string) ($payload['apellido'] ?? $current['apellido'] ?? ''));
+        if ($name === '' || $apellido === '' || $username === '') {
+            return ['ok' => false, 'error' => 'Nombre, apellidos y usuario de acceso son obligatorios.'];
+        }
+
+        if ($isNew && $rut === '') {
+            return ['ok' => false, 'error' => 'El RUT es obligatorio para usuarios nuevos.'];
+        }
+
+        if ($rut !== '' && !$this->isValidRut($rut)) {
+            return ['ok' => false, 'error' => 'El RUT ingresado no es valido.'];
         }
 
         foreach ($users as $i => $user) {
@@ -111,7 +139,6 @@ final class NovaUserRepository
             }
         }
 
-        $current = $index !== null ? $users[$index] : [];
         $redmineId = trim((string) ($payload['redmine_id'] ?? $current['redmine_id'] ?? ''));
 
         foreach ($users as $i => $user) {
@@ -119,7 +146,7 @@ final class NovaUserRepository
                 continue;
             }
 
-            if ($this->normalize((string) ($user['rut'] ?? '')) === $this->normalize($rut)) {
+            if ($rut !== '' && $this->normalize((string) ($user['rut'] ?? '')) === $this->normalize($rut)) {
                 return ['ok' => false, 'error' => 'Ya existe un usuario con ese RUT.'];
             }
 
@@ -143,6 +170,9 @@ final class NovaUserRepository
             return ['ok' => false, 'error' => 'La contrasena es obligatoria para usuarios nuevos.'];
         }
 
+        $integrations = app(UserIntegrationRepository::class);
+        $emachCredentials = $integrations->emachFromPayload($payload, $current);
+        $telegramSettings = $integrations->telegramFromPayload($payload, $current);
         $row = [
             'id' => $id,
             'redmine_id' => $redmineId,
@@ -150,12 +180,18 @@ final class NovaUserRepository
             'name' => $name,
             'apellido' => $apellido,
             'rut' => $rut,
-            'rut_sin_dv' => $username,
+            'rut_sin_dv' => $rut !== '' ? $username : (string) ($current['rut_sin_dv'] ?? ''),
             'core_user' => trim((string) ($payload['core_user'] ?? $current['core_user'] ?? '')),
             'role' => $this->normalizeNovaRole((string) ($payload['role'] ?? 'usuario')),
             'status' => $this->normalizeStatus((string) ($payload['status'] ?? 'activo')),
             'password' => $passwordHash,
         ];
+        if ($emachCredentials !== []) {
+            $row['emach_credentials'] = $emachCredentials;
+        }
+        if ($telegramSettings !== []) {
+            $row['telegram_settings'] = $telegramSettings;
+        }
 
         if ($index === null) {
             $users[] = $row;
@@ -171,6 +207,34 @@ final class NovaUserRepository
     public function delete(string $id): int
     {
         return $this->setStatus($id, 'baneado');
+    }
+
+    /**
+     * @return array{ok:bool,error:string}
+     */
+    public function changePassword(string $id, string $password, string $passwordConfirm): array
+    {
+        $users = $this->all();
+        $index = null;
+        foreach ($users as $i => $user) {
+            if ((string) ($user['id'] ?? '') === $id) {
+                $index = $i;
+                break;
+            }
+        }
+
+        if ($index === null) {
+            return ['ok' => false, 'error' => 'Usuario no encontrado.'];
+        }
+
+        if ($password === '' || $passwordConfirm === '' || !hash_equals($password, $passwordConfirm)) {
+            return ['ok' => false, 'error' => 'La contrasena y su validacion no coinciden.'];
+        }
+
+        $users[$index]['password'] = password_hash($password, PASSWORD_DEFAULT);
+        $this->write($users);
+
+        return ['ok' => true, 'error' => ''];
     }
 
     public function activate(string $id): int
@@ -205,6 +269,8 @@ final class NovaUserRepository
             'rut_sin_dv' => (string) ($user['rut_sin_dv'] ?? ''),
             'core_user' => (string) ($user['core_user'] ?? ''),
             'role' => $this->normalizeNovaRole((string) ($user['role'] ?? 'usuario')),
+            'has_emach_credentials' => app(UserIntegrationRepository::class)->hasEmach($user),
+            'has_telegram_settings' => app(UserIntegrationRepository::class)->hasTelegram($user),
             'source' => 'nova',
             'legacy' => [
                 'id' => (string) ($user['redmine_id'] ?? $user['username'] ?? $user['id'] ?? ''),
@@ -231,7 +297,7 @@ final class NovaUserRepository
 
         $changed = false;
         foreach ($projectUsers as $projectUser) {
-            if (!is_array($projectUser) || $this->isBlocked($projectUser)) {
+            if (!is_array($projectUser)) {
                 continue;
             }
 
@@ -248,15 +314,17 @@ final class NovaUserRepository
                 $users[] = [
                     'id' => (string) Str::uuid(),
                     'redmine_id' => $redmineId,
+                    'source' => (string) ($projectUser['_nova_project'] ?? ''),
                     'username' => $username,
                     'name' => $name,
                     'apellido' => $apellido,
                     'rut' => (string) ($projectUser['rut'] ?? ''),
                     'rut_sin_dv' => (string) ($projectUser['rut_sin_dv'] ?? ''),
                     'core_user' => (string) ($projectUser['core_user'] ?? ''),
-                    'role' => 'usuario',
-                    'status' => 'activo',
-                    'password' => '',
+                    'role' => $this->projectRole($projectUser),
+                    'status' => $this->projectStatus($projectUser),
+                    'password' => (string) ($projectUser['password'] ?? ''),
+                    'api' => (string) ($projectUser['api'] ?? ''),
                 ];
                 $changed = true;
                 continue;
@@ -264,22 +332,32 @@ final class NovaUserRepository
 
             $updated = array_merge($users[$index], [
                 'redmine_id' => $redmineId !== '' ? $redmineId : (string) ($users[$index]['redmine_id'] ?? ''),
+                'source' => $this->mergeSources((string) ($users[$index]['source'] ?? ''), (string) ($projectUser['_nova_project'] ?? '')),
                 'username' => (string) ($users[$index]['username'] ?? '') !== '' ? (string) $users[$index]['username'] : $username,
                 'name' => $name,
                 'apellido' => $apellido !== '' ? $apellido : (string) ($users[$index]['apellido'] ?? ''),
-                'rut' => (string) ($projectUser['rut'] ?? $users[$index]['rut'] ?? ''),
-                'rut_sin_dv' => (string) ($projectUser['rut_sin_dv'] ?? $users[$index]['rut_sin_dv'] ?? ''),
-                'core_user' => (string) ($projectUser['core_user'] ?? $users[$index]['core_user'] ?? ''),
+                'rut' => $this->preferFilled((string) ($projectUser['rut'] ?? ''), (string) ($users[$index]['rut'] ?? '')),
+                'rut_sin_dv' => $this->preferFilled((string) ($projectUser['rut_sin_dv'] ?? ''), (string) ($users[$index]['rut_sin_dv'] ?? '')),
+                'core_user' => $this->preferFilled((string) ($projectUser['core_user'] ?? ''), (string) ($users[$index]['core_user'] ?? '')),
+                'role' => $this->projectRole($projectUser),
             ]);
 
-            if (($users[$index]['status'] ?? 'activo') !== 'baneado') {
-                $updated['status'] = 'activo';
-            }
+            $updated['status'] = $this->projectStatus($projectUser);
 
             if ($updated !== $users[$index]) {
                 $users[$index] = $updated;
                 $changed = true;
             }
+        }
+
+        if ($this->syncNovaStatusesFromProjectUsers($users, $projectUsers)) {
+            $changed = true;
+        }
+
+        $deduplicated = $this->deduplicateUsers($users);
+        if ($deduplicated !== $users) {
+            $users = $deduplicated;
+            $changed = true;
         }
 
         if ($changed) {
@@ -320,25 +398,45 @@ final class NovaUserRepository
      */
     private function findIndexForProjectUser(array $users, array $projectUser, string $username): ?int
     {
-        $needles = array_filter(array_map([$this, 'normalize'], [
-            $username,
-            $projectUser['id'] ?? '',
-            $projectUser['rut'] ?? '',
-            $projectUser['rut_sin_dv'] ?? '',
-            $projectUser['core_user'] ?? '',
-        ]));
+        $source = (string) ($projectUser['_nova_project'] ?? '');
+        $redmineId = $this->normalize((string) ($projectUser['id'] ?? ''));
+        $projectName = $this->normalize(trim($this->projectFirstName($projectUser) . ' ' . $this->projectLastName($projectUser)));
 
         foreach ($users as $index => $user) {
-            $candidates = array_filter(array_map([$this, 'normalize'], [
-                $user['username'] ?? '',
-                $user['redmine_id'] ?? '',
-                $user['id'] ?? '',
-                $user['rut'] ?? '',
-                $user['rut_sin_dv'] ?? '',
-                $user['core_user'] ?? '',
-            ]));
+            if ($source === '' || !in_array($source, $this->splitSources((string) ($user['source'] ?? '')), true)) {
+                continue;
+            }
 
-            if (array_intersect($needles, $candidates) !== []) {
+            if ($redmineId !== '' && $redmineId === $this->normalize((string) ($user['redmine_id'] ?? ''))) {
+                return $index;
+            }
+        }
+
+        foreach ($this->identityKeysForProjectUser($projectUser, $username) as $projectKey) {
+            foreach ($users as $index => $user) {
+                if (in_array($projectKey, $this->identityKeysForNovaUser($user), true)) {
+                    return $index;
+                }
+            }
+        }
+
+        if ($projectName === '') {
+            return null;
+        }
+
+        foreach ($users as $index => $user) {
+            $userName = $this->normalize($this->fullName($user));
+            if ($userName === '') {
+                continue;
+            }
+
+            $userRedmineId = $this->normalize((string) ($user['redmine_id'] ?? ''));
+            if ($redmineId !== '' && $userRedmineId !== '' && $redmineId === $userRedmineId && $projectName === $userName) {
+                return $index;
+            }
+
+            $userNameKey = $this->normalize((string) ($user['username'] ?? ''));
+            if ($username !== '' && $userNameKey !== '' && $this->normalize($username) === $userNameKey && $projectName === $userName) {
                 return $index;
             }
         }
@@ -353,7 +451,14 @@ final class NovaUserRepository
             return $rutUser;
         }
 
-        return trim((string) ($user['rut_sin_dv'] ?? $user['core_user'] ?? $user['id'] ?? ''));
+        foreach (['rut_sin_dv', 'core_user', 'id'] as $field) {
+            $value = trim((string) ($user[$field] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     private function projectFirstName(array $user): string
@@ -366,17 +471,262 @@ final class NovaUserRepository
         return trim((string) ($user['apellido'] ?? ''));
     }
 
+    private function projectRole(array $user): string
+    {
+        return $this->normalizeNovaRole((string) ($user['rol'] ?? $user['role'] ?? 'usuario'));
+    }
+
+    private function projectStatus(array $user): string
+    {
+        return $this->normalizeStatus((string) ($user['status'] ?? $user['estado'] ?? $user['estado_usuario'] ?? 'activo'));
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $users
+     * @param array<int,array<string,mixed>> $projectUsers
+     */
+    private function syncNovaStatusesFromProjectUsers(array &$users, array $projectUsers): bool
+    {
+        $changed = false;
+
+        foreach ($users as $index => $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+
+            $matchedProjectUsers = array_values(array_filter(
+                $projectUsers,
+                fn (array $projectUser): bool => $this->projectUserMatchesNovaUser($user, $projectUser)
+            ));
+
+            if ($matchedProjectUsers === []) {
+                continue;
+            }
+
+            $hasActiveProject = false;
+            foreach ($matchedProjectUsers as $projectUser) {
+                if ($this->projectStatus($projectUser) === 'activo') {
+                    $hasActiveProject = true;
+                    break;
+                }
+            }
+
+            $nextStatus = $hasActiveProject ? 'activo' : 'baneado';
+            if (($users[$index]['status'] ?? 'activo') !== $nextStatus) {
+                $users[$index]['status'] = $nextStatus;
+                $changed = true;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     * @param array<string,mixed> $projectUser
+     */
+    private function projectUserMatchesNovaUser(array $user, array $projectUser): bool
+    {
+        foreach ($this->identityKeysForProjectUser($projectUser, $this->projectUsername($projectUser)) as $projectKey) {
+            if (in_array($projectKey, $this->identityKeysForNovaUser($user), true)) {
+                return true;
+            }
+        }
+
+        $sameSource = (string) ($user['source'] ?? '') !== ''
+            && in_array((string) ($projectUser['_nova_project'] ?? ''), $this->splitSources((string) ($user['source'] ?? '')), true);
+
+        $userRedmineId = $this->normalize((string) ($user['redmine_id'] ?? ''));
+        $projectRedmineId = $this->normalize((string) ($projectUser['id'] ?? ''));
+        if ($sameSource && $userRedmineId !== '' && $userRedmineId === $projectRedmineId) {
+            return true;
+        }
+
+        $userName = $this->normalize($this->fullName($user));
+        $projectName = $this->normalize(trim($this->projectFirstName($projectUser) . ' ' . $this->projectLastName($projectUser)));
+
+        return $userRedmineId !== ''
+            && $projectRedmineId !== ''
+            && $userRedmineId === $projectRedmineId
+            && $userName !== ''
+            && $projectName !== ''
+            && $userName === $projectName;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $users
+     */
+    private function deduplicateUsers(array $users): array
+    {
+        $result = [];
+        $keys = [];
+
+        foreach ($users as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+
+            $key = $this->dedupeKey($user);
+            if ($key === '' || !isset($keys[$key])) {
+                $keys[$key] = count($result);
+                $result[] = $user;
+                continue;
+            }
+
+            $index = $keys[$key];
+            $result[$index] = $this->mergeDuplicateUsers($result[$index], $user);
+        }
+
+        return array_values($result);
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    private function dedupeKey(array $user): string
+    {
+        $identityKeys = $this->identityKeysForNovaUser($user);
+        if ($identityKeys !== []) {
+            return $identityKeys[0];
+        }
+
+        $username = $this->normalize((string) ($user['username'] ?? ''));
+        $redmineId = $this->normalize((string) ($user['redmine_id'] ?? ''));
+        $name = $this->normalize($this->fullName($user));
+        if ($username !== '' && $name !== '') {
+            return 'user-name:' . $username . ':' . $name;
+        }
+        if ($redmineId !== '' && $name !== '') {
+            return 'redmine-name:' . $redmineId . ':' . $name;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $primary
+     * @param array<string,mixed> $duplicate
+     * @return array<string,mixed>
+     */
+    private function mergeDuplicateUsers(array $primary, array $duplicate): array
+    {
+        $merged = $primary;
+
+        foreach (['redmine_id', 'username', 'name', 'apellido', 'rut', 'rut_sin_dv', 'core_user', 'api', 'password'] as $field) {
+            if (trim((string) ($merged[$field] ?? '')) === '' && trim((string) ($duplicate[$field] ?? '')) !== '') {
+                $merged[$field] = $duplicate[$field];
+            }
+        }
+        $merged['source'] = $this->mergeSources((string) ($merged['source'] ?? ''), (string) ($duplicate['source'] ?? ''));
+
+        if ($this->normalizeNovaRole((string) ($duplicate['role'] ?? 'usuario')) === 'admin') {
+            $merged['role'] = 'admin';
+        }
+        if ($this->normalizeStatus((string) ($duplicate['status'] ?? 'activo')) === 'activo') {
+            $merged['status'] = 'activo';
+        }
+
+        foreach (['projects', 'emach_credentials', 'telegram_settings'] as $field) {
+            if (is_array($duplicate[$field] ?? null)) {
+                $merged[$field] = array_replace_recursive(
+                    is_array($merged[$field] ?? null) ? $merged[$field] : [],
+                    $duplicate[$field]
+                );
+            }
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    private function fullName(array $user): string
+    {
+        return trim((string) (($user['name'] ?? $user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')));
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function identityKeysForProjectUser(array $projectUser, string $username): array
+    {
+        return $this->identityKeys([
+            $projectUser['rut'] ?? '',
+            $projectUser['rut_sin_dv'] ?? '',
+            $projectUser['core_user'] ?? '',
+        ]);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function identityKeysForNovaUser(array $user): array
+    {
+        return $this->identityKeys([
+            $user['rut'] ?? '',
+            $user['rut_sin_dv'] ?? '',
+            $user['core_user'] ?? '',
+        ]);
+    }
+
+    /**
+     * @param array<int,mixed> $values
+     * @return array<int,string>
+     */
+    private function identityKeys(array $values): array
+    {
+        $keys = [];
+        foreach ($values as $value) {
+            $normalized = $this->normalize((string) $value);
+            if ($normalized !== '' && !in_array('identity:' . $normalized, $keys, true)) {
+                $keys[] = 'identity:' . $normalized;
+            }
+        }
+
+        return $keys;
+    }
+
+    private function preferFilled(string $preferred, string $fallback): string
+    {
+        $preferred = trim($preferred);
+
+        return $preferred !== '' ? $preferred : $fallback;
+    }
+
+    private function mergeSources(string $current, string $next): string
+    {
+        $sources = $this->splitSources($current);
+        $next = trim($next);
+        if ($next !== '' && !in_array($next, $sources, true)) {
+            $sources[] = $next;
+        }
+
+        return implode(',', $sources);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function splitSources(string $source): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', $source))));
+    }
+
     /**
      * @param array<int,array<string,mixed>> $users
      */
     private function write(array $users): void
     {
+        $this->writeUsersToDatabase($users);
+
         $directory = dirname($this->path());
         if (!is_dir($directory)) {
             mkdir($directory, 0777, true);
         }
 
         file_put_contents($this->path(), json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+        @chmod($this->path(), 0666);
     }
 
     private function path(): string
@@ -394,6 +744,199 @@ final class NovaUserRepository
         $users = json_decode($raw, true);
 
         return is_array($users) ? array_values(array_filter($users, 'is_array')) : [];
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $fileUsers
+     * @return array<int,array<string,mixed>>
+     */
+    private function usersFromDatabase(array $fileUsers): array
+    {
+        if (!$this->usersTableAvailable()) {
+            return [];
+        }
+
+        $fileByIdentity = [];
+        foreach ($fileUsers as $fileUser) {
+            foreach ($this->databaseMergeIdentities($fileUser) as $identity) {
+                $identity = $this->normalize($identity);
+                if ($identity !== '' && !isset($fileByIdentity[$identity])) {
+                    $fileByIdentity[$identity] = $fileUser;
+                }
+            }
+        }
+
+        try {
+            $users = NovaUser::query()
+                ->orderBy('nombre')
+                ->orderBy('apellido')
+                ->get()
+                ->map(function (NovaUser $row) use ($fileByIdentity): array {
+                    $current = [];
+                    foreach ([
+                        (string) $row->uuid,
+                        (string) $row->usuario,
+                        (string) $row->rut,
+                        (string) $row->redmine_id,
+                        (string) $row->usuario_core,
+                    ] as $identity) {
+                        $identity = $this->normalize($identity);
+                        if ($identity !== '' && isset($fileByIdentity[$identity])) {
+                            $current = $fileByIdentity[$identity];
+                            break;
+                        }
+                    }
+
+                    return array_merge($current, [
+                        'id' => (string) $row->uuid,
+                        'redmine_id' => trim((string) $row->redmine_id),
+                        'username' => trim((string) $row->usuario),
+                        'name' => trim((string) $row->nombre),
+                        'apellido' => trim((string) $row->apellido),
+                        'rut' => trim((string) $row->rut),
+                        'rut_sin_dv' => trim((string) ($current['rut_sin_dv'] ?? $row->usuario)),
+                        'core_user' => trim((string) $row->usuario_core),
+                        'role' => $this->normalizeNovaRole((string) $row->rol),
+                        'status' => $this->normalizeStatus((string) $row->estado),
+                        'password' => (string) $row->password,
+                    ]);
+                })
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $known = [];
+        foreach ($users as $user) {
+            foreach ($this->databaseMergeIdentities($user) as $identity) {
+                $identity = $this->normalize($identity);
+                if ($identity !== '') {
+                    $known[$identity] = true;
+                }
+            }
+        }
+
+        foreach ($fileUsers as $fileUser) {
+            $found = false;
+            foreach ($this->databaseMergeIdentities($fileUser) as $identity) {
+                $identity = $this->normalize($identity);
+                if ($identity !== '' && isset($known[$identity])) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $users[] = $fileUser;
+            }
+        }
+
+        return $users;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $users
+     */
+    private function writeUsersToDatabase(array $users): void
+    {
+        if (!$this->usersTableAvailable()) {
+            return;
+        }
+
+        foreach ($users as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+
+            $uuid = trim((string) ($user['id'] ?? ''));
+            $username = trim((string) ($user['username'] ?? $user['rut_sin_dv'] ?? $user['redmine_id'] ?? ''));
+            $name = trim((string) ($user['name'] ?? $user['nombre'] ?? ''));
+            $lastName = trim((string) ($user['apellido'] ?? ''));
+            $password = (string) ($user['password'] ?? '');
+
+            if ($uuid === '') {
+                $uuid = (string) Str::uuid();
+            }
+            if ($username === '' || $name === '') {
+                continue;
+            }
+            if ($lastName === '' && str_contains($name, ' ')) {
+                [$firstName, $remainingName] = explode(' ', $name, 2);
+                $name = $firstName;
+                $lastName = $remainingName;
+            }
+
+            try {
+                NovaUser::query()->updateOrCreate(
+                    ['uuid' => $uuid],
+                    [
+                        'usuario' => $username,
+                        'rut' => trim((string) ($user['rut'] ?? '')) ?: null,
+                        'redmine_id' => trim((string) ($user['redmine_id'] ?? '')) ?: null,
+                        'nombre' => $name,
+                        'apellido' => $lastName,
+                        'email' => trim((string) ($user['email'] ?? '')) ?: null,
+                        'rol' => $this->normalizeNovaRole((string) ($user['role'] ?? 'usuario')),
+                        'estado' => $this->normalizeStatus((string) ($user['status'] ?? 'activo')),
+                        'password' => $password,
+                        'usuario_core' => trim((string) ($user['core_user'] ?? '')) ?: null,
+                    ]
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function databaseMergeIdentities(array $user): array
+    {
+        return array_values(array_filter([
+            (string) ($user['id'] ?? ''),
+            (string) ($user['username'] ?? ''),
+            (string) ($user['rut'] ?? ''),
+            (string) ($user['rut_sin_dv'] ?? ''),
+            (string) ($user['redmine_id'] ?? ''),
+            (string) ($user['core_user'] ?? ''),
+        ], static fn (string $value): bool => trim($value) !== ''));
+    }
+
+    private function usersTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('usuarios_nova');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function markLastLogin(array $user): void
+    {
+        if (!$this->usersTableAvailable()) {
+            return;
+        }
+
+        $uuid = trim((string) ($user['id'] ?? ''));
+        $username = trim((string) ($user['username'] ?? ''));
+        $redmineId = trim((string) ($user['redmine_id'] ?? ''));
+
+        try {
+            $query = NovaUser::query();
+            if ($uuid !== '') {
+                $query->where('uuid', $uuid);
+            } elseif ($username !== '') {
+                $query->where('usuario', $username);
+            } elseif ($redmineId !== '') {
+                $query->where('redmine_id', $redmineId);
+            } else {
+                return;
+            }
+
+            $query->update(['ultimo_login_at' => now()]);
+        } catch (\Throwable) {
+        }
     }
 
     private function isBlocked(array $user): bool

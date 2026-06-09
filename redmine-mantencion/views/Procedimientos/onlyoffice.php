@@ -7,7 +7,7 @@ $isPublicShare = $shareToken !== '';
 if (!$isPublicShare) {
   auth_require_login('/redmine-mantencion/login.php');
   if (!auth_can('procedimientos')) {
-    header('Location: /redmine-mantencion');
+    header('Location: ' . legacy_app_url());
     exit;
   }
 }

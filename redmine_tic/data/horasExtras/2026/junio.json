@@ -1,0 +1,63 @@
+[
+    {
+        "fecha": "2026-06-05",
+        "hora_inicio": "15:11",
+        "hora_fin": "15:11",
+        "reports": [
+            {
+                "id": "212f8e73-f03e-4ecd-b3b5-b5638a4f42cd",
+                "tipo": "Soporte",
+                "estado": "pendiente",
+                "asunto": "esto es una prueba",
+                "descripcion": "hola mundo",
+                "mensaje": "",
+                "solicitante": "pp",
+                "unidad": "ABASTECIMIENTO",
+                "unidad_solicitante": "ABASTECIMIENTO",
+                "categoria": "Alfa",
+                "prioridad": "NORMAL",
+                "numero": "",
+                "fecha": "2026-06-05",
+                "hora": "15:11",
+                "fecha_inicio": "2026-06-05",
+                "fecha_fin": "",
+                "asignado_a": "117",
+                "asignado_nombre": "Hernan",
+                "hora_extra": "SI",
+                "tiempo_estimado": "1",
+                "origen": "manual",
+                "created_at": "2026-06-05T15:11:28-04:00"
+            }
+        ]
+    },
+    {
+        "fecha": "2026-06-06",
+        "hora_inicio": "09:08:53",
+        "hora_fin": "09:08:53",
+        "reports": [
+            {
+                "id": "4cc71ab7-2e7c-4079-9f68-5420e5501d7c",
+                "numero": "telegram:7449883192",
+                "mensaje": "problema impresora, recuperación h, Hugo enfermero",
+                "fecha": "06-06-2026",
+                "hora": "09:08:53",
+                "fecha_inicio": "06-06-2026",
+                "fecha_fin": "06-06-2026",
+                "tipo": "Soporte",
+                "prioridad": "NORMAL",
+                "estado": "pendiente",
+                "hora_extra": "SI",
+                "tiempo_estimado": "1",
+                "categoria": "Equipos",
+                "unidad": "recuperación h",
+                "unidad_solicitante": "RECUPERACIÓN H",
+                "solicitante": "Hugo enfermero",
+                "asunto": "problema impresora \/ recuperación h",
+                "asignado_a": "",
+                "asignado_nombre": "",
+                "origen": "telegram",
+                "created_at": "2026-06-06T09:08:53-04:00"
+            }
+        ]
+    }
+]

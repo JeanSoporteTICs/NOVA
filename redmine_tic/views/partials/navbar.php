@@ -371,6 +371,14 @@ window.addEventListener('load', () => {
       }
     });
   }
+  if (modalEl) {
+    modalEl.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+      if (!modalEl.classList.contains('show')) return;
+      event.preventDefault();
+      if (extendBtn && !extendBtn.disabled) extendBtn.click();
+    });
+  }
   setModalState(false);
 });
 </script>

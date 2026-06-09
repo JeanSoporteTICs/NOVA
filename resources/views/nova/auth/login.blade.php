@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Ingresar - NOVA</title>
+    @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
@@ -97,7 +98,7 @@
             <form method="post" action="{{ route('login.store') }}">
                 @csrf
                 <div class="field">
-                    <label for="username">Usuario, ID o RUT</label>
+                    <label for="username">Usuario acceso, ID Redmine o RUT</label>
                     <input class="form-control" id="username" name="username" value="{{ old('username') }}" autocomplete="username" required autofocus>
                 </div>
                 <div class="field">

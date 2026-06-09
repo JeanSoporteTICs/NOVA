@@ -35,6 +35,18 @@ class NovaUserController extends Controller
             return redirect()->route('nova-users.index')->with('status', 'Usuario activado.');
         }
 
+        if ($action === 'password') {
+            $result = $users->changePassword(
+                (string) $request->input('id'),
+                (string) $request->input('password'),
+                (string) $request->input('password_confirmation')
+            );
+
+            return redirect()
+                ->route('nova-users.index')
+                ->with($result['ok'] ? 'status' : 'error', $result['ok'] ? 'Contrasena actualizada.' : $result['error']);
+        }
+
         $result = $users->save($request->all());
 
         return redirect()

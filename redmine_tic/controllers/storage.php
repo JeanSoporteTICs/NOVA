@@ -78,6 +78,7 @@ if (!function_exists('storage_base_path')) {
         fflush($handle);
         flock($handle, LOCK_UN);
         fclose($handle);
+        @chmod($path, 0666);
         return $ok;
     }
 

@@ -1,0 +1,15 @@
+services:
+  nova-telegram:
+    build:
+      context: .
+      dockerfile: docker/telegram/Dockerfile
+    container_name: nova-telegram
+    working_dir: /app
+    restart: unless-stopped
+    volumes:
+      - ./:/app
+    environment:
+      APP_ENV: local
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}
+    command: ["php", "telegram/bin/service.php"]

@@ -8,7 +8,7 @@
     };
     $sectionIcons = [
         'dashboard' => 'bi-inboxes',
-        'webhook' => 'bi-broadcast',
+        'webhook' => 'bi-pencil-square',
         'horas-extra' => 'bi-clock',
         'historico' => 'bi-archive',
         'usuarios' => 'bi-people',
@@ -25,6 +25,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Redmine - {{ $sectionLabel }}</title>
+    @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
@@ -305,6 +306,426 @@
             .rm-toolbar-actions { justify-content: flex-start; }
             .rm-toolbar-actions .btn { width: 100%; }
         }
+
+        /* Visual parity with Redmine Mantencion for /NOVA/public/index.php/redmine_tic */
+        body.nova-page {
+            background:
+                radial-gradient(circle at 12% 8%, rgba(37, 99, 235, .08), transparent 28rem),
+                radial-gradient(circle at 88% 12%, rgba(20, 184, 166, .08), transparent 26rem),
+                #eef3fa !important;
+            color: #111827;
+            font-family: var(--nova-font);
+        }
+        .rm-navbar {
+            min-height: 78px !important;
+            border: 1px solid rgba(255,255,255,.12) !important;
+            border-radius: 0 0 22px 22px !important;
+            background: #102033 !important;
+            box-shadow: 0 22px 54px rgba(15, 23, 42, .24) !important;
+        }
+        .rm-navbar .navbar-brand { font-weight: 900 !important; letter-spacing: 0 !important; }
+        .rm-brand-mark,
+        .rm-hero-icon {
+            border-radius: 14px !important;
+            background: rgba(255,255,255,.16) !important;
+            border: 1px solid rgba(255,255,255,.28) !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.2) !important;
+        }
+        .rm-section-nav { gap: .55rem !important; margin-bottom: 1rem !important; }
+        .rm-section-nav .nav-link {
+            min-height: 40px !important;
+            border: 1px solid rgba(215, 226, 239, .92) !important;
+            border-radius: 8px !important;
+            background: rgba(255,255,255,.94) !important;
+            color: #334155 !important;
+            font-weight: 900 !important;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, .05) !important;
+            transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease !important;
+        }
+        .rm-section-nav .nav-link:hover,
+        .rm-section-nav .nav-link.active {
+            border-color: rgba(37, 99, 235, .22) !important;
+            background: #2563eb !important;
+            color: #fff !important;
+            box-shadow: 0 14px 28px rgba(37, 99, 235, .22) !important;
+            transform: translateY(-1px);
+        }
+        .rm-hero {
+            position: relative;
+            overflow: hidden;
+            border: 0 !important;
+            border-radius: 12px !important;
+            background: linear-gradient(135deg, #1f4f7e, #244a75), #244a75 !important;
+            box-shadow: 0 24px 58px rgba(37, 99, 235, .20) !important;
+        }
+        .rm-hero::after {
+            content: "";
+            position: absolute;
+            right: -5rem;
+            top: -6rem;
+            width: 16rem;
+            height: 16rem;
+            border-radius: 50%;
+            background: rgba(255,255,255,.14);
+            pointer-events: none;
+        }
+        .rm-hero .card-body,
+        .rm-hero h1,
+        .rm-hero-retention { position: relative; z-index: 1; }
+        .rm-hero-retention {
+            border-radius: 999px !important;
+            font-weight: 900 !important;
+            background: rgba(255,255,255,.16) !important;
+        }
+        .nova-card,
+        .card:not(.rm-hero),
+        .rm-work-panel,
+        .rm-panel,
+        .rm-stats-panel,
+        .rm-api-card,
+        .rm-api-hero-card,
+        .rm-interactive-chart,
+        .rm-option-panel,
+        .rm-option-card,
+        .rm-catalog-panel,
+        .rm-role-permission-item,
+        .rm-scope-card {
+            border: 1px solid rgba(215, 226, 239, .92) !important;
+            border-radius: 12px !important;
+            background: rgba(255,255,255,.94) !important;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .08) !important;
+        }
+        .nova-card:hover,
+        .card:hover,
+        .rm-work-panel:hover,
+        .rm-filter-card:hover,
+        .rm-interactive-chart:hover,
+        .rm-option-panel:hover { box-shadow: 0 24px 56px rgba(15, 23, 42, .13) !important; }
+        .rm-stat-card {
+            min-height: 126px !important;
+            background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(248,250,255,.9)) !important;
+        }
+        .rm-filter-card.active {
+            border-color: rgba(37, 99, 235, .28) !important;
+            box-shadow: 0 26px 54px rgba(37, 99, 235, .16) !important;
+            transform: translateY(-2px);
+        }
+        .rm-stat-icon {
+            width: 72px !important;
+            height: 72px !important;
+            border-radius: 22px !important;
+            box-shadow: 0 14px 28px rgba(15, 23, 42, .14) !important;
+        }
+        .rm-stat-icon.is-pending { background: linear-gradient(135deg, #f59e0b, #f97316) !important; }
+        .rm-stat-icon.is-success { background: linear-gradient(135deg, #10b981, #22c55e) !important; }
+        .rm-stat-icon.is-danger { background: linear-gradient(135deg, #ef4444, #fb7185) !important; }
+        .rm-section-head h2,
+        .rm-stats-panel-head h3,
+        .rm-api-card-head h3 { color: #0f172a !important; font-weight: 900 !important; }
+        .rm-section-head p,
+        .rm-stats-panel-head p { color: #526071 !important; font-weight: 600 !important; }
+        .rm-table-wrap { border-radius: 12px; overflow: hidden; }
+        .rm-table-wrap .table thead th,
+        .rm-api-top-table thead th {
+            background: #eef4ff !important;
+            color: #1e3a8a !important;
+            font-size: .78rem !important;
+            font-weight: 900 !important;
+            letter-spacing: 0 !important;
+            text-transform: uppercase;
+        }
+        .table > :not(caption) > * > *,
+        .rm-api-top-table td { border-bottom-color: rgba(215, 226, 239, .95) !important; }
+        .table tbody tr:hover > * { background: #f8fbff !important; }
+        .btn,
+        button.btn,
+        a.btn {
+            min-height: 40px;
+            border-radius: 8px !important;
+            font-weight: 900 !important;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, .06);
+            transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 30px rgba(15, 23, 42, .12);
+        }
+        .btn-primary { border-color: transparent !important; background: linear-gradient(135deg, #2563eb, #1d4ed8) !important; color: #fff !important; }
+        .btn-success { border-color: transparent !important; background: linear-gradient(135deg, #16a34a, #22c55e) !important; color: #fff !important; }
+        .btn-warning { border-color: transparent !important; background: linear-gradient(135deg, #f59e0b, #facc15) !important; color: #553600 !important; }
+        .btn-danger { border-color: transparent !important; background: linear-gradient(135deg, #dc2626, #fb7185) !important; color: #fff !important; }
+        .btn-outline-secondary,
+        .btn-secondary {
+            background: #fff !important;
+            border-color: #d7e2ef !important;
+            color: #334155 !important;
+        }
+        .form-control,
+        .form-select,
+        textarea,
+        select {
+            border-radius: 8px !important;
+            border-color: #cbd8e8 !important;
+            background-color: #fff !important;
+        }
+        .form-control:focus,
+        .form-select:focus,
+        .form-check-input:focus {
+            border-color: #2563eb !important;
+            box-shadow: 0 0 0 .22rem rgba(37, 99, 235, .22) !important;
+        }
+        .form-check-input:checked {
+            border-color: #2563eb !important;
+            background-color: #2563eb !important;
+        }
+        .nova-badge,
+        .badge { border-radius: 999px !important; font-weight: 900 !important; }
+        .modal-content,
+        .rm-redmine-send-modal,
+        .rm-webhook-test-modal {
+            border-radius: 12px !important;
+            border: 1px solid rgba(215, 226, 239, .95) !important;
+            box-shadow: 0 28px 70px rgba(15, 23, 42, .22) !important;
+        }
+        .modal-header {
+            background: linear-gradient(135deg, rgba(37, 99, 235, .10), rgba(20, 184, 166, .08)), #fff !important;
+        }
+        #editar-solicitud {
+            --drawer-width: min(960px, 92vw);
+        }
+        #editar-solicitud .detail-drawer-dialog {
+            width: var(--drawer-width);
+            max-width: var(--drawer-width);
+            min-height: 100vh;
+            margin: 0 0 0 auto;
+        }
+        #editar-solicitud.fade .detail-drawer-dialog {
+            transform: translateX(100%);
+            transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+        }
+        #editar-solicitud.show .detail-drawer-dialog {
+            transform: translateX(0);
+        }
+        #editar-solicitud .modal-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            max-height: 100vh;
+            border: 0 !important;
+            border-radius: 18px 0 0 18px !important;
+            box-shadow: -24px 0 64px rgba(15, 23, 42, .2) !important;
+            overflow: hidden;
+        }
+        #editar-solicitud .modal-content > form {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            flex-direction: column;
+        }
+        #editar-solicitud .modal-header {
+            align-items: flex-start;
+            padding: 1.15rem 1.25rem;
+            background: linear-gradient(135deg, rgba(37, 99, 235, .12), rgba(20, 184, 166, .1)), #fff !important;
+            border-bottom: 1px solid rgba(15, 23, 42, .08);
+        }
+        #editar-solicitud .modal-title {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            margin: 0;
+            color: #0f172a;
+            font-size: 1.12rem;
+            font-weight: 900;
+        }
+        .detail-drawer-kicker {
+            margin: 0 0 .25rem;
+            color: #2563eb;
+            font-size: .76rem;
+            font-weight: 900;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+        .detail-drawer-subtitle {
+            margin: .25rem 0 0;
+            color: #64748b;
+            font-size: .88rem;
+            font-weight: 700;
+        }
+        .detail-drawer-icon {
+            display: inline-flex;
+            width: 36px;
+            height: 36px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            color: #fff;
+            background: linear-gradient(135deg, #2563eb, #14b8a6);
+            box-shadow: 0 12px 24px rgba(37, 99, 235, .24);
+        }
+        #editar-solicitud .modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 1.2rem 1.25rem 2rem;
+            background: #f8fafc;
+        }
+        #editar-solicitud .modal-body .row {
+            padding: 1rem;
+            border: 1px solid rgba(148, 163, 184, .24);
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
+        }
+        #editar-solicitud .form-control,
+        #editar-solicitud .form-select {
+            min-height: 44px;
+        }
+        #editar-solicitud textarea.form-control {
+            min-height: 96px;
+            line-height: 1.45;
+            resize: vertical;
+        }
+        #editar-solicitud .modal-footer {
+            flex-shrink: 0;
+            gap: .65rem;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, .96);
+            border-top: 1px solid rgba(15, 23, 42, .08);
+            box-shadow: 0 -16px 30px rgba(15, 23, 42, .06);
+            z-index: 2;
+        }
+        #editar-solicitud .modal-footer .btn {
+            min-width: 142px;
+        }
+        .detail-drawer-view {
+            display: none;
+        }
+        .detail-drawer-view.is-active {
+            display: block;
+        }
+        .detail-drawer-modal {
+            --drawer-width: min(960px, 92vw);
+        }
+        .detail-drawer-modal .detail-drawer-dialog {
+            width: var(--drawer-width);
+            max-width: var(--drawer-width);
+            min-height: 100vh;
+            margin: 0 0 0 auto;
+        }
+        .detail-drawer-modal.fade .detail-drawer-dialog {
+            transform: translateX(100%);
+            transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+        }
+        .detail-drawer-modal.show .detail-drawer-dialog {
+            transform: translateX(0);
+        }
+        .detail-drawer-modal .modal-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            max-height: 100vh;
+            border: 0 !important;
+            border-radius: 18px 0 0 18px !important;
+            box-shadow: -24px 0 64px rgba(15, 23, 42, .2) !important;
+            overflow: hidden;
+        }
+        .detail-drawer-modal .modal-content > form {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            flex-direction: column;
+        }
+        .detail-drawer-modal .modal-header {
+            align-items: flex-start;
+            padding: 1.15rem 1.25rem;
+            background: linear-gradient(135deg, rgba(37, 99, 235, .12), rgba(20, 184, 166, .1)), #fff !important;
+            border-bottom: 1px solid rgba(15, 23, 42, .08);
+        }
+        .detail-drawer-modal .modal-title {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            margin: 0;
+            color: #0f172a;
+            font-size: 1.12rem;
+            font-weight: 900;
+        }
+        .detail-drawer-modal .modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 1.2rem 1.25rem 2rem;
+            background: #f8fafc;
+        }
+        .detail-drawer-modal .modal-body > .row,
+        .detail-drawer-panel {
+            padding: 1rem;
+            border: 1px solid rgba(148, 163, 184, .24);
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
+        }
+        .detail-drawer-modal .form-control,
+        .detail-drawer-modal .form-select {
+            min-height: 44px;
+        }
+        .detail-drawer-modal textarea.form-control {
+            min-height: 96px;
+            line-height: 1.45;
+            resize: vertical;
+        }
+        .detail-drawer-modal .modal-footer {
+            flex-shrink: 0;
+            gap: .65rem;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, .96);
+            border-top: 1px solid rgba(15, 23, 42, .08);
+            box-shadow: 0 -16px 30px rgba(15, 23, 42, .06);
+            z-index: 2;
+        }
+        .detail-drawer-modal .modal-footer .btn {
+            min-width: 142px;
+        }
+        @media (max-width: 575.98px) {
+            #editar-solicitud {
+                --drawer-width: 100vw;
+            }
+            .detail-drawer-modal {
+                --drawer-width: 100vw;
+            }
+            #editar-solicitud .modal-content {
+                border-radius: 0 !important;
+            }
+            .detail-drawer-modal .modal-content {
+                border-radius: 0 !important;
+            }
+            #editar-solicitud .modal-footer .btn {
+                width: 100%;
+            }
+            .detail-drawer-modal .modal-footer .btn {
+                width: 100%;
+            }
+        }
+        .rm-log {
+            border: 1px solid #22c55e !important;
+            background: #020617 !important;
+            color: #4ade80 !important;
+            font-family: "JetBrains Mono", "Consolas", monospace !important;
+            box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .16), 0 18px 38px rgba(2, 6, 23, .18);
+        }
+        @media (max-width: 760px) {
+            .rm-navbar { border-radius: 0 0 16px 16px !important; }
+            .rm-stat-icon { width: 58px !important; height: 58px !important; }
+        }
+        .card.card-hero.sb-page-hero.rm-hero {
+            color: #fff !important;
+            background: linear-gradient(135deg, #1f4f7e, #244a75), #244a75 !important;
+            border: 0 !important;
+        }
+        .card.card-hero.sb-page-hero.rm-hero .rm-page-title,
+        .card.card-hero.sb-page-hero.rm-hero .rm-hero-retention {
+            color: #fff !important;
+        }
     </style>
 </head>
 <body class="nova-page {{ !empty($redmineMaintenance['enabled']) ? 'rm-maintenance-active' : '' }}">
@@ -340,7 +761,7 @@
                     @endforeach
                 </nav>
 
-                <section class="card rm-hero mb-4">
+                <section class="card card-hero sb-page-hero rm-hero mb-3">
                     <div class="card-body p-3 p-lg-4 d-flex align-items-center gap-3 flex-wrap">
                         <div class="d-flex align-items-center gap-3">
                             <span class="rm-hero-icon"><i class="bi bi-speedometer2"></i></span>
@@ -451,5 +872,3 @@
     </script>
 </body>
 </html>
-
-

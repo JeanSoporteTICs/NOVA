@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../controllers/auth.php';
 auth_require_login('/redmine-mantencion/login.php');
 if (!auth_can('simulador')) {
-    header('Location: /redmine-mantencion');
+    header('Location: ' . legacy_app_url());
     exit;
 }
 require_once __DIR__ . '/../../controllers/pendiente_manual.php';

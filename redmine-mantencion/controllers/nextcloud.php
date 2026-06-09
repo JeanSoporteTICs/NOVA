@@ -141,6 +141,108 @@ function nextcloud_match_key(string $value): string {
     return preg_replace('/[^a-z0-9]+/', '', $value) ?? '';
 }
 
+function nextcloud_match_tokens(string $value): array {
+    $value = trim($value);
+    if ($value === '') return [];
+    if (function_exists('iconv')) {
+        $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        if (is_string($converted) && $converted !== '') $value = $converted;
+    }
+    $value = strtolower($value);
+    $tokens = preg_split('/[^a-z0-9]+/', $value) ?: [];
+    $stopwords = ['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'a', 'al', 'en', 'por', 'para'];
+    $tokens = array_values(array_filter($tokens, static function ($token) use ($stopwords) {
+        return $token !== '' && !in_array($token, $stopwords, true);
+    }));
+    return array_values(array_unique($tokens));
+}
+
+function nextcloud_group_match_score(string $needleRaw, string $groupRaw): int {
+    $needle = nextcloud_match_key($needleRaw);
+    $group = nextcloud_match_key($groupRaw);
+    if ($needle === '' || $group === '') return 0;
+    if ($needle === $group) return 100;
+
+    $needleTokens = nextcloud_match_tokens($needleRaw);
+    $groupTokens = nextcloud_match_tokens($groupRaw);
+    $needleTokenKey = implode('', $needleTokens);
+    $groupTokenKey = implode('', $groupTokens);
+    if ($needleTokenKey !== '' && $needleTokenKey === $groupTokenKey) return 98;
+    if ($needleTokenKey !== '' && $groupTokenKey !== '' && str_contains($groupTokenKey, $needleTokenKey)) return 90;
+    if ($needleTokenKey !== '' && $groupTokenKey !== '' && str_contains($needleTokenKey, $groupTokenKey)) return 86;
+
+    if ($needleTokens && $groupTokens) {
+        $intersect = array_intersect($needleTokens, $groupTokens);
+        $partialMatches = [];
+        foreach ($needleTokens as $needleToken) {
+            foreach ($groupTokens as $groupToken) {
+                if (strlen($needleToken) >= 2 && (str_starts_with($groupToken, $needleToken) || str_contains($groupToken, $needleToken))) {
+                    $partialMatches[] = $needleToken;
+                    break;
+                }
+            }
+        }
+        $needleCoverage = count($intersect) / max(1, count($needleTokens));
+        $groupCoverage = count($intersect) / max(1, count($groupTokens));
+        $partialCoverage = count(array_unique($partialMatches)) / max(1, count($needleTokens));
+        if ($needleCoverage === 1.0 && $groupCoverage === 1.0) return 96;
+        if ($needleCoverage === 1.0) return 82;
+        if ($partialCoverage === 1.0) return 80;
+        if ($partialCoverage >= 0.5 && count($partialMatches) >= 2) return 72;
+        if ($groupCoverage === 1.0 && count($intersect) >= 2) return 78;
+        if (count($intersect) >= 2) return 68;
+    }
+
+    if (str_contains($group, $needle)) return 74;
+    if (str_contains($needle, $group)) return 70;
+
+    similar_text($needleTokenKey ?: $needle, $groupTokenKey ?: $group, $percent);
+    return $percent >= 84 ? (int)round($percent * 0.65) : 0;
+}
+
+function nextcloud_best_group_match(string $raw, array $candidates): string {
+    $bestGroup = '';
+    $bestScore = 0;
+    foreach ($candidates as $group) {
+        $group = (string)$group;
+        $score = nextcloud_group_match_score($raw, $group);
+        if ($score > $bestScore || ($score === $bestScore && $score > 0 && strlen($group) < strlen($bestGroup))) {
+            $bestScore = $score;
+            $bestGroup = $group;
+        }
+    }
+    return $bestScore >= 68 ? $bestGroup : '';
+}
+
+function nextcloud_group_suggestions(string $raw, array $candidates, int $limit = 3): array {
+    $items = [];
+    foreach ($candidates as $group) {
+        $group = (string)$group;
+        $score = nextcloud_group_match_score($raw, $group);
+        if ($score > 0) {
+            $items[] = ['group' => $group, 'score' => $score];
+        }
+    }
+    usort($items, static function ($a, $b) {
+        return ($b['score'] <=> $a['score']) ?: (strlen($a['group']) <=> strlen($b['group'])) ?: strnatcasecmp($a['group'], $b['group']);
+    });
+    return array_values(array_map(static fn($item) => $item['group'], array_slice($items, 0, $limit)));
+}
+
+function nextcloud_normalize_userid(string $userid): string {
+    $userid = strtoupper(trim($userid));
+    if ($userid === '') return '';
+    $userid = str_replace(['.', ' '], '', $userid);
+    if (str_contains($userid, '-')) {
+        [$body] = array_pad(explode('-', $userid, 2), 2, '');
+        return preg_replace('/\D+/', '', $body) ?: '';
+    }
+    if (preg_match('/^\d{7,8}[0-9K]$/', $userid) && strlen($userid) >= 9) {
+        return substr($userid, 0, -1);
+    }
+    return preg_replace('/\D+/', '', $userid) ?: '';
+}
+
 function nextcloud_generate_password(string $displayName, string $userid): string {
     $parts = preg_split('/\s+/', trim($displayName)) ?: [];
     $name = $parts[0] ?? 'Usuario';
@@ -170,15 +272,8 @@ function nextcloud_match_groups(string $raw, array $candidates, string $defaultG
     $parts = array_values(array_filter(array_map('trim', preg_split('/[,;|]+/', $raw) ?: [])));
     $matched = [];
     foreach ($parts as $part) {
-        $needle = nextcloud_match_key($part);
-        if ($needle === '') continue;
-        foreach ($candidates as $group) {
-            $hay = nextcloud_match_key((string)$group);
-            if ($hay !== '' && ($hay === $needle || str_contains($hay, $needle) || str_contains($needle, $hay))) {
-                $matched[] = (string)$group;
-                break;
-            }
-        }
+        $match = nextcloud_best_group_match($part, $candidates);
+        if ($match !== '') $matched[] = $match;
     }
     $matched = array_values(array_unique($matched));
     if (!$matched && $defaultGroup !== '') $matched[] = $defaultGroup;
@@ -186,7 +281,8 @@ function nextcloud_match_groups(string $raw, array $candidates, string $defaultG
 }
 
 function nextcloud_normalize_row(array $row, array $defaults): ?array {
-    $userid = nextcloud_column_value($row, ['userid', 'usuario', 'nombre_de_usuario', 'user', 'id', 'rut']);
+    $rawUserid = nextcloud_column_value($row, ['userid', 'usuario', 'nombre_de_usuario', 'user', 'id', 'rut']);
+    $userid = nextcloud_normalize_userid($rawUserid);
     $display = nextcloud_column_value($row, ['displayName', 'displayname', 'nombre_a_desplegar', 'nombre', 'nombre_completo', 'name']);
     $email = nextcloud_column_value($row, ['email', 'correo_electronico', 'correo', 'mail']);
     $password = nextcloud_column_value($row, ['password', 'contrasena', 'contraseña', 'clave']);
@@ -195,7 +291,7 @@ function nextcloud_normalize_row(array $row, array $defaults): ?array {
     if ($userid === '') {
         return null;
     }
-    $lowerUser = strtolower($userid);
+    $lowerUser = strtolower($rawUserid);
     if (str_contains($lowerUser, 'rut sin') || str_contains($lowerUser, 'ej:')) {
         return null;
     }
@@ -207,6 +303,8 @@ function nextcloud_normalize_row(array $row, array $defaults): ?array {
     }
     return [
         'userid' => $userid,
+        'raw_userid' => $rawUserid,
+        'userid_normalized' => $userid !== $rawUserid,
         'password' => $password,
         'displayName' => $display !== '' ? $display : $userid,
         'email' => $email,
@@ -414,6 +512,36 @@ function nextcloud_cached_groups(): array {
     return is_array($groups) ? array_values(array_filter(array_map('strval', $groups))) : [];
 }
 
+function nextcloud_user_result_snapshot(array $user, string $status, string $message = ''): array {
+    return [
+        'userid' => (string)($user['userid'] ?? ''),
+        'displayName' => (string)($user['displayName'] ?? ''),
+        'email' => (string)($user['email'] ?? ''),
+        'group' => (string)(($user['groups'][0] ?? '')),
+        'password' => (string)($user['password'] ?? ''),
+        'status' => $status,
+        'message' => $message,
+    ];
+}
+
+function nextcloud_user_exists(array $cfg, string $userid): array {
+    $userid = trim($userid);
+    if ($userid === '') {
+        return ['exists' => false];
+    }
+    $res = nextcloud_request($cfg, 'GET', '/users/' . rawurlencode($userid));
+    if (!empty($res['ok'])) {
+        return ['exists' => true];
+    }
+    $http = (int)($res['http'] ?? 0);
+    $statusCode = (int)($res['statuscode'] ?? 0);
+    $message = strtolower((string)($res['message'] ?? ''));
+    if ($http === 404 || $statusCode === 404 || str_contains($message, 'not exist') || str_contains($message, 'not found')) {
+        return ['exists' => false];
+    }
+    return ['exists' => null, 'error' => (($res['message'] ?? '') ?: 'HTTP ' . $http)];
+}
+
 function nextcloud_created_history_load(): array {
     global $NEXTCLOUD_CREATED_HISTORY_FILE;
     $items = is_file($NEXTCLOUD_CREATED_HISTORY_FILE) ? json_decode((string)file_get_contents($NEXTCLOUD_CREATED_HISTORY_FILE), true) : [];
@@ -434,9 +562,9 @@ function nextcloud_created_history_clear(): bool {
     return storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
-function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = []): ?array {
+function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = [], array $failedUsers = [], array $resultUsers = []): ?array {
     global $NEXTCLOUD_CREATED_HISTORY_FILE;
-    if (!$createdUsers && !$existingUsers) return null;
+    if (!$createdUsers && !$existingUsers && !$failedUsers && !$resultUsers) return null;
     $items = nextcloud_created_history_load();
     $batch = [
         'id' => bin2hex(random_bytes(6)),
@@ -445,6 +573,8 @@ function nextcloud_created_history_save_batch(array $createdUsers, array $existi
         'users' => array_values($createdUsers),
         'created_users' => array_values($createdUsers),
         'existing_users' => array_values($existingUsers),
+        'failed_users' => array_values($failedUsers),
+        'result_users' => array_values($resultUsers),
     ];
     array_unshift($items, $batch);
     storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, $items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
@@ -464,11 +594,18 @@ function nextcloud_prepare_users(array $file, array $options = []): array {
     if (!$users) return ['error' => 'El archivo no contiene usuarios válidos.'];
     $cachedGroups = nextcloud_cached_groups();
     $preparedUsers = [];
+    $seenUsers = [];
     foreach ($users as $user) {
         $user['password'] = nextcloud_generate_password((string)$user['displayName'], (string)$user['userid']);
         $user['groups'] = nextcloud_match_groups((string)($user['group_source'] ?? ''), $cachedGroups, '');
         $user['group_match_found'] = !empty($user['groups']);
+        $user['group_suggestions'] = empty($user['groups']) ? nextcloud_group_suggestions((string)($user['group_source'] ?? ''), $cachedGroups, 3) : [];
         $user['email_valid'] = filter_var((string)$user['email'], FILTER_VALIDATE_EMAIL) !== false;
+        $userKey = (string)($user['userid'] ?? '');
+        $user['duplicate_in_file'] = $userKey !== '' && isset($seenUsers[$userKey]);
+        if ($userKey !== '') {
+            $seenUsers[$userKey] = true;
+        }
         $preparedUsers[] = $user;
     }
     return ['ok' => true, 'users' => $preparedUsers, 'total' => count($preparedUsers)];
@@ -490,15 +627,60 @@ function nextcloud_import_prepared_users(array $users, array $runtimeCredentials
     $created = 0;
     $exists = 0;
     $failed = [];
+    $failedUsers = [];
     $existingUsers = [];
     $createdUsers = [];
+    $resultUsers = [];
+    $seenUsers = [];
     foreach ($users as $user) {
+        $user['userid'] = nextcloud_normalize_userid((string)($user['userid'] ?? ''));
+        if (($user['userid'] ?? '') === '') {
+            $message = 'RUT inválido o vacío';
+            $failed[] = 'usuario: ' . $message;
+            $failedUser = nextcloud_user_result_snapshot($user, 'failed', $message);
+            $failedUsers[] = $failedUser;
+            $resultUsers[] = $failedUser;
+            continue;
+        }
+        if (isset($seenUsers[(string)$user['userid']])) {
+            $message = 'RUT duplicado en la planilla';
+            $failed[] = ($user['userid'] ?? 'usuario') . ': ' . $message;
+            $failedUser = nextcloud_user_result_snapshot($user, 'failed', $message);
+            $failedUsers[] = $failedUser;
+            $resultUsers[] = $failedUser;
+            continue;
+        }
+        $seenUsers[(string)$user['userid']] = true;
         if (filter_var((string)($user['email'] ?? ''), FILTER_VALIDATE_EMAIL) === false) {
-            $failed[] = ($user['userid'] ?? 'usuario') . ': correo inválido';
+            $message = 'correo inválido';
+            $failed[] = ($user['userid'] ?? 'usuario') . ': ' . $message;
+            $failedUser = nextcloud_user_result_snapshot($user, 'failed', $message);
+            $failedUsers[] = $failedUser;
+            $resultUsers[] = $failedUser;
             continue;
         }
         if (empty($user['groups'])) {
-            $failed[] = ($user['userid'] ?? 'usuario') . ': sin grupo válido';
+            $message = 'sin grupo válido';
+            $failed[] = ($user['userid'] ?? 'usuario') . ': ' . $message;
+            $failedUser = nextcloud_user_result_snapshot($user, 'failed', $message);
+            $failedUsers[] = $failedUser;
+            $resultUsers[] = $failedUser;
+            continue;
+        }
+        $existsCheck = nextcloud_user_exists($cfg, (string)$user['userid']);
+        if (($existsCheck['exists'] ?? false) === true) {
+            $exists++;
+            $existingUser = nextcloud_user_result_snapshot($user, 'existing', 'No se creó porque ya existe en Nextcloud.');
+            $existingUsers[] = $existingUser;
+            $resultUsers[] = $existingUser;
+            continue;
+        }
+        if (array_key_exists('error', $existsCheck)) {
+            $message = 'no se pudo validar existencia: ' . (string)$existsCheck['error'];
+            $failed[] = ($user['userid'] ?? 'usuario') . ': ' . $message;
+            $failedUser = nextcloud_user_result_snapshot($user, 'failed', $message);
+            $failedUsers[] = $failedUser;
+            $resultUsers[] = $failedUser;
             continue;
         }
         $res = nextcloud_request($cfg, 'POST', '/users', [
@@ -512,27 +694,23 @@ function nextcloud_import_prepared_users(array $users, array $runtimeCredentials
         ]);
         if ($res['ok']) {
             $created++;
-            $createdUsers[] = [
-                'userid' => (string)$user['userid'],
-                'displayName' => (string)$user['displayName'],
-                'email' => (string)$user['email'],
-                'group' => (string)(($user['groups'][0] ?? '')),
-                'password' => (string)$user['password'],
-            ];
+            $createdUser = nextcloud_user_result_snapshot($user, 'created', 'Creado correctamente.');
+            $createdUsers[] = $createdUser;
+            $resultUsers[] = $createdUser;
         } elseif ((int)($res['statuscode'] ?? 0) === 102) {
             $exists++;
-            $existingUsers[] = [
-                'userid' => (string)$user['userid'],
-                'displayName' => (string)$user['displayName'],
-                'email' => (string)$user['email'],
-                'group' => (string)(($user['groups'][0] ?? '')),
-                'password' => (string)$user['password'],
-            ];
+            $existingUser = nextcloud_user_result_snapshot($user, 'existing', 'No se creó porque ya existe en Nextcloud.');
+            $existingUsers[] = $existingUser;
+            $resultUsers[] = $existingUser;
         } else {
-            $failed[] = $user['userid'] . ': ' . (($res['message'] ?? '') ?: 'HTTP ' . ($res['http'] ?? 0));
+            $message = (($res['message'] ?? '') ?: 'HTTP ' . ($res['http'] ?? 0));
+            $failed[] = $user['userid'] . ': ' . $message;
+            $failedUser = nextcloud_user_result_snapshot($user, 'failed', $message);
+            $failedUsers[] = $failedUser;
+            $resultUsers[] = $failedUser;
         }
     }
-    $batch = nextcloud_created_history_save_batch($createdUsers, $existingUsers);
+    $batch = nextcloud_created_history_save_batch($createdUsers, $existingUsers, $failedUsers, $resultUsers);
     return [
         'ok' => true,
         'created' => $created,
@@ -540,6 +718,8 @@ function nextcloud_import_prepared_users(array $users, array $runtimeCredentials
         'created_users' => $createdUsers,
         'created_batch' => $batch,
         'existing_users' => $existingUsers,
+        'failed_users' => $failedUsers,
+        'result_users' => $resultUsers,
         'failed' => $failed,
         'total' => count($users),
     ];

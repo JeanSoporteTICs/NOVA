@@ -19,6 +19,10 @@
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/redmine-mantencion/assets/js/app-modal.js?v=20260527-toast2"></script>
-
+  <?php
+    $mantencionBaseUrl = function_exists('url') ? rtrim(url('/redmine-mantencion'), '/') : '/redmine-mantencion';
+    $appModalPath = __DIR__ . '/../../assets/js/app-modal.js';
+    $appModalVersion = @filemtime($appModalPath) ?: time();
+  ?>
+  <script src="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/js/app-modal.js?v=<?= (int)$appModalVersion ?>"></script>
 

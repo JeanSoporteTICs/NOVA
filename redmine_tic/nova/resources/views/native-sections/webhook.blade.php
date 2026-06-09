@@ -1,128 +1,132 @@
 @php
-    $webhookResult = session('redmine_webhook_result');
-    $currentUserId = (string) data_get(session('redmine_project_user', []), 'id', session('nova_user.id', ''));
-    $loggedNumber = '';
-    foreach (($users ?? []) as $user) {
-        if ((string) ($user['id'] ?? '') === $currentUserId) {
-            $loggedNumber = (string) ($user['numero_celular'] ?? '');
-            break;
-        }
-    }
+    $categoryOptions = collect($categories ?? [])->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))->filter()->unique()->values();
+    $unitOptions = collect($units ?? [])->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))->filter()->unique()->values();
+    $activeUsers = collect($users ?? [])->filter(fn ($user) => strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo'))) === 'activo')->values();
 @endphp
 
-<section class="row g-3 align-items-start rm-webhook-view">
-    <div class="col-12 col-xxl-9">
-        <article class="card nova-card rm-panel h-100 rm-webhook-panel">
+<section class="row g-3 align-items-start rm-manual-view">
+    <div class="col-12">
+        <form class="card nova-card rm-panel h-100 rm-manual-panel" method="post" action="{{ $redmineRoute('redmine.native.webhook.action') }}">
+            @csrf
             <div class="rm-section-head">
                 <div>
-                    <h2>Enviar mensaje al webhook</h2>
-                    <p>Envía el texto al servicio Python para que interprete problema, ubicación y solicitante.</p>
+                    <h2>Crear reporte manual</h2>
+                    <p>El reporte queda en pendientes para revisar, editar o enviar a Redmine.</p>
                 </div>
-                <span class="nova-badge"><i class="bi bi-broadcast"></i> Python</span>
+                <span class="nova-badge is-warning"><i class="bi bi-inbox"></i>Pendiente</span>
             </div>
 
-            <form method="post" action="{{ $redmineRoute('redmine.native.webhook.action') }}">
-                @csrf
-                <div class="row g-3">
-                    <div class="col-12 col-xl-5">
-                        <label class="form-label" for="webhook-url">URL del webhook</label>
-                        <input class="form-control" id="webhook-url" name="webhook_url" value="{{ old('webhook_url', $webhookUrl ?? 'http://localhost:8000/webhook') }}" placeholder="http://localhost:8000/webhook" required>
-                    </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <label class="form-label" for="webhook-numero">Numero remitente</label>
-                        <input class="form-control" id="webhook-numero" name="numero" value="{{ old('numero', $loggedNumber) }}" placeholder="+569..." required>
-                    </div>
-                    <div class="col-12 col-md-6 col-xl-4">
-                        <label class="form-label" for="webhook-usuario">Usuario</label>
-                        <select class="form-select" id="webhook-usuario">
-                            <option value="">Seleccionar</option>
-                            @foreach (($users ?? []) as $user)
-                                @php
-                                    $name = trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? ''));
-                                    $phone = (string) ($user['numero_celular'] ?? '');
-                                @endphp
-                                <option value="{{ $phone }}">{{ $name ?: ($user['id'] ?? 'Usuario') }}{{ $phone ? ' - ' . $phone : '' }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-3">
-                        <label class="form-label" for="webhook-fecha">Fecha</label>
-                        <input class="form-control" id="webhook-fecha" type="date" name="fecha" value="{{ old('fecha', now('America/Santiago')->format('Y-m-d')) }}">
-                    </div>
-                    <div class="col-12 col-md-3">
-                        <label class="form-label" for="webhook-hora">Hora</label>
-                        <input class="form-control" id="webhook-hora" type="time" name="hora" value="{{ old('hora', now('America/Santiago')->format('H:i')) }}">
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label" for="webhook-mensaje">Mensaje</label>
-                        <textarea class="form-control rm-webhook-message" id="webhook-mensaje" name="mensaje" rows="2" placeholder="Ej: impresora no imprime, SOME HBV, Francisca Perez" required>{{ old('mensaje') }}</textarea>
-                    </div>
-                    <div class="col-12">
-                        <div class="rm-form-actions">
-                            <button class="btn btn-success" type="submit"><i class="bi bi-send"></i>Enviar al webhook</button>
-                            <a class="btn btn-outline-secondary" href="{{ $redmineRoute('redmine.dashboard') }}"><i class="bi bi-inboxes"></i>Ver cola</a>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label" for="manual-asunto">Problema</label>
+                    <input class="form-control" id="manual-asunto" name="asunto" maxlength="220" required placeholder="Ej: Impresora no imprime">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="manual-unidad">Ubicacion</label>
+                    <input class="form-control" id="manual-unidad" name="unidad" list="manual-units" maxlength="180" placeholder="Ej: SOME HBV">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="manual-unidad-solicitante">Unidad solicitante</label>
+                    <input class="form-control" id="manual-unidad-solicitante" name="unidad_solicitante" list="manual-units" maxlength="180" placeholder="Ej: SOME HBV">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="manual-solicitante">Solicitante</label>
+                    <input class="form-control" id="manual-solicitante" name="solicitante" maxlength="160" placeholder="Nombre de quien solicita">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="manual-categoria">Categoria</label>
+                    <input class="form-control" id="manual-categoria" name="categoria" list="manual-categories" maxlength="180" placeholder="Ej: Equipos">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label" for="manual-tipo">Tipo</label>
+                    <input class="form-control" id="manual-tipo" name="tipo" value="Soporte" maxlength="80">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="manual-prioridad">Prioridad</label>
+                    <select class="form-select" id="manual-prioridad" name="prioridad">
+                        <option value="NORMAL">NORMAL</option>
+                        <option value="BAJA">BAJA</option>
+                        <option value="ALTA">ALTA</option>
+                        <option value="URGENTE">URGENTE</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="manual-asignado">Asignar a</label>
+                    <select class="form-select" id="manual-asignado" name="asignado_a">
+                        <option value="">Mi usuario</option>
+                        @foreach ($activeUsers as $user)
+                            @php($displayName = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? ''))) ?: (string) ($user['id'] ?? ''))
+                            <option value="{{ $user['id'] ?? '' }}">{{ $displayName }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label" for="manual-descripcion">Descripcion</label>
+                    <textarea class="form-control" id="manual-descripcion" name="descripcion" rows="5" maxlength="4000" placeholder="Detalle breve del problema, contacto, equipo afectado u observaciones"></textarea>
+                </div>
+
+                <div class="col-12">
+                    <div class="manual-extra-row">
+                        <label class="form-check form-switch manual-switch" for="manual-hora-extra">
+                            <input class="form-check-input" type="checkbox" id="manual-hora-extra" name="hora_extra" value="SI" data-manual-extra-toggle>
+                            <span>Hora extra</span>
+                        </label>
+                        <div class="manual-extra-time" data-manual-extra-time hidden>
+                            <input class="form-control" id="manual-tiempo-estimado" name="tiempo_estimado" placeholder="Tiempo estimado: 01:30" aria-label="Tiempo estimado">
                         </div>
                     </div>
                 </div>
-            </form>
-        </article>
+            </div>
+
+            <datalist id="manual-categories">
+                @foreach ($categoryOptions as $option)
+                    <option value="{{ $option }}"></option>
+                @endforeach
+            </datalist>
+            <datalist id="manual-units">
+                @foreach ($unitOptions as $option)
+                    <option value="{{ $option }}"></option>
+                @endforeach
+            </datalist>
+
+            <div class="rm-manual-actions">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle"></i>Crear pendiente</button>
+                <a class="btn btn-outline-secondary" href="{{ $redmineRoute('redmine.native.section', 'dashboard') }}"><i class="bi bi-inboxes"></i>Ver pendientes</a>
+            </div>
+        </form>
     </div>
 
-    <div class="col-12 col-xxl-3">
-        <article class="card nova-card rm-panel rm-webhook-panel">
-            <div class="rm-section-head">
-                <div>
-                    <h2>Formato esperado</h2>
-                </div>
-            </div>
-            <div class="rm-kv"><span>Problema</span><strong>Primera parte del mensaje</strong></div>
-            <div class="rm-kv"><span>Ubicacion</span><strong>Segunda parte del mensaje</strong></div>
-            <div class="rm-kv"><span>Solicitante</span><strong>Tercera parte del mensaje</strong></div>
-            <div class="alert alert-info py-2 px-3 mt-3 mb-0">
-                Ejemplo: <strong>computador lento, SOME HBV, Juan Perez</strong>
-            </div>
-        </article>
-
-        @if (is_array($webhookResult))
-            <article class="card nova-card rm-panel rm-webhook-panel mt-3">
-                <div class="rm-section-head">
-                    <div>
-                        <h2>Ultima respuesta</h2>
-                        <p>Resultado devuelto por el servicio Python.</p>
-                    </div>
-                    <span class="nova-badge {{ ($webhookResult['ok'] ?? false) ? 'is-success' : '' }}">HTTP {{ $webhookResult['http_code'] ?? 0 }}</span>
-                </div>
-                <pre class="rm-log rm-webhook-log">{{ json_encode([
-                    'url' => $webhookResult['url'] ?? '',
-                    'ok' => $webhookResult['ok'] ?? false,
-                    'body' => $webhookResult['body'] ?? '',
-                    'error' => $webhookResult['error'] ?? '',
-                    'payload' => $webhookResult['payload'] ?? [],
-                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
-            </article>
-        @endif
-    </div>
 </section>
 
 <style>
-    .rm-webhook-view .rm-panel { padding: 14px; }
-    .rm-webhook-view .rm-section-head { margin-bottom: 10px; }
-    .rm-webhook-view .rm-section-head p { margin-top: 2px; }
-    .rm-webhook-view .form-label { margin-bottom: .3rem; }
-    .rm-webhook-message { min-height: 70px; resize: vertical; }
-    .rm-webhook-log { max-height: 170px; font-size: .78rem; }
-    .rm-webhook-view .rm-kv { grid-template-columns: 108px minmax(0, 1fr); padding: 7px 0; }
+    .rm-manual-view .rm-panel { padding: 14px; }
+    .rm-manual-view .rm-section-head { margin-bottom: 10px; }
+    .rm-manual-view .rm-section-head p { margin-top: 2px; }
+    .rm-manual-view .rm-kv { grid-template-columns: 92px minmax(0, 1fr); padding: 7px 0; }
+    .rm-manual-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .manual-extra-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 2px; }
+    .manual-switch { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; margin: 0; font-weight: 800; color: #334155; white-space: nowrap; }
+    .manual-switch .form-check-input { width: 2.6rem; height: 1.35rem; margin: 0; }
+    .manual-extra-time { flex: 0 1 260px; min-width: 220px; }
+    @media (max-width: 575.98px) {
+        .manual-extra-row { align-items: stretch; }
+        .manual-extra-time { flex-basis: 100%; min-width: 0; }
+    }
 </style>
 
 <script>
     (() => {
-        const userSelect = document.getElementById('webhook-usuario');
-        const numberInput = document.getElementById('webhook-numero');
-        if (!userSelect || !numberInput) return;
-
-        userSelect.addEventListener('change', () => {
-            if (userSelect.value) numberInput.value = userSelect.value;
-        });
+        const toggle = document.querySelector('[data-manual-extra-toggle]');
+        const timeField = document.querySelector('[data-manual-extra-time]');
+        const sync = () => {
+            if (!timeField || !toggle) return;
+            timeField.hidden = !toggle.checked;
+        };
+        toggle?.addEventListener('change', sync);
+        sync();
     })();
 </script>
-

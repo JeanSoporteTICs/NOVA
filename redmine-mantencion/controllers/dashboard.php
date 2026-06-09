@@ -57,6 +57,29 @@ function dashboard_json_response(array $payload, int $statusCode = 200): void {
     exit;
 }
 
+function dashboard_security_actor(): string {
+    auth_start_session();
+    $name = trim((string)($_SESSION['user']['nombre'] ?? ''));
+    $id = trim((string)($_SESSION['user']['id'] ?? ''));
+    if ($name === '' && $id === '') {
+        return 'usuario desconocido';
+    }
+    return trim($name . ($id !== '' ? ' (ID ' . $id . ')' : ''));
+}
+
+function dashboard_security_ids_count(array $ids): int {
+    return count(array_values(array_filter(array_map('trim', $ids), static fn(string $id): bool => $id !== '')));
+}
+
+function dashboard_log_action(string $tag, string $details): void {
+    if (!function_exists('log_security_event')) {
+        return;
+    }
+    $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    $suffix = $ip !== '' ? ' | IP ' . $ip : '';
+    log_security_event($tag, dashboard_security_actor() . ' | ' . $details . $suffix);
+}
+
 function dashboard_messages_file(): string {
     return __DIR__ . '/../data/mensaje.json';
 }
@@ -1482,7 +1505,7 @@ function dashboard_core_extract_json_rows(string $body): array {
     if (!is_array($payload)) {
         return [];
     }
-    $items = dashboard_array_is_list($payload) ? $payload : [$payload];
+    $items = dashboard_core_json_items($payload);
     $rows = [];
     foreach ($items as $item) {
         if (!is_array($item)) {
@@ -1702,6 +1725,56 @@ function dashboard_core_candidate_urls(string $sourceUrl): array {
     return array_values(array_unique(array_filter($candidates)));
 }
 
+function dashboard_core_filter_payload(array $filters = []): array {
+    $payload = [];
+    $desde = trim((string)($filters['desde'] ?? ''));
+    $hasta = trim((string)($filters['hasta'] ?? ''));
+    $assigned = trim((string)($filters['assigned'] ?? ''));
+
+    if ($desde !== '') {
+        $payload['desde'] = $desde;
+        $payload['fecha_desde'] = $desde;
+        $payload['fecha_inicio'] = $desde;
+    }
+
+    if ($hasta !== '') {
+        $payload['hasta'] = $hasta;
+        $payload['fecha_hasta'] = $hasta;
+        $payload['fecha_fin'] = $hasta;
+    }
+
+    if ($assigned !== '') {
+        $payload['assigned'] = $assigned;
+        $payload['asignado'] = $assigned;
+        $payload['usuario_asignado'] = $assigned;
+    }
+
+    return $payload;
+}
+
+function dashboard_core_url_with_filters(string $url, array $filters = []): string {
+    $payload = dashboard_core_filter_payload($filters);
+    if (empty($payload)) {
+        return $url;
+    }
+
+    return $url . (str_contains($url, '?') ? '&' : '?') . http_build_query($payload);
+}
+
+function dashboard_core_json_items(array $payload): array {
+    if (dashboard_array_is_list($payload)) {
+        return $payload;
+    }
+
+    foreach (['data', 'rows', 'items', 'solicitudes', 'result', 'results', 'records', 'aaData'] as $key) {
+        if (isset($payload[$key]) && is_array($payload[$key])) {
+            return dashboard_core_json_items($payload[$key]);
+        }
+    }
+
+    return [$payload];
+}
+
 function dashboard_core_base_admin_url(string $url): string {
     $url = trim($url);
     if ($url === '') {
@@ -1709,14 +1782,14 @@ function dashboard_core_base_admin_url(string $url): string {
     }
     $parts = parse_url($url);
     if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
-        return rtrim(preg_replace('#/obtener_[^/?#]+$#', '', $url) ?? $url, '/');
+        return rtrim(preg_replace('~/obtener_[^/?#]+$~', '', $url) ?? $url, '/');
     }
     $base = $parts['scheme'] . '://' . $parts['host'];
     if (!empty($parts['port'])) {
         $base .= ':' . $parts['port'];
     }
     $path = (string)($parts['path'] ?? '');
-    $path = preg_replace('#/obtener_[^/?#]+$#', '', $path) ?? $path;
+    $path = preg_replace('~/obtener_[^/?#]+$~', '', $path) ?? $path;
     $path = rtrim($path, '/');
     return $base . $path;
 }
@@ -1814,10 +1887,38 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         $requestHeaders[] = 'Referer: ' . $loginUrl;
     }
     foreach (dashboard_core_candidate_urls($sourceUrl) as $candidateUrl) {
-        $page = dashboard_core_curl($candidateUrl, [
+        $page = dashboard_core_curl(dashboard_core_url_with_filters($candidateUrl, $filters), [
             CURLOPT_COOKIEJAR => $cookieJar,
             CURLOPT_COOKIEFILE => $cookieJar,
             CURLOPT_HTTPHEADER => $requestHeaders,
+        ]);
+        if ($page['error'] !== '') {
+            continue;
+        }
+        $pageNorm = dashboard_normalize_text($page['body']);
+        if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
+            continue;
+        }
+        $rows = dashboard_core_extract_json_rows($page['body']);
+        if (empty($rows)) {
+            $rows = dashboard_core_extract_rows($page['body']);
+        }
+        if (!empty($rows)) {
+            $sourceUrl = $candidateUrl;
+            break;
+        }
+
+        $filterPayload = dashboard_core_filter_payload($filters);
+        if (empty($filterPayload)) {
+            continue;
+        }
+
+        $page = dashboard_core_curl($candidateUrl, [
+            CURLOPT_COOKIEJAR => $cookieJar,
+            CURLOPT_COOKIEFILE => $cookieJar,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($filterPayload),
+            CURLOPT_HTTPHEADER => array_merge($requestHeaders, ['Content-Type: application/x-www-form-urlencoded']),
         ]);
         if ($page['error'] !== '') {
             continue;
@@ -2703,6 +2804,31 @@ function dashboard_filter_messages_by_scope(array $messages): array {
     }));
 }
 
+function dashboard_accessible_message_ids(array $messages): array {
+    $ids = [];
+    foreach (dashboard_filter_messages_by_scope($messages) as $message) {
+        $id = trim((string)($message['id'] ?? ''));
+        if ($id !== '') {
+            $ids[$id] = true;
+        }
+    }
+    return $ids;
+}
+
+function dashboard_can_access_message(array $messages, string $id): bool {
+    $id = trim($id);
+    if ($id === '') {
+        return false;
+    }
+    $ids = dashboard_accessible_message_ids($messages);
+    return isset($ids[$id]);
+}
+
+function dashboard_filter_ids_by_scope(array $messages, array $ids): array {
+    $allowed = dashboard_accessible_message_ids($messages);
+    return array_values(array_filter(array_map('trim', $ids), static fn(string $id): bool => $id !== '' && isset($allowed[$id])));
+}
+
 function dashboard_default_core_assigned_name(): string {
     if (function_exists('auth_get_user_role') && auth_get_user_role() === 'root') {
         return '';
@@ -2745,6 +2871,11 @@ function handle_request(): array {
                 $id = $_POST['id'] ?? '';
                 if ($id === '') {
                     $flashMsg = 'Falta el identificador del mensaje.';
+                    break;
+                }
+                if (!dashboard_can_access_message($messages, (string)$id)) {
+                    $flashMsg = 'No tienes acceso a este mensaje.';
+                    $ajaxPayload['ok'] = false;
                     break;
                 }
                 $updated = false;
@@ -2790,6 +2921,7 @@ function handle_request(): array {
                         append_hours_extra_record($updatedMessage);
                     }
                     $flashMsg = 'Mensaje actualizado.';
+                    dashboard_log_action('REPORT_UPDATE', 'Edito reporte ID ' . $id);
                 } else {
                     $flashMsg = 'No se encontró el mensaje.';
                 }
@@ -2798,6 +2930,11 @@ function handle_request(): array {
                 $id = trim((string)($_POST['id'] ?? ''));
                 if ($id === '') {
                     $flashMsg = 'Identificador no valido.';
+                    break;
+                }
+                if (!dashboard_can_access_message($messages, $id)) {
+                    $flashMsg = 'No tienes acceso a este mensaje.';
+                    $ajaxPayload['ok'] = false;
                     break;
                 }
                 $updated = false;
@@ -2828,6 +2965,7 @@ function handle_request(): array {
                         remove_hours_extra_record_by_id($id);
                     }
                     $flashMsg = $isEnabled ? 'Hora extra activada.' : 'Hora extra desactivada.';
+                    dashboard_log_action('HORA_EXTRA', ($isEnabled ? 'Activo' : 'Desactivo') . ' hora extra en reporte ID ' . $id);
                     $ajaxPayload['ids'] = [$id];
                     $ajaxPayload['row'] = [
                         'id' => $id,
@@ -2849,11 +2987,17 @@ function handle_request(): array {
                     $ajaxPayload['ok'] = false;
                     break;
                 }
+                if (!dashboard_can_access_message($messages, (string)$id)) {
+                    $flashMsg = 'No tienes acceso a este mensaje.';
+                    $ajaxPayload['ok'] = false;
+                    break;
+                }
                 $before = count($messages);
                 $messages = array_values(array_filter($messages, fn($m) => ($m['id'] ?? '') !== $id));
                 if ($before !== count($messages)) {
                     save_messages($messages);
                     $flashMsg = 'Mensaje eliminado.';
+                    dashboard_log_action('REPORT_DELETE', 'Elimino reporte ID ' . $id);
                     $ajaxPayload['ids'] = [$id];
                 } else {
                     $flashMsg = 'No se encontró el mensaje para eliminar.';
@@ -2898,15 +3042,25 @@ function handle_request(): array {
                 }
                 if (!empty($result['error'])) {
                     $flashMsg = $result['error'];
+                    dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE desde ' . $desde . ' hasta ' . $hasta . ': ' . $result['error']);
                 } else {
                     $flashMsg = 'Importación CORE completada. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
+                    dashboard_log_action(
+                        'CORE_IMPORT',
+                        'Obtuvo datos CORE desde ' . $desde . ' hasta ' . $hasta
+                        . ' | asignado "' . $assigned . '"'
+                        . ' | nuevos ' . (int)($result['imported'] ?? 0)
+                        . ' | actualizados ' . (int)($result['updated'] ?? 0)
+                    );
                 }
                 break;
             case 'archive_selected':
                 $ids = isset($_POST['ids']) ? explode(',', $_POST['ids']) : [];
+                $ids = dashboard_filter_ids_by_scope($messages, $ids);
                 $archived = archive_selected_messages($messages, $ids);
                 if ($archived > 0) {
                     $flashMsg = $archived . ' tickets archivados.';
+                    dashboard_log_action('REPORT_ARCHIVE', 'Archivo ' . $archived . ' reporte(s)');
                     $ajaxPayload['ids'] = array_values(array_filter(array_map('trim', $ids)));
                 } else {
                     $flashMsg = 'No había mensajes seleccionados para archivar.';
@@ -2915,7 +3069,7 @@ function handle_request(): array {
                 break;
             case 'delete_selected':
                 $ids = isset($_POST['ids']) ? explode(',', $_POST['ids']) : [];
-                $ids = array_values(array_filter(array_map('trim', $ids)));
+                $ids = dashboard_filter_ids_by_scope($messages, $ids);
                 if (empty($ids)) {
                     $flashMsg = 'No había mensajes seleccionados para eliminar.';
                     $ajaxPayload['ok'] = false;
@@ -2927,6 +3081,7 @@ function handle_request(): array {
                 if ($deleted > 0) {
                     save_messages($messages);
                     $flashMsg = $deleted . ' mensaje(s) eliminados.';
+                    dashboard_log_action('REPORT_DELETE_BULK', 'Elimino ' . $deleted . ' reporte(s)');
                     $ajaxPayload['ids'] = $ids;
                 } else {
                     $flashMsg = 'No se encontraron mensajes seleccionados para eliminar.';
@@ -2935,7 +3090,7 @@ function handle_request(): array {
                 break;
             case 'reset_errors':
                 $ids = isset($_POST['ids']) ? explode(',', $_POST['ids']) : [];
-                $ids = array_filter(array_map('trim', $ids));
+                $ids = dashboard_filter_ids_by_scope($messages, $ids);
                 $updated = 0;
                 foreach ($messages as &$message) {
                     if (!in_array(($message['id'] ?? ''), $ids, true)) {
@@ -2954,6 +3109,7 @@ function handle_request(): array {
                     remove_redmine_logs_for_messages($ids);
                     save_messages($messages);
                     $flashMsg = $updated . ' error(es) marcados como pendientes.';
+                    dashboard_log_action('REPORT_RESET_ERRORS', 'Marco ' . $updated . ' error(es) como pendientes');
                     $ajaxPayload['ids'] = array_values($ids);
                     $ajaxPayload['status'] = 'pendiente';
                 } else {
@@ -2967,6 +3123,7 @@ function handle_request(): array {
         }
         if ($action === 'process_selected') {
             $ids = isset($_POST['ids']) ? explode(',', $_POST['ids']) : [];
+            $ids = dashboard_filter_ids_by_scope($messages, $ids);
             $result = send_selected_messages($messages, $ids, load_platform_config(), $userToken);
             $flashParts = [];
             if ($result['success'] > 0) {
@@ -2985,6 +3142,13 @@ function handle_request(): array {
                 $flashParts[] = 'Redmine ID(s): ' . implode(', ', $result['redmine_ids']);
             }
             $flashMsg = implode(' ', $flashParts);
+            dashboard_log_action(
+                'REDMINE_SEND',
+                'Envio datos a Redmine | seleccionados ' . dashboard_security_ids_count($ids)
+                . ' | intentos ' . (int)($result['attempts'] ?? 0)
+                . ' | exitos ' . (int)($result['success'] ?? 0)
+                . ' | fallas ' . max(0, (int)($result['attempts'] ?? 0) - (int)($result['success'] ?? 0))
+            );
         }
         if ($ajaxAction && $action !== 'process_selected' && $action !== 'import_core_history') {
             $scopedMessages = dashboard_filter_messages_by_scope($messages);

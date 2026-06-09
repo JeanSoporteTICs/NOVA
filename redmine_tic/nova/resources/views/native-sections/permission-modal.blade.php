@@ -1,5 +1,5 @@
-<div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+<div class="modal fade detail-drawer-modal" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
         <form class="modal-content" method="post" action="{{ $formAction }}">
             @csrf
             <input type="hidden" name="config_action" value="{{ $configAction }}">
@@ -8,8 +8,11 @@
             @endforeach
             <div class="modal-header">
                 <div>
-                    <h2 class="modal-title fs-5">{{ $title }}</h2>
-                    <div class="text-muted fw-semibold">{{ $subtitle }}</div>
+                    <p class="detail-drawer-kicker">Permisos del proyecto</p>
+                    <h2 class="modal-title">
+                        <span class="detail-drawer-icon"><i class="bi bi-shield-lock"></i></span>
+                        {{ $title }}
+                    </h2>
                 </div>
                 <button type="button" class="btn-close" data-nova-modal-close data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -91,10 +94,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close data-bs-dismiss="modal"><i class="bi bi-x-lg"></i>Cancelar</button>
                 <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
             </div>
         </form>
     </div>
 </div>
-

@@ -202,23 +202,26 @@
                         </div>
                     </div>
                     <button class="rm-redmine-card-hit" type="button" data-bs-toggle="modal" data-bs-target="#rm-options-{{ $field }}" aria-label="Abrir {{ $label }}"></button>
-                    <div class="modal fade" id="rm-options-{{ $field }}" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal fade detail-drawer-modal" id="rm-options-{{ $field }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
                                     <div>
-                                        <h2 class="modal-title fs-5">{{ $label }}</h2>
-                                        <div class="text-muted fw-semibold">{{ count(data_get($config, $field, [])) }} opcion(es). ID default: {{ data_get($config, $defaultKey, '-') ?: '-' }}</div>
+                                        <p class="detail-drawer-kicker">Catalogo Redmine</p>
+                                        <h2 class="modal-title">
+                                            <span class="detail-drawer-icon"><i class="bi {{ $optionGroup['icon'] }}"></i></span>
+                                            {{ $label }}
+                                        </h2>
                                     </div>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                                 </div>
                                 <div class="modal-body">
-                                    <div class="d-flex justify-content-end mb-3">
+                                    <div class="detail-drawer-panel d-flex justify-content-end mb-3">
                                         <button class="btn btn-success" type="button" data-bs-toggle="modal" data-bs-target="#rm-option-create-{{ $field }}">
                                             <i class="bi bi-plus-lg"></i>Agregar
                                         </button>
                                     </div>
-                    <div class="rm-option-list">
+                    <div class="rm-option-list detail-drawer-panel">
                         @forelse (data_get($config, $field, []) as $option)
                             @php
                                 $modalId = 'rm-option-edit-' . $field . '-' . $loop->index;
@@ -250,7 +253,7 @@
                             <div class="rm-empty-state">Sin opciones configuradas.</div>
                         @endforelse
                     </div>
-                    <div class="rm-option-foot">
+                    <div class="rm-option-foot detail-drawer-panel mt-3">
                         <span>ID predeterminado</span>
                         <strong>{{ data_get($config, $defaultKey, '-') ?: '-' }}</strong>
                     </div>
@@ -406,7 +409,7 @@
             @endif
             <div class="col-12">
                 <button class="btn btn-primary" type="submit" name="config_action" value="save_webhook" data-webhook-save-button @disabled(!$webhookCanSave)><i class="bi bi-save"></i>Guardar webhook</button>
-                <span class="ms-2 text-muted fw-semibold" data-webhook-save-hint>{{ $webhookCanSave ? 'Conexion probada.' : 'Prueba la conexion antes de guardar.' }}</span>
+                <span class="ms-2 text-muted fw-semibold" data-webhook-save-hint>{{ $webhookCanSave ? 'Conexion probada.' : '' }}</span>
             </div>
         </div>
     </form>
@@ -986,7 +989,7 @@
             const canSave = webhookUrlInput.value.trim() !== '' && webhookUrlInput.value.trim() === (webhookUrlInput.dataset.testedUrl || '').trim();
             webhookSaveButton.disabled = !canSave;
             if (webhookSaveHint) {
-                webhookSaveHint.textContent = canSave ? 'Conexion probada.' : 'Prueba la conexion antes de guardar.';
+                webhookSaveHint.textContent = canSave ? 'Conexion probada.' : '';
             }
         };
         webhookUrlInput?.addEventListener('input', syncWebhookSaveState);
@@ -1198,4 +1201,3 @@
         .rm-summary-operation-grid { grid-template-columns: 1fr; }
     }
 </style>
-

@@ -1529,7 +1529,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           </div>
           <div class="col-12 permission-grid-section">
             <label class="form-label mb-1">Accesos a vistas</label>
-            <div class="permission-section-help">Activa primero el permiso para ver la vista. Los permisos marcados como adicionales habilitan acciones dentro de esa vista.</div>
             <div class="row g-2">
               <div class="col-md-4">
                 <div class="form-check">
@@ -1725,7 +1724,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           </div>
           <div class="col-12 permission-grid-section">
             <label class="form-label mb-1">Accesos a vistas</label>
-            <div class="permission-section-help">Activa primero el permiso para ver la vista. Los permisos marcados como adicionales habilitan acciones dentro de esa vista.</div>
             <div class="row g-2">
               <div class="col-md-4">
                 <div class="form-check">
@@ -2082,7 +2080,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </div> <!-- #page-content -->
 </body>
 </html>
-
 
 
 

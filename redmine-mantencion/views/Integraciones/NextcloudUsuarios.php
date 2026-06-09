@@ -11,7 +11,7 @@ $hasSavedNextcloudCredentials = (function_exists('auth_get_user_id') && nextclou
 $previewUsers = is_array($preview['users'] ?? null) ? $preview['users'] : [];
 $hasInvalidPreview = false;
 foreach ($previewUsers as $item) {
-    if (empty($item['groups']) || empty($item['email_valid'])) {
+    if (empty($item['groups']) || empty($item['email_valid']) || !empty($item['duplicate_in_file'])) {
         $hasInvalidPreview = true;
         break;
     }
@@ -210,11 +210,18 @@ foreach ($previewUsers as $item) {
                         <?php
                           $selectedGroup = (string)($item['groups'][0] ?? '');
                           $emailValid = !empty($item['email_valid']);
+                          $groupSuggestions = is_array($item['group_suggestions'] ?? null) ? $item['group_suggestions'] : [];
                         ?>
                         <tr data-nextcloud-row>
                           <td><input type="checkbox" class="form-check-input nextcloud-row-check" aria-label="Seleccionar fila"></td>
                           <td class="fw-bold">
                             <?= $h($item['userid'] ?? '') ?>
+                            <?php if (!empty($item['userid_normalized']) && (string)($item['raw_userid'] ?? '') !== ''): ?>
+                              <span class="badge text-bg-info ms-1">Normalizado desde <?= $h($item['raw_userid'] ?? '') ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($item['duplicate_in_file'])): ?>
+                              <span class="badge text-bg-danger ms-1">Duplicado</span>
+                            <?php endif; ?>
                             <input type="hidden" name="users[<?= (int)$idx ?>][userid]" value="<?= $h($item['userid'] ?? '') ?>">
                             <input type="hidden" name="users[<?= (int)$idx ?>][displayName]" value="<?= $h($item['displayName'] ?? '') ?>">
                             <input type="hidden" name="users[<?= (int)$idx ?>][email]" value="<?= $h($item['email'] ?? '') ?>">
@@ -234,6 +241,15 @@ foreach ($previewUsers as $item) {
                               <span class="badge text-bg-success nextcloud-group-badge" data-group-label><?= $h($selectedGroup) ?></span>
                             <?php else: ?>
                               <span class="badge text-bg-warning nextcloud-group-badge" data-group-label>Sin coincidencia</span>
+                              <?php if ($groupSuggestions): ?>
+                                <div class="d-flex flex-wrap gap-1 mt-2">
+                                  <?php foreach ($groupSuggestions as $suggestion): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-primary nextcloud-suggestion-btn" data-suggested-group="<?= $h($suggestion) ?>">
+                                      <?= $h($suggestion) ?>
+                                    </button>
+                                  <?php endforeach; ?>
+                                </div>
+                              <?php endif; ?>
                             <?php endif; ?>
                           </td>
                           <td>
@@ -264,19 +280,40 @@ foreach ($previewUsers as $item) {
 
         <?php $existingUsers = is_array($lastImport['existing_users'] ?? null) ? $lastImport['existing_users'] : []; ?>
         <?php $createdUsers = is_array($lastImport['created_users'] ?? null) ? $lastImport['created_users'] : []; ?>
+        <?php $failedUsers = is_array($lastImport['failed_users'] ?? null) ? $lastImport['failed_users'] : []; ?>
         <?php
-          $resultUsers = [];
-          foreach ($createdUsers as $item) {
-              $item['_status'] = 'Creado';
-              $item['_badge'] = 'success';
-              $item['_row'] = 'table-success nextcloud-row-created';
-              $resultUsers[] = $item;
+          $resultUsers = is_array($lastImport['result_users'] ?? null) ? $lastImport['result_users'] : [];
+          if (!$resultUsers) {
+              foreach ($createdUsers as $item) {
+                  $item['status'] = 'created';
+                  $item['message'] = $item['message'] ?? 'Creado correctamente.';
+                  $resultUsers[] = $item;
+              }
+              foreach ($existingUsers as $item) {
+                  $item['status'] = 'existing';
+                  $item['message'] = $item['message'] ?? 'No se creó porque ya existe en Nextcloud.';
+                  $resultUsers[] = $item;
+              }
+              foreach ($failedUsers as $item) {
+                  $item['status'] = 'failed';
+                  $resultUsers[] = $item;
+              }
           }
-          foreach ($existingUsers as $item) {
-              $item['_status'] = 'Existente';
-              $item['_badge'] = 'warning';
-              $item['_row'] = 'table-warning nextcloud-row-existing';
-              $resultUsers[] = $item;
+          foreach ($resultUsers as $idx => $item) {
+              $status = (string)($item['status'] ?? '');
+              if ($status === 'created') {
+                  $resultUsers[$idx]['_status'] = 'Creado';
+                  $resultUsers[$idx]['_badge'] = 'success';
+                  $resultUsers[$idx]['_row'] = 'table-success nextcloud-row-created';
+              } elseif ($status === 'existing') {
+                  $resultUsers[$idx]['_status'] = 'Ya existe';
+                  $resultUsers[$idx]['_badge'] = 'warning';
+                  $resultUsers[$idx]['_row'] = 'table-warning nextcloud-row-existing';
+              } else {
+                  $resultUsers[$idx]['_status'] = 'No creado';
+                  $resultUsers[$idx]['_badge'] = 'danger';
+                  $resultUsers[$idx]['_row'] = 'table-danger';
+              }
           }
         ?>
         <?php if (!empty($lastImport) && $resultUsers): ?>
@@ -289,7 +326,7 @@ foreach ($previewUsers as $item) {
                   </div>
                   <div>
                     <h5 class="mb-0">Resultado de importación</h5>
-                    <div class="text-muted small">Usuarios creados y existentes en una sola tabla. Disponible en historial por 24 horas.</div>
+                    <div class="text-muted small">Todos los usuarios enviados, indicando si fue creado o no se creó porque ya existía. Disponible en historial por 24 horas.</div>
                   </div>
                 </div>
                 <button type="button" class="btn btn-outline-primary" data-copy-table="#nextcloud-result-table">
@@ -306,6 +343,7 @@ foreach ($previewUsers as $item) {
                       <th>Correo</th>
                       <th>Grupo</th>
                       <th>Contraseña</th>
+                      <th>Detalle</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -317,6 +355,7 @@ foreach ($previewUsers as $item) {
                         <td><?= $h($item['email'] ?? '') ?></td>
                         <td><?= $h($item['group'] ?? '') ?></td>
                         <td><?= $h($item['password'] ?? '') ?></td>
+                        <td><?= $h($item['message'] ?? '') ?></td>
                       </tr>
                     <?php endforeach; ?>
                   </tbody>
@@ -422,6 +461,65 @@ document.addEventListener('DOMContentLoaded', () => {
   let quotaChanged = false;
   let nextcloudProgressTimer = null;
   let nextcloudSubmitAccepted = false;
+  const groupStopwords = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'a', 'al', 'en', 'por', 'para']);
+
+  function normalizeGroupText(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  function groupTokens(value) {
+    return normalizeGroupText(value)
+      .split(/[^a-z0-9]+/)
+      .filter(token => token && !groupStopwords.has(token))
+      .filter((token, index, items) => items.indexOf(token) === index);
+  }
+
+  function groupKey(value) {
+    return normalizeGroupText(value).replace(/[^a-z0-9]+/g, '');
+  }
+
+  function groupScore(term, group) {
+    const needle = groupKey(term);
+    const hay = groupKey(group);
+    if (!needle || !hay) return 0;
+    if (needle === hay) return 100;
+    const needleTokens = groupTokens(term);
+    const groupTokensValue = groupTokens(group);
+    const needleTokenKey = needleTokens.join('');
+    const groupTokenKey = groupTokensValue.join('');
+    if (needleTokenKey && needleTokenKey === groupTokenKey) return 98;
+    if (needleTokenKey && groupTokenKey.includes(needleTokenKey)) return 90;
+    if (groupTokenKey && needleTokenKey.includes(groupTokenKey)) return 86;
+    const overlap = needleTokens.filter(token => groupTokensValue.includes(token));
+    if (needleTokens.length && groupTokensValue.length) {
+      const needleCoverage = overlap.length / needleTokens.length;
+      const groupCoverage = overlap.length / groupTokensValue.length;
+      const partialMatches = needleTokens.filter(token => {
+        return token.length >= 2 && groupTokensValue.some(groupToken => groupToken.startsWith(token) || groupToken.includes(token));
+      });
+      const partialCoverage = new Set(partialMatches).size / needleTokens.length;
+      if (needleCoverage === 1 && groupCoverage === 1) return 96;
+      if (needleCoverage === 1) return 82;
+      if (partialCoverage === 1) return 80;
+      if (partialCoverage >= 0.5 && partialMatches.length >= 2) return 72;
+      if (groupCoverage === 1 && overlap.length >= 2) return 78;
+      if (overlap.length >= 2) return 68;
+    }
+    if (hay.includes(needle)) return 74;
+    if (needle.includes(hay)) return 70;
+    return 0;
+  }
+
+  function bestGroupMatch(term) {
+    const matches = groups
+      .map(group => ({ group, score: groupScore(term, group) }))
+      .filter(item => item.score >= 68)
+      .sort((a, b) => b.score - a.score || a.group.length - b.group.length || a.group.localeCompare(b.group, 'es'));
+    return matches.length ? matches[0].group : '';
+  }
 
   function showNextcloudLoading() {
     if (!nextcloudLoadingOverlay || !nextcloudLoadingProgressBar) return;
@@ -471,7 +569,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return !input || input.value.trim() === '';
     });
     const invalidEmail = rows.some(row => row.querySelector('.badge.text-bg-danger'));
-    confirmBtn.disabled = confirmBtn.dataset.maintenance === '1' || missingGroup || invalidEmail;
+    const duplicateRows = rows.some(row => Array.from(row.querySelectorAll('.badge')).some(badge => badge.textContent.trim() === 'Duplicado'));
+    confirmBtn.disabled = confirmBtn.dataset.maintenance === '1' || missingGroup || invalidEmail || duplicateRows;
   }
 
   function hasSelectedRows() {
@@ -486,22 +585,32 @@ document.addEventListener('DOMContentLoaded', () => {
   if (search) {
     search.addEventListener('input', () => {
       const term = search.value.trim();
-      const normalized = term.toLowerCase();
-      const exactGroup = groups.find(group => group.toLowerCase() === normalized) || '';
-      selectedGroup = exactGroup;
-      selectedGroupText = exactGroup;
+      const normalized = normalizeGroupText(term);
+      selectedGroup = bestGroupMatch(term);
+      selectedGroupText = selectedGroup;
       updateApplyState();
       if (!groupList) return;
       groupList.innerHTML = '';
       if (normalized.length < 1) return;
       groups
-        .filter(group => group.toLowerCase().includes(normalized))
+        .map(group => ({ group, score: groupScore(term, group) }))
+        .filter(item => item.score > 0 || normalizeGroupText(item.group).includes(normalized))
+        .sort((a, b) => b.score - a.score || a.group.length - b.group.length || a.group.localeCompare(b.group, 'es'))
         .slice(0, 30)
-        .forEach(group => {
+        .forEach(({ group }) => {
           const option = document.createElement('option');
           option.value = group;
           groupList.appendChild(option);
         });
+    });
+    search.addEventListener('change', () => {
+      const match = bestGroupMatch(search.value.trim());
+      if (match) {
+        selectedGroup = match;
+        selectedGroupText = match;
+        search.value = match;
+      }
+      updateApplyState();
     });
   }
 
@@ -526,6 +635,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const checks = Array.from(document.querySelectorAll('.nextcloud-row-check'));
         checkAll.checked = checks.length > 0 && checks.every(check => check.checked);
       }
+      updateApplyState();
+      updateConfirmState();
+    });
+  });
+
+  document.querySelectorAll('.nextcloud-suggestion-btn').forEach(button => {
+    button.addEventListener('click', () => {
+      const row = button.closest('[data-nextcloud-row]');
+      const group = button.dataset.suggestedGroup || '';
+      const groupInput = row ? row.querySelector('.nextcloud-row-group-input') : null;
+      const label = row ? row.querySelector('[data-group-label]') : null;
+      if (!group || !groupInput || !label) return;
+      groupInput.value = group;
+      label.textContent = group;
+      label.classList.remove('text-bg-warning');
+      label.classList.add('text-bg-success');
+      row.querySelectorAll('.nextcloud-suggestion-btn').forEach(item => item.remove());
       updateApplyState();
       updateConfirmState();
     });

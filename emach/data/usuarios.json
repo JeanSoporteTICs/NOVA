@@ -1,0 +1,20 @@
+[
+  {
+    "id": "42",
+    "rut_sin_dv": "19006667",
+    "nombre": "Jean",
+    "apellido": "Cortes Lorca",
+    "rut": "19.006.667-3",
+    "rol": "gestor",
+    "estado": "activo"
+  },
+  {
+    "id": "1",
+    "rut_sin_dv": "1",
+    "nombre": "root",
+    "apellido": "",
+    "rut": "",
+    "rol": "root",
+    "estado": "activo"
+  }
+]

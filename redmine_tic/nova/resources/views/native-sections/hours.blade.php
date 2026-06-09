@@ -125,32 +125,40 @@
     </div>
 </section>
 
-<div class="modal fade" id="editar-horas" tabindex="-1" aria-labelledby="editar-horas-title" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade detail-drawer-modal" id="editar-horas" tabindex="-1" aria-labelledby="editar-horas-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
         <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.hours.action') }}">
             @csrf
             <input type="hidden" name="_source_file">
             <input type="hidden" name="fecha">
             <div class="modal-header">
-                <h2 class="modal-title fs-5" id="editar-horas-title">Editar horas por fecha</h2>
+                <div>
+                    <p class="detail-drawer-kicker">Horas extra</p>
+                    <h2 class="modal-title" id="editar-horas-title">
+                        <span class="detail-drawer-icon"><i class="bi bi-clock"></i></span>
+                        Editar horas por fecha
+                    </h2>
+                </div>
                 <button type="button" class="btn-close" data-nova-modal-close aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Fecha</label>
-                    <input class="form-control" name="fecha_display" readonly>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Hora de inicio</label>
-                    <input class="form-control" type="time" name="hora_inicio">
-                </div>
-                <div class="mb-0">
-                    <label class="form-label">Hora de término</label>
-                    <input class="form-control" type="time" name="hora_fin">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Fecha</label>
+                        <input class="form-control" name="fecha_display" readonly>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Hora de inicio</label>
+                        <input class="form-control" type="time" name="hora_inicio">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Hora de termino</label>
+                        <input class="form-control" type="time" name="hora_fin">
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close>Cancelar</button>
+                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close><i class="bi bi-x-lg"></i>Cancelar</button>
                 <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar</button>
             </div>
         </form>
@@ -264,4 +272,3 @@
         });
     })();
 </script>
-

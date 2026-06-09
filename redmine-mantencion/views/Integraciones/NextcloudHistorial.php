@@ -23,6 +23,7 @@ $batches = nextcloud_created_history_load();
     .nextcloud-panel { border: 0; border-radius: 1.1rem; box-shadow: 0 16px 38px rgba(15, 23, 42, .08); }
     .nextcloud-row-created > * { background-color: #dcfce7 !important; }
     .nextcloud-row-existing > * { background-color: #fef3c7 !important; }
+    .nextcloud-row-failed > * { background-color: #fee2e2 !important; }
   </style>
 </head>
 <body class="bg-light">
@@ -68,18 +69,39 @@ $batches = nextcloud_created_history_load();
         $tableId = 'nextcloud-history-' . preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($batch['id'] ?? uniqid()));
         $createdUsers = (array)(($batch['created_users'] ?? null) ?: ($batch['users'] ?? []));
         $existingUsers = (array)($batch['existing_users'] ?? []);
-        $batchUsers = [];
-        foreach ($createdUsers as $item) {
-            $item['_status'] = 'Creado';
-            $item['_badge'] = 'success';
-            $item['_row'] = 'table-success nextcloud-row-created';
-            $batchUsers[] = $item;
+        $failedUsers = (array)($batch['failed_users'] ?? []);
+        $batchUsers = is_array($batch['result_users'] ?? null) ? (array)$batch['result_users'] : [];
+        if (!$batchUsers) {
+            foreach ($createdUsers as $item) {
+                $item['status'] = 'created';
+                $item['message'] = $item['message'] ?? 'Creado correctamente.';
+                $batchUsers[] = $item;
+            }
+            foreach ($existingUsers as $item) {
+                $item['status'] = 'existing';
+                $item['message'] = $item['message'] ?? 'No se creó porque ya existe en Nextcloud.';
+                $batchUsers[] = $item;
+            }
+            foreach ($failedUsers as $item) {
+                $item['status'] = 'failed';
+                $batchUsers[] = $item;
+            }
         }
-        foreach ($existingUsers as $item) {
-            $item['_status'] = 'Existente';
-            $item['_badge'] = 'warning';
-            $item['_row'] = 'table-warning nextcloud-row-existing';
-            $batchUsers[] = $item;
+        foreach ($batchUsers as $idx => $item) {
+            $status = (string)($item['status'] ?? '');
+            if ($status === 'created') {
+                $batchUsers[$idx]['_status'] = 'Creado';
+                $batchUsers[$idx]['_badge'] = 'success';
+                $batchUsers[$idx]['_row'] = 'table-success nextcloud-row-created';
+            } elseif ($status === 'existing') {
+                $batchUsers[$idx]['_status'] = 'Ya existe';
+                $batchUsers[$idx]['_badge'] = 'warning';
+                $batchUsers[$idx]['_row'] = 'table-warning nextcloud-row-existing';
+            } else {
+                $batchUsers[$idx]['_status'] = 'No creado';
+                $batchUsers[$idx]['_badge'] = 'danger';
+                $batchUsers[$idx]['_row'] = 'table-danger nextcloud-row-failed';
+            }
         }
       ?>
       <div class="card nextcloud-panel mb-3">
@@ -109,6 +131,7 @@ $batches = nextcloud_created_history_load();
                   <th>Correo</th>
                   <th>Grupo</th>
                   <th>Contraseña</th>
+                  <th>Detalle</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,6 +143,7 @@ $batches = nextcloud_created_history_load();
                     <td><?= $h($item['email'] ?? '') ?></td>
                     <td><?= $h($item['group'] ?? '') ?></td>
                     <td><?= $h($item['password'] ?? '') ?></td>
+                    <td><?= $h($item['message'] ?? '') ?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>

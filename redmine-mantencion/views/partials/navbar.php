@@ -178,6 +178,7 @@ window.addEventListener('load', () => {
         window.location.href = url;
         return;
       }
+      window.appUi?.setLoading?.(true);
       try {
         const res = await fetch(url, { headers: { 'X-Requested-With': 'partial-nav' } });
         let text = await res.text();
@@ -212,6 +213,8 @@ window.addEventListener('load', () => {
         executeScripts(doc);
       } catch (err) {
         window.location.href = url;
+      } finally {
+        window.appUi?.setLoading?.(false);
       }
     };
     const handleClick = (e) => {
@@ -390,6 +393,14 @@ window.addEventListener('load', () => {
       } catch (e) {
         if (extendMsg) extendMsg.textContent = 'No se pudo extender la sesión.';
       }
+    });
+  }
+  if (modalEl) {
+    modalEl.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+      if (!modalEl.classList.contains('show')) return;
+      event.preventDefault();
+      if (extendBtn && !extendBtn.disabled) extendBtn.click();
     });
   }
   setModalState(false);

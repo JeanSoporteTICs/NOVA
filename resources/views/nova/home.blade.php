@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>NOVA</title>
+    @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
@@ -313,6 +314,22 @@
             box-shadow: 0 16px 30px rgba(71, 85, 105, .18);
         }
 
+        .nova-module-status-icon {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            z-index: 5;
+            display: grid;
+            width: 34px;
+            height: 34px;
+            place-items: center;
+            border-radius: 999px;
+            border: 1px solid #bae6fd;
+            background: #e0f2fe;
+            color: #0369a1;
+            box-shadow: 0 10px 24px rgba(14, 165, 233, .2);
+        }
+
         .nova-module-type {
             display: inline-flex;
             align-items: center;
@@ -542,20 +559,27 @@
                         'servicios' => 'bi-hdd-network',
                         'reportes' => 'bi-clipboard-data',
                         'usuarios' => 'bi-people',
+                        'telegram' => 'bi-telegram',
                         'administracion' => 'bi-person-gear',
                     ];
                     $projectType = $project['type'] ?? 'legacy';
                     $projectIcon = $project['icon'] ?? ($moduleIcons[$key] ?? ($projectType === 'native' ? 'bi-window-stack' : 'bi-window-sidebar'));
                     $isMaintenance = (bool) data_get($project, 'maintenance.enabled');
+                    $hasEmachCredentials = $key === 'emach' && (bool) session('nova_user.has_emach_credentials', false);
+                    $hasTelegramSettings = $key === 'telegram' && (bool) session('nova_user.has_telegram_settings', false);
                     $projectUrl = match ($key) {
                         'redmine_tic' => route('redmine.native.dashboard'),
                         'redmine-mantencion' => route('redmine.mantencion.dashboard'),
+                        'telegram' => route('telegram.index'),
                         'administracion' => route('administracion.index'),
                         default => url($key),
                     };
                 @endphp
                 <article class="nova-module nova-card">
                     <a class="nova-module-link" href="{{ $projectUrl }}" aria-label="Abrir {{ $project['name'] }}"></a>
+                    @if ($hasEmachCredentials || $hasTelegramSettings)
+                        <span class="nova-module-status-icon" title="{{ $hasEmachCredentials ? 'Credenciales EMACH guardadas' : 'Telegram personal configurado' }}" aria-label="{{ $hasEmachCredentials ? 'Credenciales EMACH guardadas' : 'Telegram personal configurado' }}"><i class="bi {{ $hasEmachCredentials ? 'bi-key-fill' : 'bi-check-circle-fill' }}"></i></span>
+                    @endif
                     <div class="nova-module-head">
                         <div class="nova-module-title">
                             <div class="nova-module-title-row">
@@ -566,7 +590,6 @@
                                     <h3>{{ $project['name'] }}</h3>
                                 </div>
                             </div>
-                            <p>{{ $project['description'] }}</p>
                         </div>
                     </div>
 

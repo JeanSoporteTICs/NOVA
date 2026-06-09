@@ -75,7 +75,14 @@ function ensure_user_fields(array &$item) {
 
 function load_usuarios($path) {
     ensure_usr_file($path);
-    $data = json_decode(file_get_contents($path), true);
+    $data = usuarios_project_users_from_nova();
+    if ($data === []) {
+        $data = json_decode(file_get_contents($path), true);
+        if (is_array($data) && $data !== []) {
+            save_usuarios($path, $data);
+            $data = usuarios_project_users_from_nova();
+        }
+    }
     if (!is_array($data)) $data = [];
     $changed = false;
     foreach ($data as &$item) {
@@ -88,7 +95,155 @@ function load_usuarios($path) {
 }
 
 function save_usuarios($path, $data) {
-    storage_write_json($path, $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    usuarios_save_project_users_to_nova(is_array($data) ? $data : []);
+    storage_write_json($path, usuarios_project_users_from_nova(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+}
+
+function usuarios_nova_users_path(): string {
+    return dirname(__DIR__, 2) . '/storage/app/nova/users.json';
+}
+
+function usuarios_read_nova_users(): array {
+    $path = usuarios_nova_users_path();
+    $rows = json_decode((string)@file_get_contents($path), true);
+    return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+}
+
+function usuarios_write_nova_users(array $rows): void {
+    $path = usuarios_nova_users_path();
+    storage_ensure_dir(dirname($path));
+    file_put_contents($path, json_encode(array_values($rows), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+    @chmod($path, 0666);
+}
+
+function usuarios_norm_identity(string $value): string {
+    return strtolower((string)preg_replace('/[^0-9a-z]/i', '', $value));
+}
+
+function usuarios_project_users_from_nova(): array {
+    $users = [];
+    foreach (usuarios_read_nova_users() as $row) {
+        $project = $row['projects']['redmine-mantencion'] ?? null;
+        if (!is_array($project)) {
+            continue;
+        }
+        $redmineId = trim((string)($project['id'] ?? $row['redmine_id'] ?? ''));
+        if ($redmineId === '') {
+            continue;
+        }
+        $users[] = [
+            'id' => $redmineId,
+            'rut_sin_dv' => trim((string)($row['rut_sin_dv'] ?? $row['username'] ?? '')),
+            'nombre' => trim((string)(($row['name'] ?? '') . ' ' . ($row['apellido'] ?? ''))),
+            'apellido' => '',
+            'rut' => trim((string)($row['rut'] ?? '')),
+            'numero_celular' => '',
+            'estamento' => '',
+            'api' => trim((string)($project['api'] ?? $row['api'] ?? '')),
+            'core_user' => trim((string)($project['core_user'] ?? '')),
+            'core_pass_enc' => trim((string)($project['core_pass_enc'] ?? '')),
+            'nextcloud_user' => trim((string)($project['nextcloud_user'] ?? '')),
+            'nextcloud_pass_enc' => trim((string)($project['nextcloud_pass_enc'] ?? '')),
+            'rol' => trim((string)($project['rol'] ?? $row['role'] ?? 'usuario')) ?: 'usuario',
+            'estado' => trim((string)($project['estado'] ?? $project['estado_usuario'] ?? $row['status'] ?? 'activo')) ?: 'activo',
+            'password' => (string)($row['password'] ?? ''),
+            'permisos' => is_array($project['permisos'] ?? null) ? $project['permisos'] : [],
+            '_nova_user_id' => (string)($row['id'] ?? ''),
+        ];
+    }
+    return $users;
+}
+
+function usuarios_save_project_users_to_nova(array $projectUsers): void {
+    $novaUsers = usuarios_read_nova_users();
+    foreach ($projectUsers as $projectUser) {
+        if (!is_array($projectUser)) {
+            continue;
+        }
+        $redmineId = trim((string)($projectUser['id'] ?? ''));
+        if ($redmineId === '') {
+            continue;
+        }
+        $idx = usuarios_find_nova_index_for_project_user($novaUsers, $projectUser);
+        $current = $idx !== null ? $novaUsers[$idx] : [];
+        $fullName = trim((string)($projectUser['nombre'] ?? ''));
+        $firstName = $fullName;
+        $lastName = trim((string)($projectUser['apellido'] ?? ''));
+        if ($lastName === '' && str_contains($fullName, ' ')) {
+            [$firstName, $lastName] = explode(' ', $fullName, 2);
+        }
+        $row = array_merge($current, [
+            'id' => (string)($current['id'] ?? uniqid('', true)),
+            'redmine_id' => (string)($current['redmine_id'] ?? $redmineId),
+            'source' => (string)($current['source'] ?? 'redmine-mantencion'),
+            'username' => trim((string)($current['username'] ?? $projectUser['rut_sin_dv'] ?? $projectUser['core_user'] ?? $redmineId)),
+            'name' => trim($firstName),
+            'apellido' => trim($lastName),
+            'rut' => trim((string)($projectUser['rut'] ?? $current['rut'] ?? '')),
+            'rut_sin_dv' => trim((string)($projectUser['rut_sin_dv'] ?? $current['rut_sin_dv'] ?? '')),
+            'role' => usuarios_normalize_nova_role((string)($current['role'] ?? $projectUser['rol'] ?? 'usuario')),
+            'status' => usuarios_normalize_status((string)($projectUser['estado'] ?? $current['status'] ?? 'activo')),
+            'password' => (string)($current['password'] ?? $projectUser['password'] ?? ''),
+            'api' => trim((string)($current['api'] ?? $projectUser['api'] ?? '')),
+        ]);
+        $projects = is_array($row['projects'] ?? null) ? $row['projects'] : [];
+        $projects['redmine-mantencion'] = [
+            'id' => $redmineId,
+            'rol' => trim((string)($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
+            'estado' => usuarios_normalize_status((string)($projectUser['estado'] ?? 'activo')),
+            'estado_usuario' => usuarios_normalize_status((string)($projectUser['estado'] ?? 'activo')),
+            'api' => trim((string)($projectUser['api'] ?? '')),
+            'core_user' => trim((string)($projectUser['core_user'] ?? '')),
+            'core_pass_enc' => trim((string)($projectUser['core_pass_enc'] ?? '')),
+            'nextcloud_user' => trim((string)($projectUser['nextcloud_user'] ?? '')),
+            'nextcloud_pass_enc' => trim((string)($projectUser['nextcloud_pass_enc'] ?? '')),
+            'permisos' => is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [],
+        ];
+        $row['projects'] = $projects;
+        if ($idx === null) {
+            $novaUsers[] = $row;
+        } else {
+            $novaUsers[$idx] = $row;
+        }
+    }
+    usuarios_write_nova_users($novaUsers);
+}
+
+function usuarios_find_nova_index_for_project_user(array $novaUsers, array $projectUser): ?int {
+    $redmineId = usuarios_norm_identity((string)($projectUser['id'] ?? ''));
+    $needles = array_filter(array_map('usuarios_norm_identity', [
+        $projectUser['rut'] ?? '',
+        $projectUser['rut_sin_dv'] ?? '',
+        $projectUser['core_user'] ?? '',
+    ]));
+    foreach ($novaUsers as $idx => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $project = $row['projects']['redmine-mantencion'] ?? [];
+        $candidateRedmineId = usuarios_norm_identity((string)($project['id'] ?? $row['redmine_id'] ?? ''));
+        if ($redmineId !== '' && $candidateRedmineId === $redmineId) {
+            return $idx;
+        }
+        $candidates = array_filter(array_map('usuarios_norm_identity', [
+            $row['rut'] ?? '',
+            $row['rut_sin_dv'] ?? '',
+            $row['username'] ?? '',
+            $row['core_user'] ?? '',
+        ]));
+        if ($needles !== [] && array_intersect($needles, $candidates) !== []) {
+            return $idx;
+        }
+    }
+    return null;
+}
+
+function usuarios_normalize_status(string $status): string {
+    return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
+}
+
+function usuarios_normalize_nova_role(string $role): string {
+    return in_array(strtolower(trim($role)), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
 }
 
 function usuarios_migrate_global_nextcloud_credentials(array &$rows): bool {

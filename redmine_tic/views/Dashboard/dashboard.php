@@ -22,6 +22,7 @@ $procesados = array_filter($messages, fn($m) => strtolower($m['estado'] ?? '') =
 $errores = array_filter($messages, fn($m) => strtolower($m['estado'] ?? '') === 'error');
 
 $cfg = load_platform_config();
+$redmineBaseUrl = function_exists('url') ? rtrim(url('/redmine_tic'), '/') : '/redmine_tic';
 
 function normalize_phone_key($value) {
     $digits = preg_replace('/\D/', '', $value ?? '');
@@ -340,6 +341,66 @@ $maintenanceActive = function_exists('maintenance_mode_enabled') && maintenance_
     box-shadow: 0 18px 42px rgba(15, 23, 42, .18);
     font-weight: 700;
   }
+  .redmine-send-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, .46);
+    backdrop-filter: blur(5px);
+  }
+  .redmine-send-overlay.is-visible { display: flex; }
+  .redmine-send-card {
+    width: min(460px, calc(100vw - 32px));
+    border-radius: 8px;
+    border: 1px solid #d9e2ec;
+    background: #fff;
+    box-shadow: 0 24px 64px rgba(16, 24, 40, .28);
+    padding: 18px;
+  }
+  .redmine-send-media {
+    display: grid;
+    place-items: center;
+    min-height: 150px;
+    margin-bottom: 14px;
+    border-radius: 8px;
+    background: #f4f7fb;
+    overflow: hidden;
+  }
+  .redmine-send-media img {
+    max-width: 100%;
+    max-height: 190px;
+    object-fit: contain;
+  }
+  .redmine-send-title {
+    margin: 0;
+    color: #111827;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+  .redmine-send-text {
+    margin: .2rem 0 0;
+    color: #64748b;
+    font-size: .92rem;
+  }
+  .redmine-send-progress {
+    height: 8px;
+    margin-top: 14px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+  }
+  .redmine-send-progress span {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #0f9f7a);
+    transition: width .22s ease;
+  }
   @media (max-width: 991px) { .dashboard-stats { grid-template-columns: 1fr; } }
   @media (max-width: 767px) {
     .dashboard-toolbar, .dashboard-table-header { flex-direction: column; align-items: stretch; }
@@ -593,6 +654,19 @@ $maintenanceActive = function_exists('maintenance_mode_enabled') && maintenance_
 
 
 
+<div class="redmine-send-overlay" id="redmine-send-overlay" role="status" aria-live="polite" aria-hidden="true">
+  <div class="redmine-send-card">
+    <div class="redmine-send-media">
+      <img src="<?= $h($redmineBaseUrl) ?>/assets/img/redmine.gif" alt="">
+    </div>
+    <h3 class="redmine-send-title">Enviando reportes a Redmine</h3>
+    <p class="redmine-send-text" id="redmine-send-text">Preparando seleccion...</p>
+    <div class="redmine-send-progress" aria-label="Progreso de envio">
+      <span id="redmine-send-progress"></span>
+    </div>
+  </div>
+</div>
+
   <form id="process-form" method="post" class="d-none">
     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
     <input type="hidden" name="action" id="process-action" value="process_selected">
@@ -705,7 +779,7 @@ $maintenanceActive = function_exists('maintenance_mode_enabled') && maintenance_
 
             <?php if ($estadoRedmineId): ?>
             <div class="col-md-3">
-              <label class="form-label">Estado Redmine (solo lectura)</label>
+              <label class="form-label">Estado Redmine</label>
               <input class="form-control" value="<?= $h($estadoRedmineNombre ?: ('ID ' . $estadoRedmineId)) ?>" disabled>
             </div>
             <?php endif; ?>
@@ -868,7 +942,7 @@ $maintenanceActive = function_exists('maintenance_mode_enabled') && maintenance_
     if (estadoHelp) estadoHelp.textContent = '';
     if (estadoActual === 'pendiente' || estadoActual === 'procesado') {
       estadoInput.disabled = true;
-      if (estadoHelp) estadoHelp.textContent = 'No se puede cambiar este estado.';
+      if (estadoHelp) estadoHelp.textContent = '';
     } else if (estadoActual === 'error') {
       estadoInput.setAttribute('list', 'estado-error-list');
       if (estadoHelp) estadoHelp.textContent = 'Solo puede cambiar a pendiente.';
@@ -1031,6 +1105,38 @@ const processForm = document.getElementById('process-form');
 
 const processAction = document.getElementById('process-action');
 const processIds = document.getElementById('process-ids');
+const redmineSendOverlay = document.getElementById('redmine-send-overlay');
+const redmineSendProgress = document.getElementById('redmine-send-progress');
+const redmineSendText = document.getElementById('redmine-send-text');
+let redmineSubmitDelayDone = false;
+
+function showRedmineSendProgress() {
+  if (!redmineSendOverlay || !redmineSendProgress) return;
+  const steps = [
+    { at: 12, text: 'Validando seleccion...' },
+    { at: 30, text: 'Conectando con Redmine...' },
+    { at: 52, text: 'Creando tickets...' },
+    { at: 76, text: 'Registrando respuestas...' },
+    { at: 94, text: 'Finalizando envio...' }
+  ];
+  let progress = 0;
+  let stepIndex = 0;
+  redmineSendOverlay.classList.add('is-visible');
+  redmineSendOverlay.setAttribute('aria-hidden', 'false');
+  redmineSendProgress.style.width = '0%';
+  if (redmineSendText) redmineSendText.textContent = steps[0].text;
+  const timer = window.setInterval(() => {
+    progress = Math.min(94, progress + 3 + Math.random() * 5);
+    redmineSendProgress.style.width = `${progress}%`;
+    while (steps[stepIndex + 1] && progress >= steps[stepIndex + 1].at) {
+      stepIndex += 1;
+      if (redmineSendText) redmineSendText.textContent = steps[stepIndex].text;
+    }
+    if (progress >= 94) {
+      window.clearInterval(timer);
+    }
+  }, 220);
+}
 
 if (processForm && processIds) {
 
@@ -1060,6 +1166,15 @@ if (processForm && processIds) {
         tone: 'warning'
       });
 
+    }
+    const currentProcessAction = processAction?.value || '';
+    if (!e.defaultPrevented && currentProcessAction === 'process_selected' && !redmineSubmitDelayDone) {
+      e.preventDefault();
+      showRedmineSendProgress();
+      redmineSubmitDelayDone = true;
+      window.setTimeout(() => {
+        processForm.requestSubmit();
+      }, 2500);
     }
     refreshDashboardCounters();
 
@@ -1232,10 +1347,6 @@ refreshDashboardCounters();
 </body>
 
 </html>
-
-
-
-
 
 
 

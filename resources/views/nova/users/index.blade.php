@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Usuarios NOVA</title>
+    @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
@@ -48,6 +49,10 @@
         .user-search i { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #64748b; }
         .user-search input { padding-left: 38px; }
         .column-filter { width: 150px; }
+        .emach-credential-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: .72rem; font-weight: 900; white-space: nowrap; }
+        .emach-credential-badge.is-missing { background: #f1f5f9; color: #64748b; }
+        .telegram-user-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .72rem; font-weight: 900; white-space: nowrap; }
+        .telegram-user-badge.is-missing { background: #f1f5f9; color: #64748b; }
         .row-actions { display: flex; gap: 7px; justify-content: flex-end; }
         .nova-toast-stack { position: fixed; right: 22px; bottom: 22px; z-index: 1080; display: grid; gap: 10px; width: min(380px, calc(100vw - 32px)); }
         .nova-toast { border-radius: 16px; border: 1px solid #cbd5e1; background: #fff; box-shadow: 0 20px 50px rgba(15, 23, 42, .18); padding: 14px 16px; display: flex; align-items: flex-start; gap: 10px; font-weight: 800; color: #0f172a; animation: toastIn .18s ease-out; }
@@ -132,7 +137,7 @@
                     <div class="form-section">
                         <div class="field">
                             <label for="rut">RUT</label>
-                            <input class="form-control" id="rut" name="rut" required placeholder="12.345.678-9" maxlength="12" data-user-rut>
+                            <input class="form-control" id="rut" name="rut" placeholder="12.345.678-9" maxlength="12" data-user-rut>
                             <div class="field-help" data-user-rut-help>Ingrese un RUT valido.</div>
                         </div>
                         <div class="field">
@@ -170,15 +175,35 @@
                         </div>
                     </div>
 
-                    <div class="form-section-title">Clave</div>
-                    <div class="form-section">
+                    <div class="form-section-title" data-user-create-password>Clave inicial</div>
+                    <div class="form-section" data-user-create-password>
                         <div class="field">
                             <label for="password">Contrasena</label>
-                            <input class="form-control" id="password" name="password" type="password" autocomplete="new-password" placeholder="Dejar vacia al editar">
+                            <input class="form-control" id="password" name="password" type="password" autocomplete="new-password">
                         </div>
                         <div class="field">
                             <label for="password_confirmation">Validar contrasena</label>
                             <input class="form-control" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" placeholder="Repetir contrasena">
+                        </div>
+                    </div>
+
+                    <div class="form-section-title">Credenciales EMACH</div>
+                    <div class="form-section is-two">
+                        <div class="field">
+                            <label for="emach_user">Usuario EMACH</label>
+                            <input class="form-control" id="emach_user" name="emach_user" autocomplete="off" placeholder="RUT trabajador" data-user-emach-user>
+                        </div>
+                        <div class="field">
+                            <label for="emach_password">Contrasena EMACH</label>
+                            <input class="form-control" id="emach_password" name="emach_password" type="password" autocomplete="new-password" placeholder="Dejar vacia para conservar" data-user-emach-password>
+                        </div>
+                    </div>
+
+                    <div class="form-section-title">Telegram</div>
+                    <div class="form-section">
+                        <div class="field">
+                            <label for="telegram_chat_id">Chat ID Telegram</label>
+                            <input class="form-control" id="telegram_chat_id" name="telegram_chat_id" autocomplete="off" placeholder="7449883192" data-user-telegram-chat-id>
                         </div>
                     </div>
                 </div>
@@ -221,6 +246,8 @@
                                 <th>Usuario</th>
                                 <th>Nombre</th>
                                 <th>ID Redmine</th>
+                                <th>EMACH</th>
+                                <th>Telegram</th>
                                 <th>Permiso NOVA</th>
                                 <th>Estado</th>
                                 <th></th>
@@ -230,6 +257,10 @@
                         @forelse ($users as $user)
                             @php($novaRole = in_array(($user['role'] ?? 'usuario'), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario')
                             @php($userStatus = $user['status'] ?? 'activo')
+                            @php($emachCredentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [])
+                            @php($hasEmachCredentials = trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '')
+                            @php($telegramSettings = is_array($user['telegram_settings'] ?? null) ? $user['telegram_settings'] : [])
+                            @php($hasTelegramSettings = trim((string) ($telegramSettings['chat_id'] ?? '')) !== '')
                             <tr data-user-row
                                 data-user-row-id="{{ $user['id'] ?? '' }}"
                                 data-user-row-rut="{{ $user['rut'] ?? '' }}"
@@ -243,6 +274,16 @@
                                 </td>
                                 <td>{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</td>
                                 <td>{{ $user['redmine_id'] ?? '-' }}</td>
+                                <td>
+                                    <span class="emach-credential-badge {{ $hasEmachCredentials ? '' : 'is-missing' }}">
+                                        <i class="bi {{ $hasEmachCredentials ? 'bi-key-fill' : 'bi-key' }}"></i>{{ $hasEmachCredentials ? 'Guardadas' : 'Sin datos' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="telegram-user-badge {{ $hasTelegramSettings ? '' : 'is-missing' }}">
+                                        <i class="bi {{ $hasTelegramSettings ? 'bi-telegram' : 'bi-chat' }}"></i>{{ $hasTelegramSettings ? 'Chat ID' : 'Sin datos' }}
+                                    </span>
+                                </td>
                                 <td><span class="nova-badge {{ $novaRole === 'admin' ? 'is-success' : '' }}">{{ $novaRole === 'admin' ? 'Admin' : 'Usuario' }}</span></td>
                                 <td><span class="nova-badge {{ $userStatus === 'baneado' ? 'is-danger' : '' }}">{{ $userStatus }}</span></td>
                                 <td>
@@ -255,9 +296,19 @@
                                             data-name="{{ $user['name'] ?? '' }}"
                                             data-apellido="{{ $user['apellido'] ?? '' }}"
                                             data-rut="{{ $user['rut'] ?? '' }}"
+                                            data-emach-user="{{ $emachCredentials['user'] ?? '' }}"
+                                            data-telegram-chat-id="{{ $telegramSettings['chat_id'] ?? '' }}"
                                             data-role="{{ $novaRole }}"
                                             data-status="{{ $user['status'] ?? 'activo' }}">
                                             <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary" type="button"
+                                            title="Cambiar contrasena"
+                                            data-password-open
+                                            data-id="{{ $user['id'] ?? '' }}"
+                                            data-username="{{ $user['username'] ?? '' }}"
+                                            data-display-name="{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}">
+                                            <i class="bi bi-key"></i>
                                         </button>
                                         <form method="post" action="{{ route('nova-users.update') }}" data-confirm-form data-confirm-message="{{ $userStatus === 'baneado' ? 'Activar este usuario?' : 'Marcar usuario como baneado?' }}">
                                             @csrf
@@ -274,7 +325,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6">No hay usuarios NOVA registrados.</td>
+                                <td colspan="8">No hay usuarios NOVA registrados.</td>
                             </tr>
                         @endforelse
                         </tbody>
@@ -308,15 +359,48 @@
             </div>
         </div>
     </div>
+    <div class="nova-modal-backdrop" data-password-modal aria-hidden="true">
+        <form class="nova-confirm" method="post" action="{{ route('nova-users.update') }}" role="dialog" aria-modal="true" aria-labelledby="password-title">
+            @csrf
+            <input type="hidden" name="action" value="password">
+            <input type="hidden" name="id" data-password-user-id>
+            <div class="nova-confirm__body">
+                <h2 id="password-title">Cambiar contrasena</h2>
+                <p class="nova-muted" data-password-user-text>Selecciona un usuario.</p>
+                <div class="field">
+                    <label for="password-new">Nueva contrasena</label>
+                    <input class="form-control" id="password-new" name="password" type="password" autocomplete="new-password" required data-password-new>
+                </div>
+                <div class="field">
+                    <label for="password-new-confirm">Validar contrasena</label>
+                    <input class="form-control" id="password-new-confirm" name="password_confirmation" type="password" autocomplete="new-password" required data-password-confirm>
+                </div>
+            </div>
+            <div class="nova-confirm__actions">
+                <button class="btn btn-outline-secondary" type="button" data-password-close>Cancelar</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-key"></i>Actualizar</button>
+            </div>
+        </form>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const form = document.querySelector('.form-panel');
         const formTitle = document.querySelector('[data-user-form-title]');
         const formMode = document.querySelector('[data-user-mode]');
         const userModal = document.querySelector('[data-user-modal]');
+        const passwordModal = document.querySelector('[data-password-modal]');
+        const passwordUserText = document.querySelector('[data-password-user-text]');
+        const passwordUserId = document.querySelector('[data-password-user-id]');
+        const passwordNew = document.querySelector('[data-password-new]');
+        const passwordConfirm = document.querySelector('[data-password-confirm]');
         const setValue = (selector, value) => {
             const field = form?.querySelector(selector);
             if (field) field.value = value || '';
+        };
+        const setCreatePasswordVisible = (visible) => {
+            form?.querySelectorAll('[data-user-create-password]').forEach((element) => {
+                element.hidden = !visible;
+            });
         };
         const openUserModal = () => {
             userModal?.classList.add('is-open');
@@ -332,6 +416,10 @@
             setValue('[data-user-id]', '');
             setValue('[data-user-redmine-id]', '');
             setValue('[data-user-username]', '');
+            setValue('[data-user-emach-user]', '');
+            setValue('[data-user-emach-password]', '');
+            setValue('[data-user-telegram-chat-id]', '');
+            setCreatePasswordVisible(true);
             rutField?.classList.remove('is-invalid');
             if (formTitle) formTitle.textContent = 'Crear usuario';
             if (formMode) formMode.textContent = 'Nuevo';
@@ -391,13 +479,21 @@
             const hasValue = rutField.value.trim() !== '';
             const valid = isValidRut(rutField.value);
             const duplicate = valid ? duplicateRutUser() : null;
+            const currentId = form?.querySelector('[data-user-id]')?.value || '';
+            const usernameField = form?.querySelector('[data-user-username]');
 
             if (rutHelp) {
                 rutHelp.textContent = duplicate ? 'Este RUT ya esta registrado.' : 'Ingrese un RUT valido.';
             }
 
             rutField.classList.toggle('is-invalid', showInvalid && hasValue && (!valid || duplicate !== null));
-            setValue('[data-user-username]', valid ? rutAccessUser(rutField.value) : '');
+            if (valid) {
+                setValue('[data-user-username]', rutAccessUser(rutField.value));
+            } else if (currentId === '') {
+                setValue('[data-user-username]', '');
+            } else if (usernameField && usernameField.value === '') {
+                setValue('[data-user-username]', form?.querySelector('[data-user-redmine-id]')?.value || '');
+            }
         };
         const rutField = form?.querySelector('[data-user-rut]');
         rutField?.addEventListener('input', () => {
@@ -414,7 +510,10 @@
         });
         form?.addEventListener('submit', (event) => {
             updateRutState(true);
-            if (rutField && (!isValidRut(rutField.value) || duplicateRutUser() !== null)) {
+            const currentId = form?.querySelector('[data-user-id]')?.value || '';
+            const hasRut = (rutField?.value || '').trim() !== '';
+            const mustValidateRut = currentId === '' || hasRut;
+            if (rutField && mustValidateRut && (!isValidRut(rutField.value) || duplicateRutUser() !== null)) {
                 event.preventDefault();
                 rutField.focus();
             }
@@ -434,11 +533,37 @@
                 updateRutState(false);
                 setValue('[data-user-role]', button.dataset.role);
                 setValue('[data-user-status]', button.dataset.status);
+                setValue('[data-user-emach-user]', button.dataset.emachUser);
+                setValue('[data-user-emach-password]', '');
+                setValue('[data-user-telegram-chat-id]', button.dataset.telegramChatId);
                 setValue('#password', '');
                 setValue('#password_confirmation', '');
+                setCreatePasswordVisible(false);
                 if (formTitle) formTitle.textContent = 'Editar usuario';
                 if (formMode) formMode.textContent = 'Editando';
                 openUserModal();
+            });
+        });
+
+        document.querySelectorAll('[data-password-open]').forEach((button) => {
+            button.addEventListener('click', () => {
+                if (passwordUserId) passwordUserId.value = button.dataset.id || '';
+                if (passwordUserText) {
+                    const label = button.dataset.displayName || button.dataset.username || 'Usuario seleccionado';
+                    passwordUserText.textContent = `${label} / Usuario acceso ${button.dataset.username || '-'}`;
+                }
+                if (passwordNew) passwordNew.value = '';
+                if (passwordConfirm) passwordConfirm.value = '';
+                passwordModal?.classList.add('is-open');
+                passwordModal?.setAttribute('aria-hidden', 'false');
+                setTimeout(() => passwordNew?.focus(), 60);
+            });
+        });
+
+        document.querySelectorAll('[data-password-close]').forEach((button) => {
+            button.addEventListener('click', () => {
+                passwordModal?.classList.remove('is-open');
+                passwordModal?.setAttribute('aria-hidden', 'true');
             });
         });
 

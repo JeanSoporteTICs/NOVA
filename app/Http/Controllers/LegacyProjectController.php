@@ -250,7 +250,33 @@ class LegacyProjectController extends Controller
             $parts[] = $part;
         }
 
-        return implode('/', $parts);
+        $normalized = implode('/', $parts);
+
+        return $this->normalizeLegacyViewShortcut($normalized);
+    }
+
+    private function normalizeLegacyViewShortcut(string $path): string
+    {
+        if (str_starts_with($path, 'views/') || !str_ends_with(strtolower($path), '.php')) {
+            return $path;
+        }
+
+        $section = strtolower(strtok($path, '/') ?: '');
+        $knownViewSections = [
+            'categorias',
+            'configuracion',
+            'dashboard',
+            'estadisticas',
+            'historico',
+            'horasextra',
+            'integraciones',
+            'pendientes',
+            'procedimientos',
+            'security',
+            'usuarios',
+        ];
+
+        return in_array($section, $knownViewSections, true) ? 'views/' . $path : $path;
     }
 
     private function resolveInsideProject(array $config, string $path): string

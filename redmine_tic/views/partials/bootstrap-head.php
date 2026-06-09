@@ -2,6 +2,10 @@
 $pageTitle = $pageTitle ?? 'Redmine';
 $includeTheme = $includeTheme ?? true;
 $redmineBaseUrl = function_exists('url') ? rtrim(url('/redmine_tic'), '/') : '/redmine_tic';
+$novaFaviconUrl = function_exists('asset') ? asset('assets/logos/favicon-nova.svg') : '/NOVA/public/assets/logos/favicon-nova.svg';
+$novaFaviconPath = function_exists('base_path') ? base_path('public/assets/logos/favicon-nova.svg') : __DIR__ . '/../../../public/assets/logos/favicon-nova.svg';
+$novaTouchIconUrl = function_exists('asset') ? asset('assets/logos/favicon-nova-512.png') : '/NOVA/public/assets/logos/favicon-nova-512.png';
+$novaFaviconVersion = @filemtime($novaFaviconPath) ?: time();
 ?>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,24 +13,18 @@ $redmineBaseUrl = function_exists('url') ? rtrim(url('/redmine_tic'), '/') : '/r
   <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
   <?php endif; ?>
   <title><?= htmlspecialchars((string) $pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
-  <?php
-    $faviconSvgVersion = @filemtime(__DIR__ . '/../../assets/favicon.svg') ?: time();
-    $faviconIcoVersion = @filemtime(__DIR__ . '/../../assets/favicon.ico') ?: time();
-  ?>
-  <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($redmineBaseUrl, ENT_QUOTES, 'UTF-8') ?>/favicon.ico?v=<?= (int)$faviconIcoVersion ?>" data-app-favicon>
-  <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($redmineBaseUrl, ENT_QUOTES, 'UTF-8') ?>/favicon.ico?v=<?= (int)$faviconIcoVersion ?>" data-app-favicon>
-  <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($redmineBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/favicon.svg?v=<?= (int)$faviconSvgVersion ?>" data-app-favicon>
+  <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($novaFaviconUrl, ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaFaviconVersion ?>" data-app-favicon>
+  <link rel="shortcut icon" type="image/svg+xml" href="<?= htmlspecialchars($novaFaviconUrl, ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaFaviconVersion ?>" data-app-favicon>
+  <link rel="apple-touch-icon" href="<?= htmlspecialchars($novaTouchIconUrl, ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaFaviconVersion ?>" data-app-favicon>
   <script>
-    window.__APP_FAVICON_VERSION__ = "<?= (int)$faviconIcoVersion ?>";
+    window.__APP_FAVICON_VERSION__ = "<?= (int)$novaFaviconVersion ?>";
     window.__APP_SYNC_FAVICON__ = function () {
-      const firstPath = (window.location.pathname.split('/').filter(Boolean)[0] || 'redmine');
-      const base = "<?= htmlspecialchars($redmineBaseUrl, ENT_QUOTES, 'UTF-8') ?>";
-      const href = base + '/favicon.ico?v=' + (window.__APP_FAVICON_VERSION__ || Date.now());
+      const href = "<?= htmlspecialchars($novaFaviconUrl, ENT_QUOTES, 'UTF-8') ?>?v=" + (window.__APP_FAVICON_VERSION__ || Date.now());
       document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]').forEach(link => link.remove());
       ['icon', 'shortcut icon'].forEach(rel => {
         const link = document.createElement('link');
         link.rel = rel;
-        link.type = 'image/x-icon';
+        link.type = 'image/svg+xml';
         link.href = href;
         link.setAttribute('data-app-favicon', '1');
         document.head.appendChild(link);

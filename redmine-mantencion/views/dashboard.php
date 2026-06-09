@@ -518,7 +518,7 @@ $csrf = legacy_csrf_token();
 
             <?php if ($estadoRedmineId): ?>
             <div class="col-md-3">
-              <label class="form-label">Estado Redmine (solo lectura)</label>
+              <label class="form-label">Estado Redmine</label>
               <input class="form-control" value="<?= $h($estadoRedmineNombre ?: ('ID ' . $estadoRedmineId)) ?>" disabled>
             </div>
             <?php endif; ?>
@@ -695,7 +695,7 @@ $csrf = legacy_csrf_token();
     if (estadoHelp) estadoHelp.textContent = '';
     if (estadoActual === 'pendiente' || estadoActual === 'procesado') {
       estadoInput.disabled = true;
-      if (estadoHelp) estadoHelp.textContent = 'No se puede cambiar este estado.';
+      if (estadoHelp) estadoHelp.textContent = '';
     } else if (estadoActual === 'error') {
       estadoInput.setAttribute('list', 'estado-error-list');
       if (estadoHelp) estadoHelp.textContent = 'Solo puede cambiar a pendiente.';
@@ -903,8 +903,6 @@ if (logModal) {
 </body>
 
 </html>
-
-
 
 
 

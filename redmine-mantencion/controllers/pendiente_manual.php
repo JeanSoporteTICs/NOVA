@@ -374,7 +374,7 @@ function handle_manual_pending(): array {
             $messages[] = manual_pending_build_record($form, $cfg, $users);
             save_messages($messages);
             manual_pending_flash_set('Pendiente manual creado correctamente.');
-            header('Location: /redmine-mantencion/views/Pendientes/manual.php');
+            header('Location: ' . legacy_app_url('views/Pendientes/manual.php'));
             exit;
         }
     }

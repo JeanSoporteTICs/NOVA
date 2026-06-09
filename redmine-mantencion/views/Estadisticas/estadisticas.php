@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../controllers/auth.php';
 auth_require_login('/redmine-mantencion/login.php');
 if (!auth_can('estadisticas')) {
-  header('Location: /redmine-mantencion');
+  header('Location: ' . legacy_app_url());
   exit;
 }
 // Si es gestor, solo ve sus propios reportes

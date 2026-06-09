@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        $this->loadViewsFrom(base_path('redmine_tic/nova/resources/views'), 'redmine_tic');
+        $redmineTicPath = rtrim((string) data_get(config('modules.redmine_tic', []), 'path', base_path('redmine_tic')), DIRECTORY_SEPARATOR);
+        $this->loadViewsFrom($redmineTicPath . DIRECTORY_SEPARATOR . 'nova' . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views', 'redmine_tic');
     }
 }

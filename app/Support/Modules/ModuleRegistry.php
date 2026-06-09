@@ -70,6 +70,45 @@ final class ModuleRegistry
     public function userMatrix(): array
     {
         $users = [];
+        $novaUsers = json_decode((string) @file_get_contents(storage_path('app/nova/users.json')), true);
+        if (is_array($novaUsers)) {
+            foreach ($novaUsers as $record) {
+                if (!is_array($record) || !is_array($record['projects'] ?? null)) {
+                    continue;
+                }
+
+                $identity = $this->userIdentity([
+                    'rut_sin_dv' => $record['rut_sin_dv'] ?? $record['username'] ?? '',
+                    'rut' => $record['rut'] ?? '',
+                    'id' => $record['redmine_id'] ?? $record['id'] ?? '',
+                ]);
+                if ($identity === '') {
+                    continue;
+                }
+
+                if (!isset($users[$identity])) {
+                    $users[$identity] = [
+                        'identity' => $identity,
+                        'name' => trim((string) (($record['name'] ?? '') . ' ' . ($record['apellido'] ?? ''))) ?: 'Usuario sin nombre',
+                        'rut' => trim((string) ($record['rut'] ?? '')),
+                        'status' => trim((string) ($record['status'] ?? '')),
+                        'projects' => [],
+                    ];
+                }
+
+                foreach ($record['projects'] as $projectKey => $project) {
+                    if (!is_array($project)) {
+                        continue;
+                    }
+                    $module = $this->all()[$projectKey] ?? ['name' => $projectKey];
+                    $users[$identity]['projects'][$projectKey] = [
+                        'name' => (string) ($module['name'] ?? $projectKey),
+                        'role' => trim((string) ($project['rol'] ?? 'sin rol')),
+                        'status' => trim((string) ($project['estado_usuario'] ?? '')),
+                    ];
+                }
+            }
+        }
 
         foreach ($this->all() as $projectKey => $module) {
             $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)

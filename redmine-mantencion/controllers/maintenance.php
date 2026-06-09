@@ -547,7 +547,10 @@ function maintenance_consume_flash(): ?string {
 }
 
 function maintenance_redirect_back(): void {
-    header('Location: /redmine-mantencion/views/Configuracion/configuracion.php');
+    $target = function_exists('url')
+        ? legacy_app_url('app/configuracion?panel=mantencion')
+        : legacy_app_url('views/Configuracion/configuracion.php');
+    header('Location: ' . $target);
     exit;
 }
 

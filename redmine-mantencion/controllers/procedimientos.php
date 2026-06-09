@@ -640,7 +640,7 @@ function procedures_handle_request(): array {
                 $items[] = $folder;
                 if (procedures_write_all($items)) {
                     $_SESSION['procedures_flash'] = 'Carpeta creada.';
-                    header('Location: /redmine-mantencion/views/Procedimientos/procedimientos.php?folder=' . urlencode((string)$folder['id']));
+                    header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php?folder=' . urlencode((string)$folder['id'])));
                     exit;
                 }
                 $error = 'No se pudo crear la carpeta.';
@@ -667,7 +667,7 @@ function procedures_handle_request(): array {
                     $error = 'No se pudo encontrar el documento para mover.';
                 } elseif (procedures_write_all($items)) {
                     $_SESSION['procedures_flash'] = 'Documento movido.';
-                    header('Location: /redmine-mantencion/views/Procedimientos/procedimientos.php' . ($destinationFolderId !== '' ? '?folder=' . urlencode($destinationFolderId) : ''));
+                    header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php' . ($destinationFolderId !== '' ? '?folder=' . urlencode($destinationFolderId) : '')));
                     exit;
                 } else {
                     $error = 'No se pudo mover el documento.';
@@ -685,7 +685,7 @@ function procedures_handle_request(): array {
                 }
                 if (procedures_write_all($items)) {
                     $_SESSION['procedures_flash'] = 'Procedimiento eliminado.';
-                    header('Location: /redmine-mantencion/views/Procedimientos/procedimientos.php');
+                    header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php'));
                     exit;
                 }
                 $error = 'No se pudo eliminar el procedimiento.';
@@ -722,7 +722,7 @@ function procedures_handle_request(): array {
                 ]);
                 $items[] = $record;
                 if (procedures_write_all($items)) {
-                    header('Location: /redmine-mantencion/views/Procedimientos/onlyoffice.php?id=' . urlencode($record['id']) . '&mode=edit');
+                    header('Location: ' . legacy_app_url('views/Procedimientos/onlyoffice.php?id=' . urlencode($record['id']) . '&mode=edit'));
                     exit;
                 }
                 procedures_delete_record_file($record);
@@ -791,7 +791,7 @@ function procedures_handle_request(): array {
 
                 if (procedures_write_all($items)) {
                     $_SESSION['procedures_flash'] = $saved ? 'Procedimiento actualizado.' : 'Procedimiento creado.';
-                    header('Location: /redmine-mantencion/views/Procedimientos/procedimientos.php?id=' . urlencode($record['id']));
+                    header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php?id=' . urlencode($record['id'])));
                     exit;
                 }
 
@@ -822,4 +822,3 @@ function procedures_handle_request(): array {
 
     return [$items, $form, is_string($flash) ? $flash : null, $error, $selectedId];
 }
-

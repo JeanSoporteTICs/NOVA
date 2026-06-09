@@ -191,54 +191,61 @@
     </div>
 </div>
 
-<div class="modal fade" id="editar-solicitud" tabindex="-1" aria-labelledby="editar-solicitud-title" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+<div class="modal fade detail-drawer-modal" id="editar-solicitud" tabindex="-1" aria-labelledby="editar-solicitud-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
         <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.dashboard.action') }}">
             @csrf
             <input type="hidden" name="dashboard_action" value="update">
             <div class="modal-header">
-                <h2 class="modal-title fs-5" id="editar-solicitud-title">Detalle / Editar</h2>
+                <div>
+                    <p class="detail-drawer-kicker">Reporte seleccionado</p>
+                    <h2 class="modal-title" id="editar-solicitud-title">
+                        <span class="detail-drawer-icon"><i class="bi bi-pencil-square"></i></span>
+                        Detalle / Editar
+                    </h2>
+                </div>
                 <button type="button" class="btn-close" data-nova-modal-close aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-3">
-                    <input type="hidden" name="id">
-                    <div class="col-12 col-md-3"><label class="form-label">Tipo</label><input class="form-control" name="tipo"></div>
-                    <div class="col-12 col-md-3">
-                        <label class="form-label">Estado</label>
-                        <input class="form-control bg-body-secondary" name="_estado_readonly" readonly>
-                        <div class="form-text fw-semibold">No se puede cambiar este estado.</div>
+                <div class="detail-drawer-view is-active" id="drawer-detail-view">
+                    <div class="row g-3">
+                        <input type="hidden" name="id">
+                        <div class="col-12 col-md-3"><label class="form-label">Tipo</label><input class="form-control" name="tipo"></div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Estado</label>
+                            <input class="form-control bg-body-secondary" name="_estado_readonly" readonly>
+                        </div>
+                        <div class="col-12 col-md-6"><label class="form-label">Asunto</label><input class="form-control" name="asunto"></div>
+
+                        <div class="col-12 col-md-3"><label class="form-label">Prioridad</label><input class="form-control" name="prioridad"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Categorias</label><input class="form-control" name="categoria" list="rm-categories"></div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Asignado a</label>
+                            <select class="form-select" name="asignado_a"><option value="">Sin asignar</option>@foreach ($users as $user)<option value="{{ $user['id'] ?? '' }}">{{ trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</option>@endforeach</select>
+                            <div class="form-text fw-semibold" data-current-assignee></div>
+                        </div>
+                        <div class="col-12 col-md-3"><label class="form-label">Solicitante</label><input class="form-control" name="solicitante"></div>
+
+                        <div class="col-12 col-md-3"><label class="form-label">Unidad</label><input class="form-control" name="unidad" list="rm-units"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Unidad Solicitante</label><input class="form-control" name="unidad_solicitante" list="rm-units"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Estado Redmine</label><input class="form-control bg-body-secondary" name="_estado_redmine_readonly" readonly></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Hora extra</label><select class="form-select" name="hora_extra"><option value="NO">No</option><option value="SI">Si</option></select></div>
+
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" name="tiempo_estimado"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
+
+                        <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Numero</label><input class="form-control" name="numero"></div>
+                        <div class="col-12"><label class="form-label">Mensaje</label><textarea class="form-control" name="mensaje" rows="3"></textarea></div>
+                        <input type="hidden" name="descripcion">
                     </div>
-                    <div class="col-12 col-md-6"><label class="form-label">Asunto</label><input class="form-control" name="asunto"></div>
-
-                    <div class="col-12 col-md-3"><label class="form-label">Prioridad</label><input class="form-control" name="prioridad"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Categorias</label><input class="form-control" name="categoria" list="rm-categories"></div>
-                    <div class="col-12 col-md-3">
-                        <label class="form-label">Asignado a</label>
-                        <select class="form-select" name="asignado_a"><option value="">Sin asignar</option>@foreach ($users as $user)<option value="{{ $user['id'] ?? '' }}">{{ trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</option>@endforeach</select>
-                        <div class="form-text fw-semibold" data-current-assignee></div>
-                    </div>
-                    <div class="col-12 col-md-3"><label class="form-label">Solicitante</label><input class="form-control" name="solicitante"></div>
-
-                    <div class="col-12 col-md-3"><label class="form-label">Unidad</label><input class="form-control" name="unidad" list="rm-units"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Unidad Solicitante</label><input class="form-control" name="unidad_solicitante" list="rm-units"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Estado Redmine (solo lectura)</label><input class="form-control bg-body-secondary" name="_estado_redmine_readonly" readonly></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Hora extra</label><select class="form-select" name="hora_extra"><option value="NO">No</option><option value="SI">Si</option></select></div>
-
-                    <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" name="tiempo_estimado"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
-
-                    <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Numero</label><input class="form-control" name="numero"></div>
-                    <div class="col-12"><label class="form-label">Mensaje</label><textarea class="form-control" name="mensaje" rows="2"></textarea></div>
-                    <input type="hidden" name="descripcion">
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" type="button" data-nova-modal-close>Cerrar</button>
-                <button class="btn btn-success" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
+            <div class="modal-footer" id="detail-drawer-footer">
+                <button class="btn btn-outline-secondary" type="button" data-nova-modal-close><i class="bi bi-x-lg"></i>Cerrar</button>
+                <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle"></i>Guardar cambios</button>
             </div>
         </form>
     </div>
@@ -361,4 +368,3 @@
 
 <datalist id="rm-categories">@foreach ($categories as $category)<option value="{{ $category['nombre'] ?? '' }}"></option>@endforeach</datalist>
 <datalist id="rm-units">@foreach ($units as $unit)<option value="{{ $unit['nombre'] ?? '' }}"></option>@endforeach</datalist>
-

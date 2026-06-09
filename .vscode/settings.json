@@ -1,0 +1,20 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "10.63.123.249",
+            "port": 3306,
+            "driver": "MariaDB",
+            "name": "NOVA MariaDB",
+            "group": "NOVA",
+            "database": "nova",
+            "username": "root",
+            "connectionTimeout": 30
+        }
+    ]
+}

@@ -13,6 +13,8 @@ final class NovaSettingsRepository
 
         return array_merge([
             'session_timeout' => max(60, (int) config('nova.session_timeout', 3600)),
+            'notification_enabled' => false,
+            'health_warning_threshold' => 1,
         ], $settings);
     }
 
@@ -28,6 +30,8 @@ final class NovaSettingsRepository
     {
         $settings = $this->all();
         $settings['session_timeout'] = max(60, (int) ($payload['session_timeout'] ?? $settings['session_timeout'] ?? 3600));
+        $settings['notification_enabled'] = !empty($payload['notification_enabled']);
+        $settings['health_warning_threshold'] = max(1, (int) ($payload['health_warning_threshold'] ?? $settings['health_warning_threshold'] ?? 1));
 
         $this->write($settings);
     }

@@ -21,5 +21,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } else {
     $msg = 'Método no permitido.';
 }
-header('Location: /redmine-mantencion/views/Configuracion/configuracion.php?synccat=' . urlencode($msg));
+header('Location: ' . legacy_app_url('views/Configuracion/configuracion.php?synccat=' . urlencode($msg)));
 exit;

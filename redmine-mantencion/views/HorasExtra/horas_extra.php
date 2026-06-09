@@ -224,9 +224,15 @@ function update_hours_by_date($fecha, $horaIni, $horaFin) {
 $grupos = load_hours_extra_all();
 $grupos = deduplicate_groups_by_start_date($grupos);
 // Filtrar por usuario para roles usuario/administrador/gestor
-$role = auth_get_user_role();
 $uid = auth_get_user_id();
-if (in_array($role, ['usuario','administrador','gestor'], true) && $uid !== '') {
+$hoursScope = 'asignados';
+if (function_exists('auth_user_has_all_permissions') && auth_user_has_all_permissions()) {
+    $hoursScope = 'todos';
+} elseif (function_exists('auth_get_permission_value')) {
+    $value = strtolower(trim((string)auth_get_permission_value('horas_extra')));
+    $hoursScope = $value === 'todos' ? 'todos' : 'asignados';
+}
+if ($hoursScope !== 'todos' && $uid !== '') {
     $grupos = array_values(array_filter(array_map(function($g) use ($uid) {
         if (!is_array($g)) return null;
         if (isset($g['reports']) && is_array($g['reports'])) {
@@ -653,6 +659,5 @@ if (copyBtn) {
 </div> <!-- #page-content -->
 </body>
 </html>
-
 
 

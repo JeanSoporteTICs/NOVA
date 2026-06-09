@@ -8,7 +8,7 @@ $isPublicShare = $shareToken !== '';
 if (!$isPublicShare) {
   auth_require_login('/redmine-mantencion/login.php');
   if (!auth_can('procedimientos')) {
-    header('Location: /redmine-mantencion');
+    header('Location: ' . legacy_app_url());
     exit;
   }
 }
@@ -624,8 +624,9 @@ if ($isPdfExport) {
     .proc-meta .proc-meta-label { color: #94a3b8; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
     .proc-meta .proc-meta-value { color: #334155; font-weight: 600; }
     .proc-detail-panel { border: 0; box-shadow: 0 20px 44px rgba(15, 23, 42, 0.09); overflow: hidden; }
-    .proc-detail-header { padding: 1.75rem 1.9rem 1.2rem; border-bottom: 1px solid #e5edf7; background: linear-gradient(180deg, #f8fbff, #fff); }
+    .proc-detail-header { padding: 1.75rem 1.9rem 1.2rem; border-bottom: 1px solid #e5edf7; background: linear-gradient(135deg, color-mix(in srgb, var(--proc-soft, #eff6ff) 76%, white), #fff 62%); }
     .proc-detail-badge { display: inline-flex; align-items: center; gap: .45rem; padding: .34rem .72rem; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: .76rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .proc-detail-badge.proc-file-badge { border-color: color-mix(in srgb, var(--proc-accent, #2563eb) 30%, transparent); background: color-mix(in srgb, var(--proc-soft, #eff6ff) 76%, white); color: var(--proc-text, #2563eb); }
     .proc-detail-title { margin: 1rem 0 .45rem; font-size: clamp(1.7rem, 2.6vw, 2.25rem); line-height: 1.1; color: #0f172a; }
     .proc-detail-meta { display: flex; flex-wrap: wrap; gap: .85rem; margin-top: 1.2rem; }
     .proc-detail-meta-item { min-width: 180px; padding: .8rem .95rem; border: 1px solid #e2e8f0; border-radius: 1rem; background: rgba(255,255,255,.86); }
@@ -1564,6 +1565,7 @@ if ($isPdfExport) {
                   $folderId = (string)($folder['id'] ?? '');
                   $folderTitle = trim((string)($folder['title'] ?? 'Carpeta'));
                   $folderUpdated = trim((string)($folder['updated_at'] ?? $folder['created_at'] ?? ''));
+                  $folderCount = count(array_filter($procedures, static fn(array $procedure): bool => empty($procedure['draft_pending']) && (string)($procedure['record_type'] ?? 'document') !== 'folder' && (string)($procedure['folder_id'] ?? '') === $folderId));
                 ?>
                 <a
                   href="/redmine-mantencion/views/Procedimientos/procedimientos.php?folder=<?= urlencode($folderId) ?>"
@@ -1574,6 +1576,10 @@ if ($isPdfExport) {
                     <span class="proc-card-icon"><i class="bi bi-folder-fill"></i></span>
                     <div class="proc-card-body">
                       <div class="proc-title"><?= $h($folderTitle) ?></div>
+                      <div class="proc-card-tags">
+                        <span class="proc-file-badge"><i class="bi bi-folder2-open"></i> Carpeta</span>
+                        <span class="proc-file-size"><?= $h($folderCount) ?> archivo<?= $folderCount === 1 ? '' : 's' ?></span>
+                      </div>
                       <?php if ($folderUpdated !== ''): ?>
                         <div class="proc-card-meta"><?= $h(date('d-m-Y', strtotime($folderUpdated))) ?></div>
                       <?php endif; ?>
@@ -1587,6 +1593,16 @@ if ($isPdfExport) {
                   $itemTitle = trim((string)($procedure['title'] ?? 'Sin título'));
                   $itemUpdated = trim((string)($procedure['updated_at'] ?? ''));
                   $itemKind = function_exists('procedures_file_kind') ? procedures_file_kind($procedure) : 'html';
+                  $itemKindLabel = [
+                    'pdf' => 'PDF',
+                    'word' => 'Word',
+                    'cell' => 'Excel',
+                    'slide' => 'PowerPoint',
+                    'html' => 'Interno',
+                  ][$itemKind] ?? 'Archivo';
+                  $itemSize = !empty($procedure['file_size']) && function_exists('procedures_format_file_size')
+                    ? procedures_format_file_size((int)$procedure['file_size'])
+                    : '';
                 ?>
                 <a
                   href="/redmine-mantencion/views/Procedimientos/procedimientos.php?id=<?= urlencode($itemId) ?>"
@@ -1597,6 +1613,15 @@ if ($isPdfExport) {
                     <span class="proc-card-icon"><i class="bi <?= $itemKind === 'pdf' ? 'bi-file-earmark-pdf-fill' : ($itemKind === 'word' ? 'bi-file-earmark-word-fill' : ($itemKind === 'cell' ? 'bi-file-earmark-spreadsheet-fill' : ($itemKind === 'slide' ? 'bi-file-earmark-slides-fill' : 'bi-file-earmark-text-fill'))) ?>"></i></span>
                     <div class="proc-card-body">
                       <div class="proc-title"><?= $h($itemTitle) ?></div>
+                      <div class="proc-card-tags">
+                        <span class="proc-file-badge">
+                          <i class="bi <?= $itemKind === 'pdf' ? 'bi-filetype-pdf' : ($itemKind === 'word' ? 'bi-filetype-docx' : ($itemKind === 'cell' ? 'bi-filetype-xlsx' : ($itemKind === 'slide' ? 'bi-filetype-pptx' : 'bi-file-earmark-text'))) ?>"></i>
+                          <?= $h($itemKindLabel) ?>
+                        </span>
+                        <?php if ($itemSize !== ''): ?>
+                          <span class="proc-file-size"><?= $h($itemSize) ?></span>
+                        <?php endif; ?>
+                      </div>
                         <?php if ($itemUpdated !== ''): ?>
                           <div class="proc-card-meta"><?= $h(date('d-m-Y', strtotime($itemUpdated))) ?></div>
                         <?php endif; ?>
@@ -1608,6 +1633,23 @@ if ($isPdfExport) {
           <?php endif; ?>
       </section>
     <?php elseif ($showDetail && $selectedProcedure): ?>
+      <?php
+        $detailFileKind = function_exists('procedures_file_kind') ? procedures_file_kind($selectedProcedure) : 'html';
+        $detailKindLabel = [
+          'pdf' => 'PDF',
+          'word' => 'Word',
+          'cell' => 'Excel',
+          'slide' => 'PowerPoint',
+          'html' => 'Procedimiento',
+        ][$detailFileKind] ?? 'Archivo';
+        $detailKindIcon = $detailFileKind === 'pdf'
+          ? 'bi-filetype-pdf'
+          : ($detailFileKind === 'word'
+            ? 'bi-filetype-docx'
+            : ($detailFileKind === 'cell'
+              ? 'bi-filetype-xlsx'
+              : ($detailFileKind === 'slide' ? 'bi-filetype-pptx' : 'bi-file-earmark-richtext')));
+      ?>
       <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
         <?php if (!$isPublicShare): ?>
         <a class="btn btn-outline-secondary" href="/redmine-mantencion/views/Procedimientos/procedimientos.php<?= !empty($selectedProcedure['folder_id']) ? '?folder=' . urlencode((string)$selectedProcedure['folder_id']) : '' ?>">
@@ -1618,9 +1660,9 @@ if ($isPdfExport) {
         <?php endif; ?>
         <div class="text-muted small">Vista del documento</div>
       </div>
-      <section class="card proc-detail-panel">
+      <section class="card proc-detail-panel proc-file-<?= $h($detailFileKind) ?>">
         <header class="proc-detail-header">
-          <span class="proc-detail-badge"><i class="bi bi-file-earmark-richtext"></i> Procedimiento</span>
+          <span class="proc-detail-badge proc-file-badge"><i class="bi <?= $h($detailKindIcon) ?>"></i> <?= $h($detailKindLabel) ?></span>
           <h1 class="proc-detail-title"><?= $h($selectedProcedure['title'] ?? '') ?></h1>
           <div class="proc-detail-meta">
             <?php if (!empty($selectedProcedure['author_name'])): ?>

@@ -6,6 +6,21 @@ require_once __DIR__ . '/logger.php';
 date_default_timezone_set('America/Santiago');
 storage_run_auto_backup();
 
+function legacy_app_url(string $path = ''): string {
+    $path = '/' . ltrim($path, '/');
+
+    if (function_exists('url')) {
+        return url('/redmine-mantencion' . ($path === '/' ? '' : $path));
+    }
+
+    $script = $_SERVER['SCRIPT_NAME'] ?? '';
+    if (str_contains($script, '/public/index.php')) {
+        return rtrim($script, '/') . '/redmine-mantencion' . ($path === '/' ? '' : $path);
+    }
+
+    return '/redmine-mantencion' . ($path === '/' ? '' : $path);
+}
+
 function auth_start_session() {
     if (session_status() === PHP_SESSION_NONE) {
         $params = session_get_cookie_params();
@@ -129,6 +144,11 @@ function auth_login($username, $password) {
 
 function auth_logout() {
     auth_start_session();
+    $name = trim((string)($_SESSION['user']['nombre'] ?? ''));
+    $id = trim((string)($_SESSION['user']['id'] ?? ''));
+    if ($name !== '' || $id !== '') {
+        log_security_event('LOGOUT', sprintf('Sesion cerrada por %s (ID %s)', $name !== '' ? $name : 'usuario', $id));
+    }
     // limpiar variables y cookie de sesión
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
@@ -285,7 +305,7 @@ function csrf_validate() {
     if (!$token || !$sess || !hash_equals($sess, $token)) {
         // Cierra sesión para evitar estados inconsistentes y redirige a login
         auth_logout();
-        header('Location: /redmine-mantencion/login.php?err=csrf');
+        header('Location: ' . legacy_app_url('login.php?err=csrf'));
         exit;
     }
 }
@@ -298,7 +318,7 @@ function auth_require_role(array $rolesAllowed, $redirect = '/redmine-mantencion
         return;
     }
     if (!in_array($role, $rolesAllowed, true)) {
-        header('Location: /redmine-mantencion');
+        header('Location: ' . legacy_app_url());
         exit;
     }
 }

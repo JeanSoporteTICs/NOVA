@@ -4,6 +4,7 @@ namespace RedmineTic\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Support\Modules\ProjectAccessGuard;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -15,7 +16,7 @@ class RedmineDashboardController extends Controller
 {
     private const TIC_SECTIONS = [
         'dashboard' => 'Reportes',
-        'webhook' => 'Webhook',
+        'webhook' => 'Reporte manual',
         'horas-extra' => 'Horas extra',
         'historico' => 'Historico',
         'usuarios' => 'Usuarios',
@@ -100,15 +101,17 @@ class RedmineDashboardController extends Controller
 
         $action = (string) $request->input('dashboard_action', $request->input('action', ''));
         $ids = $this->ids($request->input('ids', []));
+        $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+        $user = is_array($user) ? $user : [];
 
         $message = match ($action) {
-            'update' => $redmine->updateReport($request->all()) ? 'Solicitud actualizada.' : 'No se encontro la solicitud.',
-            'delete' => $redmine->deleteReport((string) $request->input('id')) . ' solicitud(es) eliminada(s).',
-            'delete_selected' => $redmine->deleteReports($ids) . ' solicitud(es) eliminada(s).',
-            'archive_selected' => $redmine->archiveReports($ids) . ' solicitud(es) archivada(s).',
-            'process_selected' => $this->sendReports($request, $redmine, $ids),
-            'reset_errors' => $redmine->resetErrors($ids) . ' error(es) marcados como pendientes.',
-            'toggle_hours_extra' => $redmine->toggleHoursExtra((string) $request->input('id'), $request->boolean('hora_extra')) ? 'Hora extra actualizada.' : 'No se encontro la solicitud.',
+            'update' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->updateReport($request->all()) ? 'Solicitud actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
+            'delete' => $redmine->deleteReport($redmine->canAccessActiveReport((string) $request->input('id'), $user) ? (string) $request->input('id') : '') . ' solicitud(es) eliminada(s).',
+            'delete_selected' => $redmine->deleteReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) eliminada(s).',
+            'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) archivada(s).',
+            'process_selected' => $this->sendReports($request, $redmine, $redmine->filterAccessibleActiveReportIds($ids, $user)),
+            'reset_errors' => $redmine->resetErrors($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' error(es) marcados como pendientes.',
+            'toggle_hours_extra' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->toggleHoursExtra((string) $request->input('id'), $request->boolean('hora_extra')) ? 'Hora extra actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
             default => 'Accion no reconocida.',
         };
 
@@ -402,6 +405,24 @@ class RedmineDashboardController extends Controller
         return back()->with('redmine_status', $deleted . ' registro(s) historico(s) eliminado(s).');
     }
 
+    public function historyStatuses(Request $request, RedmineDataRepository $redmine): JsonResponse
+    {
+        $this->prepare($request, $redmine);
+
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(static fn (string $id): string => preg_replace('/\D+/', '', trim($id)) ?? '')
+            ->filter()
+            ->unique()
+            ->take(100)
+            ->values()
+            ->all();
+
+        $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+        $statuses = $redmine->issueStatuses($ids, is_array($user) ? (string) ($user['id'] ?? '') : '');
+
+        return response()->json(['ok' => true, 'statuses' => $statuses]);
+    }
+
     public function hoursAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
@@ -440,15 +461,39 @@ class RedmineDashboardController extends Controller
             return $blocked;
         }
 
-        $result = $redmine->sendWebhookMessage($request->all());
-        $message = $result['ok']
-            ? 'Mensaje enviado al webhook Python. HTTP ' . $result['http_code'] . '.'
-            : 'No se pudo enviar al webhook Python: ' . ($result['error'] ?: 'HTTP ' . $result['http_code'] . ' - ' . $result['body']);
+        $payload = $request->validate([
+            'asunto' => ['required', 'string', 'max:220'],
+            'descripcion' => ['nullable', 'string', 'max:4000'],
+            'solicitante' => ['nullable', 'string', 'max:160'],
+            'unidad' => ['nullable', 'string', 'max:180'],
+            'unidad_solicitante' => ['nullable', 'string', 'max:180'],
+            'categoria' => ['nullable', 'string', 'max:180'],
+            'prioridad' => ['nullable', 'string', 'max:80'],
+            'tipo' => ['nullable', 'string', 'max:80'],
+            'asignado_a' => ['nullable', 'string', 'max:80'],
+            'hora_extra' => ['nullable', 'string', 'max:8'],
+            'tiempo_estimado' => ['nullable', 'string', 'max:40'],
+        ]);
+        $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+        if (is_array($user) && trim((string) ($payload['asignado_a'] ?? '')) === '') {
+            $payload['asignado_a'] = (string) ($user['id'] ?? '');
+            $payload['asignado_nombre'] = trim((string) data_get($user, 'legacy.nombre', '')) ?: trim((string) (($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')));
+        } elseif (trim((string) ($payload['asignado_a'] ?? '')) !== '') {
+            foreach ($redmine->users() as $projectUser) {
+                if ((string) ($projectUser['id'] ?? '') !== (string) $payload['asignado_a']) {
+                    continue;
+                }
+                $payload['asignado_nombre'] = trim((string) (($projectUser['nombre'] ?? '') . ' ' . ($projectUser['apellido'] ?? '')));
+                break;
+            }
+        }
+        $payload['origen'] = 'manual';
+        $report = $redmine->createSimulatedReport($payload);
 
         return back()
-            ->with('redmine_status', $message)
-            ->with('redmine_status_type', $result['ok'] ? 'success' : 'danger')
-            ->with('redmine_webhook_result', $result);
+            ->with('redmine_status', 'Reporte manual creado en pendientes.')
+            ->with('redmine_status_type', 'success')
+            ->with('redmine_created_report_id', $report['id'] ?? '');
     }
 
     /**
