@@ -1,11 +1,57 @@
+# Normalizar finales de línea automáticamente
 * text=auto
 
-*.blade.php diff=html
-*.css diff=css
-*.html diff=html
-*.md diff=markdown
-*.php diff=php
+# PHP - siempre LF
+*.php text eol=lf
+*.phtml text eol=lf
 
-/.github export-ignore
-CHANGELOG.md export-ignore
-.styleci.yml export-ignore
+# JavaScript/JSON - siempre LF
+*.js text eol=lf
+*.json text eol=lf
+*.vue text eol=lf
+*.ts text eol=lf
+
+# Bash/Shell - siempre LF
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Markdown - siempre LF
+*.md text eol=lf
+*.markdown text eol=lf
+README* text eol=lf
+
+# SQL - siempre LF
+*.sql text eol=lf
+
+# YAML/Config - siempre LF
+*.yml text eol=lf
+*.yaml text eol=lf
+.env* text eol=lf
+
+# Docker - siempre LF
+Dockerfile* text eol=lf
+docker-compose* text eol=lf
+.dockerignore text eol=lf
+
+# Git/VCS - siempre LF
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Binarios - no convertir
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.git* binary
+*.jar binary
+*.zip binary
+*.gz binary
+*.tar binary
+
+# Archivos ejecutables
+*.exe binary
+*.dll binary
