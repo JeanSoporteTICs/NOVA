@@ -20,10 +20,7 @@ function manual_pending_flash_consume(): ?string {
 
 function manual_pending_users(): array {
     $path = __DIR__ . '/../data/usuarios.json';
-    if (!file_exists($path)) {
-        return [];
-    }
-    $data = json_decode(file_get_contents($path), true);
+    $data = storage_read_json($path, []);
     if (!is_array($data)) {
         return [];
     }
@@ -216,10 +213,7 @@ function manual_pending_normalize_email($value): string {
 
 function manual_pending_category_options(): array {
     $path = __DIR__ . '/../data/categorias.json';
-    if (!file_exists($path)) {
-        return [];
-    }
-    $data = json_decode(file_get_contents($path), true);
+    $data = storage_read_json($path, []);
     return is_array($data) ? $data : [];
 }
 

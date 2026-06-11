@@ -470,22 +470,13 @@ class RedmineDashboardController extends Controller
             'categoria' => ['nullable', 'string', 'max:180'],
             'prioridad' => ['nullable', 'string', 'max:80'],
             'tipo' => ['nullable', 'string', 'max:80'],
-            'asignado_a' => ['nullable', 'string', 'max:80'],
+            'asignado_a' => ['nullable', 'integer', 'min:1', 'max:4294967295'],
             'hora_extra' => ['nullable', 'string', 'max:8'],
             'tiempo_estimado' => ['nullable', 'string', 'max:40'],
         ]);
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         if (is_array($user) && trim((string) ($payload['asignado_a'] ?? '')) === '') {
             $payload['asignado_a'] = (string) ($user['id'] ?? '');
-            $payload['asignado_nombre'] = trim((string) data_get($user, 'legacy.nombre', '')) ?: trim((string) (($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')));
-        } elseif (trim((string) ($payload['asignado_a'] ?? '')) !== '') {
-            foreach ($redmine->users() as $projectUser) {
-                if ((string) ($projectUser['id'] ?? '') !== (string) $payload['asignado_a']) {
-                    continue;
-                }
-                $payload['asignado_nombre'] = trim((string) (($projectUser['nombre'] ?? '') . ' ' . ($projectUser['apellido'] ?? '')));
-                break;
-            }
         }
         $payload['origen'] = 'manual';
         $report = $redmine->createSimulatedReport($payload);

@@ -3,6 +3,7 @@
 namespace App\Support\Nova;
 
 use App\Support\Modules\ModuleRegistry;
+use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
 
 final class NovaHealthRepository
 {
@@ -26,6 +27,19 @@ final class NovaHealthRepository
                 'status' => is_dir($path) ? 'ok' : 'error',
                 'detail' => is_dir($path) ? $path : 'No existe: ' . $path,
             ];
+            if ($key === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
+                try {
+                    $users = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
+                    $checks[] = [
+                        'name' => 'Usuarios ' . ($module['name'] ?? $key),
+                        'status' => is_array($users) ? 'ok' : 'error',
+                        'detail' => is_array($users) ? 'DB OK' : 'No disponible en DB',
+                    ];
+                } catch (\Throwable $e) {
+                    $checks[] = ['name' => 'Usuarios ' . ($module['name'] ?? $key), 'status' => 'error', 'detail' => $e->getMessage()];
+                }
+                continue;
+            }
             $userFile = $path . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
             if (is_file($userFile)) {
                 $checks[] = $this->fileCheck('Usuarios ' . ($module['name'] ?? $key), $userFile);
@@ -73,9 +87,14 @@ final class NovaHealthRepository
 
     private function nextcloudCheck(): array
     {
-        $modulePath = rtrim((string) data_get(config('modules.redmine-mantencion', []), 'path', base_path('redmine-mantencion')), DIRECTORY_SEPARATOR);
-        $path = $modulePath . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'configuracion.json';
-        $config = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
+        $config = [];
+        if (class_exists(RedmineMantencionStorageRepository::class)) {
+            try {
+                $config = app(RedmineMantencionStorageRepository::class)->readJson('configuracion.json') ?: [];
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
         $url = trim((string) ($config['nextcloud_url'] ?? ''));
 
         return [

@@ -6,7 +6,7 @@ require_once __DIR__ . '/storage.php';
 
 function onlyoffice_config(): array {
     $file = __DIR__ . '/../data/configuracion.json';
-    $cfg = is_file($file) ? json_decode((string)file_get_contents($file), true) : [];
+    $cfg = storage_read_json($file, []);
     return is_array($cfg) ? $cfg : [];
 }
 
@@ -185,7 +185,8 @@ function onlyoffice_handle_callback(): void {
     }
 
     $downloadUrl = trim((string)($payload['url'] ?? ''));
-    if ($downloadUrl === '') {
+    $downloadScheme = strtolower((string)parse_url($downloadUrl, PHP_URL_SCHEME));
+    if ($downloadUrl === '' || !in_array($downloadScheme, ['http', 'https'], true)) {
         onlyoffice_callback_response(1);
     }
 
@@ -195,18 +196,37 @@ function onlyoffice_handle_callback(): void {
         onlyoffice_callback_response(1);
     }
 
-    $target = procedures_documents_dir() . '/' . basename((string)$record['file_name']);
     $context = stream_context_create(['http' => ['timeout' => 30]]);
     $content = @file_get_contents($downloadUrl, false, $context);
     if (!is_string($content) || $content === '') {
         onlyoffice_callback_response(1);
     }
-    storage_write_file_locked($target, $content, 0, true);
+
+    $storedSize = strlen($content);
+    $storedMime = (string)($record['file_mime'] ?? '');
+    if (($record['storage_driver'] ?? '') === 'nextcloud') {
+        if (!procedures_nextcloud_ready($nextcloudCfg)) {
+            onlyoffice_callback_response(1);
+        }
+        $remotePath = trim((string)($record['nextcloud_path'] ?? ''));
+        if ($remotePath === '') {
+            onlyoffice_callback_response(1);
+        }
+        $upload = nextcloud_webdav_request($nextcloudCfg, 'PUT', $remotePath, $content, ['Content-Type: ' . ($storedMime !== '' ? $storedMime : 'application/octet-stream')]);
+        if (empty($upload['ok'])) {
+            onlyoffice_callback_response(1);
+        }
+    } else {
+        $target = procedures_documents_dir() . '/' . basename((string)$record['file_name']);
+        storage_write_file_locked($target, $content, 0, true);
+        $storedSize = filesize($target) ?: $storedSize;
+        $storedMime = procedures_detect_file_mime($target, $storedMime);
+    }
 
     foreach ($items as $index => $item) {
         if ((string)($item['id'] ?? '') === $id) {
-            $items[$index]['file_size'] = filesize($target) ?: (int)($item['file_size'] ?? 0);
-            $items[$index]['file_mime'] = procedures_detect_file_mime($target, (string)($item['file_mime'] ?? ''));
+            $items[$index]['file_size'] = $storedSize;
+            $items[$index]['file_mime'] = $storedMime;
             $items[$index]['updated_at'] = date('c');
             if (!empty($item['draft_pending']) && $status === 6) {
                 $items[$index]['draft_pending'] = false;

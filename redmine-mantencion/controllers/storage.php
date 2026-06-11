@@ -20,20 +20,77 @@ if (!function_exists('storage_base_path')) {
         return JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
     }
 
-    function storage_relative_data_path(string $path): ?string {
-        $dataRoot = realpath(storage_data_path());
-        $dir = realpath(dirname($path));
-        if ($dataRoot === false || $dir === false) {
+    function storage_db_repository() {
+        if (!function_exists('app') || !class_exists(\App\Support\RedmineMantencion\RedmineMantencionStorageRepository::class)) {
             return null;
         }
-        $full = $dir . DIRECTORY_SEPARATOR . basename($path);
+        try {
+            $repo = app(\App\Support\RedmineMantencion\RedmineMantencionStorageRepository::class);
+            return $repo->tableReady() ? $repo : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    function storage_relative_data_path(string $path): ?string {
+        $dataRoot = realpath(storage_data_path());
+        if ($dataRoot === false) {
+            return null;
+        }
         $dataRoot = rtrim(str_replace('\\', '/', $dataRoot), '/');
-        $fullNorm = str_replace('\\', '/', $full);
+
+        $fullNorm = str_replace('\\', '/', $path);
+        if (!str_starts_with($fullNorm, '/')) {
+            $fullNorm = storage_base_path($fullNorm);
+        }
+        $parts = [];
+        foreach (explode('/', $fullNorm) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+            if ($part === '..') {
+                return null;
+            }
+            $parts[] = $part;
+        }
+        $fullNorm = '/' . implode('/', $parts);
+
         if ($fullNorm !== $dataRoot && strpos($fullNorm, $dataRoot . '/') !== 0) {
             return null;
         }
         $rel = ltrim(substr($fullNorm, strlen($dataRoot)), '/');
         return $rel === '' ? null : $rel;
+    }
+
+    function storage_read_json(string $path, $default = []) {
+        $rel = storage_relative_data_path($path);
+        $repo = $rel !== null ? storage_db_repository() : null;
+        if ($repo !== null) {
+            try {
+                $data = $repo->readJson($rel);
+                if ($data !== null) {
+                    return $data;
+                }
+            } catch (Throwable) {
+            }
+        }
+
+        if (getenv('REDMINE_MANTENCION_JSON_FALLBACK') !== '1') {
+            return $default;
+        }
+
+        if (!is_file($path)) {
+            return $default;
+        }
+        $raw = @file_get_contents($path);
+        if (!is_string($raw) || trim($raw) === '') {
+            return $default;
+        }
+        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            $raw = substr($raw, 3);
+        }
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : $default;
     }
 
     function storage_backup_file(string $path): void {
@@ -87,14 +144,114 @@ if (!function_exists('storage_base_path')) {
         if ($json === false) {
             return false;
         }
-        return storage_write_file_locked($path, $json, 0, $backup);
+        $rel = storage_relative_data_path($path);
+        $repo = $rel !== null ? storage_db_repository() : null;
+        if ($repo !== null) {
+            try {
+                $repo->writeJson($rel, $data);
+                return true;
+            } catch (Throwable) {
+                return false;
+            }
+        }
+
+        return getenv('REDMINE_MANTENCION_JSON_FALLBACK') === '1'
+            ? storage_write_file_locked($path, $json, 0, $backup)
+            : false;
+    }
+
+    function storage_json_by_prefix(string $prefix): array {
+        $repo = storage_db_repository();
+        if ($repo !== null) {
+            try {
+                return $repo->jsonByPrefix($prefix);
+            } catch (Throwable) {
+                return [];
+            }
+        }
+
+        if (getenv('REDMINE_MANTENCION_JSON_FALLBACK') !== '1') {
+            return [];
+        }
+
+        $root = storage_data_path($prefix);
+        if (!is_dir($root)) {
+            return [];
+        }
+
+        $items = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if (!$file instanceof SplFileInfo || !$file->isFile() || strtolower($file->getExtension()) !== 'json') {
+                continue;
+            }
+            $rel = storage_relative_data_path($file->getPathname());
+            if ($rel === null) {
+                continue;
+            }
+            $decoded = storage_read_json($file->getPathname(), null);
+            if (is_array($decoded)) {
+                $items[$rel] = $decoded;
+            }
+        }
+
+        ksort($items);
+        return $items;
+    }
+
+    function storage_read_text(string $path, string $default = ''): string {
+        $rel = storage_relative_data_path($path);
+        $repo = $rel !== null ? storage_db_repository() : null;
+        if ($repo !== null) {
+            try {
+                $data = $repo->readText($rel);
+                if ($data !== null) {
+                    return $data;
+                }
+            } catch (Throwable) {
+            }
+        }
+
+        if (getenv('REDMINE_MANTENCION_JSON_FALLBACK') !== '1') {
+            return $default;
+        }
+
+        return is_file($path) ? (string)@file_get_contents($path) : $default;
+    }
+
+    function storage_write_text(string $path, string $contents): bool {
+        $rel = storage_relative_data_path($path);
+        $repo = $rel !== null ? storage_db_repository() : null;
+        if ($repo !== null) {
+            try {
+                $repo->writeText($rel, $contents);
+                return true;
+            } catch (Throwable) {
+                return false;
+            }
+        }
+
+        return getenv('REDMINE_MANTENCION_JSON_FALLBACK') === '1'
+            ? storage_write_file_locked($path, $contents, 0, true)
+            : false;
     }
 
     function storage_append_line(string $path, string $line): bool {
+        $current = storage_read_text($path, '');
+        if ($current !== '' || storage_relative_data_path($path) !== null) {
+            return storage_write_text($path, rtrim($current, "\r\n") . ($current !== '' ? PHP_EOL : '') . rtrim($line, "\r\n") . PHP_EOL);
+        }
+
         return storage_write_file_locked($path, rtrim($line, "\r\n") . PHP_EOL, FILE_APPEND, false);
     }
 
     function storage_truncate_file(string $path): bool {
+        if (storage_relative_data_path($path) !== null) {
+            return storage_write_text($path, '');
+        }
+
         return storage_write_file_locked($path, '', 0, true);
     }
 

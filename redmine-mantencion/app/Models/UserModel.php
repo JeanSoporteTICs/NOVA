@@ -7,11 +7,7 @@ class UserModel
     public function all(): array
     {
         $path = APP_BASE_PATH . '/data/usuarios.json';
-        if (!is_file($path)) {
-            return [];
-        }
-
-        $data = json_decode((string) file_get_contents($path), true);
+        $data = \storage_read_json($path, []);
         return is_array($data) ? $data : [];
     }
 

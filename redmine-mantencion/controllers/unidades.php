@@ -6,13 +6,13 @@ require_once __DIR__ . '/maintenance.php';
 $GLOBALS['DATA_FILE'] = __DIR__ . '/../data/unidades.json';
 
 function ensure_uni_file($path) {
-    if (!file_exists($path)) {
+    if (storage_read_json($path, null) === null) {
         storage_write_json($path, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
     }
 }
 function load_unidades($path) {
     ensure_uni_file($path);
-    $data = json_decode(file_get_contents($path), true);
+    $data = storage_read_json($path, []);
     if (!is_array($data)) $data = [];
     $changed = false;
     foreach ($data as &$item) {

@@ -30,11 +30,7 @@ function normalize_date($str) {
 }
 
 function estadisticas_read_json_file($file) {
-    if (!is_file($file)) return null;
-    $raw = @file_get_contents($file);
-    if (!is_string($raw) || $raw === '') return null;
-    $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
-    $data = json_decode($raw, true);
+    $data = storage_read_json((string)$file, null);
     return is_array($data) ? $data : null;
 }
 
@@ -56,18 +52,12 @@ function estadisticas_normalize_message(array $row): array {
 
 function load_report_messages($baseDir) {
     $messages = [];
-    if (!is_dir($baseDir)) return $messages;
-    $years = glob($baseDir . '/*', GLOB_ONLYDIR);
-    foreach ($years as $yearDir) {
-        $files = glob($yearDir . '/*.json');
-        foreach ($files as $file) {
-            $data = estadisticas_read_json_file($file);
-            if (is_array($data)) {
-                foreach ($data as $row) {
-                    if (!is_array($row)) continue;
-                    $row['_fuente'] = 'reportes';
-                    $messages[] = estadisticas_normalize_message($row);
-                }
+    foreach (storage_json_by_prefix('reportes') as $data) {
+        if (is_array($data)) {
+            foreach ($data as $row) {
+                if (!is_array($row)) continue;
+                $row['_fuente'] = 'reportes';
+                $messages[] = estadisticas_normalize_message($row);
             }
         }
     }
@@ -88,12 +78,7 @@ function load_live_messages($file) {
 
 function load_extra_messages($baseDir) {
     $messages = [];
-    if (!is_dir($baseDir)) return $messages;
-    $years = glob($baseDir . '/*', GLOB_ONLYDIR);
-    foreach ($years as $yearDir) {
-        $files = glob($yearDir . '/*.json');
-        foreach ($files as $file) {
-            $groups = estadisticas_read_json_file($file);
+    foreach (storage_json_by_prefix('horasExtras') as $groups) {
             if (!is_array($groups)) continue;
             foreach ($groups as $group) {
                 if (!is_array($group)) continue;
@@ -115,7 +100,6 @@ function load_extra_messages($baseDir) {
                     $messages[] = estadisticas_normalize_message($rep);
                 }
             }
-        }
     }
     return $messages;
 }

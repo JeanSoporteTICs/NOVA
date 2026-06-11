@@ -24,25 +24,9 @@ class SystemHealthModel
 
         foreach ($paths as $path) {
             $name = basename($path);
-            if (!file_exists($path)) {
-                $status['ok'] = false;
-                $status['checks'][$name] = 'missing';
-                continue;
-            }
-
-            $contents = file_get_contents($path);
-            if ($contents === false) {
-                $status['checks'][$name] = 'read_fail';
-                $status['ok'] = false;
-                continue;
-            }
-            $decoded = json_decode($contents, true);
+            $decoded = \storage_read_json($path, null);
             $status['checks'][$name] = is_array($decoded) ? 'ok' : 'invalid_json';
             if (!is_array($decoded)) {
-                $status['ok'] = false;
-            }
-            if (!is_writable($path)) {
-                $status['checks'][$name . '_writable'] = 'not_writable';
                 $status['ok'] = false;
             }
         }
@@ -87,7 +71,7 @@ class SystemHealthModel
             $status['ok'] = false;
         }
         $lastBackupFile = APP_BASE_PATH . '/data/backups/.last_auto_backup';
-        $lastBackup = is_file($lastBackupFile) ? trim((string)file_get_contents($lastBackupFile)) : '';
+        $lastBackup = trim(\storage_read_text($lastBackupFile, ''));
         if ($lastBackup === date('Y-m-d')) {
             $status['checks']['last_auto_backup'] = 'ok';
         } else {
@@ -103,7 +87,7 @@ class SystemHealthModel
         }
 
         $cfgPath = APP_BASE_PATH . '/data/configuracion.json';
-        $cfg = is_file($cfgPath) ? json_decode((string)file_get_contents($cfgPath), true) : [];
+        $cfg = \storage_read_json($cfgPath, []);
         if (is_array($cfg)) {
             foreach (['platform_url', 'project_id', 'tracker_id', 'priority_id', 'status_id'] as $key) {
                 if (($cfg[$key] ?? '') === '' || $cfg[$key] === null) {

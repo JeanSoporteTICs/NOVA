@@ -33,9 +33,119 @@ function rut_base($rut) {
 }
 
 function ensure_usr_file($path) {
-    if (!file_exists($path)) {
+    if (storage_read_json($path, null) === null) {
         storage_write_json($path, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
     }
+}
+
+function usuarios_text_key(string $value): string {
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+    $value = strtr($value, [
+        'ÃƒÆ’Ã‚Â¡' => 'á', 'ÃƒÆ’Ã‚Â©' => 'é', 'ÃƒÆ’Ã‚Â­' => 'í', 'ÃƒÆ’Ã‚Â³' => 'ó', 'ÃƒÆ’Ã‚Âº' => 'ú',
+        'ÃƒÆ’Ã‚Â±' => 'ñ', 'ÃƒÆ’Ã‚Â‘' => 'Ñ',
+        'Ã¡' => 'á', 'Ã©' => 'é', 'Ã­' => 'í', 'Ã³' => 'ó', 'Ãº' => 'ú', 'Ã±' => 'ñ',
+    ]);
+    $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+    if (is_string($ascii) && $ascii !== '') {
+        $value = $ascii;
+    }
+    $value = strtolower($value);
+    $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
+    return trim((string)$value);
+}
+
+function usuarios_strip_trailing_phrase(string $value, string $phrase): string {
+    $value = preg_replace('/\s+/', ' ', trim($value)) ?? '';
+    $phrase = preg_replace('/\s+/', ' ', trim($phrase)) ?? '';
+    if ($value === '' || $phrase === '') {
+        return $value;
+    }
+    $phraseTokens = explode(' ', usuarios_text_key($phrase));
+    if ($phraseTokens === ['']) {
+        return $value;
+    }
+    do {
+        $tokens = preg_split('/\s+/', $value) ?: [];
+        $tail = array_slice($tokens, -count($phraseTokens));
+        $tailKey = usuarios_text_key(implode(' ', $tail));
+        $phraseKey = implode(' ', $phraseTokens);
+        if ($tailKey !== $phraseKey || count($tokens) <= count($phraseTokens)) {
+            break;
+        }
+        $value = implode(' ', array_slice($tokens, 0, -count($phraseTokens)));
+    } while (true);
+
+    return trim($value);
+}
+
+function usuarios_detect_repeated_suffix(string $fullName): array {
+    $fullName = preg_replace('/\s+/', ' ', trim($fullName)) ?? '';
+    $tokens = preg_split('/\s+/', $fullName) ?: [];
+    $count = count($tokens);
+    if ($count < 3) {
+        return [$fullName, ''];
+    }
+    $maxLen = min(4, intdiv($count, 2));
+    for ($len = $maxLen; $len >= 1; $len--) {
+        $suffix = array_slice($tokens, -$len);
+        $prev = array_slice($tokens, -($len * 2), $len);
+        if (usuarios_text_key(implode(' ', $suffix)) !== usuarios_text_key(implode(' ', $prev))) {
+            continue;
+        }
+        $nameTokens = $tokens;
+        while (count($nameTokens) > $len) {
+            $tail = array_slice($nameTokens, -$len);
+            if (usuarios_text_key(implode(' ', $tail)) !== usuarios_text_key(implode(' ', $suffix))) {
+                break;
+            }
+            $nameTokens = array_slice($nameTokens, 0, -$len);
+        }
+        if ($nameTokens !== []) {
+            return [implode(' ', $nameTokens), implode(' ', $suffix)];
+        }
+    }
+
+    return [$fullName, ''];
+}
+
+function usuarios_normalize_person_fields(array &$item): void {
+    $nombre = preg_replace('/\s+/', ' ', trim((string)($item['nombre'] ?? ''))) ?? '';
+    $apellido = preg_replace('/\s+/', ' ', trim((string)($item['apellido'] ?? ''))) ?? '';
+    $nombre = strtr($nombre, [
+        'ÃƒÆ’Ã‚Â¡' => 'á', 'ÃƒÆ’Ã‚Â©' => 'é', 'ÃƒÆ’Ã‚Â­' => 'í', 'ÃƒÆ’Ã‚Â³' => 'ó', 'ÃƒÆ’Ã‚Âº' => 'ú',
+        'ÃƒÆ’Ã‚Â±' => 'ñ', 'ÃƒÆ’Ã‚Â‘' => 'Ñ',
+        'Ã¡' => 'á', 'Ã©' => 'é', 'Ã­' => 'í', 'Ã³' => 'ó', 'Ãº' => 'ú', 'Ã±' => 'ñ',
+    ]);
+    $apellido = strtr($apellido, [
+        'ÃƒÆ’Ã‚Â¡' => 'á', 'ÃƒÆ’Ã‚Â©' => 'é', 'ÃƒÆ’Ã‚Â­' => 'í', 'ÃƒÆ’Ã‚Â³' => 'ó', 'ÃƒÆ’Ã‚Âº' => 'ú',
+        'ÃƒÆ’Ã‚Â±' => 'ñ', 'ÃƒÆ’Ã‚Â‘' => 'Ñ',
+        'Ã¡' => 'á', 'Ã©' => 'é', 'Ã­' => 'í', 'Ã³' => 'ó', 'Ãº' => 'ú', 'Ã±' => 'ñ',
+    ]);
+    if ($apellido !== '') {
+        [$lastPrefix, $lastSuffix] = usuarios_detect_repeated_suffix($apellido);
+        if ($lastSuffix !== '' && strlen($lastSuffix) < strlen($apellido)) {
+            $apellido = $lastSuffix;
+        }
+        $nombre = usuarios_strip_trailing_phrase($nombre, $apellido);
+        [$detectedName, $detectedLastName] = usuarios_detect_repeated_suffix($nombre);
+        if ($detectedLastName !== '' && strlen($detectedName) < strlen($nombre)) {
+            $nombre = $detectedName;
+        }
+        $tokens = preg_split('/\s+/', $nombre) ?: [];
+        while (count($tokens) > 1 && preg_match('/Ã|Â/u', (string)end($tokens)) === 1) {
+            array_pop($tokens);
+        }
+        $nombre = trim(implode(' ', $tokens));
+    } else {
+        [$detectedName, $detectedLastName] = usuarios_detect_repeated_suffix($nombre);
+        $nombre = $detectedName;
+        $apellido = $detectedLastName;
+    }
+    $item['nombre'] = $nombre;
+    $item['apellido'] = $apellido;
 }
 
 function ensure_user_fields(array &$item) {
@@ -61,12 +171,7 @@ function ensure_user_fields(array &$item) {
             $item[$key] = $value;
         }
     }
-    $nombre = trim((string)($item['nombre'] ?? ''));
-    $apellido = trim((string)($item['apellido'] ?? ''));
-    if ($apellido !== '' && stripos($nombre, $apellido) === false) {
-        $item['nombre'] = trim($nombre . ' ' . $apellido);
-    }
-    $item['apellido'] = '';
+    usuarios_normalize_person_fields($item);
     $item['numero_celular'] = '';
     $item['rut_sin_dv'] = '';
     $item['rut'] = '';
@@ -75,14 +180,7 @@ function ensure_user_fields(array &$item) {
 
 function load_usuarios($path) {
     ensure_usr_file($path);
-    $data = usuarios_project_users_from_nova();
-    if ($data === []) {
-        $data = json_decode(file_get_contents($path), true);
-        if (is_array($data) && $data !== []) {
-            save_usuarios($path, $data);
-            $data = usuarios_project_users_from_nova();
-        }
-    }
+    $data = storage_read_json($path, []);
     if (!is_array($data)) $data = [];
     $changed = false;
     foreach ($data as &$item) {
@@ -95,164 +193,24 @@ function load_usuarios($path) {
 }
 
 function save_usuarios($path, $data) {
-    usuarios_save_project_users_to_nova(is_array($data) ? $data : []);
-    storage_write_json($path, usuarios_project_users_from_nova(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-}
-
-function usuarios_nova_users_path(): string {
-    return dirname(__DIR__, 2) . '/storage/app/nova/users.json';
-}
-
-function usuarios_read_nova_users(): array {
-    $path = usuarios_nova_users_path();
-    $rows = json_decode((string)@file_get_contents($path), true);
-    return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
-}
-
-function usuarios_write_nova_users(array $rows): void {
-    $path = usuarios_nova_users_path();
-    storage_ensure_dir(dirname($path));
-    file_put_contents($path, json_encode(array_values($rows), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
-    @chmod($path, 0666);
+    storage_write_json($path, is_array($data) ? array_values($data) : [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function usuarios_norm_identity(string $value): string {
     return strtolower((string)preg_replace('/[^0-9a-z]/i', '', $value));
 }
 
-function usuarios_project_users_from_nova(): array {
-    $users = [];
-    foreach (usuarios_read_nova_users() as $row) {
-        $project = $row['projects']['redmine-mantencion'] ?? null;
-        if (!is_array($project)) {
-            continue;
-        }
-        $redmineId = trim((string)($project['id'] ?? $row['redmine_id'] ?? ''));
-        if ($redmineId === '') {
-            continue;
-        }
-        $users[] = [
-            'id' => $redmineId,
-            'rut_sin_dv' => trim((string)($row['rut_sin_dv'] ?? $row['username'] ?? '')),
-            'nombre' => trim((string)(($row['name'] ?? '') . ' ' . ($row['apellido'] ?? ''))),
-            'apellido' => '',
-            'rut' => trim((string)($row['rut'] ?? '')),
-            'numero_celular' => '',
-            'estamento' => '',
-            'api' => trim((string)($project['api'] ?? $row['api'] ?? '')),
-            'core_user' => trim((string)($project['core_user'] ?? '')),
-            'core_pass_enc' => trim((string)($project['core_pass_enc'] ?? '')),
-            'nextcloud_user' => trim((string)($project['nextcloud_user'] ?? '')),
-            'nextcloud_pass_enc' => trim((string)($project['nextcloud_pass_enc'] ?? '')),
-            'rol' => trim((string)($project['rol'] ?? $row['role'] ?? 'usuario')) ?: 'usuario',
-            'estado' => trim((string)($project['estado'] ?? $project['estado_usuario'] ?? $row['status'] ?? 'activo')) ?: 'activo',
-            'password' => (string)($row['password'] ?? ''),
-            'permisos' => is_array($project['permisos'] ?? null) ? $project['permisos'] : [],
-            '_nova_user_id' => (string)($row['id'] ?? ''),
-        ];
-    }
-    return $users;
-}
-
-function usuarios_save_project_users_to_nova(array $projectUsers): void {
-    $novaUsers = usuarios_read_nova_users();
-    foreach ($projectUsers as $projectUser) {
-        if (!is_array($projectUser)) {
-            continue;
-        }
-        $redmineId = trim((string)($projectUser['id'] ?? ''));
-        if ($redmineId === '') {
-            continue;
-        }
-        $idx = usuarios_find_nova_index_for_project_user($novaUsers, $projectUser);
-        $current = $idx !== null ? $novaUsers[$idx] : [];
-        $fullName = trim((string)($projectUser['nombre'] ?? ''));
-        $firstName = $fullName;
-        $lastName = trim((string)($projectUser['apellido'] ?? ''));
-        if ($lastName === '' && str_contains($fullName, ' ')) {
-            [$firstName, $lastName] = explode(' ', $fullName, 2);
-        }
-        $row = array_merge($current, [
-            'id' => (string)($current['id'] ?? uniqid('', true)),
-            'redmine_id' => (string)($current['redmine_id'] ?? $redmineId),
-            'source' => (string)($current['source'] ?? 'redmine-mantencion'),
-            'username' => trim((string)($current['username'] ?? $projectUser['rut_sin_dv'] ?? $projectUser['core_user'] ?? $redmineId)),
-            'name' => trim($firstName),
-            'apellido' => trim($lastName),
-            'rut' => trim((string)($projectUser['rut'] ?? $current['rut'] ?? '')),
-            'rut_sin_dv' => trim((string)($projectUser['rut_sin_dv'] ?? $current['rut_sin_dv'] ?? '')),
-            'role' => usuarios_normalize_nova_role((string)($current['role'] ?? $projectUser['rol'] ?? 'usuario')),
-            'status' => usuarios_normalize_status((string)($projectUser['estado'] ?? $current['status'] ?? 'activo')),
-            'password' => (string)($current['password'] ?? $projectUser['password'] ?? ''),
-            'api' => trim((string)($current['api'] ?? $projectUser['api'] ?? '')),
-        ]);
-        $projects = is_array($row['projects'] ?? null) ? $row['projects'] : [];
-        $projects['redmine-mantencion'] = [
-            'id' => $redmineId,
-            'rol' => trim((string)($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
-            'estado' => usuarios_normalize_status((string)($projectUser['estado'] ?? 'activo')),
-            'estado_usuario' => usuarios_normalize_status((string)($projectUser['estado'] ?? 'activo')),
-            'api' => trim((string)($projectUser['api'] ?? '')),
-            'core_user' => trim((string)($projectUser['core_user'] ?? '')),
-            'core_pass_enc' => trim((string)($projectUser['core_pass_enc'] ?? '')),
-            'nextcloud_user' => trim((string)($projectUser['nextcloud_user'] ?? '')),
-            'nextcloud_pass_enc' => trim((string)($projectUser['nextcloud_pass_enc'] ?? '')),
-            'permisos' => is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [],
-        ];
-        $row['projects'] = $projects;
-        if ($idx === null) {
-            $novaUsers[] = $row;
-        } else {
-            $novaUsers[$idx] = $row;
-        }
-    }
-    usuarios_write_nova_users($novaUsers);
-}
-
-function usuarios_find_nova_index_for_project_user(array $novaUsers, array $projectUser): ?int {
-    $redmineId = usuarios_norm_identity((string)($projectUser['id'] ?? ''));
-    $needles = array_filter(array_map('usuarios_norm_identity', [
-        $projectUser['rut'] ?? '',
-        $projectUser['rut_sin_dv'] ?? '',
-        $projectUser['core_user'] ?? '',
-    ]));
-    foreach ($novaUsers as $idx => $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $project = $row['projects']['redmine-mantencion'] ?? [];
-        $candidateRedmineId = usuarios_norm_identity((string)($project['id'] ?? $row['redmine_id'] ?? ''));
-        if ($redmineId !== '' && $candidateRedmineId === $redmineId) {
-            return $idx;
-        }
-        $candidates = array_filter(array_map('usuarios_norm_identity', [
-            $row['rut'] ?? '',
-            $row['rut_sin_dv'] ?? '',
-            $row['username'] ?? '',
-            $row['core_user'] ?? '',
-        ]));
-        if ($needles !== [] && array_intersect($needles, $candidates) !== []) {
-            return $idx;
-        }
-    }
-    return null;
-}
-
 function usuarios_normalize_status(string $status): string {
     return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
-}
-
-function usuarios_normalize_nova_role(string $role): string {
-    return in_array(strtolower(trim($role)), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
 }
 
 function usuarios_migrate_global_nextcloud_credentials(array &$rows): bool {
     global $CONFIG_FILE;
     $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
-    if ($userId === '' || !is_file($CONFIG_FILE)) {
+    if ($userId === '') {
         return false;
     }
-    $cfg = json_decode((string)file_get_contents($CONFIG_FILE), true);
+    $cfg = storage_read_json($CONFIG_FILE, []);
     if (!is_array($cfg)) {
         return false;
     }
@@ -333,10 +291,7 @@ function usuarios_user_api_token(): string {
         return '';
     }
     global $DATA_FILE;
-    if (!file_exists($DATA_FILE)) {
-        return '';
-    }
-    $users = json_decode(file_get_contents($DATA_FILE), true);
+    $users = storage_read_json($DATA_FILE, []);
     if (!is_array($users)) {
         return '';
     }
@@ -353,7 +308,7 @@ function usuarios_user_api_token(): string {
 
 function usuarios_members_url_from_config(): string {
     global $CONFIG_FILE;
-    $cfg = file_exists($CONFIG_FILE) ? json_decode(file_get_contents($CONFIG_FILE), true) : [];
+    $cfg = storage_read_json($CONFIG_FILE, []);
     if (is_array($cfg)) {
         $custom = trim((string)($cfg['users_members_url'] ?? ''));
         if ($custom !== '') {
@@ -386,17 +341,23 @@ function usuarios_split_name(string $fullName): array {
     if ($fullName === '') {
         return ['', ''];
     }
+    [$cleanName, $detectedLastName] = usuarios_detect_repeated_suffix($fullName);
+    if ($detectedLastName !== '') {
+        return [$cleanName, $detectedLastName];
+    }
     $parts = preg_split('/\s+/', $fullName);
     if (!$parts || count($parts) === 1) {
         return [$fullName, ''];
     }
-    $first = array_shift($parts);
-    return [trim($first . ' ' . implode(' ', $parts)), ''];
+    $lastNameLength = count($parts) >= 3 ? 2 : 1;
+    $lastName = implode(' ', array_slice($parts, -$lastNameLength));
+    $firstName = implode(' ', array_slice($parts, 0, -$lastNameLength));
+    return [trim($firstName), trim($lastName)];
 }
 
 function usuarios_sync_remote(array &$rows): array {
     global $CONFIG_FILE, $DATA_FILE;
-    $cfg = file_exists($CONFIG_FILE) ? json_decode(file_get_contents($CONFIG_FILE), true) : [];
+    $cfg = storage_read_json($CONFIG_FILE, []);
     $apiKey = is_array($cfg) ? trim((string)($cfg['platform_token'] ?? '')) : '';
     if ($apiKey === '') {
         $apiKey = usuarios_user_api_token();
@@ -456,10 +417,12 @@ function usuarios_sync_remote(array &$rows): array {
         }
         if (isset($indexed[$id])) {
             $idx = $indexed[$id];
+            [$nombre, $apellido] = usuarios_split_name($name);
             $currentName = trim((string)($rows[$idx]['nombre'] ?? ''));
-            if ($currentName !== $name) {
-                $rows[$idx]['nombre'] = $name;
-                $rows[$idx]['apellido'] = '';
+            $currentLastName = trim((string)($rows[$idx]['apellido'] ?? ''));
+            if ($currentName !== $nombre || $currentLastName !== $apellido) {
+                $rows[$idx]['nombre'] = $nombre;
+                $rows[$idx]['apellido'] = $apellido;
                 $rows[$idx]['rut_sin_dv'] = '';
                 $rows[$idx]['rut'] = '';
                 $rows[$idx]['estamento'] = '';
@@ -471,7 +434,7 @@ function usuarios_sync_remote(array &$rows): array {
         $rows[] = [
             'id' => $id,
             'rut_sin_dv' => '',
-            'nombre' => $nombre !== '' ? $name : $name,
+            'nombre' => $nombre !== '' ? $nombre : $name,
             'apellido' => $apellido,
             'rut' => '',
             'numero_celular' => '',
@@ -525,11 +488,12 @@ function handle_usuarios() {
             if ($requiredName === '') {
                 return [$rows, 'Error: el nombre es obligatorio'];
             }
+            [$newNombre, $newApellido] = usuarios_split_name($requiredName);
             $rows[] = [
                 'id' => $id_input !== '' ? $id_input : uniqid('', true),
                 'rut_sin_dv' => '',
-                'nombre' => $requiredName,
-                'apellido' => '',
+                'nombre' => $newNombre !== '' ? $newNombre : $requiredName,
+                'apellido' => $newApellido,
                 'rut' => '',
                 'numero_celular' => '',
                 'estamento' => '',
@@ -554,9 +518,10 @@ function handle_usuarios() {
             if ($requiredNameUp === '') {
                 return [$rows, 'Error: el nombre es obligatorio'];
             }
+            [$upNombre, $upApellido] = usuarios_split_name($requiredNameUp);
             $current['rut_sin_dv'] = '';
-            $current['nombre'] = $requiredNameUp;
-            $current['apellido'] = '';
+            $current['nombre'] = $upNombre !== '' ? $upNombre : $requiredNameUp;
+            $current['apellido'] = $upApellido;
             $current['rut'] = '';
             $current['numero_celular'] = '';
             $current['estamento'] = '';

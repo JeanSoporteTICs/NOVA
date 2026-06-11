@@ -43,7 +43,7 @@ function ensure_path(string $path, bool $isDir = false): void
         return;
     }
 
-    if (!file_exists($path)) {
+    if (\storage_read_json($path, null) === null) {
         $dir = dirname($path);
         if (!is_dir($dir)) {
             mkdir($dir, 0777, true);

@@ -52,9 +52,17 @@ function nextcloud_sanitize(string $value): string {
     return trim(filter_var($value, FILTER_UNSAFE_RAW) ?? '');
 }
 
+function nextcloud_normalize_document_path(string $path): string {
+    $parts = array_values(array_filter(explode('/', str_replace('\\', '/', $path)), static function (string $part): bool {
+        $part = trim($part);
+        return $part !== '' && $part !== '.' && $part !== '..';
+    }));
+    return $parts ? '/' . implode('/', $parts) : '/NOVA/Procedimientos';
+}
+
 function nextcloud_config_load(): array {
     global $NEXTCLOUD_CONFIG_FILE;
-    $cfg = is_file($NEXTCLOUD_CONFIG_FILE) ? json_decode((string)file_get_contents($NEXTCLOUD_CONFIG_FILE), true) : [];
+    $cfg = storage_read_json($NEXTCLOUD_CONFIG_FILE, []);
     return is_array($cfg) ? $cfg : [];
 }
 
@@ -77,6 +85,7 @@ function nextcloud_config(): array {
     $savedUserCredentials = nextcloud_credentials_for_user($userId);
     $adminUser = trim((string)($savedUserCredentials['user'] ?? ''));
     $adminPass = trim((string)($savedUserCredentials['pass'] ?? ''));
+    $proceduresRoot = nextcloud_normalize_document_path((string)($cfg['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos'));
     return [
         'url' => trim((string)($cfg['nextcloud_url'] ?? 'https://www.coresalud.cl/nextcloud')),
         'admin_user' => $adminUser,
@@ -84,6 +93,10 @@ function nextcloud_config(): array {
         'default_group' => trim((string)($cfg['nextcloud_default_group'] ?? '')),
         'default_quota' => trim((string)($cfg['nextcloud_default_quota'] ?? '')),
         'default_language' => trim((string)($cfg['nextcloud_default_language'] ?? 'es')),
+        'procedures_storage' => in_array(strtolower((string)($cfg['procedures_storage'] ?? 'local')), ['local', 'nextcloud'], true)
+            ? strtolower((string)($cfg['procedures_storage'] ?? 'local'))
+            : 'local',
+        'procedures_nextcloud_root' => $proceduresRoot,
         'has_password' => nextcloud_credentials_has_saved($userId),
         'has_global_password' => false,
     ];
@@ -95,6 +108,9 @@ function nextcloud_save_config(array $post): bool {
     $cfg['nextcloud_default_group'] = nextcloud_sanitize($post['nextcloud_default_group'] ?? '');
     $cfg['nextcloud_default_quota'] = nextcloud_sanitize($post['nextcloud_default_quota'] ?? '');
     $cfg['nextcloud_default_language'] = nextcloud_sanitize($post['nextcloud_default_language'] ?? 'es');
+    $storage = strtolower(nextcloud_sanitize($post['procedures_storage'] ?? 'local'));
+    $cfg['procedures_storage'] = in_array($storage, ['local', 'nextcloud'], true) ? $storage : 'local';
+    $cfg['procedures_nextcloud_root'] = nextcloud_normalize_document_path(nextcloud_sanitize($post['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos'));
     $cfg['nextcloud_admin_user'] = '';
     $cfg['nextcloud_admin_pass_enc'] = '';
     return nextcloud_config_save($cfg);
@@ -458,6 +474,91 @@ function nextcloud_request(array $cfg, string $method, string $path, array $payl
     ];
 }
 
+function nextcloud_webdav_base_url(array $cfg): string {
+    $base = rtrim((string)($cfg['url'] ?? ''), '/');
+    $user = rawurlencode((string)($cfg['admin_user'] ?? ''));
+    return $base . '/remote.php/dav/files/' . $user;
+}
+
+function nextcloud_webdav_request(array $cfg, string $method, string $path, $body = null, array $headers = []): array {
+    $path = '/' . ltrim(str_replace('\\', '/', $path), '/');
+    $url = nextcloud_webdav_base_url($cfg) . implode('/', array_map('rawurlencode', explode('/', $path)));
+    $ch = curl_init($url);
+    $requestHeaders = array_merge(['Accept: application/xml, application/json'], $headers);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_USERPWD => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
+        CURLOPT_HTTPHEADER => $requestHeaders,
+        CURLOPT_HEADER => true,
+        CURLOPT_TIMEOUT => 60,
+    ]);
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    }
+    $response = curl_exec($ch);
+    if ($response === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        return ['ok' => false, 'http' => 0, 'body' => '', 'headers' => '', 'message' => $err];
+    }
+    $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+
+    return [
+        'ok' => $http >= 200 && $http < 300,
+        'http' => $http,
+        'headers' => substr((string)$response, 0, $headerSize),
+        'body' => substr((string)$response, $headerSize),
+        'message' => $http >= 400 ? 'HTTP ' . $http : '',
+    ];
+}
+
+function nextcloud_ensure_directory(array $cfg, string $path): array {
+    $path = '/' . trim(str_replace('\\', '/', $path), '/');
+    if ($path === '/') {
+        return ['ok' => true];
+    }
+    $parts = array_values(array_filter(explode('/', trim($path, '/'))));
+    $current = '';
+    foreach ($parts as $part) {
+        $current .= '/' . $part;
+        $res = nextcloud_webdav_request($cfg, 'MKCOL', $current);
+        if (!$res['ok'] && !in_array((int)($res['http'] ?? 0), [405, 409], true)) {
+            return $res;
+        }
+    }
+    return ['ok' => true];
+}
+
+function nextcloud_share_create(array $cfg, string $path, bool $publicUpload = false): array {
+    $res = nextcloud_request($cfg, 'POST', '/shares', [
+        'path' => '/' . ltrim($path, '/'),
+        'shareType' => 3,
+        'permissions' => $publicUpload ? 15 : 1,
+    ]);
+    if (!$res['ok']) {
+        return ['ok' => false, 'error' => (($res['message'] ?? '') ?: 'No se pudo crear enlace compartido.')];
+    }
+    $data = is_array($res['data'] ?? null) ? $res['data'] : [];
+    return [
+        'ok' => true,
+        'id' => (string)($data['id'] ?? ''),
+        'url' => (string)($data['url'] ?? ''),
+        'token' => (string)($data['token'] ?? ''),
+    ];
+}
+
+function nextcloud_share_delete(array $cfg, string $shareId): array {
+    $shareId = trim($shareId);
+    if ($shareId === '') {
+        return ['ok' => true];
+    }
+    $res = nextcloud_request($cfg, 'DELETE', '/shares/' . rawurlencode($shareId));
+    return $res['ok'] ? ['ok' => true] : ['ok' => false, 'error' => (($res['message'] ?? '') ?: 'No se pudo eliminar enlace compartido.')];
+}
+
 function nextcloud_groups_from_response($data): array {
     $groups = [];
     if (is_array($data['groups'] ?? null)) {
@@ -544,16 +645,14 @@ function nextcloud_user_exists(array $cfg, string $userid): array {
 
 function nextcloud_created_history_load(): array {
     global $NEXTCLOUD_CREATED_HISTORY_FILE;
-    $items = is_file($NEXTCLOUD_CREATED_HISTORY_FILE) ? json_decode((string)file_get_contents($NEXTCLOUD_CREATED_HISTORY_FILE), true) : [];
+    $items = storage_read_json($NEXTCLOUD_CREATED_HISTORY_FILE, []);
     $items = is_array($items) ? $items : [];
     $cutoff = time() - 86400;
     $items = array_values(array_filter($items, static function ($item) use ($cutoff) {
         $createdAt = strtotime((string)($item['created_at'] ?? ''));
         return $createdAt !== false && $createdAt >= $cutoff;
     }));
-    if (is_file($NEXTCLOUD_CREATED_HISTORY_FILE)) {
-        storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, $items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    }
+    storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, $items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     return $items;
 }
 

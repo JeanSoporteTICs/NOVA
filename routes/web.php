@@ -101,7 +101,7 @@ Route::post('/redmine_tic/app/horas-extra', [RedmineDashboardController::class, 
 Route::post('/redmine_tic/app/actividad', [RedmineDashboardController::class, 'activityAction'])->name('redmine.native.activity.action');
 Route::post('/redmine_tic/app/webhook', [RedmineDashboardController::class, 'webhookAction'])->name('redmine.native.webhook.action');
 Route::get('/redmine_tic', fn () => redirect()->route('redmine.native.dashboard'))->name('redmine.dashboard');
-Route::match(['GET', 'POST'], '/redmine_tic/{path}', fn (Request $request, LegacyProjectController $controller, ?string $path = null) => $controller->passthrough($request, 'redmine_tic', $path))
+Route::match(['GET', 'POST'], '/redmine_tic/{path}', fn () => redirect()->route('redmine.native.dashboard'))
     ->where('path', '^(?!(?:app|nativo)(?:/|$)).*')
     ->name('redmine.path');
 Route::get('/redmine-mantencion/health.php', fn () => response()->json([

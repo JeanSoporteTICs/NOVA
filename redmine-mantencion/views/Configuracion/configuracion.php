@@ -27,7 +27,7 @@ $rolesFile = __DIR__ . '/../../data/roles.json';
 $rolesData = auth_load_roles();
 $rolesData = is_array($rolesData) ? $rolesData : [];
 $usuariosFile = __DIR__ . '/../../data/usuarios.json';
-$usuariosData = json_decode(@file_get_contents($usuariosFile), true);
+$usuariosData = storage_read_json($usuariosFile, []);
 if (!is_array($usuariosData)) $usuariosData = [];
 $usuariosIndex = [];
 foreach ($usuariosData as $u) {
@@ -56,10 +56,8 @@ foreach (array_keys($rolesData) as $roleName) {
 }
 $categoriasData = [];
 $categoriasFile = __DIR__ . '/../../data/categorias.json';
-if (file_exists($categoriasFile)) {
-  $categoriasData = json_decode(file_get_contents($categoriasFile), true);
-  if (!is_array($categoriasData)) $categoriasData = [];
-}
+$categoriasData = storage_read_json($categoriasFile, []);
+if (!is_array($categoriasData)) $categoriasData = [];
 if (empty($rolesData)) {
   $rolesData = [
     'root' => [
@@ -973,7 +971,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           <div><span>Retencion</span><strong><?= $h($cfg['retencion_horas'] ?? 24) ?> hora(s)</strong></div>
           <div><span>Sesion</span><strong>NOVA global</strong></div>
           <div><span>Roles</span><strong><?= $h(is_array($rolesData ?? null) ? count($rolesData) : 0) ?> perfil(es)</strong></div>
-          <div><span>Nextcloud</span><strong><?= !empty($nextcloudCfg['enabled']) ? 'Activo' : 'Configurable' ?></strong></div>
+          <div><span>Documentos</span><strong><?= (($nextcloudCfg['procedures_storage'] ?? 'local') === 'nextcloud') ? 'Nextcloud' : 'Local' ?></strong></div>
         </div>
       </article>
     </div>
@@ -1035,6 +1033,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <label class="form-label">Idioma</label>
                   <input name="nextcloud_default_language" class="form-control" value="<?= $h($nextcloudCfg['default_language'] ?? 'es') ?>" placeholder="es">
                 </div>
+              </div>
+              <hr class="my-3">
+              <h6 class="fw-bold mb-3"><i class="bi bi-file-earmark-text text-success"></i> Procedimientos</h6>
+              <?php $proceduresStorage = (string)($nextcloudCfg['procedures_storage'] ?? 'local'); ?>
+              <div class="mb-3">
+                <label class="form-label">Almacenamiento documental</label>
+                <select name="procedures_storage" class="form-select">
+                  <option value="local" <?= $proceduresStorage !== 'nextcloud' ? 'selected' : '' ?>>Local</option>
+                  <option value="nextcloud" <?= $proceduresStorage === 'nextcloud' ? 'selected' : '' ?>>Nextcloud</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Carpeta raíz Nextcloud</label>
+                <input name="procedures_nextcloud_root" class="form-control" value="<?= $h($nextcloudCfg['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos') ?>" placeholder="/NOVA/Procedimientos">
+                <div class="form-text">Se usa para documentos nuevos y carpetas creadas desde Procedimientos.</div>
               </div>
               <button class="btn btn-primary w-100 mt-3" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
                 <i class="bi bi-save"></i> Guardar configuración
@@ -2080,8 +2093,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </div> <!-- #page-content -->
 </body>
 </html>
-
-
 
 
 

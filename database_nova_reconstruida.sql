@@ -56,7 +56,7 @@ CREATE TABLE usuarios_nova (
   uuid CHAR(36) NOT NULL,
   usuario VARCHAR(80) NOT NULL,
   rut VARCHAR(20) NULL,
-  redmine_id VARCHAR(80) NULL,
+  redmine_id INT UNSIGNED NULL,
   nombre VARCHAR(120) NOT NULL,
   apellido VARCHAR(160) NOT NULL,
   email VARCHAR(180) NULL,
@@ -233,25 +233,24 @@ CREATE TABLE catalogos_modulo (
 CREATE TABLE reportes_redmine (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   modulo_id BIGINT UNSIGNED NOT NULL,
-  local_id VARCHAR(100) NULL,
-  redmine_id VARCHAR(100) NULL,
-  estado VARCHAR(100) NULL,
-  estado_redmine VARCHAR(100) NULL,
-  tipo VARCHAR(150) NULL,
-  prioridad VARCHAR(150) NULL,
-  categoria VARCHAR(255) NULL,
-  unidad VARCHAR(255) NULL,
-  unidad_solicitante VARCHAR(255) NULL,
+  local_id CHAR(36) NULL,
+  redmine_id INT UNSIGNED NULL,
+  estado VARCHAR(20) NULL,
+  estado_redmine VARCHAR(40) NULL,
+  tipo VARCHAR(40) NULL,
+  prioridad VARCHAR(20) NULL,
+  categoria_catalogo_id BIGINT UNSIGNED NULL,
+  unidad_catalogo_id BIGINT UNSIGNED NULL,
+  unidad_solicitante_catalogo_id BIGINT UNSIGNED NULL,
   solicitante VARCHAR(255) NULL,
   asunto TEXT NULL,
   descripcion LONGTEXT NULL,
   fecha DATE NULL,
   hora TIME NULL,
-  asignado_a VARCHAR(100) NULL,
-  asignado_nombre VARCHAR(255) NULL,
+  asignado_a INT UNSIGNED NULL,
   hora_extra TINYINT(1) NULL,
   tiempo_estimado DECIMAL(10,2) NULL,
-  origen VARCHAR(100) NULL,
+  origen VARCHAR(40) NULL,
   procesado_at DATETIME NULL,
   archivado_por VARCHAR(255) NULL,
   archivado_at DATETIME NULL,
@@ -264,10 +263,30 @@ CREATE TABLE reportes_redmine (
   KEY idx_reportes_redmine_id (redmine_id),
   KEY idx_reportes_fecha (fecha),
   KEY idx_reportes_origen (origen),
+  KEY idx_reportes_asignado (asignado_a),
+  KEY idx_reportes_categoria (categoria_catalogo_id),
+  KEY idx_reportes_unidad (unidad_catalogo_id),
+  KEY idx_reportes_unidad_solicitante (unidad_solicitante_catalogo_id),
 
   CONSTRAINT fk_reportes_modulo
     FOREIGN KEY (modulo_id) REFERENCES modulos_nova(id)
-    ON DELETE CASCADE
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_reportes_asignado
+    FOREIGN KEY (asignado_a) REFERENCES usuarios_nova(redmine_id)
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_reportes_categoria
+    FOREIGN KEY (categoria_catalogo_id) REFERENCES catalogos_modulo(id)
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_reportes_unidad
+    FOREIGN KEY (unidad_catalogo_id) REFERENCES catalogos_modulo(id)
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_reportes_unidad_solicitante
+    FOREIGN KEY (unidad_solicitante_catalogo_id) REFERENCES catalogos_modulo(id)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================

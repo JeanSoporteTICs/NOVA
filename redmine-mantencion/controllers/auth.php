@@ -41,11 +41,9 @@ function auth_config_timeout() {
     if ($cache !== null) return $cache;
     $cache = 300; // valor por defecto
     $file = __DIR__ . '/../data/configuracion.json';
-    if (file_exists($file)) {
-        $data = json_decode(file_get_contents($file), true);
-        if (is_array($data) && isset($data['session_timeout'])) {
-            $cache = max(60, (int)$data['session_timeout']);
-        }
+    $data = storage_read_json($file, []);
+    if (is_array($data) && isset($data['session_timeout'])) {
+        $cache = max(60, (int)$data['session_timeout']);
     }
     return $cache;
 }
@@ -66,8 +64,7 @@ function auth_users_file() {
 
 function auth_find_user($username) {
     $file = auth_users_file();
-    if (!file_exists($file)) return null;
-    $data = json_decode(file_get_contents($file), true);
+    $data = storage_read_json($file, []);
     if (!is_array($data)) return null;
     foreach ($data as $u) {
         if (!is_array($u)) continue;
@@ -95,8 +92,7 @@ function auth_find_user($username) {
 
 function auth_find_user_by_id($id) {
     $file = auth_users_file();
-    if (!file_exists($file)) return null;
-    $data = json_decode(file_get_contents($file), true);
+    $data = storage_read_json($file, []);
     if (!is_array($data)) return null;
     foreach ($data as $u) {
         if (!is_array($u)) continue;
@@ -217,10 +213,7 @@ function auth_load_roles() {
     static $cache = null;
     if ($cache !== null) return $cache;
     $file = auth_roles_file();
-    if (!file_exists($file)) {
-        return $cache = [];
-    }
-    $data = json_decode(file_get_contents($file), true);
+    $data = storage_read_json($file, []);
     return $cache = is_array($data) ? auth_apply_role_permission_defaults($data) : [];
 }
 

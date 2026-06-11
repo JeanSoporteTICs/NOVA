@@ -17,7 +17,7 @@ return new class extends Migration
             $table->char('uuid', 36)->unique();
             $table->string('usuario', 80)->unique();
             $table->string('rut', 20)->nullable()->unique();
-            $table->string('redmine_id', 80)->nullable()->unique();
+            $table->unsignedInteger('redmine_id')->nullable()->unique();
             $table->string('nombre', 120)->index();
             $table->string('apellido', 160);
             $table->string('email', 180)->nullable();

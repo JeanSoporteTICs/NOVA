@@ -65,9 +65,7 @@ $retencionHoras = get_retencion_horas();
 $userOptions = [];
 $userLookup = [];
 $usersPath = __DIR__ . '/../../data/usuarios.json';
-if (file_exists($usersPath)) {
-    $rawUsers = file_get_contents($usersPath);
-    $parsedUsers = json_decode($rawUsers, true);
+$parsedUsers = storage_read_json($usersPath, []);
     if (is_array($parsedUsers)) {
         foreach ($parsedUsers as $u) {
             if (!is_array($u) || empty($u['id'])) continue;
@@ -87,7 +85,6 @@ if (file_exists($usersPath)) {
                 $userLookup[$rutKey] = $displayName;
             }
         }
-    }
 }
 $userMap = [];
 if (count($userOptions) > 0) {
@@ -99,11 +96,7 @@ $catOptions = [];
 
 $catPath = __DIR__ . '/../../data/categorias.json';
 
-if (file_exists($catPath)) {
-
-    $raw = file_get_contents($catPath);
-
-    $parsed = json_decode($raw, true);
+$parsed = storage_read_json($catPath, []);
 
     if (is_array($parsed)) {
 
@@ -119,19 +112,11 @@ if (file_exists($catPath)) {
 
     }
 
-}
-
-
-
 $unitOptions = [];
 
 $unitPath = __DIR__ . '/../../data/unidades.json';
 
-if (file_exists($unitPath)) {
-
-    $raw = file_get_contents($unitPath);
-
-    $parsed = json_decode($raw, true);
+$parsed = storage_read_json($unitPath, []);
 
     if (is_array($parsed)) {
 
@@ -147,11 +132,6 @@ if (file_exists($unitPath)) {
 
     }
 
-}
-
-
-
-
 $tipoOptions = [];
 $prioridadOptions = [];
 $estadoOptions = ['pendiente', 'procesado', 'error']; // estados locales (dashboard)
@@ -159,18 +139,15 @@ $estadoRedmineId = null;
 $estadoRedmineNombre = null;
 $logsByMessage = [];
 $logPath = __DIR__ . '/../../data/envio_errores.log';
-if (file_exists($logPath)) {
-    foreach (file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+foreach (preg_split('/\R+/', trim(storage_read_text($logPath, ''))) ?: [] as $line) {
         $decoded = json_decode($line, true);
         if (!is_array($decoded)) continue;
         $mid = $decoded['message_id'] ?? '';
         if ($mid === '') continue;
         $logsByMessage[$mid][] = $line;
-    }
 }
 $cfgPath = __DIR__ . '/../../data/configuracion.json';
-if (file_exists($cfgPath)) {
-    $cfgData = json_decode(file_get_contents($cfgPath), true);
+$cfgData = storage_read_json($cfgPath, []);
     if (is_array($cfgData)) {
         foreach (($cfgData['trackers'] ?? []) as $t) {
             if (is_array($t) && isset($t['nombre'])) {
@@ -193,7 +170,6 @@ if (file_exists($cfgPath)) {
             }
         }
         // estados de Redmine se usan para configurar status_id, no para el flujo local del dashboard
-    }
 }
 
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
@@ -903,8 +879,6 @@ if (logModal) {
 </body>
 
 </html>
-
-
 
 
 

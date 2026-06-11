@@ -2,6 +2,8 @@
 
 namespace App\Support\Modules;
 
+use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
+
 final class ModuleRegistry
 {
     /**
@@ -111,6 +113,17 @@ final class ModuleRegistry
         }
 
         foreach ($this->all() as $projectKey => $module) {
+            if ($projectKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
+                try {
+                    $records = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
+                    if (is_array($records)) {
+                        $this->appendProjectUsers($users, $projectKey, $module, $records);
+                    }
+                } catch (\Throwable) {
+                }
+                continue;
+            }
+
             $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
                 . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
             if (!is_file($path)) {
@@ -122,32 +135,7 @@ final class ModuleRegistry
                 continue;
             }
 
-            foreach ($records as $record) {
-                if (!is_array($record)) {
-                    continue;
-                }
-
-                $identity = $this->userIdentity($record);
-                if ($identity === '') {
-                    continue;
-                }
-
-                if (!isset($users[$identity])) {
-                    $users[$identity] = [
-                        'identity' => $identity,
-                        'name' => $this->userDisplayName($record),
-                        'rut' => trim((string) ($record['rut'] ?? '')),
-                        'status' => trim((string) ($record['estado'] ?? $record['estado_usuario'] ?? '')),
-                        'projects' => [],
-                    ];
-                }
-
-                $users[$identity]['projects'][$projectKey] = [
-                    'name' => (string) ($module['name'] ?? $projectKey),
-                    'role' => trim((string) ($record['rol'] ?? 'sin rol')),
-                    'status' => trim((string) ($record['estado'] ?? $record['estado_usuario'] ?? '')),
-                ];
-            }
+            $this->appendProjectUsers($users, $projectKey, $module, $records);
         }
 
         uasort($users, static function (array $left, array $right): int {
@@ -155,6 +143,41 @@ final class ModuleRegistry
         });
 
         return array_values($users);
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $users
+     * @param array<string,mixed> $module
+     * @param array<int,array<string,mixed>> $records
+     */
+    private function appendProjectUsers(array &$users, string $projectKey, array $module, array $records): void
+    {
+        foreach ($records as $record) {
+            if (!is_array($record)) {
+                continue;
+            }
+
+            $identity = $this->userIdentity($record);
+            if ($identity === '') {
+                continue;
+            }
+
+            if (!isset($users[$identity])) {
+                $users[$identity] = [
+                    'identity' => $identity,
+                    'name' => $this->userDisplayName($record),
+                    'rut' => trim((string) ($record['rut'] ?? '')),
+                    'status' => trim((string) ($record['estado'] ?? $record['estado_usuario'] ?? '')),
+                    'projects' => [],
+                ];
+            }
+
+            $users[$identity]['projects'][$projectKey] = [
+                'name' => (string) ($module['name'] ?? $projectKey),
+                'role' => trim((string) ($record['rol'] ?? 'sin rol')),
+                'status' => trim((string) ($record['estado'] ?? $record['estado_usuario'] ?? '')),
+            ];
+        }
     }
 
     /**
@@ -197,6 +220,23 @@ final class ModuleRegistry
      */
     private function maintenanceState(array $module): array
     {
+        $modulePath = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR);
+        if (str_contains(str_replace('\\', '/', $modulePath), 'redmine-mantencion') && class_exists(RedmineMantencionStorageRepository::class)) {
+            try {
+                $config = app(RedmineMantencionStorageRepository::class)->readJson('configuracion.json');
+                if (is_array($config)) {
+                    $until = trim((string) ($config['maintenance_until'] ?? ''));
+
+                    return [
+                        'enabled' => !empty($config['maintenance_mode']),
+                        'until' => $until,
+                        'until_text' => $this->formatMaintenanceUntil($until),
+                    ];
+                }
+            } catch (\Throwable) {
+            }
+        }
+
         $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
             . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'configuracion.json';
 

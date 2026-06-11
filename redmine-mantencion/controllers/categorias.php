@@ -8,13 +8,13 @@ $GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
 $GLOBALS['USERS_FILE'] = __DIR__ . '/../data/usuarios.json';
 
 function ensure_cat_file($path) {
-    if (!file_exists($path)) {
+    if (storage_read_json($path, null) === null) {
         storage_write_json($path, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
     }
 }
 function load_categorias($path) {
     ensure_cat_file($path);
-    $data = json_decode(file_get_contents($path), true);
+    $data = storage_read_json($path, []);
     if (!is_array($data)) $data = [];
     foreach ($data as &$item) {
         if (!isset($item['id'])) { $item['id'] = uniqid('', true); }
@@ -79,8 +79,8 @@ function categorias_parse_html($html) {
 function user_api_token_fallback($usersFile) {
     if (!function_exists('auth_get_user_id')) return '';
     $uid = auth_get_user_id();
-    if (!$uid || !file_exists($usersFile)) return '';
-    $users = json_decode(file_get_contents($usersFile), true);
+    if (!$uid) return '';
+    $users = storage_read_json($usersFile, []);
     if (!is_array($users)) return '';
     foreach ($users as $u) {
         if (!is_array($u)) continue;
@@ -93,7 +93,7 @@ function user_api_token_fallback($usersFile) {
 
 
 function sync_categorias_desde_api($configPath, $dataPath) {
-    $cfg = file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : [];
+    $cfg = storage_read_json($configPath, []);
     $platformUrl = $cfg['platform_url'] ?? '';
     $apiKey = $cfg['platform_token'] ?? '';
     $userToken = user_api_token_fallback($GLOBALS['USERS_FILE']);

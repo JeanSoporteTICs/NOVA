@@ -5,6 +5,7 @@ namespace App\Support\Auth;
 use App\Models\NovaUser;
 use App\Support\Modules\ModuleRegistry;
 use App\Support\Integrations\UserIntegrationRepository;
+use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -374,8 +375,14 @@ final class NovaUserRepository
         foreach (['redmine_tic', 'redmine-mantencion'] as $moduleKey) {
             try {
                 $module = $this->modules->get($moduleKey);
-                $sourcePath = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-                $sourceUsers = json_decode((string) @file_get_contents($sourcePath), true);
+                $sourceUsers = null;
+                if ($moduleKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
+                    $sourceUsers = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
+                }
+                if (!is_array($sourceUsers)) {
+                    $sourcePath = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
+                    $sourceUsers = json_decode((string) @file_get_contents($sourcePath), true);
+                }
                 if (is_array($sourceUsers)) {
                     foreach ($sourceUsers as $user) {
                         if (is_array($user)) {
@@ -463,12 +470,119 @@ final class NovaUserRepository
 
     private function projectFirstName(array $user): string
     {
-        return trim((string) ($user['nombre'] ?? ''));
+        [$name] = $this->cleanProjectPersonName($user);
+        return $name;
     }
 
     private function projectLastName(array $user): string
     {
-        return trim((string) ($user['apellido'] ?? ''));
+        [, $lastName] = $this->cleanProjectPersonName($user);
+        return $lastName;
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     * @return array{0:string,1:string}
+     */
+    private function cleanProjectPersonName(array $user): array
+    {
+        $name = preg_replace('/\s+/', ' ', trim((string) ($user['nombre'] ?? $user['name'] ?? ''))) ?? '';
+        $lastName = preg_replace('/\s+/', ' ', trim((string) ($user['apellido'] ?? ''))) ?? '';
+        if ($lastName !== '') {
+            [$lastPrefix, $lastSuffix] = $this->detectRepeatedSuffix($lastName);
+            if ($lastSuffix !== '' && strlen($lastSuffix) < strlen($lastName)) {
+                $lastName = $lastSuffix;
+            }
+            $name = $this->stripTrailingPhrase($name, $lastName);
+            [$detectedName, $detectedLastName] = $this->detectRepeatedSuffix($name);
+            if ($detectedLastName !== '' && strlen($detectedName) < strlen($name)) {
+                $name = $detectedName;
+            }
+            $name = $this->dropMojibakeTail($name);
+            return [mb_substr($name, 0, 120), mb_substr($lastName, 0, 160)];
+        }
+
+        [$detectedName, $detectedLastName] = $this->detectRepeatedSuffix($name);
+        if ($detectedLastName !== '') {
+            return [mb_substr($detectedName, 0, 120), mb_substr($detectedLastName, 0, 160)];
+        }
+
+        return [mb_substr($name, 0, 120), ''];
+    }
+
+    private function stripTrailingPhrase(string $value, string $phrase): string
+    {
+        $phraseTokens = explode(' ', $this->textKey($phrase));
+        $phraseKey = implode(' ', array_filter($phraseTokens));
+        if ($value === '' || $phraseKey === '') {
+            return $value;
+        }
+
+        do {
+            $tokens = preg_split('/\s+/', trim($value)) ?: [];
+            $tail = array_slice($tokens, -count($phraseTokens));
+            if (count($tokens) <= count($phraseTokens) || $this->textKey(implode(' ', $tail)) !== $phraseKey) {
+                break;
+            }
+            $value = implode(' ', array_slice($tokens, 0, -count($phraseTokens)));
+        } while (true);
+
+        return trim($value);
+    }
+
+    private function dropMojibakeTail(string $value): string
+    {
+        $tokens = preg_split('/\s+/', trim($value)) ?: [];
+        while (count($tokens) > 1 && preg_match('/Ã|Â/u', (string) end($tokens)) === 1) {
+            array_pop($tokens);
+        }
+
+        return trim(implode(' ', $tokens));
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function detectRepeatedSuffix(string $fullName): array
+    {
+        $tokens = preg_split('/\s+/', trim($fullName)) ?: [];
+        $count = count($tokens);
+        if ($count < 3) {
+            return [$fullName, ''];
+        }
+
+        for ($len = min(4, intdiv($count, 2)); $len >= 1; $len--) {
+            $suffix = array_slice($tokens, -$len);
+            $previous = array_slice($tokens, -($len * 2), $len);
+            if ($this->textKey(implode(' ', $suffix)) !== $this->textKey(implode(' ', $previous))) {
+                continue;
+            }
+
+            $nameTokens = $tokens;
+            while (count($nameTokens) > $len && $this->textKey(implode(' ', array_slice($nameTokens, -$len))) === $this->textKey(implode(' ', $suffix))) {
+                $nameTokens = array_slice($nameTokens, 0, -$len);
+            }
+
+            return [implode(' ', $nameTokens), implode(' ', $suffix)];
+        }
+
+        return [$fullName, ''];
+    }
+
+    private function textKey(string $value): string
+    {
+        $value = strtr($value, [
+            'ÃƒÆ’Ã‚Â¡' => 'á', 'ÃƒÆ’Ã‚Â©' => 'é', 'ÃƒÆ’Ã‚Â­' => 'í', 'ÃƒÆ’Ã‚Â³' => 'ó', 'ÃƒÆ’Ã‚Âº' => 'ú',
+            'ÃƒÆ’Ã‚Â±' => 'ñ', 'ÃƒÆ’Ã‚Â‘' => 'Ñ',
+            'Ã¡' => 'á', 'Ã©' => 'é', 'Ã­' => 'í', 'Ã³' => 'ó', 'Ãº' => 'ú', 'Ã±' => 'ñ',
+        ]);
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', trim($value));
+        if (is_string($ascii) && $ascii !== '') {
+            $value = $ascii;
+        }
+        $value = strtolower($value);
+        $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
+        return trim((string) $value);
     }
 
     private function projectRole(array $user): string
@@ -872,7 +986,7 @@ final class NovaUserRepository
                     [
                         'usuario' => $username,
                         'rut' => trim((string) ($user['rut'] ?? '')) ?: null,
-                        'redmine_id' => trim((string) ($user['redmine_id'] ?? '')) ?: null,
+                        'redmine_id' => $this->unsignedIntegerOrNull($user['redmine_id'] ?? null),
                         'nombre' => $name,
                         'apellido' => $lastName,
                         'email' => trim((string) ($user['email'] ?? '')) ?: null,
@@ -978,6 +1092,18 @@ final class NovaUserRepository
     private function normalize(string $value): string
     {
         return strtolower((string) preg_replace('/[^0-9a-z]/i', '', $value));
+    }
+
+    private function unsignedIntegerOrNull($value): ?int
+    {
+        $value = trim((string) $value);
+        if ($value === '' || !ctype_digit($value)) {
+            return null;
+        }
+
+        $number = (int) $value;
+
+        return $number > 0 ? $number : null;
     }
 
     private function normalizeNovaRole(string $role): string

@@ -4,8 +4,10 @@ namespace App\Support\Nova;
 
 use App\Support\Auth\NovaUserRepository;
 use App\Support\Modules\ModuleRegistry;
+use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RedmineTic\Support\Redmine\RedmineDataRepository;
 
 final class NovaAccessRepository
 {
@@ -190,6 +192,14 @@ final class NovaAccessRepository
      */
     private function projectUserExists(string $moduleKey, array $sessionUser): bool
     {
+        if ($moduleKey === 'redmine_tic' && class_exists(RedmineDataRepository::class)) {
+            try {
+                return $this->projectUserExistsInRows(app(RedmineDataRepository::class)->forProject($moduleKey)->users(), $sessionUser);
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
         if ($this->novaProjectUserExists($moduleKey, $sessionUser)) {
             return true;
         }
@@ -198,6 +208,14 @@ final class NovaAccessRepository
             $module = $this->modules->get($moduleKey);
         } catch (\Throwable) {
             return false;
+        }
+
+        if ($moduleKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
+            try {
+                $records = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
+                return is_array($records) ? $this->projectUserExistsInRows($records, $sessionUser) : false;
+            } catch (\Throwable) {
+            }
         }
 
         $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
@@ -212,6 +230,15 @@ final class NovaAccessRepository
             return false;
         }
 
+        return $this->projectUserExistsInRows($records, $sessionUser);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $records
+     * @param array<string,mixed> $sessionUser
+     */
+    private function projectUserExistsInRows(array $records, array $sessionUser): bool
+    {
         $needles = array_filter(array_map([$this, 'normalize'], [
             $sessionUser['username'] ?? '',
             $sessionUser['redmine_id'] ?? '',

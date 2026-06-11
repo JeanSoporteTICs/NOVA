@@ -13,25 +13,24 @@ $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $maintenanceMode = maintenance_mode_enabled();
 
 function historico_read_json_file(string $file): array {
-  $raw = @file_get_contents($file);
-  if (!is_string($raw) || $raw === '') return [];
-  if (str_starts_with($raw, "\xEF\xBB\xBF")) {
-    $raw = substr($raw, 3);
-  }
-  $data = json_decode($raw, true);
+  $data = storage_read_json($file, []);
   return is_array($data) ? $data : [];
+}
+
+function historico_prefix_from_base(string $base, string $fallback): string {
+  $rel = storage_relative_data_path(rtrim($base, '/\\') . '/placeholder.json');
+  $prefix = is_string($rel) ? preg_replace('#/placeholder\.json$#', '', $rel) : '';
+  return trim((string)($prefix ?: $fallback), '/');
 }
 
 // --- Helpers para eliminar registros ---
 function delete_reporte(string $base, string $id): bool {
   $changed = false;
-  if (!is_dir($base)) return false;
-  foreach (glob($base . '/*/*.json') as $file) {
-    $data = historico_read_json_file($file);
+  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'reportes')) as $rel => $data) {
     if (!$data) continue;
     $new = array_values(array_filter($data, fn($r) => !is_array($r) || ($r['id'] ?? '') !== $id));
     if (count($new) !== count($data)) {
-      storage_write_json($file, $new, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+      storage_write_json(storage_data_path($rel), $new, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
       $changed = true;
     }
   }
@@ -40,9 +39,7 @@ function delete_reporte(string $base, string $id): bool {
 
 function delete_horas_extra(string $base, string $id): bool {
   $changed = false;
-  if (!is_dir($base)) return false;
-  foreach (glob($base . '/*/*.json') as $file) {
-    $groups = historico_read_json_file($file);
+  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'horasExtras')) as $rel => $groups) {
     if (!$groups) continue;
     $newGroups = [];
     foreach ($groups as $g) {
@@ -53,7 +50,7 @@ function delete_horas_extra(string $base, string $id): bool {
       $newGroups[] = $g;
     }
     if ($newGroups !== $groups) {
-      storage_write_json($file, $newGroups, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+      storage_write_json(storage_data_path($rel), $newGroups, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
       $changed = true;
     }
   }
@@ -270,9 +267,7 @@ function historico_matches_search(array $row, string $needle): bool {
 
 function load_reportes(string $base): array {
   $out = [];
-  if (!is_dir($base)) return $out;
-  foreach (glob($base . '/*/*.json') as $file) {
-    $data = historico_read_json_file($file);
+  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'reportes')) as $data) {
     if (!$data) continue;
     foreach ($data as $row) {
       if (!is_array($row)) continue;
@@ -286,9 +281,7 @@ function load_reportes(string $base): array {
 
 function load_horas_extras(string $base): array {
   $out = [];
-  if (!is_dir($base)) return $out;
-  foreach (glob($base . '/*/*.json') as $file) {
-    $groups = historico_read_json_file($file);
+  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'horasExtras')) as $groups) {
     if (!$groups) continue;
     foreach ($groups as $g) {
       if (!isset($g['reports']) || !is_array($g['reports'])) continue;

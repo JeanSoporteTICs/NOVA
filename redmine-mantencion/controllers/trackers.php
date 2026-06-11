@@ -6,8 +6,7 @@ require_once __DIR__ . '/maintenance.php';
 $GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
 
 function trk_load_cfg() {
-    if (!file_exists($GLOBALS['CONFIG_FILE'])) return [];
-    $data = json_decode(file_get_contents($GLOBALS['CONFIG_FILE']), true);
+    $data = storage_read_json($GLOBALS['CONFIG_FILE'], []);
     if (!is_array($data)) $data = [];
     if (!isset($data['trackers']) || !is_array($data['trackers'])) $data['trackers'] = [];
     return $data;

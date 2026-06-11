@@ -3,6 +3,8 @@
 namespace App\Support\Modules;
 
 use App\Support\Nova\NovaAccessRepository;
+use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
+use RedmineTic\Support\Redmine\RedmineDataRepository;
 
 final class ProjectAccessGuard
 {
@@ -24,62 +26,61 @@ final class ProjectAccessGuard
      */
     public function projectUser(string $projectKey, array $sessionUser): ?array
     {
+        $explicitAccess = null;
         try {
             $explicitAccess = app(NovaAccessRepository::class)->explicitAccess($sessionUser, $projectKey);
             if ($explicitAccess === false) {
                 return null;
             }
-            if ($explicitAccess === true) {
-                return $this->sessionProjectUser($sessionUser);
-            }
         } catch (\Throwable) {
         }
 
-        $novaProjectUser = $this->novaProjectUser($projectKey, $sessionUser);
+        $module = $this->modules->get($projectKey);
+        $needles = $this->sessionNeedles($sessionUser);
+
+        if ($projectKey === 'redmine_tic' && class_exists(RedmineDataRepository::class)) {
+            try {
+                $user = $this->projectUserFromRows(app(RedmineDataRepository::class)->forProject($projectKey)->users(), $needles);
+                if ($user !== null) {
+                    return $user;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($projectKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
+            try {
+                $users = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
+                if (is_array($users)) {
+                    $user = $this->projectUserFromRows($users, $needles);
+                    if ($user !== null) {
+                        return $user;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
+
+        if (is_file($path)) {
+            $users = json_decode((string) file_get_contents($path), true);
+            if (is_array($users)) {
+                $user = $this->projectUserFromRows($users, $needles);
+                if ($user !== null) {
+                    return $user;
+                }
+            }
+        }
+
+        $novaProjectUser = $this->novaProjectUser($projectKey, $sessionUser, $needles);
         if ($novaProjectUser !== null) {
             return $novaProjectUser;
         }
 
-        $module = $this->modules->get($projectKey);
-        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-
-        if (!is_file($path)) {
-            return false;
-        }
-
-        $users = json_decode((string) file_get_contents($path), true);
-        if (!is_array($users)) {
-            return false;
-        }
-
-        $needles = array_filter(array_map([$this, 'normalize'], [
-            $sessionUser['username'] ?? '',
-            $sessionUser['redmine_id'] ?? '',
-            $sessionUser['id'] ?? '',
-            $sessionUser['rut'] ?? '',
-            $sessionUser['rut_sin_dv'] ?? '',
-            $sessionUser['core_user'] ?? '',
-            data_get($sessionUser, 'legacy.id', ''),
-            data_get($sessionUser, 'legacy.rut', ''),
-        ]));
-
-        foreach ($users as $user) {
-            if (!is_array($user) || $this->isBlocked($user)) {
-                continue;
-            }
-
-            $candidates = array_filter(array_map([$this, 'normalize'], [
-                $user['id'] ?? '',
-                $user['rut'] ?? '',
-                $user['rut_sin_dv'] ?? '',
-                $user['core_user'] ?? '',
-                $user['nextcloud_user'] ?? '',
-            ]));
-
-            if (array_intersect($needles, $candidates) !== []) {
-                return $user;
-            }
+        if ($explicitAccess === true) {
+            return $this->sessionProjectUser($sessionUser);
         }
 
         return null;
@@ -124,23 +125,14 @@ final class ProjectAccessGuard
      * @param array<string,mixed> $sessionUser
      * @return array<string,mixed>|null
      */
-    private function novaProjectUser(string $projectKey, array $sessionUser): ?array
+    private function novaProjectUser(string $projectKey, array $sessionUser, ?array $needles = null): ?array
     {
         $rows = json_decode((string) @file_get_contents(storage_path('app/nova/users.json')), true);
         if (!is_array($rows)) {
             return null;
         }
 
-        $needles = array_filter(array_map([$this, 'normalize'], [
-            $sessionUser['username'] ?? '',
-            $sessionUser['redmine_id'] ?? '',
-            $sessionUser['id'] ?? '',
-            $sessionUser['rut'] ?? '',
-            $sessionUser['rut_sin_dv'] ?? '',
-            $sessionUser['core_user'] ?? '',
-            data_get($sessionUser, 'legacy.id', ''),
-            data_get($sessionUser, 'legacy.rut', ''),
-        ]));
+        $needles = $needles ?? $this->sessionNeedles($sessionUser);
 
         foreach ($rows as $row) {
             if (!is_array($row) || $this->isBlocked($row)) {
@@ -186,5 +178,51 @@ final class ProjectAccessGuard
     private function normalize(string $value): string
     {
         return strtolower((string) preg_replace('/[^0-9a-z]/i', '', $value));
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @param array<int,string> $needles
+     * @return array<string,mixed>|null
+     */
+    private function projectUserFromRows(array $rows, array $needles): ?array
+    {
+        foreach ($rows as $user) {
+            if (!is_array($user) || $this->isBlocked($user)) {
+                continue;
+            }
+
+            $candidates = array_filter(array_map([$this, 'normalize'], [
+                $user['id'] ?? '',
+                $user['rut'] ?? '',
+                $user['rut_sin_dv'] ?? '',
+                $user['core_user'] ?? '',
+                $user['nextcloud_user'] ?? '',
+            ]));
+
+            if (array_intersect($needles, $candidates) !== []) {
+                return $user;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $sessionUser
+     * @return array<int,string>
+     */
+    private function sessionNeedles(array $sessionUser): array
+    {
+        return array_filter(array_map([$this, 'normalize'], [
+            $sessionUser['username'] ?? '',
+            $sessionUser['redmine_id'] ?? '',
+            $sessionUser['id'] ?? '',
+            $sessionUser['rut'] ?? '',
+            $sessionUser['rut_sin_dv'] ?? '',
+            $sessionUser['core_user'] ?? '',
+            data_get($sessionUser, 'legacy.id', ''),
+            data_get($sessionUser, 'legacy.rut', ''),
+        ]));
     }
 }

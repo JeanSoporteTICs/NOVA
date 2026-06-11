@@ -11,11 +11,7 @@ if (!defined('HOURS_EXTRA_DIR')) {
 
 function load_hours_extra_all(): array {
     $out = [];
-    if (!is_dir(HOURS_EXTRA_DIR)) {
-        return $out;
-    }
-    foreach (glob(HOURS_EXTRA_DIR . '/*/*.json') as $file) {
-        $groups = json_decode(@file_get_contents($file), true);
+    foreach (storage_json_by_prefix('horasExtras') as $groups) {
         if (!is_array($groups)) {
             continue;
         }
@@ -176,11 +172,7 @@ function update_hours_by_date($fecha, $horaIni, $horaFin) {
     $horaFin = sanitize_time_value($horaFin);
     $updated = false;
 
-    $years = glob(HOURS_EXTRA_DIR . '/*', GLOB_ONLYDIR);
-    foreach ($years as $yearDir) {
-        $files = glob($yearDir . '/*.json');
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
+    foreach (storage_json_by_prefix('horasExtras') as $relPath => $data) {
             if (!is_array($data)) continue;
 
             if (!isset($data[0]['reports'])) {
@@ -213,10 +205,9 @@ function update_hours_by_date($fecha, $horaIni, $horaFin) {
             unset($g);
 
             if ($changed) {
-                storage_write_json($file, $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                storage_write_json(storage_data_path($relPath), $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                 $updated = true;
             }
-        }
     }
     return $updated;
 }
@@ -659,5 +650,4 @@ if (copyBtn) {
 </div> <!-- #page-content -->
 </body>
 </html>
-
 

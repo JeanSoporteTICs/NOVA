@@ -1683,6 +1683,12 @@ if ($isPdfExport) {
                 <span class="proc-detail-meta-value"><?= $h(procedures_format_file_size((int)$selectedProcedure['file_size'])) ?></span>
               </span>
             <?php endif; ?>
+            <?php if (!empty($selectedProcedure['file_name'])): ?>
+              <span class="proc-detail-meta-item">
+                <span class="proc-detail-meta-label">Almacenamiento</span>
+                <span class="proc-detail-meta-value"><?= (($selectedProcedure['storage_driver'] ?? 'local') === 'nextcloud') ? 'Nextcloud' : 'Local' ?></span>
+              </span>
+            <?php endif; ?>
           </div>
         </header>
         <div class="proc-detail-actions">
@@ -1730,6 +1736,26 @@ if ($isPdfExport) {
               >
                 <i class="bi bi-share"></i> Compartir
               </button>
+            <?php endif; ?>
+            <?php if (!$isPublicShare && $canEditProcedures && (($selectedProcedure['storage_driver'] ?? 'local') === 'nextcloud')): ?>
+              <?php if (!empty($selectedProcedure['nextcloud_share_url'])): ?>
+                <button type="button" class="btn btn-outline-info" data-share-url="<?= $h($selectedProcedure['nextcloud_share_url']) ?>">
+                  <i class="bi bi-cloud-check"></i> Copiar Nextcloud
+                </button>
+                <form method="post" class="d-inline" data-app-confirm="¿Quitar enlace compartido de Nextcloud?">
+                  <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                  <input type="hidden" name="action" value="unshare_nextcloud">
+                  <input type="hidden" name="id" value="<?= $h($selectedProcedure['id'] ?? '') ?>">
+                  <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-link-45deg"></i> Quitar Nextcloud</button>
+                </form>
+              <?php else: ?>
+                <form method="post" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                  <input type="hidden" name="action" value="share_nextcloud">
+                  <input type="hidden" name="id" value="<?= $h($selectedProcedure['id'] ?? '') ?>">
+                  <button class="btn btn-outline-info" type="submit"><i class="bi bi-cloud-arrow-up"></i> Compartir Nextcloud</button>
+                </form>
+              <?php endif; ?>
             <?php endif; ?>
           </div>
         </div>

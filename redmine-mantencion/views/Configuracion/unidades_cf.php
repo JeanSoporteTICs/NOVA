@@ -31,15 +31,14 @@ function build_cf_url($platformUrl) {
 }
 
 function load_unidades_local($path) {
-  if (!file_exists($path)) return [];
-  $data = json_decode(file_get_contents($path), true);
+  $data = storage_read_json($path, []);
   return is_array($data) ? $data : [];
 }
 function save_unidades_local($path, $arr) {
   storage_write_json($path, $arr, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
-$cfg = file_exists($cfgPath) ? json_decode(file_get_contents($cfgPath), true) : [];
+$cfg = storage_read_json($cfgPath, []);
 $platformUrl = $cfg['platform_url'] ?? '';
 $cfOverride = $cfg['unidades_url'] ?? '';
 $apiKey = $cfg['platform_token'] ?? '';
@@ -47,8 +46,8 @@ $apiKey = $cfg['platform_token'] ?? '';
 $currentUserId = auth_get_user_id();
 $userToken = '';
 $userPath = __DIR__ . '/../../data/usuarios.json';
-if ($currentUserId && file_exists($userPath)) {
-  $users = json_decode(file_get_contents($userPath), true);
+if ($currentUserId) {
+  $users = storage_read_json($userPath, []);
   if (is_array($users)) {
     foreach ($users as $u) {
       if (!is_array($u)) continue;

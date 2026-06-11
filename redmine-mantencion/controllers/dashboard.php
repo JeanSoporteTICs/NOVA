@@ -601,11 +601,7 @@ function dashboard_compact_message(array $message): array {
 
 function load_messages(): array {
     $file = dashboard_messages_file();
-    if (!file_exists($file)) {
-        return [];
-    }
-    $raw = file_get_contents($file);
-    $data = json_decode($raw, true);
+    $data = storage_read_json($file, []);
     if (!is_array($data)) {
         return [];
     }
@@ -620,10 +616,7 @@ function save_messages(array $messages): void {
 
 function load_platform_config(): array {
     $path = __DIR__ . '/../data/configuracion.json';
-    if (!file_exists($path)) {
-        return [];
-    }
-    $data = json_decode(file_get_contents($path), true);
+    $data = storage_read_json($path, []);
     return is_array($data) ? $data : [];
 }
 
@@ -683,10 +676,7 @@ function dashboard_normalize_phone(string $value): string {
 }
 
 function dashboard_catalog_names(string $file): array {
-    if (!file_exists($file)) {
-        return [];
-    }
-    $data = json_decode((string)file_get_contents($file), true);
+    $data = storage_read_json($file, []);
     if (!is_array($data)) {
         return [];
     }
@@ -779,10 +769,7 @@ function dashboard_core_resolve_category(string $tipoSolicitud, array $catalog):
 function dashboard_load_user_maps(): array {
     $path = __DIR__ . '/../data/usuarios.json';
     $result = ['phone' => [], 'name' => []];
-    if (!file_exists($path)) {
-        return $result;
-    }
-    $users = json_decode((string)file_get_contents($path), true);
+    $users = storage_read_json($path, []);
     if (!is_array($users)) {
         return $result;
     }
@@ -1796,11 +1783,9 @@ function dashboard_core_base_admin_url(string $url): string {
 
 function dashboard_archived_source_ids(string $baseDir): array {
     $sourceIds = [];
-    if (!is_dir($baseDir)) {
-        return $sourceIds;
-    }
-    foreach (glob(rtrim($baseDir, '/\\') . '/*/*.json') ?: [] as $file) {
-        $rows = json_decode(@file_get_contents($file), true);
+    $prefix = trim((string)storage_relative_data_path($baseDir . '/placeholder.json'), '/');
+    $prefix = preg_replace('#/placeholder\.json$#', '', $prefix) ?: 'reportes';
+    foreach (storage_json_by_prefix($prefix) as $rows) {
         if (!is_array($rows)) {
             continue;
         }
@@ -2047,10 +2032,7 @@ function redmine_log_path(): string {
 
 function load_name_map(string $file, string $nameKey = 'nombre'): array {
     $out = [];
-    if (!file_exists($file)) {
-        return $out;
-    }
-    $data = json_decode(file_get_contents($file), true);
+    $data = storage_read_json($file, []);
     if (!is_array($data)) {
         return $out;
     }
@@ -2286,13 +2268,8 @@ function append_hours_extra_record(array $message): void {
     ensure_dir($yearDir);
     $monthName = horas_extra_month_name($dt);
     $filePath = $yearDir . '/' . $monthName . '.json';
-    $groups = [];
-    if (file_exists($filePath)) {
-        $parsed = json_decode(@file_get_contents($filePath), true);
-        if (is_array($parsed)) {
-            $groups = array_values($parsed);
-        }
-    }
+    $parsed = storage_read_json($filePath, []);
+    $groups = is_array($parsed) ? array_values($parsed) : [];
     foreach ($groups as $idx => $group) {
         if (!is_array($group)) {
             $groups[$idx] = ['fecha' => '', 'hora_inicio' => '', 'hora_fin' => '', 'reports' => []];
@@ -2346,19 +2323,8 @@ function remove_hours_extra_record_by_id(string $messageId): void {
     if ($messageId === '') {
         return;
     }
-    $baseDir = horas_extra_base_path();
-    if (!is_dir($baseDir)) {
-        return;
-    }
-    $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($baseDir, FilesystemIterator::SKIP_DOTS)
-    );
-    foreach ($iterator as $file) {
-        if (!$file->isFile() || strtolower($file->getExtension()) !== 'json') {
-            continue;
-        }
-        $path = $file->getPathname();
-        $groups = json_decode((string)@file_get_contents($path), true);
+    foreach (storage_json_by_prefix('horasExtras') as $relPath => $groups) {
+        $path = storage_data_path($relPath);
         if (!is_array($groups)) {
             continue;
         }
@@ -2394,11 +2360,8 @@ function append_redmine_log(array $entry): void {
 
 function parse_redmine_log_entries(): array {
     $path = redmine_log_path();
-    if (!file_exists($path)) {
-        return [];
-    }
-    $raw = file_get_contents($path);
-    if ($raw === false || trim($raw) === '') {
+    $raw = storage_read_text($path, '');
+    if (trim($raw) === '') {
         return [];
     }
     $entries = [];
@@ -2484,15 +2447,15 @@ function remove_redmine_logs_for_messages(array $ids): void {
         storage_truncate_file($path);
         return;
     }
-    storage_write_file_locked($path, implode(PHP_EOL, $kept) . PHP_EOL, 0, true);
+    storage_write_text($path, implode(PHP_EOL, $kept) . PHP_EOL);
 }
 
 function load_user_api_token(?string $userId): string {
     $path = __DIR__ . '/../data/usuarios.json';
-    if (!$userId || !file_exists($path)) {
+    if (!$userId) {
         return '';
     }
-    $users = json_decode(file_get_contents($path), true);
+    $users = storage_read_json($path, []);
     if (!is_array($users)) {
         return '';
     }
@@ -2697,7 +2660,7 @@ function archive_message_record(array $message): void {
     $yearDir = retention_archive_base() . '/' . $dt->format('Y');
     ensure_dir($yearDir);
     $destFile = $yearDir . '/' . retention_archive_month_name($dt) . '.json';
-    $payload = json_decode(@file_get_contents($destFile), true);
+    $payload = storage_read_json($destFile, []);
     if (!is_array($payload)) {
         $payload = [];
     }

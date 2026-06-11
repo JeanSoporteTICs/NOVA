@@ -40,7 +40,7 @@ function maintenance_config_file(): string {
 
 function maintenance_load_config(): array {
     $file = maintenance_config_file();
-    $cfg = is_file($file) ? json_decode((string)file_get_contents($file), true) : [];
+    $cfg = storage_read_json($file, []);
     return is_array($cfg) ? $cfg : [];
 }
 
@@ -112,6 +112,19 @@ function maintenance_data_file(string $relative): string {
 function maintenance_read_path(string $relative): array {
     $absolute = maintenance_data_file($relative);
     $files = [];
+    if (strtolower(pathinfo($relative, PATHINFO_EXTENSION)) === 'json') {
+        $decoded = storage_read_json($absolute, null);
+        return is_array($decoded) ? [$relative => $decoded] : [];
+    }
+    foreach (storage_json_by_prefix($relative) as $rel => $decoded) {
+        if (is_array($decoded)) {
+            $files[$rel] = $decoded;
+        }
+    }
+    if ($files !== []) {
+        ksort($files);
+        return $files;
+    }
     if (is_file($absolute)) {
         $decoded = json_decode((string)file_get_contents($absolute), true);
         $files[$relative] = is_array($decoded) ? $decoded : [];
@@ -322,7 +335,7 @@ function maintenance_write_import_json(string $relative, array $incoming): bool 
     if (!maintenance_should_merge_json($relative)) {
         return storage_write_json($target, $incoming, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
-    $existing = is_file($target) ? json_decode((string)file_get_contents($target), true) : [];
+    $existing = storage_read_json($target, []);
     if (!is_array($existing)) {
         $existing = [];
     }

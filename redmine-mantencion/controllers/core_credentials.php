@@ -64,7 +64,7 @@ function core_credentials_users_file(): string {
 
 function core_credentials_load_users(): array {
     $file = core_credentials_users_file();
-    $rows = is_file($file) ? json_decode((string)file_get_contents($file), true) : [];
+    $rows = storage_read_json($file, []);
     return is_array($rows) ? $rows : [];
 }
 

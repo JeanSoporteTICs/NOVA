@@ -3,6 +3,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
+require_once __DIR__ . '/nextcloud.php';
 
 function procedures_set_flash(string $message): void {
     auth_start_session();
@@ -21,6 +22,42 @@ function procedures_documents_dir(): string {
     return procedures_storage_dir() . '/documentos';
 }
 
+function procedures_config_file(): string {
+    return __DIR__ . '/../data/configuracion.json';
+}
+
+function procedures_config(): array {
+    $cfg = storage_read_json(procedures_config_file(), []);
+    return is_array($cfg) ? $cfg : [];
+}
+
+function procedures_nextcloud_enabled(): bool {
+    return strtolower(trim((string)(procedures_config()['procedures_storage'] ?? 'local'))) === 'nextcloud';
+}
+
+function procedures_nextcloud_root(): string {
+    if (function_exists('nextcloud_normalize_document_path')) {
+        return nextcloud_normalize_document_path((string)(procedures_config()['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos'));
+    }
+    $root = trim((string)(procedures_config()['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos'));
+    $parts = array_values(array_filter(explode('/', str_replace('\\', '/', $root)), static function (string $part): bool {
+        $part = trim($part);
+        return $part !== '' && $part !== '.' && $part !== '..';
+    }));
+    return $parts ? '/' . implode('/', $parts) : '/NOVA/Procedimientos';
+}
+
+function procedures_nextcloud_cfg(): array {
+    return nextcloud_config();
+}
+
+function procedures_nextcloud_ready(?array &$cfg = null): bool {
+    $cfg = procedures_nextcloud_cfg();
+    return trim((string)($cfg['url'] ?? '')) !== ''
+        && trim((string)($cfg['admin_user'] ?? '')) !== ''
+        && trim((string)($cfg['admin_pass'] ?? '')) !== '';
+}
+
 function procedures_legacy_data_file(): string {
     return __DIR__ . '/../data/procedimientos.json';
 }
@@ -30,7 +67,6 @@ function procedures_data_file(): string {
 }
 
 function procedures_ensure_storage(): void {
-    $legacyFile = procedures_legacy_data_file();
     $file = procedures_data_file();
     $dir = procedures_storage_dir();
     $imagesDir = procedures_images_dir();
@@ -38,16 +74,13 @@ function procedures_ensure_storage(): void {
     if (!is_dir($dir)) {
         mkdir($dir, 0777, true);
     }
-    if (file_exists($legacyFile) && !file_exists($file)) {
-        @rename($legacyFile, $file);
-    }
     if (!is_dir($imagesDir)) {
         mkdir($imagesDir, 0777, true);
     }
     if (!is_dir($documentsDir)) {
         mkdir($documentsDir, 0777, true);
     }
-    if (!file_exists($file)) {
+    if (storage_read_json($file, null) === null) {
         storage_write_json($file, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES, false);
     }
     static $migrated = false;
@@ -59,14 +92,7 @@ function procedures_ensure_storage(): void {
 
 function procedures_read_all(): array {
     procedures_ensure_storage();
-    $raw = @file_get_contents(procedures_data_file());
-    if (!is_string($raw) || trim($raw) === '') {
-        return [];
-    }
-    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
-        $raw = substr($raw, 3);
-    }
-    $data = json_decode($raw, true);
+    $data = storage_read_json(procedures_data_file(), []);
     if (!is_array($data)) {
         return [];
     }
@@ -136,6 +162,10 @@ function procedures_normalize_record(array $row): array {
         'file_mime' => trim((string)($row['file_mime'] ?? '')),
         'file_size' => max(0, (int)($row['file_size'] ?? 0)),
         'file_url' => trim((string)($row['file_url'] ?? '')),
+        'storage_driver' => trim((string)($row['storage_driver'] ?? 'local')) ?: 'local',
+        'nextcloud_path' => trim((string)($row['nextcloud_path'] ?? '')),
+        'nextcloud_share_id' => trim((string)($row['nextcloud_share_id'] ?? '')),
+        'nextcloud_share_url' => trim((string)($row['nextcloud_share_url'] ?? '')),
         'uploaded_at' => trim((string)($row['uploaded_at'] ?? '')),
         'draft_pending' => !empty($row['draft_pending']),
         'created_at' => trim((string)($row['created_at'] ?? $now)),
@@ -312,14 +342,7 @@ function procedures_sanitize_html(string $html): string {
 
 function procedures_migrate_embedded_images(): void {
     $file = procedures_data_file();
-    $raw = @file_get_contents($file);
-    if (!is_string($raw) || trim($raw) === '') {
-        return;
-    }
-    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
-        $raw = substr($raw, 3);
-    }
-    $data = json_decode($raw, true);
+    $data = storage_read_json($file, []);
     if (!is_array($data)) {
         return;
     }
@@ -413,14 +436,93 @@ function procedures_delete_record_images(string $recordId): void {
 }
 
 function procedures_delete_record_file(array $record): void {
-    $fileName = basename((string)($record['file_name'] ?? ''));
-    if ($fileName === '') {
+    if (($record['storage_driver'] ?? '') === 'nextcloud') {
+        if (procedures_nextcloud_ready($cfg)) {
+            $shareId = trim((string)($record['nextcloud_share_id'] ?? ''));
+            if ($shareId !== '') {
+                nextcloud_share_delete($cfg, $shareId);
+            }
+            $path = trim((string)($record['nextcloud_path'] ?? ''));
+            if ($path !== '') {
+                nextcloud_webdav_request($cfg, 'DELETE', $path);
+            }
+        }
         return;
     }
-    $path = procedures_documents_dir() . '/' . $fileName;
-    if (is_file($path)) {
-        @unlink($path);
+    procedures_delete_local_record_file($record);
+}
+
+function procedures_create_nextcloud_share(array $record): array {
+    if (($record['storage_driver'] ?? '') !== 'nextcloud') {
+        return ['ok' => false, 'error' => 'Este documento no está almacenado en Nextcloud.'];
     }
+    if (!procedures_nextcloud_ready($cfg)) {
+        return ['ok' => false, 'error' => 'Configura credenciales Nextcloud para compartir.'];
+    }
+    if (!empty($record['nextcloud_share_url'])) {
+        return ['ok' => true, 'id' => (string)($record['nextcloud_share_id'] ?? ''), 'url' => (string)$record['nextcloud_share_url']];
+    }
+    $path = trim((string)($record['nextcloud_path'] ?? ''));
+    if ($path === '') {
+        return ['ok' => false, 'error' => 'Ruta Nextcloud no disponible.'];
+    }
+    return nextcloud_share_create($cfg, $path);
+}
+
+function procedures_delete_nextcloud_share(array $record): array {
+    if (($record['storage_driver'] ?? '') !== 'nextcloud') {
+        return ['ok' => true];
+    }
+    if (!procedures_nextcloud_ready($cfg)) {
+        return ['ok' => false, 'error' => 'Configura credenciales Nextcloud para quitar el enlace.'];
+    }
+    return nextcloud_share_delete($cfg, (string)($record['nextcloud_share_id'] ?? ''));
+}
+
+function procedures_move_record_file_to_folder(array $record, array $items, string $destinationFolderId): array {
+    if (($record['storage_driver'] ?? '') !== 'nextcloud') {
+        return ['ok' => true, 'record' => $record];
+    }
+    if (!procedures_nextcloud_ready($cfg)) {
+        return ['ok' => false, 'error' => 'Configura credenciales Nextcloud para mover documentos.'];
+    }
+
+    $oldPath = trim((string)($record['nextcloud_path'] ?? ''));
+    if ($oldPath === '') {
+        return ['ok' => true, 'record' => $record];
+    }
+    $fileName = basename($oldPath);
+    $newDir = procedures_nextcloud_directory($items, $destinationFolderId);
+    $newPath = $newDir . '/' . $fileName;
+    if ($newPath === $oldPath) {
+        return ['ok' => true, 'record' => $record];
+    }
+
+    $dirResult = nextcloud_ensure_directory($cfg, $newDir);
+    if (empty($dirResult['ok'])) {
+        return ['ok' => false, 'error' => 'No se pudo preparar carpeta destino en Nextcloud.'];
+    }
+    $destination = nextcloud_webdav_base_url($cfg) . implode('/', array_map('rawurlencode', explode('/', '/' . ltrim($newPath, '/'))));
+    $move = nextcloud_webdav_request($cfg, 'MOVE', $oldPath, null, [
+        'Destination: ' . $destination,
+        'Overwrite: T',
+    ]);
+    if (empty($move['ok'])) {
+        return ['ok' => false, 'error' => 'No se pudo mover archivo en Nextcloud: ' . (($move['message'] ?? '') ?: 'HTTP ' . ($move['http'] ?? 0))];
+    }
+
+    $record['nextcloud_path'] = $newPath;
+    $record['nextcloud_share_id'] = '';
+    $record['nextcloud_share_url'] = '';
+    return ['ok' => true, 'record' => $record];
+}
+
+function procedures_local_file_path(array $record): string {
+    $fileName = basename((string)($record['file_name'] ?? ''));
+    if ($fileName === '') {
+        return '';
+    }
+    return procedures_documents_dir() . '/' . $fileName;
 }
 
 function procedures_file_extension(string $name): string {
@@ -429,6 +531,119 @@ function procedures_file_extension(string $name): string {
 
 function procedures_build_file_url(string $fileName): string {
     return '/redmine-mantencion/data/procedimientos/documentos/' . rawurlencode($fileName);
+}
+
+function procedures_build_download_url(string $recordId, string $token): string {
+    return '/redmine-mantencion/controllers/procedimientos_file.php?id=' . rawurlencode($recordId) . '&token=' . rawurlencode($token);
+}
+
+function procedures_safe_remote_name(string $name, string $fallback): string {
+    $name = trim($name);
+    if ($name === '') {
+        $name = $fallback;
+    }
+    $name = str_replace(["\0", '/', '\\'], '-', $name);
+    $name = preg_replace('/[<>:"|?*\x00-\x1F]+/u', '-', $name) ?? $name;
+    $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
+    $name = trim($name, " .\t\n\r\0\x0B");
+    return $name !== '' ? $name : $fallback;
+}
+
+function procedures_folder_remote_segments(array $items, string $folderId): array {
+    $segments = [];
+    $guard = 0;
+    while ($folderId !== '' && $guard < 20) {
+        $guard++;
+        $folder = procedures_find_folder_by_id($items, $folderId);
+        if (!$folder) {
+            break;
+        }
+        array_unshift($segments, procedures_safe_remote_name((string)($folder['title'] ?? ''), $folderId));
+        $folderId = (string)($folder['folder_id'] ?? '');
+    }
+    return $segments;
+}
+
+function procedures_nextcloud_directory(array $items, string $folderId = ''): string {
+    $root = procedures_nextcloud_root();
+    $segments = procedures_folder_remote_segments($items, $folderId);
+    return rtrim($root . ($segments ? '/' . implode('/', $segments) : ''), '/');
+}
+
+function procedures_nextcloud_store_binary(string $recordId, string $originalName, string $binary, string $mime, array $items, string $folderId = '', ?array $existing = null): array {
+    if (!procedures_nextcloud_ready($cfg)) {
+        return ['ok' => false, 'error' => 'Configura credenciales Nextcloud antes de usar almacenamiento documental.'];
+    }
+    if ($binary === '') {
+        return ['ok' => false, 'error' => 'El archivo está vacío.'];
+    }
+
+    $extension = procedures_file_extension($originalName);
+    $fallback = $recordId . ($extension !== '' ? '.' . $extension : '.bin');
+    $safeOriginal = procedures_safe_remote_name($originalName, $fallback);
+    $remoteDir = procedures_nextcloud_directory($items, $folderId);
+    $remoteName = $recordId . '-' . $safeOriginal;
+    $remotePath = $remoteDir . '/' . $remoteName;
+    $dirResult = nextcloud_ensure_directory($cfg, $remoteDir);
+    if (empty($dirResult['ok'])) {
+        return ['ok' => false, 'error' => 'No se pudo preparar carpeta Nextcloud: ' . (($dirResult['message'] ?? '') ?: 'HTTP ' . ($dirResult['http'] ?? 0))];
+    }
+
+    $upload = nextcloud_webdav_request($cfg, 'PUT', $remotePath, $binary, ['Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream')]);
+    if (empty($upload['ok'])) {
+        return ['ok' => false, 'error' => 'No se pudo subir a Nextcloud: ' . (($upload['message'] ?? '') ?: 'HTTP ' . ($upload['http'] ?? 0))];
+    }
+
+    if ($existing && ($existing['storage_driver'] ?? '') === 'nextcloud') {
+        $oldPath = trim((string)($existing['nextcloud_path'] ?? ''));
+        if ($oldPath !== '' && $oldPath !== $remotePath) {
+            nextcloud_webdav_request($cfg, 'DELETE', $oldPath);
+        }
+    } elseif ($existing && !empty($existing['file_name'])) {
+        procedures_delete_local_record_file($existing);
+    }
+
+    $shareToken = trim((string)($existing['share_token'] ?? ''));
+    if ($shareToken === '') {
+        $shareToken = bin2hex(random_bytes(16));
+    }
+
+    return [
+        'ok' => true,
+        'file' => [
+            'file_name' => $remoteName,
+            'file_original_name' => $safeOriginal,
+            'file_mime' => $mime,
+            'file_size' => strlen($binary),
+            'file_url' => procedures_build_download_url($recordId, $shareToken),
+            'storage_driver' => 'nextcloud',
+            'nextcloud_path' => $remotePath,
+            'uploaded_at' => date('c'),
+        ],
+    ];
+}
+
+function procedures_nextcloud_download(array $record): array {
+    $path = trim((string)($record['nextcloud_path'] ?? ''));
+    if ($path === '' || !procedures_nextcloud_ready($cfg)) {
+        return ['ok' => false, 'error' => 'Archivo Nextcloud no disponible.'];
+    }
+    $res = nextcloud_webdav_request($cfg, 'GET', $path);
+    if (empty($res['ok'])) {
+        return ['ok' => false, 'error' => (($res['message'] ?? '') ?: 'HTTP ' . ($res['http'] ?? 0))];
+    }
+    return ['ok' => true, 'body' => (string)($res['body'] ?? '')];
+}
+
+function procedures_delete_local_record_file(array $record): void {
+    $fileName = basename((string)($record['file_name'] ?? ''));
+    if ($fileName === '') {
+        return;
+    }
+    $path = procedures_documents_dir() . '/' . $fileName;
+    if (is_file($path)) {
+        @unlink($path);
+    }
 }
 
 function procedures_detect_file_mime(string $path, string $fallback = ''): string {
@@ -457,6 +672,10 @@ function procedures_handle_uploaded_file(string $recordId, ?array $existing = nu
                     'file_mime' => (string)($existing['file_mime'] ?? ''),
                     'file_size' => (int)($existing['file_size'] ?? 0),
                     'file_url' => (string)($existing['file_url'] ?? ''),
+                    'storage_driver' => (string)($existing['storage_driver'] ?? 'local'),
+                    'nextcloud_path' => (string)($existing['nextcloud_path'] ?? ''),
+                    'nextcloud_share_id' => (string)($existing['nextcloud_share_id'] ?? ''),
+                    'nextcloud_share_url' => (string)($existing['nextcloud_share_url'] ?? ''),
                     'uploaded_at' => (string)($existing['uploaded_at'] ?? ''),
                 ],
             ];
@@ -478,6 +697,14 @@ function procedures_handle_uploaded_file(string $recordId, ?array $existing = nu
         return ['ok' => false, 'error' => 'El archivo subido no es válido.'];
     }
 
+    $mime = procedures_detect_file_mime($tmpName, (string)($upload['type'] ?? ''));
+    if (procedures_nextcloud_enabled()) {
+        $binary = (string)@file_get_contents($tmpName);
+        $items = procedures_read_all();
+        $folderId = trim((string)($_POST['folder_id'] ?? $existing['folder_id'] ?? ''));
+        return procedures_nextcloud_store_binary($recordId, $originalName, $binary, $mime, $items, $folderId, $existing);
+    }
+
     $safeName = $recordId . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
     $target = procedures_documents_dir() . '/' . $safeName;
     if (!move_uploaded_file($tmpName, $target)) {
@@ -493,9 +720,11 @@ function procedures_handle_uploaded_file(string $recordId, ?array $existing = nu
         'file' => [
             'file_name' => $safeName,
             'file_original_name' => $originalName,
-            'file_mime' => procedures_detect_file_mime($target, (string)($upload['type'] ?? '')),
+            'file_mime' => $mime,
             'file_size' => (int)($upload['size'] ?? filesize($target)),
             'file_url' => procedures_build_file_url($safeName),
+            'storage_driver' => 'local',
+            'nextcloud_path' => '',
             'uploaded_at' => date('c'),
         ],
     ];
@@ -526,23 +755,32 @@ function procedures_create_blank_office_file(string $recordId, string $title, st
     if (!is_string($binary) || $binary === '') {
         return ['ok' => false, 'error' => 'No se encontró la plantilla del documento.'];
     }
+    $originalTitle = preg_replace('/[\\\\\/:*?"<>|]+/', '-', trim($title));
+    if ($originalTitle === '') {
+        $originalTitle = $type === 'xlsx' ? 'Nueva planilla' : 'Nuevo documento';
+    }
+    $originalName = $originalTitle . '.' . $type;
+    if (procedures_nextcloud_enabled()) {
+        $items = procedures_read_all();
+        $folderId = trim((string)($_POST['folder_id'] ?? ''));
+        return procedures_nextcloud_store_binary($recordId, $originalName, $binary, procedures_office_mime($type), $items, $folderId);
+    }
+
     $safeName = $recordId . '-' . bin2hex(random_bytes(4)) . '.' . $type;
     $target = procedures_documents_dir() . '/' . $safeName;
     if (file_put_contents($target, $binary, LOCK_EX) === false) {
         return ['ok' => false, 'error' => 'No se pudo crear el documento.'];
     }
-    $originalTitle = preg_replace('/[\\\\\/:*?"<>|]+/', '-', trim($title));
-    if ($originalTitle === '') {
-        $originalTitle = $type === 'xlsx' ? 'Nueva planilla' : 'Nuevo documento';
-    }
     return [
         'ok' => true,
         'file' => [
             'file_name' => $safeName,
-            'file_original_name' => $originalTitle . '.' . $type,
+            'file_original_name' => $originalName,
             'file_mime' => procedures_office_mime($type),
             'file_size' => filesize($target) ?: strlen($binary),
             'file_url' => procedures_build_file_url($safeName),
+            'storage_driver' => 'local',
+            'nextcloud_path' => '',
             'uploaded_at' => date('c'),
         ],
     ];
@@ -591,6 +829,10 @@ function procedures_empty_form(): array {
         'file_mime' => '',
         'file_size' => 0,
         'file_url' => '',
+        'storage_driver' => 'local',
+        'nextcloud_path' => '',
+        'nextcloud_share_id' => '',
+        'nextcloud_share_url' => '',
         'uploaded_at' => '',
     ];
 }
@@ -638,12 +880,24 @@ function procedures_handle_request(): array {
                     'author_name' => trim((string)($_SESSION['user']['nombre'] ?? '')),
                 ]);
                 $items[] = $folder;
-                if (procedures_write_all($items)) {
+                if (procedures_nextcloud_enabled() && procedures_nextcloud_ready($nextcloudCfg)) {
+                    $remoteDir = procedures_nextcloud_directory($items, (string)$folder['id']);
+                    $remoteResult = nextcloud_ensure_directory($nextcloudCfg, $remoteDir);
+                    if (empty($remoteResult['ok'])) {
+                        array_pop($items);
+                        $error = 'No se pudo crear carpeta en Nextcloud: ' . (($remoteResult['message'] ?? '') ?: 'HTTP ' . ($remoteResult['http'] ?? 0));
+                    }
+                }
+                if ($error !== null) {
+                    // handled below by rendering the message modal
+                } elseif (procedures_write_all($items)) {
                     $_SESSION['procedures_flash'] = 'Carpeta creada.';
                     header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php?folder=' . urlencode((string)$folder['id'])));
                     exit;
                 }
-                $error = 'No se pudo crear la carpeta.';
+                if ($error === null) {
+                    $error = 'No se pudo crear la carpeta.';
+                }
             }
         } elseif ($action === 'move') {
             $targetId = trim((string)($_POST['target_id'] ?? ''));
@@ -657,20 +911,74 @@ function procedures_handle_request(): array {
                 $moved = false;
                 foreach ($items as $idx => $item) {
                     if ((string)($item['id'] ?? '') === $targetId && (string)($item['record_type'] ?? 'document') !== 'folder') {
+                        $moveFile = procedures_move_record_file_to_folder($item, $items, $destinationFolderId);
+                        if (empty($moveFile['ok'])) {
+                            $error = (string)($moveFile['error'] ?? 'No se pudo mover el archivo.');
+                            break;
+                        }
+                        $item = is_array($moveFile['record'] ?? null) ? $moveFile['record'] : $item;
                         $items[$idx]['folder_id'] = $destinationFolderId;
+                        $items[$idx]['nextcloud_path'] = (string)($item['nextcloud_path'] ?? $items[$idx]['nextcloud_path'] ?? '');
+                        $items[$idx]['nextcloud_share_id'] = (string)($item['nextcloud_share_id'] ?? '');
+                        $items[$idx]['nextcloud_share_url'] = (string)($item['nextcloud_share_url'] ?? '');
                         $items[$idx]['updated_at'] = date('c');
                         $moved = true;
                         break;
                     }
                 }
-                if (!$moved) {
+                if ($error === null && !$moved) {
                     $error = 'No se pudo encontrar el documento para mover.';
-                } elseif (procedures_write_all($items)) {
+                } elseif ($error === null && procedures_write_all($items)) {
                     $_SESSION['procedures_flash'] = 'Documento movido.';
                     header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php' . ($destinationFolderId !== '' ? '?folder=' . urlencode($destinationFolderId) : '')));
                     exit;
-                } else {
+                } elseif ($error === null) {
                     $error = 'No se pudo mover el documento.';
+                }
+            }
+        } elseif ($action === 'share_nextcloud' || $action === 'unshare_nextcloud') {
+            $existing = $selectedId !== '' ? procedures_find_by_id($items, $selectedId) : null;
+            if (!$existing) {
+                $error = 'No se encontró el procedimiento.';
+            } elseif ($action === 'share_nextcloud') {
+                $share = procedures_create_nextcloud_share($existing);
+                if (empty($share['ok'])) {
+                    $error = (string)($share['error'] ?? 'No se pudo compartir.');
+                } else {
+                    foreach ($items as $idx => $item) {
+                        if ((string)($item['id'] ?? '') === $selectedId) {
+                            $items[$idx]['nextcloud_share_id'] = (string)($share['id'] ?? '');
+                            $items[$idx]['nextcloud_share_url'] = (string)($share['url'] ?? '');
+                            $items[$idx]['updated_at'] = date('c');
+                            break;
+                        }
+                    }
+                    if (procedures_write_all($items)) {
+                        $_SESSION['procedures_flash'] = 'Enlace Nextcloud creado.';
+                        header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php?id=' . urlencode($selectedId)));
+                        exit;
+                    }
+                    $error = 'No se pudo guardar el enlace compartido.';
+                }
+            } else {
+                $share = procedures_delete_nextcloud_share($existing);
+                if (empty($share['ok'])) {
+                    $error = (string)($share['error'] ?? 'No se pudo quitar el enlace.');
+                } else {
+                    foreach ($items as $idx => $item) {
+                        if ((string)($item['id'] ?? '') === $selectedId) {
+                            $items[$idx]['nextcloud_share_id'] = '';
+                            $items[$idx]['nextcloud_share_url'] = '';
+                            $items[$idx]['updated_at'] = date('c');
+                            break;
+                        }
+                    }
+                    if (procedures_write_all($items)) {
+                        $_SESSION['procedures_flash'] = 'Enlace Nextcloud eliminado.';
+                        header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php?id=' . urlencode($selectedId)));
+                        exit;
+                    }
+                    $error = 'No se pudo actualizar el procedimiento.';
                 }
             }
         } elseif ($action === 'delete') {
@@ -713,6 +1021,10 @@ function procedures_handle_request(): array {
                     'file_mime' => (string)($fileResult['file']['file_mime'] ?? ''),
                     'file_size' => (int)($fileResult['file']['file_size'] ?? 0),
                     'file_url' => (string)($fileResult['file']['file_url'] ?? ''),
+                    'storage_driver' => (string)($fileResult['file']['storage_driver'] ?? 'local'),
+                    'nextcloud_path' => (string)($fileResult['file']['nextcloud_path'] ?? ''),
+                    'nextcloud_share_id' => (string)($fileResult['file']['nextcloud_share_id'] ?? ''),
+                    'nextcloud_share_url' => (string)($fileResult['file']['nextcloud_share_url'] ?? ''),
                     'uploaded_at' => (string)($fileResult['file']['uploaded_at'] ?? ''),
                     'draft_pending' => true,
                     'created_at' => $now,
@@ -769,6 +1081,10 @@ function procedures_handle_request(): array {
                     'file_mime' => (string)($fileResult['file']['file_mime'] ?? ''),
                     'file_size' => (int)($fileResult['file']['file_size'] ?? 0),
                     'file_url' => (string)($fileResult['file']['file_url'] ?? ''),
+                    'storage_driver' => (string)($fileResult['file']['storage_driver'] ?? 'local'),
+                    'nextcloud_path' => (string)($fileResult['file']['nextcloud_path'] ?? ''),
+                    'nextcloud_share_id' => (string)($fileResult['file']['nextcloud_share_id'] ?? $existing['nextcloud_share_id'] ?? ''),
+                    'nextcloud_share_url' => (string)($fileResult['file']['nextcloud_share_url'] ?? $existing['nextcloud_share_url'] ?? ''),
                     'uploaded_at' => (string)($fileResult['file']['uploaded_at'] ?? ''),
                     'share_token' => $existing['share_token'] ?? '',
                     'created_at' => $existing['created_at'] ?? $now,
@@ -815,6 +1131,10 @@ function procedures_handle_request(): array {
                 'file_mime' => $selected['file_mime'] ?? '',
                 'file_size' => $selected['file_size'] ?? 0,
                 'file_url' => $selected['file_url'] ?? '',
+                'storage_driver' => $selected['storage_driver'] ?? 'local',
+                'nextcloud_path' => $selected['nextcloud_path'] ?? '',
+                'nextcloud_share_id' => $selected['nextcloud_share_id'] ?? '',
+                'nextcloud_share_url' => $selected['nextcloud_share_url'] ?? '',
                 'uploaded_at' => $selected['uploaded_at'] ?? '',
             ];
         }

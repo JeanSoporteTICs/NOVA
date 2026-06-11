@@ -5,8 +5,16 @@ require_once __DIR__ . '/maintenance.php';
 // Mantenedor de configuración de envío a Redmine (incluye opciones de tracker/prioridad/estado)
 $GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
 
+function config_normalize_document_path(string $path): string {
+    $parts = array_values(array_filter(explode('/', str_replace('\\', '/', $path)), static function (string $part): bool {
+        $part = trim($part);
+        return $part !== '' && $part !== '.' && $part !== '..';
+    }));
+    return $parts ? '/' . implode('/', $parts) : '/NOVA/Procedimientos';
+}
+
 function ensure_config_file($path) {
-    if (!file_exists($path)) {
+    if (storage_read_json($path, null) === null) {
         $default = [
             'platform_url' => 'https://coresalud.cl/gp/projects/backlog-mantencion-ti/issues.json',
             'platform_token' => '',
@@ -20,6 +28,8 @@ function ensure_config_file($path) {
             'onlyoffice_url' => '',
             'onlyoffice_app_url' => '',
             'onlyoffice_jwt_secret' => '',
+            'procedures_storage' => 'local',
+            'procedures_nextcloud_root' => '/NOVA/Procedimientos',
             'project_id' => 48,
             'project_name' => 'Backlog Mantención TI',
             'tracker_id' => 1,
@@ -60,8 +70,7 @@ function ensure_config_file($path) {
 
 function load_config($path) {
     ensure_config_file($path);
-    $raw = file_get_contents($path);
-    $data = json_decode($raw, true);
+    $data = storage_read_json($path, []);
     if (!is_array($data)) $data = [];
     if (!array_key_exists('categories_url', $data)) $data['categories_url'] = '';
     if (!array_key_exists('unidades_url', $data)) $data['unidades_url'] = '';
@@ -90,6 +99,12 @@ function load_config($path) {
     if (!array_key_exists('onlyoffice_url', $data)) $data['onlyoffice_url'] = '';
     if (!array_key_exists('onlyoffice_app_url', $data)) $data['onlyoffice_app_url'] = '';
     if (!array_key_exists('onlyoffice_jwt_secret', $data)) $data['onlyoffice_jwt_secret'] = '';
+    if (!array_key_exists('procedures_storage', $data)) $data['procedures_storage'] = 'local';
+    $data['procedures_storage'] = in_array(strtolower((string)$data['procedures_storage']), ['local', 'nextcloud'], true)
+        ? strtolower((string)$data['procedures_storage'])
+        : 'local';
+    if (!array_key_exists('procedures_nextcloud_root', $data)) $data['procedures_nextcloud_root'] = '/NOVA/Procedimientos';
+    $data['procedures_nextcloud_root'] = config_normalize_document_path((string)$data['procedures_nextcloud_root']);
     foreach (['trackers','prioridades','estados'] as $k) {
         if (!isset($data[$k]) || !is_array($data[$k])) $data[$k] = [];
     }

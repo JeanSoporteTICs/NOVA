@@ -53,24 +53,19 @@ $selectedUserLabel = '';
 $catPath = __DIR__ . '/../../data/categorias.json';
 $unitPath = __DIR__ . '/../../data/unidades.json';
 $userPath = __DIR__ . '/../../data/usuarios.json';
-if (file_exists($catPath)) {
-  $parsed = json_decode(file_get_contents($catPath), true);
+$parsed = storage_read_json($catPath, []);
   if (is_array($parsed)) {
     foreach ($parsed as $c) {
       if (is_array($c) && isset($c['nombre'])) $cats[] = $c['nombre'];
     }
   }
-}
-if (file_exists($unitPath)) {
-  $parsed = json_decode(file_get_contents($unitPath), true);
+$parsed = storage_read_json($unitPath, []);
   if (is_array($parsed)) {
     foreach ($parsed as $u) {
       if (is_array($u) && isset($u['nombre'])) $units[] = $u['nombre'];
     }
   }
-}
-if (file_exists($userPath)) {
-  $parsed = json_decode(file_get_contents($userPath), true);
+$parsed = storage_read_json($userPath, []);
   if (is_array($parsed)) {
     foreach ($parsed as $u) {
       if (!is_array($u)) continue;
@@ -79,7 +74,6 @@ if (file_exists($userPath)) {
       if ($id !== '') $users[$id] = $nombre ?: $id;
     }
   }
-}
 $selectedUserLabel = '';
 if ($selectedUserId !== '') {
   if (isset($users[$selectedUserId])) {
