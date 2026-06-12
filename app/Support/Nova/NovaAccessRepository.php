@@ -128,6 +128,10 @@ final class NovaAccessRepository
      */
     public function explicitAccess(array $user, string $moduleKey): ?bool
     {
+        if ($this->isAdmin($user)) {
+            return true;
+        }
+
         if ($moduleKey === 'administracion') {
             return null;
         }
@@ -147,6 +151,10 @@ final class NovaAccessRepository
      */
     public function canAccess(array $user, string $moduleKey): bool
     {
+        if ($this->isAdmin($user)) {
+            return true;
+        }
+
         if ($moduleKey === 'administracion') {
             return $this->defaultAccess($user, $moduleKey);
         }
@@ -171,6 +179,10 @@ final class NovaAccessRepository
      */
     private function defaultAccess(array $user, string $moduleKey): bool
     {
+        if ($this->isAdmin($user)) {
+            return true;
+        }
+
         if ($moduleKey === 'administracion') {
             return in_array((string) ($user['role'] ?? 'usuario'), config('nova.module_admin_roles', []), true);
         }
@@ -541,6 +553,16 @@ final class NovaAccessRepository
         $state = strtolower(trim((string) ($user['status'] ?? $user['estado'] ?? $user['estado_usuario'] ?? 'activo')));
 
         return in_array($state, ['baneado', 'bloqueado', 'inactivo'], true);
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    private function isAdmin(array $user): bool
+    {
+        $role = strtolower(trim((string) ($user['role'] ?? $user['rol'] ?? 'usuario')));
+
+        return in_array($role, config('nova.module_admin_roles', []), true);
     }
 
     private function normalize(string $value): string

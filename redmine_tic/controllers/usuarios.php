@@ -248,6 +248,165 @@ function usuarios_split_name(string $name): array {
     return [$first, trim(implode(' ', $parts))];
 }
 
+function usuarios_redmine_user_api_url(string $membersUrl, string $userId): string {
+    $parts = parse_url($membersUrl);
+    if (!$parts || empty($parts['scheme']) || empty($parts['host']) || $userId === '') {
+        return '';
+    }
+
+    $path = (string)($parts['path'] ?? '');
+    $prefix = preg_replace('#/projects/.*$#', '', $path);
+    $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+
+    return $parts['scheme'] . '://' . $parts['host'] . $port . rtrim((string)$prefix, '/') . '/users/' . rawurlencode($userId) . '.json';
+}
+
+function usuarios_fetch_redmine_user_detail(string $userId, string $apiKey, string $membersUrl): array {
+    static $cache = [];
+
+    if ($userId === '' || $apiKey === '') {
+        return [];
+    }
+
+    if (array_key_exists($userId, $cache)) {
+        return $cache[$userId];
+    }
+
+    $url = usuarios_redmine_user_api_url($membersUrl, $userId);
+    if ($url === '') {
+        return $cache[$userId] = [];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['X-Redmine-API-Key: ' . $apiKey, 'Accept: application/json'],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($body === false || $code >= 400) {
+        return $cache[$userId] = [];
+    }
+
+    $json = json_decode((string)$body, true);
+    $detail = is_array($json['user'] ?? null) ? $json['user'] : [];
+    $detailNombre = trim((string)($detail['firstname'] ?? $detail['first_name'] ?? ''));
+    $detailApellido = trim((string)($detail['lastname'] ?? $detail['last_name'] ?? ''));
+
+    if ($detailNombre === '' || $detailApellido === '') {
+        $htmlDetail = usuarios_fetch_redmine_user_edit_detail($userId, $apiKey, $membersUrl);
+        foreach (['firstname', 'lastname'] as $key) {
+            if (trim((string)($detail[$key] ?? '')) === '' && trim((string)($htmlDetail[$key] ?? '')) !== '') {
+                $detail[$key] = $htmlDetail[$key];
+            }
+        }
+    }
+
+    return $cache[$userId] = $detail;
+}
+
+function usuarios_fetch_redmine_user_edit_detail(string $userId, string $apiKey, string $membersUrl): array {
+    $apiUrl = usuarios_redmine_user_api_url($membersUrl, $userId);
+    if ($apiUrl === '') {
+        return [];
+    }
+
+    $url = preg_replace('#/users/([^/]+)\.json$#', '/users/$1/edit', $apiUrl);
+    if (!is_string($url) || $url === $apiUrl) {
+        return [];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['X-Redmine-API-Key: ' . $apiKey, 'Accept: text/html'],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $html = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($html === false || $code >= 400) {
+        return [];
+    }
+
+    return [
+        'firstname' => usuarios_html_input_value((string)$html, 'user[firstname]'),
+        'lastname' => usuarios_html_input_value((string)$html, 'user[lastname]'),
+    ];
+}
+
+function usuarios_html_input_value(string $html, string $name): string {
+    if ($html === '' || $name === '') {
+        return '';
+    }
+
+    if (!preg_match_all('/<input\b[^>]*>/i', $html, $matches)) {
+        return '';
+    }
+
+    foreach ($matches[0] as $tag) {
+        if (usuarios_html_attr_value($tag, 'name') !== $name) {
+            continue;
+        }
+
+        return html_entity_decode(usuarios_html_attr_value($tag, 'value'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    return '';
+}
+
+function usuarios_html_attr_value(string $tag, string $attribute): string {
+    $quoted = '/\b' . preg_quote($attribute, '/') . '\s*=\s*([\'"])(.*?)\1/i';
+    if (preg_match($quoted, $tag, $match)) {
+        return (string)$match[2];
+    }
+
+    $plain = '/\b' . preg_quote($attribute, '/') . '\s*=\s*([^\s>]+)/i';
+    if (preg_match($plain, $tag, $match)) {
+        return trim((string)$match[1], "\"'");
+    }
+
+    return '';
+}
+
+function usuarios_redmine_person_name(array $user, string $apiKey = '', string $membersUrl = ''): array {
+    $id = trim((string)($user['id'] ?? ''));
+    $nombre = trim((string)($user['firstname'] ?? $user['first_name'] ?? ''));
+    $apellido = trim((string)($user['lastname'] ?? $user['last_name'] ?? ''));
+
+    if ($nombre !== '' && $apellido !== '') {
+        return [$nombre, $apellido];
+    }
+
+    if ($id !== '' && $apiKey !== '' && $membersUrl !== '') {
+        $detail = usuarios_fetch_redmine_user_detail($id, $apiKey, $membersUrl);
+        $detailNombre = trim((string)($detail['firstname'] ?? $detail['first_name'] ?? ''));
+        $detailApellido = trim((string)($detail['lastname'] ?? $detail['last_name'] ?? ''));
+
+        if ($detailNombre !== '') {
+            $nombre = $detailNombre;
+        }
+        if ($detailApellido !== '') {
+            $apellido = $detailApellido;
+        }
+    }
+
+    if ($nombre !== '' && $apellido !== '') {
+        return [$nombre, $apellido];
+    }
+
+    [$splitNombre, $splitApellido] = usuarios_split_name((string)($user['name'] ?? ''));
+
+    return [
+        $nombre !== '' ? $nombre : $splitNombre,
+        $apellido !== '' ? $apellido : $splitApellido,
+    ];
+}
+
 function usuarios_import_from_redmine(array &$rows): array {
     $remote = usuarios_fetch_redmine_members();
     if (isset($remote['error'])) return ['error' => $remote['error']];
@@ -268,7 +427,7 @@ function usuarios_import_from_redmine(array &$rows): array {
         if (!is_array($user) || empty($user['id'])) continue;
         $id = (string)$user['id'];
         $name = trim((string)($user['name'] ?? ''));
-        [$nombre, $apellido] = usuarios_split_name($name);
+        [$nombre, $apellido] = usuarios_redmine_person_name($user, usuarios_current_api_token(), usuarios_redmine_memberships_url());
         $payload = [
             'id' => $id,
             'rut_sin_dv' => '',

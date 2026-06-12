@@ -44,6 +44,7 @@ vendor/, node_modules/       Dependencias generadas; no editar manualmente.
 - Limpiar caches: `/opt/lampp/bin/php artisan optimize:clear`
 - Importar Redmine TIC JSON a BD: `/opt/lampp/bin/php artisan redmine:tic-import-json`
 - Importar Redmine Mantencion JSON/texto a BD: `/opt/lampp/bin/php artisan redmine:mantencion-import-json`
+- Consolidar usuarios legacy/TIC/Mantencion en identidad central NOVA: `/opt/lampp/bin/php artisan nova:consolidate-users`
 - Reparar nombres de usuarios Mantencion/NOVA tras migracion: `/opt/lampp/bin/php artisan redmine:mantencion-repair-user-names`
 - Archivar reportes TIC procesados: `/opt/lampp/bin/php artisan redmine:archive-processed`
 - Servicio Telegram Docker: `docker compose -f docker-compose.telegram.yml ps|logs|restart`
@@ -56,6 +57,7 @@ No hay script `npm test` ni `npm lint` definido en `package.json`.
 - Login/sesion NOVA: `app/Http/Controllers/NovaAuthController.php`, middleware `app/Http/Middleware/EnsureNovaAuthenticated.php`.
 - Home y administracion NOVA: `resources/views/nova/home.blade.php`, `app/Http/Controllers/NovaAdministrationController.php`.
 - Registro y permisos de modulos: `config/modules.php`, `app/Support/Modules/ModuleRegistry.php`, `app/Support/Modules/ProjectAccessGuard.php`, `app/Support/Nova/NovaAccessRepository.php`.
+- Identidad central NOVA: modelo `app/Models/NovaUser.php`, repositorio `app/Support/Auth/NovaUserRepository.php`, tablas `usuarios_nova`, `integraciones_usuario`, `modulos_nova` y `permisos_usuario_modulo`.
 - Bridge a modulos legacy: `app/Http/Controllers/LegacyProjectController.php`.
 - Redmine TIC MVC/DB: `redmine_tic/nova/app/Http/Controllers/RedmineDashboardController.php`, `redmine_tic/nova/resources/views/native.blade.php`, `redmine_tic/nova/app/Support/Redmine/RedmineDataRepository.php`.
 - Redmine TIC legacy: `redmine_tic/index.php`, `redmine_tic/controllers/*.php`, `redmine_tic/views/**/*.php` quedan como codigo historico; las rutas `/redmine_tic/*` redirigen al MVC nativo salvo assets/health/app.
@@ -73,7 +75,10 @@ No hay script `npm test` ni `npm lint` definido en `package.json`.
 - Los modulos legacy usan PHP procedural con controladores en `controllers/`, vistas en `views/` y parciales en `views/partials/`. Redmine TIC y Redmine Mantencion ya no deben escribir runtime en `data/*.json`; esos archivos son historicos/importables.
 - En legacy, usar helpers existentes: `storage_read_json()` / `storage_write_json()` / `storage_json_by_prefix()` para datos de Mantencion, `auth_can()` para permisos, `legacy_csrf_token()` / validacion CSRF para POST, y bloqueos de mantencion cuando correspondan.
 - No duplicar nombres derivados si existe relacion por ID. La tendencia actual es normalizar datos y usar repositorios/relaciones para resolver nombres.
-- Las integraciones y credenciales de usuario deben pasar por repositorios/helpers existentes; no loguear secretos ni escribir tokens en vistas.
+- La identidad de usuarios debe resolverse desde `usuarios_nova` cuando exista. Los registros legacy de TIC/Mantencion pueden proyectar usuarios centrales, pero no deben volver a convertirse en fuente principal si ya existe relacion por `redmine_id`, RUT o usuario.
+- Las integraciones y credenciales de usuario deben pasar por repositorios/helpers existentes y persistir en `integraciones_usuario`; no loguear secretos ni escribir tokens en vistas. Redmine Mantencion usa helpers como `auth_central_redmine_api_token()` y TIC usa `RedmineDataRepository` para leer/grabar tokens de usuario.
+- Los roles administradores definidos en `config/nova.php` (`module_admin_roles`) tienen acceso amplio a modulos; `ProjectAccessGuard` y `NovaAccessRepository` deben conservar ese comportamiento.
+- Al importar/sincronizar usuarios Redmine, preferir `firstname`/`lastname` de la API `/users/{id}.json` y, si falta, el formulario `/users/{id}/edit`; partir `name` solo como fallback.
 - Mantener estilos visuales del modulo: Bootstrap/Bootstrap Icons (`bi ...`), `assets/theme.css` y parciales `bootstrap-head.php`, `navbar.php`.
 
 ## Configuracion y Servicios Criticos
@@ -84,6 +89,7 @@ No hay script `npm test` ni `npm lint` definido en `package.json`.
 - Integraciones externas actuales: Redmine API, CORE, Nextcloud/WebDAV, OnlyOffice, Telegram Bot API y EMACH. En sandbox puede fallar red por permisos.
 - Apache/XAMPP sirve normalmente desde `/NOVA/public`. Laravel necesita permisos de escritura en `storage/` y `bootstrap/cache/`.
 - Administracion y accesos NOVA se almacenan bajo `storage/app/nova` y se exponen por `/administracion`.
+- Respaldo importable de BD: generar dumps con estructura y datos, por ejemplo `mysqldump --single-transaction --routines --triggers --events --add-drop-table --databases nova --result-file=storage/app/backups/nova_full_YYYYMMDD_HHMMSS.sql`. No publicar dumps con datos reales.
 
 ## Precauciones
 
@@ -93,6 +99,9 @@ No hay script `npm test` ni `npm lint` definido en `package.json`.
 - `database_nova_reconstruida.sql` es un dump de reconstruccion; tocarlo solo si la tarea es de migracion/backup.
 - El bridge `LegacyProjectController` limita roots PHP/assets segun `config/modules.php`; al agregar rutas o archivos ejecutables, revisar esas listas.
 - Redmine TIC debe persistir en BD en runtime. No escribir nuevos datos en `redmine_tic/data/*.json`; usar `RedmineDataRepository` y las tablas `reportes_redmine`, `catalogos_modulo`, `configuraciones_modulo`, `redmine_tic_usuarios`, `redmine_tic_horas_extra_grupos` y `redmine_tic_activity_logs`. El comando `redmine:tic-import-json` solo es puente historico de migracion.
+- Redmine TIC debe sincronizar usuarios de proyecto hacia `usuarios_nova`, guardar secretos en `integraciones_usuario` y limpiar duplicados sensibles de `redmine_tic_usuarios` cuando corresponda.
 - Redmine Mantencion debe persistir en BD en runtime. No escribir nuevos datos en `redmine-mantencion/data/*.json`; usar `storage.php`/`RedmineMantencionStorageRepository` y la tabla `redmine_mantencion_storage`. El comando `redmine:mantencion-import-json` solo es puente historico de migracion.
+- Redmine Mantencion debe sincronizar usuarios hacia `usuarios_nova`, tomar tokens API centrales desde `integraciones_usuario` y mezclar accesos centrales al cargar `usuarios.json`.
+- `redmine-mantencion/controllers/storage.php` normaliza rutas Windows y Linux; mantener validaciones de path dentro del data root para evitar escapes fuera del modulo.
 - Si aparece error de permisos en vistas/cache (`storage/framework/views` o `bootstrap/cache`), limpiar cache primero y revisar owner/permisos; no aplicar `chown/chmod` amplio sin aprobacion.
 - Antes de cambios grandes, ejecutar al menos `/opt/lampp/bin/php artisan test` y limpiar caches si se alteran rutas/configuracion.

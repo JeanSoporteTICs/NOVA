@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('redmine_mantencion_storage')) {
+            return;
+        }
+
         Schema::create('redmine_mantencion_storage', function (Blueprint $table): void {
             $table->id();
             $table->string('path', 255)->unique();

@@ -44,6 +44,199 @@ Artisan::command('redmine:mantencion-import-json', function (RedmineMantencionSt
     }
 })->purpose('Import Redmine Mantencion JSON/text data into NOVA database tables');
 
+Artisan::command('nova:consolidate-users', function () {
+    $normalizeStatus = static function (string $status): string {
+        return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
+    };
+    $normalizeRole = static function (string $role): string {
+        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
+    };
+    $splitPerson = static function (string $name, string $lastName = ''): array {
+        $name = preg_replace('/\s+/', ' ', trim($name)) ?? '';
+        $lastName = preg_replace('/\s+/', ' ', trim($lastName)) ?? '';
+        if ($lastName !== '') {
+            return [mb_substr($name !== '' ? $name : 'Redmine', 0, 120), mb_substr($lastName, 0, 160)];
+        }
+        $parts = preg_split('/\s+/', $name) ?: [];
+        if (count($parts) <= 1) {
+            return [mb_substr($name !== '' ? $name : 'Redmine', 0, 120), 'Usuario'];
+        }
+        $lastLen = count($parts) >= 4 ? 2 : 1;
+        return [
+            mb_substr(implode(' ', array_slice($parts, 0, -$lastLen)), 0, 120),
+            mb_substr(implode(' ', array_slice($parts, -$lastLen)), 0, 160),
+        ];
+    };
+    $uniqueUsername = static function (string $username, ?int $currentId = null): string {
+        $username = trim($username) !== '' ? trim($username) : (string) \Illuminate\Support\Str::uuid();
+        $candidate = $username;
+        $suffix = 2;
+        while (true) {
+            $query = DB::table('usuarios_nova')->where('usuario', $candidate);
+            if ($currentId !== null) {
+                $query->where('id', '<>', $currentId);
+            }
+            if (!$query->exists()) {
+                return $candidate;
+            }
+            $candidate = $username . '-' . $suffix;
+            $suffix++;
+        }
+    };
+    $upsertNova = function (array $source, string $origin) use ($normalizeStatus, $normalizeRole, $splitPerson, $uniqueUsername): ?int {
+        $redmineId = trim((string) ($source['redmine_id'] ?? $source['id'] ?? ''));
+        $rut = trim((string) ($source['rut'] ?? ''));
+        $rawUsername = trim((string) ($source['rut_sin_dv'] ?? $source['username'] ?? $source['usuario'] ?? ''));
+        $username = $rawUsername !== '' ? $rawUsername : $redmineId;
+        [$name, $lastName] = $splitPerson((string) ($source['nombre'] ?? $source['name'] ?? ''), (string) ($source['apellido'] ?? ''));
+        if ($username === '' || $name === '') {
+            return null;
+        }
+
+        $existing = null;
+        if ($redmineId !== '') {
+            $existing = DB::table('usuarios_nova')->where('redmine_id', $redmineId)->first();
+        }
+        if (!$existing && $rut !== '') {
+            $existing = DB::table('usuarios_nova')->where('rut', $rut)->first();
+        }
+        if (!$existing && $username !== '') {
+            $existing = DB::table('usuarios_nova')->where('usuario', $username)->first();
+        }
+        if ($existing && trim((string) ($source['nombre'] ?? $source['name'] ?? '')) === '') {
+            $name = trim((string) ($existing->nombre ?? $name));
+        }
+        if ($existing && trim((string) ($source['apellido'] ?? '')) === '') {
+            $lastName = trim((string) ($existing->apellido ?? $lastName));
+        }
+        if ($existing && $rawUsername === '') {
+            $username = trim((string) ($existing->usuario ?? $username));
+        }
+
+        $values = [
+            'usuario' => $uniqueUsername($username, $existing?->id),
+            'rut' => $rut !== '' ? $rut : null,
+            'redmine_id' => $redmineId !== '' ? $redmineId : null,
+            'nombre' => $name,
+            'apellido' => $lastName,
+            'rol' => $normalizeRole((string) ($source['rol'] ?? $source['role'] ?? 'usuario')),
+            'estado' => $normalizeStatus((string) ($source['estado_usuario'] ?? $source['estado'] ?? $source['status'] ?? 'activo')),
+            'usuario_core' => trim((string) ($source['core_user'] ?? $source['usuario_core'] ?? '')) ?: null,
+            'actualizado_at' => now(),
+        ];
+
+        try {
+            if ($existing) {
+                DB::table('usuarios_nova')->where('id', $existing->id)->update($values);
+                return (int) $existing->id;
+            }
+
+            $values['uuid'] = (string) \Illuminate\Support\Str::uuid();
+            $values['password'] = (string) ($source['password'] ?? '') ?: \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
+            $values['creado_at'] = now();
+
+            return (int) DB::table('usuarios_nova')->insertGetId($values);
+        } catch (\Throwable $e) {
+            $this->warn('No se pudo consolidar usuario ' . ($redmineId ?: $username) . ' desde ' . $origin . ': ' . $e->getMessage());
+            return null;
+        }
+    };
+    $saveIntegration = static function (int $userId, string $type, string $secret = '', string $external = '', string $chatId = ''): void {
+        if ($userId <= 0 || ($secret === '' && $external === '' && $chatId === '')) {
+            return;
+        }
+        $values = [
+            'usuario_externo' => $external !== '' ? $external : null,
+            'chat_id' => $chatId !== '' ? $chatId : null,
+            'actualizado_at' => now(),
+        ];
+        if ($secret !== '') {
+            try {
+                $values['valor_secreto'] = encrypt($secret);
+            } catch (\Throwable) {
+                $values['valor_secreto'] = $secret;
+            }
+        }
+        DB::table('integraciones_usuario')->updateOrInsert(
+            ['usuario_id' => $userId, 'tipo' => $type],
+            $values
+        );
+    };
+    $grantAccess = static function (int $userId, string $moduleKey): void {
+        if ($userId <= 0) {
+            return;
+        }
+        $moduleId = DB::table('modulos_nova')->where('clave_modulo', $moduleKey)->value('id');
+        if ($moduleId === null) {
+            return;
+        }
+        DB::table('permisos_usuario_modulo')->updateOrInsert(
+            ['usuario_id' => $userId, 'modulo_id' => (int) $moduleId],
+            ['permitido' => 1, 'actualizado_at' => now()]
+        );
+    };
+
+    if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')) {
+        $this->error('No existe usuarios_nova.');
+        return 1;
+    }
+
+    $tic = 0;
+    if (\Illuminate\Support\Facades\Schema::hasTable('redmine_tic_usuarios')) {
+        foreach (DB::table('redmine_tic_usuarios')->get() as $row) {
+            $payload = [
+                'id' => $row->redmine_id ?? '',
+                'rut_sin_dv' => $row->rut_sin_dv ?? '',
+                'rut' => $row->rut ?? '',
+                'nombre' => $row->nombre ?? '',
+                'apellido' => $row->apellido ?? '',
+                'rol' => $row->rol ?? 'usuario',
+                'estado_usuario' => $row->estado_usuario ?? 'activo',
+            ];
+            $userId = $upsertNova($payload, 'redmine_tic');
+            if ($userId !== null) {
+                $saveIntegration($userId, 'redmine_tic', trim((string) ($row->api_token ?? '')), (string) ($row->redmine_id ?? ''));
+                $saveIntegration($userId, 'telegram', '', '', trim((string) ($row->telegram_chat_id ?? '')));
+                $grantAccess($userId, 'redmine_tic');
+                $tic++;
+            }
+        }
+        DB::table('redmine_tic_usuarios')->update([
+            'rut_sin_dv' => null,
+            'rut' => null,
+            'nombre' => null,
+            'apellido' => null,
+            'api_token' => null,
+        ]);
+    }
+
+    $mantencion = 0;
+    $storageRow = \Illuminate\Support\Facades\Schema::hasTable('redmine_mantencion_storage')
+        ? DB::table('redmine_mantencion_storage')->where('path', 'usuarios.json')->first()
+        : null;
+    $mantencionUsers = $storageRow ? json_decode((string) $storageRow->payload_json, true) : [];
+    if (is_array($mantencionUsers)) {
+        foreach ($mantencionUsers as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+            $userId = $upsertNova($user, 'redmine_mantencion');
+            if ($userId !== null) {
+                $redmineId = trim((string) ($user['id'] ?? $user['redmine_id'] ?? ''));
+                $saveIntegration($userId, 'redmine_mantencion', trim((string) ($user['api'] ?? '')), $redmineId);
+                $grantAccess($userId, 'redmine-mantencion');
+                $mantencion++;
+            }
+        }
+    }
+
+    $this->info('Usuarios TIC consolidados: ' . $tic);
+    $this->info('Usuarios Mantencion consolidados: ' . $mantencion);
+    $this->info('Identidad central: usuarios_nova. Secretos/API: integraciones_usuario.');
+
+    return 0;
+})->purpose('Consolidate NOVA, Redmine TIC and Redmine Mantencion users into central tables');
+
 Artisan::command('redmine:mantencion-repair-user-names', function () {
     $fixMojibake = static function (string $value): string {
         $value = strtr($value, [

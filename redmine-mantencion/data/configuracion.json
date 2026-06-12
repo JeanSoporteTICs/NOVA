@@ -70,6 +70,7 @@
     "project_name": "Backlog Mantencion TI",
     "cf_unidad_solicitante": null,
     "categories_url": "https:\/\/coresalud.cl\/gp\/projects\/backlog-mantencion-ti\/settings\/categories",
+    "users_members_url": "https:\/\/www.coresalud.cl\/gp\/projects\/backlog-mantencion-ti\/settings\/members",
     "unidades_url": "https:\/\/coresalud.cl\/gp\/custom_fields.json",
     "source_mode": "core",
     "core_enabled": true,

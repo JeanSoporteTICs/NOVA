@@ -6,6 +6,7 @@ use App\Models\NovaUser;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -497,7 +498,7 @@ final class RedmineDataRepository
                 continue;
             }
 
-            [$firstName, $lastName] = $this->splitRedmineName((string) ($redmineUser['name'] ?? ''));
+            [$firstName, $lastName] = $this->redmineUserName($redmineUser, $baseUrl, $token);
             $row = [
                 'id' => $id,
                 'nombre' => $firstName,
@@ -3002,6 +3003,29 @@ final class RedmineDataRepository
         return ['http_code' => $httpCode, 'body' => (string) $body, 'error' => $error];
     }
 
+    /**
+     * @return array{http_code:int,body:string,error:string}
+     */
+    private function getRedmineHtml(string $url, string $token): array
+    {
+        if (!function_exists('curl_init')) {
+            return ['http_code' => 0, 'body' => '', 'error' => 'Extension cURL no disponible'];
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Accept: text/html', 'X-Redmine-API-Key: ' . $token],
+            CURLOPT_TIMEOUT => 20,
+        ]);
+        $body = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = (string) curl_error($ch);
+        curl_close($ch);
+
+        return ['http_code' => $httpCode, 'body' => (string) $body, 'error' => $error];
+    }
+
     private function redmineBaseUrl(string $url): string
     {
         $parts = parse_url(trim($url));
@@ -3048,6 +3072,100 @@ final class RedmineDataRepository
         return [$parts[0] ?? '', $parts[1] ?? ''];
     }
 
+    /**
+     * @param array<string,mixed> $redmineUser
+     * @return array{0:string,1:string}
+     */
+    private function redmineUserName(array $redmineUser, string $baseUrl, string $token): array
+    {
+        $firstName = trim((string) ($redmineUser['firstname'] ?? $redmineUser['first_name'] ?? ''));
+        $lastName = trim((string) ($redmineUser['lastname'] ?? $redmineUser['last_name'] ?? ''));
+
+        if ($firstName !== '' && $lastName !== '') {
+            return [$firstName, $lastName];
+        }
+
+        $id = trim((string) ($redmineUser['id'] ?? ''));
+        if ($id !== '' && $baseUrl !== '' && $token !== '') {
+            $response = $this->getRedmineJson($baseUrl . '/users/' . rawurlencode($id) . '.json', $token);
+            if ($response['error'] === '' && $response['http_code'] >= 200 && $response['http_code'] < 300) {
+                $data = json_decode($response['body'], true);
+                $detail = is_array($data['user'] ?? null) ? $data['user'] : [];
+                $detailFirstName = trim((string) ($detail['firstname'] ?? $detail['first_name'] ?? ''));
+                $detailLastName = trim((string) ($detail['lastname'] ?? $detail['last_name'] ?? ''));
+
+                if ($detailFirstName !== '') {
+                    $firstName = $detailFirstName;
+                }
+                if ($detailLastName !== '') {
+                    $lastName = $detailLastName;
+                }
+            }
+
+            if ($firstName === '' || $lastName === '') {
+                $response = $this->getRedmineHtml($baseUrl . '/users/' . rawurlencode($id) . '/edit', $token);
+                if ($response['error'] === '' && $response['http_code'] >= 200 && $response['http_code'] < 300) {
+                    $htmlFirstName = $this->htmlInputValue($response['body'], 'user[firstname]');
+                    $htmlLastName = $this->htmlInputValue($response['body'], 'user[lastname]');
+
+                    if ($htmlFirstName !== '') {
+                        $firstName = $htmlFirstName;
+                    }
+                    if ($htmlLastName !== '') {
+                        $lastName = $htmlLastName;
+                    }
+                }
+            }
+        }
+
+        if ($firstName !== '' && $lastName !== '') {
+            return [$firstName, $lastName];
+        }
+
+        [$splitFirstName, $splitLastName] = $this->splitRedmineName((string) ($redmineUser['name'] ?? ''));
+
+        return [
+            $firstName !== '' ? $firstName : $splitFirstName,
+            $lastName !== '' ? $lastName : $splitLastName,
+        ];
+    }
+
+    private function htmlInputValue(string $html, string $name): string
+    {
+        if ($html === '' || $name === '') {
+            return '';
+        }
+
+        if (!preg_match_all('/<input\b[^>]*>/i', $html, $matches)) {
+            return '';
+        }
+
+        foreach ($matches[0] as $tag) {
+            if ($this->htmlAttrValue($tag, 'name') !== $name) {
+                continue;
+            }
+
+            return html_entity_decode($this->htmlAttrValue($tag, 'value'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        return '';
+    }
+
+    private function htmlAttrValue(string $tag, string $attribute): string
+    {
+        $quoted = '/\b' . preg_quote($attribute, '/') . '\s*=\s*([\'"])(.*?)\1/i';
+        if (preg_match($quoted, $tag, $match)) {
+            return (string) $match[2];
+        }
+
+        $plain = '/\b' . preg_quote($attribute, '/') . '\s*=\s*([^\s>]+)/i';
+        if (preg_match($plain, $tag, $match)) {
+            return trim((string) $match[1], '"\'');
+        }
+
+        return '';
+    }
+
     private function normalizePhoneForCompare(string $phone): string
     {
         $digits = preg_replace('/\D+/', '', $phone) ?? '';
@@ -3084,7 +3202,7 @@ final class RedmineDataRepository
             }
         }
 
-        return DB::table('redmine_tic_usuarios')
+        $users = DB::table('redmine_tic_usuarios')
             ->orderBy('nombre')
             ->orderBy('apellido')
             ->get()
@@ -3097,14 +3215,14 @@ final class RedmineDataRepository
 
                 return [
                     'id' => $redmineId,
-                    'rut_sin_dv' => trim((string) ($row->rut_sin_dv ?? $nova?->usuario ?? '')),
-                    'nombre' => trim((string) ($row->nombre ?? $nova?->nombre ?? '')),
-                    'apellido' => trim((string) ($row->apellido ?? $nova?->apellido ?? '')),
-                    'rut' => trim((string) ($row->rut ?? $nova?->rut ?? '')),
+                    'rut_sin_dv' => trim((string) ($nova?->usuario ?? $row->rut_sin_dv ?? '')),
+                    'nombre' => trim((string) ($nova?->nombre ?? $row->nombre ?? '')),
+                    'apellido' => trim((string) ($nova?->apellido ?? $row->apellido ?? '')),
+                    'rut' => trim((string) ($nova?->rut ?? $row->rut ?? '')),
                     'numero_celular' => '',
                     'telegram_chat_id' => $telegramChatId,
                     'telegram_source' => $telegramChatId !== '' ? 'redmine_tic' : '',
-                    'api' => trim((string) ($row->api_token ?? '')),
+                    'api' => $this->integrationSecret((int) ($nova?->id ?? 0), 'redmine_tic') ?: trim((string) ($row->api_token ?? '')),
                     'rol' => trim((string) ($row->rol ?? 'usuario')) ?: 'usuario',
                     'password' => (string) ($nova?->password ?? ''),
                     'permisos' => is_array($permissions) ? $permissions : [],
@@ -3116,6 +3234,48 @@ final class RedmineDataRepository
             })
             ->values()
             ->all();
+
+        $known = [];
+        foreach ($users as $user) {
+            $id = trim((string) ($user['id'] ?? ''));
+            if ($id !== '') {
+                $known[$id] = true;
+            }
+        }
+
+        foreach ($this->novaUsersWithProjectAccess() as $nova) {
+            $redmineId = trim((string) ($nova->redmine_id ?? ''));
+            if ($redmineId === '' || isset($known[$redmineId])) {
+                continue;
+            }
+
+            $users[] = [
+                'id' => $redmineId,
+                'rut_sin_dv' => trim((string) ($nova->usuario ?? '')),
+                'nombre' => trim((string) ($nova->nombre ?? '')),
+                'apellido' => trim((string) ($nova->apellido ?? '')),
+                'rut' => trim((string) ($nova->rut ?? '')),
+                'numero_celular' => '',
+                'telegram_chat_id' => '',
+                'telegram_source' => '',
+                'api' => $this->integrationSecret((int) ($nova->id ?? 0), 'redmine_tic'),
+                'rol' => trim((string) ($nova->rol ?? 'usuario')) ?: 'usuario',
+                'password' => (string) ($nova->password ?? ''),
+                'permisos' => [],
+                'estado_usuario' => trim((string) ($nova->estado ?? 'activo')) ?: 'activo',
+                'redmine_membership_id' => null,
+                'redmine_roles' => [],
+                '_nova_user_id' => (string) ($nova->uuid ?? ''),
+            ];
+            $known[$redmineId] = true;
+        }
+
+        usort($users, static fn (array $a, array $b): int => strcasecmp(
+            trim((string) ($a['nombre'] ?? '') . ' ' . (string) ($a['apellido'] ?? '')),
+            trim((string) ($b['nombre'] ?? '') . ' ' . (string) ($b['apellido'] ?? ''))
+        ));
+
+        return array_values($users);
     }
 
     /**
@@ -3145,15 +3305,24 @@ final class RedmineDataRepository
                 $lastName = $rest;
             }
 
+            $nova = $this->upsertNovaUserFromProjectUser($projectUser, $name, $lastName);
+            $apiToken = trim((string) ($projectUser['api'] ?? ''));
+            $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
+            if ($nova instanceof NovaUser) {
+                $this->saveUserIntegration((int) $nova->id, 'redmine_tic', $apiToken, (string) $redmineId);
+                $this->saveUserIntegration((int) $nova->id, 'telegram', '', '', $telegramChatId);
+                $this->grantProjectAccess((int) $nova->id);
+            }
+
             DB::table('redmine_tic_usuarios')->updateOrInsert(
                 ['redmine_id' => (int) $redmineId],
                 [
-                    'rut_sin_dv' => trim((string) ($projectUser['rut_sin_dv'] ?? $projectUser['username'] ?? '')) ?: null,
-                    'rut' => trim((string) ($projectUser['rut'] ?? '')) ?: null,
-                    'nombre' => $name ?: null,
-                    'apellido' => $lastName ?: null,
-                    'telegram_chat_id' => trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', ''))) ?: null,
-                    'api_token' => trim((string) ($projectUser['api'] ?? '')) ?: null,
+                    'rut_sin_dv' => null,
+                    'rut' => null,
+                    'nombre' => null,
+                    'apellido' => null,
+                    'telegram_chat_id' => $telegramChatId ?: null,
+                    'api_token' => null,
                     'rol' => trim((string) ($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
                     'estado_usuario' => $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? 'activo')),
                     'permisos' => json_encode(is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -3162,6 +3331,209 @@ final class RedmineDataRepository
                     'actualizado_at' => now(),
                 ]
             );
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $projectUser
+     */
+    private function upsertNovaUserFromProjectUser(array $projectUser, string $name, string $lastName): ?NovaUser
+    {
+        if (!$this->novaUsersTableAvailable()) {
+            return null;
+        }
+
+        $redmineId = trim((string) ($projectUser['id'] ?? ''));
+        if ($redmineId === '') {
+            return null;
+        }
+
+        $username = trim((string) ($projectUser['rut_sin_dv'] ?? $projectUser['username'] ?? '')) ?: $redmineId;
+        $rut = trim((string) ($projectUser['rut'] ?? ''));
+        $name = $name !== '' ? $name : 'Redmine';
+        $lastName = $lastName !== '' ? $lastName : 'Usuario';
+        $role = $this->normalizeNovaRoleForProject((string) ($projectUser['rol'] ?? 'usuario'));
+        $status = $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? 'activo'));
+
+        try {
+            $user = NovaUser::query()->where('redmine_id', $redmineId)->first();
+            if (!$user && $rut !== '') {
+                $user = NovaUser::query()->where('rut', $rut)->first();
+            }
+            if (!$user && $username !== '') {
+                $user = NovaUser::query()->where('usuario', $username)->first();
+            }
+
+            if (!$user) {
+                $user = new NovaUser();
+                $user->uuid = (string) Str::uuid();
+                $user->password = Hash::make(Str::random(40));
+            }
+
+            $user->usuario = $this->uniqueNovaUsername($username, $user->exists ? (int) $user->id : null);
+            $user->rut = $rut !== '' ? $rut : null;
+            $user->redmine_id = $redmineId;
+            $user->nombre = $name;
+            $user->apellido = $lastName;
+            $user->rol = $role;
+            $user->estado = $status;
+            $user->save();
+
+            return $user;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function uniqueNovaUsername(string $username, ?int $currentId = null): string
+    {
+        $username = trim($username) !== '' ? trim($username) : (string) Str::uuid();
+        $candidate = $username;
+        $suffix = 2;
+
+        while (true) {
+            try {
+                $query = NovaUser::query()->where('usuario', $candidate);
+                if ($currentId !== null) {
+                    $query->where('id', '<>', $currentId);
+                }
+                if (!$query->exists()) {
+                    return $candidate;
+                }
+            } catch (\Throwable) {
+                return $candidate;
+            }
+
+            $candidate = $username . '-' . $suffix;
+            $suffix++;
+        }
+    }
+
+    private function saveUserIntegration(int $novaUserId, string $type, string $secret = '', string $externalUser = '', string $chatId = ''): void
+    {
+        if ($novaUserId <= 0 || !$this->userIntegrationsTableAvailable()) {
+            return;
+        }
+        if ($secret === '' && $externalUser === '' && $chatId === '') {
+            return;
+        }
+
+        $values = [
+            'usuario_externo' => $externalUser !== '' ? $externalUser : null,
+            'chat_id' => $chatId !== '' ? $chatId : null,
+            'actualizado_at' => now(),
+        ];
+        if ($secret !== '') {
+            $values['valor_secreto'] = $this->encryptIntegrationSecret($secret);
+        }
+
+        try {
+            DB::table('integraciones_usuario')->updateOrInsert(
+                ['usuario_id' => $novaUserId, 'tipo' => $type],
+                $values
+            );
+        } catch (\Throwable) {
+        }
+    }
+
+    private function grantProjectAccess(int $novaUserId): void
+    {
+        $moduleId = $this->databaseModuleId();
+        if ($novaUserId <= 0 || $moduleId === null || !$this->projectAccessTableAvailable()) {
+            return;
+        }
+
+        try {
+            DB::table('permisos_usuario_modulo')->updateOrInsert(
+                ['usuario_id' => $novaUserId, 'modulo_id' => $moduleId],
+                ['permitido' => 1, 'actualizado_at' => now()]
+            );
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * @return array<int,object>
+     */
+    private function novaUsersWithProjectAccess(): array
+    {
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null || !$this->projectAccessTableAvailable() || !$this->novaUsersTableAvailable()) {
+            return [];
+        }
+
+        try {
+            return DB::table('usuarios_nova')
+                ->join('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
+                ->where('permisos_usuario_modulo.modulo_id', $moduleId)
+                ->where('permisos_usuario_modulo.permitido', 1)
+                ->select('usuarios_nova.*')
+                ->get()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private function projectAccessTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('permisos_usuario_modulo');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function integrationSecret(int $novaUserId, string $type): string
+    {
+        if ($novaUserId <= 0 || !$this->userIntegrationsTableAvailable()) {
+            return '';
+        }
+
+        try {
+            $secret = (string) DB::table('integraciones_usuario')
+                ->where('usuario_id', $novaUserId)
+                ->where('tipo', $type)
+                ->value('valor_secreto');
+
+            return $this->decryptIntegrationSecret($secret);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function encryptIntegrationSecret(string $secret): string
+    {
+        if ($secret === '') {
+            return '';
+        }
+
+        try {
+            return encrypt($secret);
+        } catch (\Throwable) {
+            return $secret;
+        }
+    }
+
+    private function decryptIntegrationSecret(string $secret): string
+    {
+        if ($secret === '') {
+            return '';
+        }
+
+        try {
+            return (string) decrypt($secret);
+        } catch (\Throwable) {
+            return $secret;
+        }
+    }
+
+    private function userIntegrationsTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('integraciones_usuario');
+        } catch (\Throwable) {
+            return false;
         }
     }
 

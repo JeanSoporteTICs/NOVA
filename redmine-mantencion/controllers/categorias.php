@@ -80,6 +80,12 @@ function user_api_token_fallback($usersFile) {
     if (!function_exists('auth_get_user_id')) return '';
     $uid = auth_get_user_id();
     if (!$uid) return '';
+    if (function_exists('auth_central_redmine_api_token')) {
+        $central = auth_central_redmine_api_token($uid, 'redmine_mantencion');
+        if ($central !== '') {
+            return $central;
+        }
+    }
     $users = storage_read_json($usersFile, []);
     if (!is_array($users)) return '';
     foreach ($users as $u) {

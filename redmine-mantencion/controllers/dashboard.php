@@ -2455,6 +2455,12 @@ function load_user_api_token(?string $userId): string {
     if (!$userId) {
         return '';
     }
+    if (function_exists('auth_central_redmine_api_token')) {
+        $central = auth_central_redmine_api_token($userId, 'redmine_mantencion');
+        if ($central !== '') {
+            return $central;
+        }
+    }
     $users = storage_read_json($path, []);
     if (!is_array($users)) {
         return '';

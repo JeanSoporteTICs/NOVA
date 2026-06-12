@@ -189,7 +189,7 @@ function load_usuarios($path) {
         if ($item !== $prev) $changed = true;
     }
     if ($changed) save_usuarios($path, $data);
-    return $data;
+    return usuarios_merge_central_access($data);
 }
 
 function save_usuarios($path, $data) {
@@ -290,6 +290,12 @@ function usuarios_user_api_token(): string {
     if ($userId === '') {
         return '';
     }
+    if (function_exists('auth_central_redmine_api_token')) {
+        $central = auth_central_redmine_api_token($userId, 'redmine_mantencion');
+        if ($central !== '') {
+            return $central;
+        }
+    }
     global $DATA_FILE;
     $users = storage_read_json($DATA_FILE, []);
     if (!is_array($users)) {
@@ -304,6 +310,194 @@ function usuarios_user_api_token(): string {
         }
     }
     return '';
+}
+
+function usuarios_central_module_id(string $moduleKey = 'redmine-mantencion'): ?int {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return null;
+    }
+    try {
+        $id = \Illuminate\Support\Facades\DB::table('modulos_nova')->where('clave_modulo', $moduleKey)->value('id');
+        return $id !== null ? (int)$id : null;
+    } catch (\Throwable) {
+        return null;
+    }
+}
+
+function usuarios_central_decrypt_secret(string $secret): string {
+    if ($secret === '') {
+        return '';
+    }
+    try {
+        return (string)decrypt($secret);
+    } catch (\Throwable) {
+        return $secret;
+    }
+}
+
+function usuarios_central_user_api(string $redmineId, string $type = 'redmine_mantencion'): string {
+    $redmineId = trim($redmineId);
+    if ($redmineId === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return '';
+    }
+    try {
+        $secret = (string)\Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->join('integraciones_usuario', 'integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
+            ->where('usuarios_nova.redmine_id', $redmineId)
+            ->where('integraciones_usuario.tipo', $type)
+            ->value('integraciones_usuario.valor_secreto');
+        return usuarios_central_decrypt_secret($secret);
+    } catch (\Throwable) {
+        return '';
+    }
+}
+
+function usuarios_central_save_integration(int $userId, string $type, string $secret = '', string $externalUser = ''): void {
+    if ($userId <= 0 || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return;
+    }
+    if ($secret === '' && $externalUser === '') {
+        return;
+    }
+    $values = [
+        'usuario_externo' => $externalUser !== '' ? $externalUser : null,
+        'actualizado_at' => now(),
+    ];
+    if ($secret !== '') {
+        try {
+            $values['valor_secreto'] = encrypt($secret);
+        } catch (\Throwable) {
+            $values['valor_secreto'] = $secret;
+        }
+    }
+    try {
+        \Illuminate\Support\Facades\DB::table('integraciones_usuario')->updateOrInsert(
+            ['usuario_id' => $userId, 'tipo' => $type],
+            $values
+        );
+    } catch (\Throwable) {
+    }
+}
+
+function usuarios_central_grant_access(int $userId, string $moduleKey = 'redmine-mantencion'): void {
+    $moduleId = usuarios_central_module_id($moduleKey);
+    if ($userId <= 0 || $moduleId === null || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::table('permisos_usuario_modulo')->updateOrInsert(
+            ['usuario_id' => $userId, 'modulo_id' => $moduleId],
+            ['permitido' => 1, 'actualizado_at' => now()]
+        );
+    } catch (\Throwable) {
+    }
+}
+
+function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mantencion'): ?int {
+    if (!class_exists(\App\Models\NovaUser::class)) {
+        return null;
+    }
+    $redmineId = trim((string)($user['id'] ?? $user['redmine_id'] ?? ''));
+    if ($redmineId === '') {
+        return null;
+    }
+    $name = trim((string)($user['nombre'] ?? $user['name'] ?? ''));
+    $lastName = trim((string)($user['apellido'] ?? ''));
+    if ($lastName === '' && str_contains($name, ' ')) {
+        [$name, $lastName] = usuarios_split_name($name);
+    }
+    $name = $name !== '' ? $name : 'Redmine';
+    $lastName = $lastName !== '' ? $lastName : 'Usuario';
+    $rawUsername = trim((string)($user['rut_sin_dv'] ?? $user['username'] ?? ''));
+    $username = $rawUsername !== '' ? $rawUsername : $redmineId;
+    $rut = trim((string)($user['rut'] ?? ''));
+    $status = in_array(strtolower(trim((string)($user['estado'] ?? $user['estado_usuario'] ?? 'activo'))), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
+    $role = in_array(strtolower(trim((string)($user['rol'] ?? 'usuario'))), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
+    try {
+        $model = \App\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+        if (!$model && $rut !== '') {
+            $model = \App\Models\NovaUser::query()->where('rut', $rut)->first();
+        }
+        if (!$model && $username !== '') {
+            $model = \App\Models\NovaUser::query()->where('usuario', $username)->first();
+        }
+        if ($model && $rawUsername === '') {
+            $username = trim((string)$model->usuario) ?: $username;
+        }
+        if (!$model) {
+            $model = new \App\Models\NovaUser();
+            $model->uuid = (string)\Illuminate\Support\Str::uuid();
+            $model->password = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
+        }
+        $model->usuario = $username;
+        $model->rut = $rut !== '' ? $rut : null;
+        $model->redmine_id = $redmineId;
+        $model->nombre = $name;
+        $model->apellido = $lastName;
+        $model->rol = $role;
+        $model->estado = $status;
+        $model->save();
+        $userId = (int)$model->id;
+        usuarios_central_save_integration($userId, 'redmine_mantencion', trim((string)($user['api'] ?? '')), $redmineId);
+        usuarios_central_grant_access($userId, $moduleKey);
+        return $userId;
+    } catch (\Throwable) {
+        return null;
+    }
+}
+
+function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine-mantencion'): array {
+    $moduleId = usuarios_central_module_id($moduleKey);
+    if ($moduleId === null || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return $rows;
+    }
+    $indexed = [];
+    foreach ($rows as $idx => $row) {
+        if (is_array($row) && trim((string)($row['id'] ?? '')) !== '') {
+            $indexed[trim((string)$row['id'])] = $idx;
+        }
+    }
+    try {
+        $central = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->join('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
+            ->where('permisos_usuario_modulo.modulo_id', $moduleId)
+            ->where('permisos_usuario_modulo.permitido', 1)
+            ->select('usuarios_nova.*')
+            ->get();
+    } catch (\Throwable) {
+        return $rows;
+    }
+    foreach ($central as $user) {
+        $redmineId = trim((string)($user->redmine_id ?? ''));
+        if ($redmineId === '') {
+            continue;
+        }
+        $row = [
+            'id' => $redmineId,
+            'rut_sin_dv' => trim((string)($user->usuario ?? '')),
+            'nombre' => trim((string)($user->nombre ?? '')),
+            'apellido' => trim((string)($user->apellido ?? '')),
+            'rut' => trim((string)($user->rut ?? '')),
+            'numero_celular' => '',
+            'estamento' => '',
+            'api' => usuarios_central_user_api($redmineId, 'redmine_mantencion'),
+            'core_user' => trim((string)($user->usuario_core ?? '')),
+            'core_pass_enc' => '',
+            'nextcloud_user' => '',
+            'nextcloud_pass_enc' => '',
+            'rol' => trim((string)($user->rol ?? 'usuario')) === 'admin' ? 'administrador' : 'usuario',
+            'estado' => trim((string)($user->estado ?? 'activo')),
+            'password' => (string)($user->password ?? ''),
+            'permisos' => [],
+        ];
+        if (isset($indexed[$redmineId])) {
+            $rows[$indexed[$redmineId]] = array_merge($rows[$indexed[$redmineId]], $row);
+        } else {
+            $rows[] = $row;
+            $indexed[$redmineId] = count($rows) - 1;
+        }
+    }
+    return $rows;
 }
 
 function usuarios_members_url_from_config(): string {
@@ -355,6 +549,173 @@ function usuarios_split_name(string $fullName): array {
     return [trim($firstName), trim($lastName)];
 }
 
+function usuarios_redmine_user_api_url(string $membersUrl, string $userId): string {
+    $parts = parse_url($membersUrl);
+    if (!$parts || empty($parts['scheme']) || empty($parts['host']) || $userId === '') {
+        return '';
+    }
+
+    $path = (string)($parts['path'] ?? '');
+    $prefix = preg_replace('#/projects/.*$#', '', $path);
+    $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+
+    return $parts['scheme'] . '://' . $parts['host'] . $port . rtrim((string)$prefix, '/') . '/users/' . rawurlencode($userId) . '.json';
+}
+
+function usuarios_fetch_redmine_user_detail(string $userId, string $apiKey, string $membersUrl): array {
+    static $cache = [];
+
+    if ($userId === '' || $apiKey === '') {
+        return [];
+    }
+
+    if (array_key_exists($userId, $cache)) {
+        return $cache[$userId];
+    }
+
+    $url = usuarios_redmine_user_api_url($membersUrl, $userId);
+    if ($url === '') {
+        return $cache[$userId] = [];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'X-Redmine-API-Key: ' . $apiKey,
+            'Accept: application/json',
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $resp = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($resp === false || $code >= 400) {
+        return $cache[$userId] = [];
+    }
+
+    $json = json_decode((string)$resp, true);
+    $detail = is_array($json['user'] ?? null) ? $json['user'] : [];
+
+    $detailNombre = trim((string)($detail['firstname'] ?? $detail['first_name'] ?? ''));
+    $detailApellido = trim((string)($detail['lastname'] ?? $detail['last_name'] ?? ''));
+
+    if ($detailNombre === '' || $detailApellido === '') {
+        $htmlDetail = usuarios_fetch_redmine_user_edit_detail($userId, $apiKey, $membersUrl);
+        foreach (['firstname', 'lastname'] as $key) {
+            if (trim((string)($detail[$key] ?? '')) === '' && trim((string)($htmlDetail[$key] ?? '')) !== '') {
+                $detail[$key] = $htmlDetail[$key];
+            }
+        }
+    }
+
+    return $cache[$userId] = $detail;
+}
+
+function usuarios_fetch_redmine_user_edit_detail(string $userId, string $apiKey, string $membersUrl): array {
+    $apiUrl = usuarios_redmine_user_api_url($membersUrl, $userId);
+    if ($apiUrl === '') {
+        return [];
+    }
+
+    $url = preg_replace('#/users/([^/]+)\.json$#', '/users/$1/edit', $apiUrl);
+    if (!is_string($url) || $url === $apiUrl) {
+        return [];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'X-Redmine-API-Key: ' . $apiKey,
+            'Accept: text/html',
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $html = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($html === false || $code >= 400) {
+        return [];
+    }
+
+    return [
+        'firstname' => usuarios_html_input_value((string)$html, 'user[firstname]'),
+        'lastname' => usuarios_html_input_value((string)$html, 'user[lastname]'),
+    ];
+}
+
+function usuarios_html_input_value(string $html, string $name): string {
+    if ($html === '' || $name === '') {
+        return '';
+    }
+
+    if (!preg_match_all('/<input\b[^>]*>/i', $html, $matches)) {
+        return '';
+    }
+
+    foreach ($matches[0] as $tag) {
+        if (usuarios_html_attr_value($tag, 'name') !== $name) {
+            continue;
+        }
+
+        return html_entity_decode(usuarios_html_attr_value($tag, 'value'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    return '';
+}
+
+function usuarios_html_attr_value(string $tag, string $attribute): string {
+    $quoted = '/\b' . preg_quote($attribute, '/') . '\s*=\s*([\'"])(.*?)\1/i';
+    if (preg_match($quoted, $tag, $match)) {
+        return (string)$match[2];
+    }
+
+    $plain = '/\b' . preg_quote($attribute, '/') . '\s*=\s*([^\s>]+)/i';
+    if (preg_match($plain, $tag, $match)) {
+        return trim((string)$match[1], "\"'");
+    }
+
+    return '';
+}
+
+function usuarios_redmine_person_name(array $user, string $apiKey = '', string $membersUrl = ''): array {
+    $id = trim((string)($user['id'] ?? ''));
+    $nombre = trim((string)($user['firstname'] ?? $user['first_name'] ?? ''));
+    $apellido = trim((string)($user['lastname'] ?? $user['last_name'] ?? ''));
+
+    if ($nombre !== '' && $apellido !== '') {
+        return [$nombre, $apellido];
+    }
+
+    if ($id !== '' && $apiKey !== '' && $membersUrl !== '') {
+        $detail = usuarios_fetch_redmine_user_detail($id, $apiKey, $membersUrl);
+        $detailNombre = trim((string)($detail['firstname'] ?? $detail['first_name'] ?? ''));
+        $detailApellido = trim((string)($detail['lastname'] ?? $detail['last_name'] ?? ''));
+
+        if ($detailNombre !== '') {
+            $nombre = $detailNombre;
+        }
+        if ($detailApellido !== '') {
+            $apellido = $detailApellido;
+        }
+    }
+
+    if ($nombre !== '' && $apellido !== '') {
+        return [$nombre, $apellido];
+    }
+
+    $fullName = trim((string)($user['name'] ?? ''));
+    [$splitNombre, $splitApellido] = usuarios_split_name($fullName);
+
+    return [
+        $nombre !== '' ? $nombre : $splitNombre,
+        $apellido !== '' ? $apellido : $splitApellido,
+    ];
+}
+
 function usuarios_sync_remote(array &$rows): array {
     global $CONFIG_FILE, $DATA_FILE;
     $cfg = storage_read_json($CONFIG_FILE, []);
@@ -363,7 +724,7 @@ function usuarios_sync_remote(array &$rows): array {
         $apiKey = usuarios_user_api_token();
     }
     if ($apiKey === '') {
-        return ['error' => 'Falta token API para importar usuarios.'];
+        return ['error' => 'Falta token API para importar usuarios. Configura el Token API en Configuracion > Conexion API o agrega la API al usuario actual en Usuarios.'];
     }
     $url = usuarios_members_api_url(usuarios_members_url_from_config());
     if ($url === '') {
@@ -411,13 +772,12 @@ function usuarios_sync_remote(array &$rows): array {
             continue;
         }
         $id = trim((string)($user['id'] ?? ''));
-        $name = trim((string)($user['name'] ?? ''));
-        if ($id === '' || $name === '') {
+        [$nombre, $apellido] = usuarios_redmine_person_name($user, $apiKey, $url);
+        if ($id === '' || ($nombre === '' && $apellido === '')) {
             continue;
         }
         if (isset($indexed[$id])) {
             $idx = $indexed[$id];
-            [$nombre, $apellido] = usuarios_split_name($name);
             $currentName = trim((string)($rows[$idx]['nombre'] ?? ''));
             $currentLastName = trim((string)($rows[$idx]['apellido'] ?? ''));
             if ($currentName !== $nombre || $currentLastName !== $apellido) {
@@ -428,13 +788,13 @@ function usuarios_sync_remote(array &$rows): array {
                 $rows[$idx]['estamento'] = '';
                 $updated++;
             }
+            usuarios_central_upsert($rows[$idx]);
             continue;
         }
-        [$nombre, $apellido] = usuarios_split_name($name);
-        $rows[] = [
+        $newRow = [
             'id' => $id,
             'rut_sin_dv' => '',
-            'nombre' => $nombre !== '' ? $nombre : $name,
+            'nombre' => $nombre !== '' ? $nombre : trim((string)($user['name'] ?? 'Redmine')),
             'apellido' => $apellido,
             'rut' => '',
             'numero_celular' => '',
@@ -449,6 +809,8 @@ function usuarios_sync_remote(array &$rows): array {
             'password' => '',
             'permisos' => [],
         ];
+        $rows[] = $newRow;
+        usuarios_central_upsert($newRow);
         $indexed[$id] = count($rows) - 1;
         $created++;
     }
@@ -489,7 +851,7 @@ function handle_usuarios() {
                 return [$rows, 'Error: el nombre es obligatorio'];
             }
             [$newNombre, $newApellido] = usuarios_split_name($requiredName);
-            $rows[] = [
+            $newRow = [
                 'id' => $id_input !== '' ? $id_input : uniqid('', true),
                 'rut_sin_dv' => '',
                 'nombre' => $newNombre !== '' ? $newNombre : $requiredName,
@@ -506,6 +868,8 @@ function handle_usuarios() {
                 'nextcloud_pass_enc' => core_credentials_encrypt(sanitize_input($_POST['nextcloud_pass'] ?? '')),
                 'permisos' => $rolePerms,
             ];
+            $rows[] = $newRow;
+            usuarios_central_upsert($newRow);
             save_usuarios($DATA_FILE, $rows);
             usuarios_set_flash('Usuario creado');
             usuarios_redirect_back();
@@ -532,6 +896,7 @@ function handle_usuarios() {
             if ($postedApi !== '') {
                 $current['api'] = $postedApi;
             }
+            usuarios_central_upsert($current);
             $postedCoreUser = sanitize_input($_POST['core_user'] ?? '');
             $postedCorePass = sanitize_input($_POST['core_pass'] ?? '');
             if (!empty($_POST['core_clear_credentials'])) {

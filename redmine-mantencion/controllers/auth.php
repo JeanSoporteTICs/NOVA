@@ -101,6 +101,32 @@ function auth_find_user_by_id($id) {
     return null;
 }
 
+function auth_central_redmine_api_token($redmineId, string $type = 'redmine_mantencion'): string {
+    $redmineId = trim((string)$redmineId);
+    if ($redmineId === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return '';
+    }
+    try {
+        $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->join('integraciones_usuario', 'integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
+            ->where('usuarios_nova.redmine_id', $redmineId)
+            ->where('integraciones_usuario.tipo', $type)
+            ->select('integraciones_usuario.valor_secreto')
+            ->first();
+        $secret = trim((string)($row->valor_secreto ?? ''));
+        if ($secret === '') {
+            return '';
+        }
+        try {
+            return (string)decrypt($secret);
+        } catch (\Throwable) {
+            return $secret;
+        }
+    } catch (\Throwable) {
+        return '';
+    }
+}
+
 function auth_login($username, $password) {
     auth_start_session();
     $user = auth_find_user($username);

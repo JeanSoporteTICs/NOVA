@@ -26,6 +26,10 @@ final class ProjectAccessGuard
      */
     public function projectUser(string $projectKey, array $sessionUser): ?array
     {
+        if ($this->isAdmin($sessionUser)) {
+            return $this->adminProjectUser($projectKey, $sessionUser);
+        }
+
         $explicitAccess = null;
         try {
             $explicitAccess = app(NovaAccessRepository::class)->explicitAccess($sessionUser, $projectKey);
@@ -92,6 +96,8 @@ final class ProjectAccessGuard
      */
     private function sessionProjectUser(array $sessionUser): array
     {
+        $isAdmin = $this->isAdmin($sessionUser);
+
         return [
             'id' => (string) ($sessionUser['redmine_id'] ?? $sessionUser['id'] ?? ''),
             'rut_sin_dv' => (string) ($sessionUser['rut_sin_dv'] ?? $sessionUser['username'] ?? ''),
@@ -99,11 +105,35 @@ final class ProjectAccessGuard
             'apellido' => (string) ($sessionUser['apellido'] ?? ''),
             'rut' => (string) ($sessionUser['rut'] ?? ''),
             'api' => (string) ($sessionUser['api'] ?? ''),
-            'rol' => (string) ($sessionUser['role'] ?? 'usuario'),
+            'rol' => $isAdmin ? 'root' : (string) ($sessionUser['role'] ?? 'usuario'),
             'estado_usuario' => (string) ($sessionUser['status'] ?? 'activo'),
-            'permisos' => [],
+            'permisos' => $isAdmin ? ['all' => true] : [],
             '_nova_user_id' => (string) ($sessionUser['id'] ?? ''),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $sessionUser
+     * @return array<string,mixed>
+     */
+    private function adminProjectUser(string $projectKey, array $sessionUser): array
+    {
+        $projectUser = $this->findProjectUser($projectKey, $this->sessionNeedles($sessionUser));
+        $fallback = $this->sessionProjectUser($sessionUser);
+
+        if ($projectUser === null) {
+            return $fallback;
+        }
+
+        return array_merge($projectUser, [
+            'rol' => 'root',
+            'estado_usuario' => 'activo',
+            'permisos' => array_merge(
+                is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [],
+                ['all' => true]
+            ),
+            '_nova_user_id' => (string) ($sessionUser['id'] ?? $projectUser['_nova_user_id'] ?? ''),
+        ]);
     }
 
     public function deniedMessage(string $projectName = 'Redmine'): string
@@ -119,6 +149,16 @@ final class ProjectAccessGuard
         $state = strtolower(trim((string) ($user['estado'] ?? $user['estado_usuario'] ?? $user['status'] ?? 'activo')));
 
         return in_array($state, ['baneado', 'bloqueado', 'inactivo'], true);
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    private function isAdmin(array $user): bool
+    {
+        $role = strtolower(trim((string) ($user['role'] ?? $user['rol'] ?? 'usuario')));
+
+        return in_array($role, config('nova.module_admin_roles', []), true);
     }
 
     /**
@@ -173,6 +213,56 @@ final class ProjectAccessGuard
         }
 
         return null;
+    }
+
+    /**
+     * @param array<int,string> $needles
+     * @return array<string,mixed>|null
+     */
+    private function findProjectUser(string $projectKey, array $needles): ?array
+    {
+        if ($projectKey === 'redmine_tic' && class_exists(RedmineDataRepository::class)) {
+            try {
+                $user = $this->projectUserFromRows(app(RedmineDataRepository::class)->forProject($projectKey)->users(), $needles);
+                if ($user !== null) {
+                    return $user;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($projectKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
+            try {
+                $users = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
+                if (is_array($users)) {
+                    $user = $this->projectUserFromRows($users, $needles);
+                    if ($user !== null) {
+                        return $user;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        try {
+            $module = $this->modules->get($projectKey);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $users = json_decode((string) file_get_contents($path), true);
+        if (!is_array($users)) {
+            return null;
+        }
+
+        return $this->projectUserFromRows($users, $needles);
     }
 
     private function normalize(string $value): string

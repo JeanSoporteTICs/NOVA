@@ -39,8 +39,17 @@ if (!function_exists('storage_base_path')) {
         }
         $dataRoot = rtrim(str_replace('\\', '/', $dataRoot), '/');
 
-        $fullNorm = str_replace('\\', '/', $path);
-        if (!str_starts_with($fullNorm, '/')) {
+        $resolved = realpath($path);
+        if ($resolved === false) {
+            $directory = realpath(dirname($path));
+            if ($directory !== false) {
+                $resolved = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . basename($path);
+            }
+        }
+
+        $fullNorm = str_replace('\\', '/', $resolved !== false ? $resolved : $path);
+        $isWindowsAbsolute = (bool)preg_match('/^[A-Za-z]:\//', $fullNorm);
+        if (!str_starts_with($fullNorm, '/') && !$isWindowsAbsolute) {
             $fullNorm = storage_base_path($fullNorm);
         }
         $parts = [];
@@ -53,9 +62,14 @@ if (!function_exists('storage_base_path')) {
             }
             $parts[] = $part;
         }
-        $fullNorm = '/' . implode('/', $parts);
+        $fullNorm = implode('/', $parts);
+        if (!$isWindowsAbsolute) {
+            $fullNorm = '/' . ltrim($fullNorm, '/');
+        }
 
-        if ($fullNorm !== $dataRoot && strpos($fullNorm, $dataRoot . '/') !== 0) {
+        $compareFull = strtolower($fullNorm);
+        $compareRoot = strtolower($dataRoot);
+        if ($compareFull !== $compareRoot && strpos($compareFull, $compareRoot . '/') !== 0) {
             return null;
         }
         $rel = ltrim(substr($fullNorm, strlen($dataRoot)), '/');
