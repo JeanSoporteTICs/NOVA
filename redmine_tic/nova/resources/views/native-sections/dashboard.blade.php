@@ -17,6 +17,19 @@
     };
 @endphp
 
+<section class="rm-module-head">
+    <span class="rm-module-head-icon"><i class="bi bi-inboxes"></i></span>
+    <div>
+        <small>Cola operativa</small>
+        <h2>Reportes TIC</h2>
+        <p>Gestiona pendientes, procesados y errores antes de enviar o archivar.</p>
+    </div>
+    <div class="rm-module-meter">
+        <strong>{{ $summary['visible_total'] ?? $summary['active_total'] ?? count($reports) }}</strong>
+        <span>visibles</span>
+    </div>
+</section>
+
 <section class="row g-3 mb-4" aria-label="Indicadores">
     <div class="col-12 col-lg-4">
         <a class="card nova-card rm-stat-card rm-filter-card {{ $activeDashboardFilter === 'pendientes' ? 'active' : '' }}" href="{{ $dashboardRoute('pendientes') }}">
@@ -96,18 +109,17 @@
         </form>
 
         <div class="table-responsive rm-table-wrap">
-            <table class="table align-middle">
+            <table class="table table-sm align-middle rm-dashboard-table">
                 <thead>
                     <tr>
                         <th><input type="checkbox" aria-label="Seleccionar todos" data-dashboard-select-all></th>
                         <th>Redmine ID</th>
                         <th>Asunto</th>
                         <th>Solicitante</th>
-                        <th>Fecha creacion</th>
-                        <th>Tipo</th>
-                        <th>Establecimiento</th>
-                        <th>Departamento</th>
-                        <th>Asignado</th>
+                        <th>Fecha creación</th>
+                        <th>Tipo solicitud</th>
+                        <th>Unidad</th>
+                        <th>Unidad solicitante</th>
                         <th>Estado local</th>
                         <th>Acciones</th>
                     </tr>
@@ -118,14 +130,17 @@
                     <tr>
                         <td><input type="checkbox" value="{{ $report['id'] ?? '' }}" aria-label="Seleccionar solicitud" data-dashboard-row-check></td>
                         <td>{{ $report['redmine_id'] ?? '-' }}</td>
-                        <td>{{ $report['asunto'] ?? $report['mensaje'] ?? '-' }}</td>
+                        <td class="rm-dashboard-subject">{{ $report['asunto'] ?? $report['mensaje'] ?? '-' }}</td>
                         <td>{{ $report['solicitante'] ?? '-' }}</td>
-                        <td>{{ $fmtDate($report['fecha_inicio'] ?? $report['fecha'] ?? '') }}</td>
+                        <td>{{ $fmtDate($report['fecha_inicio'] ?? $report['fecha'] ?? '') }} {{ $report['hora'] ?? '' }}</td>
                         <td>{{ $report['tipo'] ?? '-' }}</td>
-                        <td>{{ $report['unidad_solicitante'] ?? '-' }}</td>
                         <td>{{ $report['unidad'] ?? '-' }}</td>
-                        <td>{{ $report['asignado_nombre'] ?? '-' }}</td>
-                        <td><span class="nova-badge">{{ $report['estado'] ?? 'sin estado' }}</span></td>
+                        <td>{{ $report['unidad_solicitante'] ?? '-' }}</td>
+                        <td class="text-center">
+                            <span class="rm-dashboard-status" title="{{ $report['estado'] ?? 'sin estado' }}">
+                                <i class="bi {{ ($report['estado'] ?? '') === 'procesado' ? 'bi-check2' : (($report['estado'] ?? '') === 'error' ? 'bi-exclamation-triangle' : 'bi-hourglass-split') }}"></i>
+                            </span>
+                        </td>
                         <td>
                             <div class="nova-row-actions">
                                 <button class="btn btn-primary nova-btn-icon" type="button"
@@ -148,8 +163,8 @@
                                     data-report-tiempo-estimado="{{ $report['tiempo_estimado'] ?? '' }}"
                                     data-report-fecha="{{ $report['fecha'] ?? $report['fecha_inicio'] ?? '' }}"
                                     data-report-hora="{{ $report['hora'] ?? '' }}"
-                                    data-report-numero="{{ $report['numero'] ?? '' }}"
-                                    data-report-mensaje=""
+                                    data-report-chat-id-telegram="{{ $report['chat_id_telegram'] ?? $report['numero'] ?? '' }}"
+                                    data-report-mensaje="{{ $report['mensaje'] ?? '' }}"
                                     data-report-descripcion="{{ $report['descripcion'] ?? '' }}">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
@@ -170,7 +185,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="11">No hay solicitudes activas.</td></tr>
+                    <tr><td colspan="10" class="nova-empty"><i class="bi bi-inboxes" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes activas en la cola.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -213,7 +228,11 @@
                         <div class="col-12 col-md-3"><label class="form-label">Tipo</label><input class="form-control" name="tipo"></div>
                         <div class="col-12 col-md-3">
                             <label class="form-label">Estado</label>
-                            <input class="form-control bg-body-secondary" name="_estado_readonly" readonly>
+                            <select class="form-select" name="estado">
+                                <option value="pendiente">pendiente</option>
+                                <option value="procesado">procesado</option>
+                                <option value="error">error</option>
+                            </select>
                         </div>
                         <div class="col-12 col-md-6"><label class="form-label">Asunto</label><input class="form-control" name="asunto"></div>
 
@@ -226,18 +245,16 @@
                         </div>
                         <div class="col-12 col-md-3"><label class="form-label">Solicitante</label><input class="form-control" name="solicitante"></div>
 
-                        <div class="col-12 col-md-3"><label class="form-label">Unidad</label><input class="form-control" name="unidad" list="rm-units"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Unidad</label><input class="form-control" name="unidad"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Unidad Solicitante</label><input class="form-control" name="unidad_solicitante" list="rm-units"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Estado Redmine</label><input class="form-control bg-body-secondary" name="_estado_redmine_readonly" readonly></div>
                         <div class="col-12 col-md-3"><label class="form-label">Hora extra</label><select class="form-select" name="hora_extra"><option value="NO">No</option><option value="SI">Si</option></select></div>
-
                         <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" name="tiempo_estimado"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
 
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1:30"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Numero</label><input class="form-control" name="numero"></div>
+
                         <div class="col-12"><label class="form-label">Mensaje</label><textarea class="form-control" name="mensaje" rows="3"></textarea></div>
                         <input type="hidden" name="descripcion">
                     </div>
@@ -329,8 +346,7 @@
             };
             form.elements.id.value = button.dataset.reportId || '';
             form.elements.tipo.value = button.dataset.reportTipo || '';
-            form.elements._estado_readonly.value = button.dataset.reportEstado || '';
-            form.elements._estado_redmine_readonly.value = button.dataset.reportEstadoRedmine || '';
+            form.elements.estado.value = button.dataset.reportEstado || 'pendiente';
             form.elements.asunto.value = button.dataset.reportAsunto || '';
             form.elements.prioridad.value = button.dataset.reportPrioridad || '';
             form.elements.categoria.value = button.dataset.reportCategoria || '';
@@ -348,8 +364,7 @@
             form.elements.tiempo_estimado.value = button.dataset.reportTiempoEstimado || '';
             form.elements.fecha.value = toDateInput(button.dataset.reportFecha);
             form.elements.hora.value = button.dataset.reportHora || '';
-            form.elements.numero.value = button.dataset.reportNumero || '';
-            form.elements.mensaje.value = button.dataset.reportDescripcion || '';
+            form.elements.mensaje.value = button.dataset.reportMensaje || button.dataset.reportDescripcion || '';
             form.elements.descripcion.value = button.dataset.reportDescripcion || '';
             modal.classList.add('show');
             modal.removeAttribute('aria-hidden');

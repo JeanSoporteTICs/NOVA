@@ -17,7 +17,7 @@ $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $currentUser = $_SESSION['user'] ?? [];
 $navItems = [
   ['key' => 'inicio', 'label' => 'Consulta', 'href' => $emachBaseUrl, 'icon' => 'bi-table'],
-  ['key' => 'mantenedor', 'label' => 'Mantenedor', 'href' => $emachBaseUrl . '/views/Mantenedor/mantenedor.php', 'icon' => 'bi-sliders'],
+  ['key' => 'configuracion', 'label' => 'Configuracion', 'href' => $emachBaseUrl . '/configuracion', 'icon' => 'bi-person-lock'],
 ];
 
 ?>
@@ -36,7 +36,10 @@ $navItems = [
       </span>
       <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($currentUser['nombre'] ?? $currentUser['name'] ?? 'Usuario') ?></span>
       <a class="btn btn-outline-light" href="<?= $h($homeUrl) ?>"><i class="bi bi-house-door"></i>NOVA</a>
-      <a class="btn btn-outline-light" href="<?= $h($logoutUrl) ?>"><i class="bi bi-box-arrow-right"></i>Salir</a>
+      <form method="POST" action="<?= $h($logoutUrl) ?>" class="d-inline m-0">
+        <input type="hidden" name="_token" value="<?= $h($csrfToken) ?>">
+        <button class="btn btn-outline-light" type="submit"><i class="bi bi-box-arrow-right"></i>Salir</button>
+      </form>
     </div>
   </div>
 </nav>
@@ -55,6 +58,28 @@ $navItems = [
     </ul>
   </div>
 </div>
+
+<div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
+<script>
+(function () {
+  var loader = document.getElementById('app-page-loader');
+  window.appUi = window.appUi || {};
+  window.appUi.setLoading = function (on) {
+    if (loader) loader.classList.toggle('is-visible', !!on);
+  };
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href]');
+    if (!a || e.defaultPrevented || a.target === '_blank') return;
+    try { var u = new URL(a.href, window.location.href); if (u.origin !== window.location.origin) return; } catch (_) { return; }
+    window.appUi.setLoading(true);
+  });
+  document.addEventListener('submit', function (e) {
+    if (!e.defaultPrevented) window.appUi.setLoading(true);
+  });
+  window.addEventListener('pageshow', function () { window.appUi.setLoading(false); });
+  window.addEventListener('load', function () { window.appUi.setLoading(false); });
+}());
+</script>
 
 <script>
 window.addEventListener('load', () => {
@@ -156,14 +181,28 @@ window.addEventListener('load', () => {
     restartTick();
   }
 
+  function submitLogout() {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = logoutUrl;
+    form.style.display = 'none';
+    if (csrfToken) {
+      const tokenInput = document.createElement('input');
+      tokenInput.type = 'hidden';
+      tokenInput.name = '_token';
+      tokenInput.value = csrfToken;
+      form.appendChild(tokenInput);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  }
+
   restartTick();
   document.addEventListener('visibilitychange', syncTimerState);
   window.addEventListener('focus', syncTimerState);
 
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      window.location.href = logoutUrl;
-    });
+    closeBtn.addEventListener('click', submitLogout);
   }
   if (extendBtn && extendPwd) {
     extendBtn.addEventListener('click', async () => {

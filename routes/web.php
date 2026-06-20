@@ -6,6 +6,7 @@ use App\Http\Controllers\NovaAdministrationController;
 use App\Http\Controllers\NovaAuthController;
 use App\Http\Controllers\NovaUserController;
 use App\Http\Controllers\TelegramController;
+use App\Http\Controllers\UserIntegrationController;
 use App\Support\Modules\ModuleRegistry;
 use App\Support\Modules\ProjectAccessGuard;
 use App\Support\Nova\NovaAccessRepository;
@@ -34,9 +35,9 @@ $legacyModulePattern = implode('|', array_map(
 */
 
 Route::get('/login', [NovaAuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [NovaAuthController::class, 'login'])->name('login.store');
+Route::post('/login', [NovaAuthController::class, 'login'])->middleware('throttle:5,1')->name('login.store');
 Route::match(['GET', 'POST'], '/logout', [NovaAuthController::class, 'logout'])->name('logout');
-Route::post('/session/extend', [NovaAuthController::class, 'extendSession'])->name('session.extend');
+Route::post('/session/extend', [NovaAuthController::class, 'extendSession'])->middleware('throttle:5,1')->name('session.extend');
 
 Route::get('/{project}/assets/{path}', [LegacyProjectController::class, 'asset'])
     ->where('project', $modulePattern)
@@ -75,6 +76,9 @@ Route::post('/telegram/configuracion', [TelegramController::class, 'update'])->n
 Route::post('/telegram/admin/configuracion', [TelegramController::class, 'updateAdmin'])->name('telegram.admin.update');
 Route::post('/telegram/admin/listener', [TelegramController::class, 'listener'])->name('telegram.admin.listener');
 Route::post('/telegram/test', [TelegramController::class, 'test'])->name('telegram.test');
+Route::get('/emach/configuracion', [UserIntegrationController::class, 'show'])->defaults('module', 'emach')->name('integrations.emach');
+Route::post('/emach/configuracion', [UserIntegrationController::class, 'update'])->defaults('module', 'emach')->name('integrations.emach.update');
+Route::get('/emach/views/Mantenedor/mantenedor.php', fn () => redirect()->route('integrations.emach'));
 
 Route::get('/redmine_tic/health.php', fn () => response()->json([
     'ok' => true,
@@ -85,6 +89,8 @@ Route::get('/redmine_tic/health.php', fn () => response()->json([
 Route::get('/redmine_tic/nativo', fn () => redirect()->route('redmine.native.dashboard'));
 Route::get('/redmine_tic/nativo/{section}', fn (string $section) => redirect()->route('redmine.native.section', ['section' => $section]));
 Route::get('/redmine_tic/app', [RedmineDashboardController::class, 'index'])->name('redmine.native.dashboard');
+Route::get('/redmine_tic/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine_tic')->name('integrations.redmine_tic');
+Route::post('/redmine_tic/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine_tic')->name('integrations.redmine_tic.update');
 Route::get('/redmine_tic/app/configuracion', [RedmineDashboardController::class, 'show'])
     ->defaults('section', 'configuracion');
 Route::get('/redmine_tic/app/{section}', [RedmineDashboardController::class, 'show'])->name('redmine.native.section');
@@ -113,6 +119,8 @@ Route::get('/redmine-mantencion/health.php', fn () => response()->json([
 Route::get('/redmine-mantencion', fn () => redirect()->route('redmine.mantencion.dashboard'));
 Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'index.php'))
     ->name('redmine.mantencion.dashboard');
+Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');
+Route::post('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion.update');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
     $path = match ($section) {
         'dashboard', 'reportes' => 'index.php',

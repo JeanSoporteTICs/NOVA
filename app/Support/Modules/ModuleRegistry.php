@@ -2,7 +2,8 @@
 
 namespace App\Support\Modules;
 
-use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class ModuleRegistry
 {
@@ -72,70 +73,66 @@ final class ModuleRegistry
     public function userMatrix(): array
     {
         $users = [];
-        $novaUsers = json_decode((string) @file_get_contents(storage_path('app/nova/users.json')), true);
-        if (is_array($novaUsers)) {
-            foreach ($novaUsers as $record) {
-                if (!is_array($record) || !is_array($record['projects'] ?? null)) {
-                    continue;
-                }
-
-                $identity = $this->userIdentity([
-                    'rut_sin_dv' => $record['rut_sin_dv'] ?? $record['username'] ?? '',
-                    'rut' => $record['rut'] ?? '',
-                    'id' => $record['redmine_id'] ?? $record['id'] ?? '',
-                ]);
-                if ($identity === '') {
-                    continue;
-                }
-
-                if (!isset($users[$identity])) {
-                    $users[$identity] = [
-                        'identity' => $identity,
-                        'name' => trim((string) (($record['name'] ?? '') . ' ' . ($record['apellido'] ?? ''))) ?: 'Usuario sin nombre',
-                        'rut' => trim((string) ($record['rut'] ?? '')),
-                        'status' => trim((string) ($record['status'] ?? '')),
-                        'projects' => [],
-                    ];
-                }
-
-                foreach ($record['projects'] as $projectKey => $project) {
-                    if (!is_array($project)) {
-                        continue;
-                    }
-                    $module = $this->all()[$projectKey] ?? ['name' => $projectKey];
-                    $users[$identity]['projects'][$projectKey] = [
-                        'name' => (string) ($module['name'] ?? $projectKey),
-                        'role' => trim((string) ($project['rol'] ?? 'sin rol')),
-                        'status' => trim((string) ($project['estado_usuario'] ?? '')),
-                    ];
-                }
-            }
+        if (!$this->accessTablesAvailable()) {
+            return [];
         }
 
-        foreach ($this->all() as $projectKey => $module) {
-            if ($projectKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
-                try {
-                    $records = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
-                    if (is_array($records)) {
-                        $this->appendProjectUsers($users, $projectKey, $module, $records);
-                    }
-                } catch (\Throwable) {
-                }
+        $modules = $this->all();
+
+        try {
+            $rows = DB::table('usuarios_nova')
+                ->leftJoin('permisos_usuario_modulo', 'usuarios_nova.id', '=', 'permisos_usuario_modulo.usuario_id')
+                ->leftJoin('modulos_nova', 'modulos_nova.id', '=', 'permisos_usuario_modulo.modulo_id')
+                ->select([
+                    'usuarios_nova.uuid',
+                    'usuarios_nova.usuario',
+                    'usuarios_nova.rut',
+                    'usuarios_nova.redmine_id',
+                    'usuarios_nova.nombre',
+                    'usuarios_nova.apellido',
+                    'usuarios_nova.rol',
+                    'usuarios_nova.estado',
+                    'modulos_nova.clave_modulo',
+                    'permisos_usuario_modulo.permitido',
+                ])
+                ->orderBy('usuarios_nova.nombre')
+                ->orderBy('usuarios_nova.apellido')
+                ->get();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        foreach ($rows as $row) {
+            $identity = $this->userIdentity([
+                'rut_sin_dv' => $row->usuario ?? '',
+                'rut' => $row->rut ?? '',
+                'id' => $row->redmine_id ?? $row->uuid ?? '',
+            ]);
+            if ($identity === '') {
                 continue;
             }
 
-            $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
-                . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-            if (!is_file($path)) {
+            if (!isset($users[$identity])) {
+                $users[$identity] = [
+                    'identity' => $identity,
+                    'name' => trim((string) (($row->nombre ?? '') . ' ' . ($row->apellido ?? ''))) ?: 'Usuario sin nombre',
+                    'rut' => trim((string) ($row->rut ?? '')),
+                    'status' => trim((string) ($row->estado ?? '')),
+                    'projects' => [],
+                ];
+            }
+
+            $projectKey = trim((string) ($row->clave_modulo ?? ''));
+            if ($projectKey === '' || empty($row->permitido)) {
                 continue;
             }
 
-            $records = json_decode((string) file_get_contents($path), true);
-            if (!is_array($records)) {
-                continue;
-            }
-
-            $this->appendProjectUsers($users, $projectKey, $module, $records);
+            $module = $modules[$projectKey] ?? ['name' => $projectKey];
+            $users[$identity]['projects'][$projectKey] = [
+                'name' => (string) ($module['name'] ?? $projectKey),
+                'role' => trim((string) ($row->rol ?? 'usuario')),
+                'status' => trim((string) ($row->estado ?? '')),
+            ];
         }
 
         uasort($users, static function (array $left, array $right): int {
@@ -181,18 +178,35 @@ final class ModuleRegistry
     }
 
     /**
+     * Returns per-module state keyed by clave_modulo.
+     * Reads from modulos_nova.habilitado / en_mantencion columns (added in migration 300001).
+     *
      * @return array<string,array<string,mixed>>
      */
     public function state(): array
     {
-        $path = $this->statePath();
-        if (!is_file($path)) {
-            return [];
-        }
-
-        $state = json_decode((string) file_get_contents($path), true);
-
-        return is_array($state) ? $state : [];
+        return \Illuminate\Support\Facades\Cache::remember(
+            'nova.modules.state',
+            300,
+            function (): array {
+                if (! $this->accessTablesAvailable() || ! Schema::hasColumn('modulos_nova', 'habilitado')) {
+                    return [];
+                }
+                try {
+                    $rows = DB::table('modulos_nova')
+                        ->get(['clave_modulo', 'habilitado', 'en_mantencion', 'nombre', 'orden'])
+                        ->keyBy('clave_modulo')
+                        ->map(static fn (object $row): array => [
+                            'enabled'     => (bool) ($row->habilitado ?? true),
+                            'maintenance' => (bool) ($row->en_mantencion ?? false),
+                        ])
+                        ->all();
+                    return $rows;
+                } catch (\Throwable) {
+                    return [];
+                }
+            }
+        );
     }
 
     /**
@@ -200,18 +214,27 @@ final class ModuleRegistry
      */
     public function saveState(array $state): void
     {
-        $path = $this->statePath();
-        $directory = dirname($path);
-        if (!is_dir($directory)) {
-            mkdir($directory, 0777, true);
+        if ($this->accessTablesAvailable() && Schema::hasColumn('modulos_nova', 'habilitado')) {
+            foreach ($state as $key => $moduleState) {
+                if (! is_array($moduleState)) {
+                    continue;
+                }
+                $updates = [];
+                if (array_key_exists('enabled', $moduleState)) {
+                    $updates['habilitado'] = (bool) $moduleState['enabled'] ? 1 : 0;
+                }
+                if (array_key_exists('maintenance', $moduleState)) {
+                    $updates['en_mantencion'] = (bool) $moduleState['maintenance'] ? 1 : 0;
+                }
+                if ($updates !== []) {
+                    try {
+                        DB::table('modulos_nova')->where('clave_modulo', $key)->update($updates);
+                    } catch (\Throwable) {
+                    }
+                }
+            }
         }
-
-        file_put_contents($path, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
-    }
-
-    private function statePath(): string
-    {
-        return storage_path('app/modules/state.json');
+        \Illuminate\Support\Facades\Cache::forget('nova.modules.state');
     }
 
     /**
@@ -221,15 +244,23 @@ final class ModuleRegistry
     private function maintenanceState(array $module): array
     {
         $modulePath = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR);
-        if (str_contains(str_replace('\\', '/', $modulePath), 'redmine-mantencion') && class_exists(RedmineMantencionStorageRepository::class)) {
+        if (str_contains(str_replace('\\', '/', $modulePath), 'redmine-mantencion')) {
+            // Read maintenance_mode and maintenance_until from configuraciones_modulo (primary source)
             try {
-                $config = app(RedmineMantencionStorageRepository::class)->readJson('configuracion.json');
-                if (is_array($config)) {
-                    $until = trim((string) ($config['maintenance_until'] ?? ''));
-
+                $moduleId = DB::table('modulos_nova')
+                    ->where('clave_modulo', 'redmine-mantencion')
+                    ->value('id');
+                if ($moduleId !== null) {
+                    $rows = DB::table('configuraciones_modulo')
+                        ->where('modulo_id', $moduleId)
+                        ->whereIn('clave', ['maintenance_mode', 'maintenance_until'])
+                        ->get(['clave', 'valor'])
+                        ->pluck('valor', 'clave');
+                    $enabled = in_array(strtolower((string) ($rows['maintenance_mode'] ?? '')), ['1', 'true'], true);
+                    $until   = trim((string) ($rows['maintenance_until'] ?? ''));
                     return [
-                        'enabled' => !empty($config['maintenance_mode']),
-                        'until' => $until,
+                        'enabled'    => $enabled,
+                        'until'      => $until,
                         'until_text' => $this->formatMaintenanceUntil($until),
                     ];
                 }
@@ -237,25 +268,7 @@ final class ModuleRegistry
             }
         }
 
-        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'configuracion.json';
-
-        if (!is_file($path)) {
-            return ['enabled' => false, 'until' => '', 'until_text' => ''];
-        }
-
-        $config = json_decode((string) file_get_contents($path), true);
-        if (!is_array($config)) {
-            return ['enabled' => false, 'until' => '', 'until_text' => ''];
-        }
-
-        $until = trim((string) ($config['maintenance_until'] ?? ''));
-
-        return [
-            'enabled' => !empty($config['maintenance_mode']),
-            'until' => $until,
-            'until_text' => $this->formatMaintenanceUntil($until),
-        ];
+        return ['enabled' => false, 'until' => '', 'until_text' => ''];
     }
 
     private function formatMaintenanceUntil(string $until): string
@@ -294,5 +307,16 @@ final class ModuleRegistry
         $displayName = trim($name . ' ' . $lastName);
 
         return $displayName !== '' ? $displayName : 'Usuario sin nombre';
+    }
+
+    private function accessTablesAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('usuarios_nova')
+                && Schema::hasTable('modulos_nova')
+                && Schema::hasTable('permisos_usuario_modulo');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

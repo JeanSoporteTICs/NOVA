@@ -52,7 +52,7 @@ $storageDir = telegram_storage_path();
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
   <main class="container-fluid py-4">
-    <section class="card telegram-hero mb-4">
+    <section class="card telegram-hero nova-system-hero mb-4">
       <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div class="d-flex align-items-center gap-3">
           <span class="telegram-hero-icon"><i class="bi bi-telegram"></i></span>

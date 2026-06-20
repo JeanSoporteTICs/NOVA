@@ -14,7 +14,6 @@
         'usuarios' => 'bi-people',
         'configuracion' => 'bi-sliders',
         'estadisticas' => 'bi-bar-chart-line',
-        'estadisticas-api' => 'bi-window',
         'actividad' => 'bi-activity',
     ];
 @endphp
@@ -562,6 +561,81 @@
             background: linear-gradient(135deg, #2563eb, #14b8a6);
             box-shadow: 0 12px 24px rgba(37, 99, 235, .24);
         }
+        .rm-module-head {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+            padding: 16px;
+            border: 1px solid #d8e3f4;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 14px 30px rgba(15,23,42,.055);
+        }
+        .rm-module-head-icon {
+            display: grid;
+            width: 54px;
+            height: 54px;
+            place-items: center;
+            border-radius: 16px;
+            color: #fff;
+            font-size: 1.45rem;
+            background: linear-gradient(135deg, #2563eb, #14b8a6);
+            box-shadow: 0 16px 32px rgba(15, 23, 42, .14);
+        }
+        .rm-module-head-icon.is-green { background: linear-gradient(135deg, #16a34a, #22c55e); }
+        .rm-module-head-icon.is-cyan { background: linear-gradient(135deg, #0891b2, #14b8a6); }
+        .rm-module-head-icon.is-orange { background: linear-gradient(135deg, #f59e0b, #f97316); }
+        .rm-module-head-icon.is-red { background: linear-gradient(135deg, #dc2626, #fb7185); }
+        .rm-module-head small { display: block; margin-bottom: 2px; color: #2563eb; font-size: .72rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+        .rm-module-head h2 { margin: 0; color: #0f172a; font-size: 1.2rem; font-weight: 900; }
+        .rm-module-head p { margin: 4px 0 0; color: #64748b; font-weight: 700; }
+        .rm-module-meter {
+            display: grid;
+            min-width: 132px;
+            justify-items: center;
+            gap: 2px;
+            padding: 10px 12px;
+            border: 1px solid #d4e4f7;
+            border-radius: 14px;
+            background: #fff;
+        }
+        .rm-module-meter strong { color: #0f172a; font-size: 1.35rem; line-height: 1; font-weight: 900; }
+        .rm-module-meter span { color: #64748b; font-size: .72rem; font-weight: 900; text-transform: uppercase; }
+        .rm-module-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .rm-info-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 92px;
+            padding: 14px;
+            border: 1px solid #d8e3f4;
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 12px 26px rgba(15, 23, 42, .05);
+        }
+        .rm-info-card > i {
+            display: grid;
+            width: 44px;
+            height: 44px;
+            place-items: center;
+            flex: 0 0 auto;
+            border-radius: 14px;
+            background: #eef6ff;
+            color: #2563eb;
+            border: 1px solid #d4e4f7;
+            font-size: 1.15rem;
+        }
+        .rm-info-card small { display: block; color: #64748b; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
+        .rm-info-card strong { display: block; color: #0f172a; font-size: 1.15rem; line-height: 1.15; font-weight: 900; overflow-wrap: anywhere; }
+        .rm-form-shell {
+            padding: 16px;
+            border: 1px solid #d8e3f4;
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .045);
+        }
         #editar-solicitud .modal-body {
             flex: 1 1 auto;
             min-height: 0;
@@ -705,6 +779,9 @@
             .detail-drawer-modal .modal-footer .btn {
                 width: 100%;
             }
+            .rm-module-head,
+            .rm-module-grid { grid-template-columns: 1fr; }
+            .rm-module-meter { justify-items: start; }
         }
         .rm-log {
             border: 1px solid #22c55e !important;
@@ -744,7 +821,7 @@
                         @include('nova.partials.session-control')
                         <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
                         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
-                        <a class="btn btn-outline-light" href="{{ route('logout') }}"><i class="bi bi-box-arrow-right"></i>Salir</a>
+                        <form method="POST" action="{{ route('logout') }}" style="display:inline" data-maintenance-allowed="1">@csrf<button class="btn btn-outline-light" type="submit"><i class="bi bi-box-arrow-right"></i>Salir</button></form>
                     </div>
                 </div>
             </div>
@@ -759,6 +836,10 @@
                             {{ $label }}
                         </a>
                     @endforeach
+                    <a class="nav-link" href="{{ route('integrations.redmine_tic') }}">
+                        <i class="bi bi-person-lock"></i>
+                        Mis integraciones
+                    </a>
                 </nav>
 
                 <section class="card card-hero sb-page-hero rm-hero mb-3">
@@ -790,7 +871,7 @@
                     @include('redmine_tic::native-sections.hours')
                 @elseif ($section === 'historico')
                     @include('redmine_tic::native-sections.history')
-                @elseif ($section === 'estadisticas' || $section === 'estadisticas-api')
+                @elseif ($section === 'estadisticas')
                     @include('redmine_tic::native-sections.stats')
                 @elseif ($section === 'actividad')
                     @include('redmine_tic::native-sections.activity')
@@ -818,26 +899,129 @@
         </div>
     @endif
 
+    <div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
+        <div class="nova-integration-card">
+            <span class="nova-integration-icon"><i class="bi bi-cloud-arrow-down"></i></span>
+            <strong id="nova-integration-title">Consultando integración</strong>
+            <span id="nova-integration-detail">La operación puede tardar unos segundos.</span>
+            <div class="nova-integration-bar" aria-hidden="true"><i></i></div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const cleanupNovaModalState = () => {
+            document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
+            if (!document.querySelector('.modal.show')) {
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+            }
+        };
+
         const closeNovaModal = (modal) => {
             if (!modal) return;
+            if (window.bootstrap?.Modal) {
+                const instance = window.bootstrap.Modal.getOrCreateInstance(modal);
+                modal.addEventListener('hidden.bs.modal', cleanupNovaModalState, { once: true });
+                instance.hide();
+                window.setTimeout(() => {
+                    if (!modal.classList.contains('show')) cleanupNovaModalState();
+                }, 260);
+                return;
+            }
             modal.classList.remove('show');
             modal.setAttribute('aria-hidden', 'true');
             modal.removeAttribute('aria-modal');
             modal.style.display = 'none';
-            document.body.classList.remove('modal-open');
+            cleanupNovaModalState();
         };
 
-        document.querySelectorAll('[data-nova-modal-close]').forEach((trigger) => {
-            trigger.addEventListener('click', () => closeNovaModal(trigger.closest('.modal')));
-        });
+        const openNovaModal = (modal) => {
+            if (!modal) return;
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+            if (window.bootstrap?.Modal) {
+                window.bootstrap.Modal.getOrCreateInstance(modal).show();
+                return;
+            }
+            modal.classList.add('show');
+            modal.removeAttribute('aria-hidden');
+            modal.setAttribute('aria-modal', 'true');
+            modal.style.display = 'block';
+            document.body.classList.add('modal-open');
+        };
 
-        document.querySelectorAll('.modal').forEach((modal) => {
-            modal.addEventListener('click', (event) => {
-                if (modal.dataset.novaSessionModal === '') return;
-                if (event.target === modal) closeNovaModal(modal);
-            });
+        window.appUi = window.appUi || {};
+        window.appUi.closeModal = closeNovaModal;
+        window.appUi.openModal = openNovaModal;
+
+        const promoteModalToBody = (modal) => {
+            if (!modal || modal.parentElement === document.body) return;
+            document.body.appendChild(modal);
+        };
+
+        document.addEventListener('click', (event) => {
+            const modalTrigger = event.target.closest('[data-bs-toggle="modal"][data-bs-target]');
+            if (!modalTrigger) return;
+            const selector = modalTrigger.getAttribute('data-bs-target');
+            if (!selector || !selector.startsWith('#')) return;
+            promoteModalToBody(document.querySelector(selector));
+        }, true);
+
+        const integrationOverlay = document.getElementById('nova-integration-overlay');
+        window.appUi.setIntegrationLoading = function (state, options = {}) {
+            if (!integrationOverlay) return;
+            const title = document.getElementById('nova-integration-title');
+            const detail = document.getElementById('nova-integration-detail');
+            const icon = integrationOverlay.querySelector('.nova-integration-icon i');
+            if (state) {
+                if (title) title.textContent = options.title || 'Consultando integración';
+                if (detail) detail.textContent = options.detail || 'La operación puede tardar unos segundos.';
+                if (icon) icon.className = 'bi ' + (options.icon || 'bi-cloud-arrow-down');
+                integrationOverlay.classList.add('is-active');
+                integrationOverlay.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('nova-integration-loading');
+            } else {
+                integrationOverlay.classList.remove('is-active');
+                integrationOverlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('nova-integration-loading');
+            }
+        };
+
+        const integrationCopyForForm = (form, submitter) => {
+            const actionInput = form.querySelector('input[name="action"]');
+            const action = `${actionInput?.value || ''} ${submitter?.value || ''} ${submitter?.textContent || ''}`.toLowerCase();
+            if (!/(sync|sincron|import|fetch|consult|confirm|core|api)/i.test(action)) return null;
+            if (/nextcloud/.test(action)) return { title: 'Procesando Nextcloud', detail: 'Conectando con Nextcloud y preparando la respuesta.', icon: 'bi-cloud-arrow-up' };
+            if (/core/.test(action)) return { title: 'Consultando CORE', detail: 'Buscando y normalizando datos recibidos desde CORE.', icon: 'bi-database-down' };
+            if (/redmine|sync|sincron/.test(action)) return { title: 'Sincronizando Redmine', detail: 'Actualizando catálogos y datos desde Redmine.', icon: 'bi-arrow-repeat' };
+            if (/import/.test(action)) return { title: 'Importando datos', detail: 'Procesando archivo o datos externos.', icon: 'bi-file-earmark-arrow-up' };
+            return { title: 'Consultando integración', detail: 'La operación puede tardar unos segundos.', icon: 'bi-cloud-arrow-down' };
+        };
+
+        document.addEventListener('click', (event) => {
+            const closeTrigger = event.target.closest('[data-nova-modal-close], [data-bs-dismiss="modal"]');
+            if (closeTrigger) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeNovaModal(closeTrigger.closest('.modal'));
+                return;
+            }
+
+            const openTrigger = event.target.closest('[data-nova-modal-open]');
+            if (openTrigger && !openTrigger.matches('[data-bs-toggle]')) {
+                const target = document.getElementById(openTrigger.getAttribute('data-nova-modal-open'));
+                if (target) {
+                    event.preventDefault();
+                    promoteModalToBody(target);
+                    openNovaModal(target);
+                }
+            }
+
+            const modal = event.target.classList?.contains('modal') ? event.target : null;
+            if (modal && modal.dataset.novaSessionModal !== '') closeNovaModal(modal);
         });
 
         document.addEventListener('keydown', (event) => {
@@ -868,6 +1052,35 @@
                 window.setTimeout(() => redmineToast.remove(), 220);
             }, 3000);
         }
+
+        // Page loader for navigation
+        (function () {
+            const loader = document.createElement('div');
+            loader.className = 'nova-page-loader';
+            loader.id = 'nova-page-loader';
+            loader.setAttribute('aria-hidden', 'true');
+            document.body.prepend(loader);
+            function showLoader() { loader.classList.add('is-active'); }
+            function hideLoader() { loader.classList.remove('is-active'); }
+            document.addEventListener('click', function (e) {
+                const a = e.target.closest('a[href]');
+                if (!a || e.defaultPrevented || a.target === '_blank') return;
+                const url = new URL(a.href, window.location.href);
+                if (url.origin !== window.location.origin) return;
+                showLoader();
+            });
+            document.addEventListener('submit', function (e) {
+                if (e.defaultPrevented) return;
+                const copy = integrationCopyForForm(e.target, e.submitter || document.activeElement);
+                if (copy) {
+                    window.appUi.setIntegrationLoading(true, copy);
+                    (e.submitter || e.target.querySelector('button[type="submit"], button:not([type])'))?.classList?.add('is-submitting');
+                }
+                showLoader();
+            });
+            window.addEventListener('pageshow', () => { hideLoader(); window.appUi.setIntegrationLoading(false); });
+            window.addEventListener('load', () => { hideLoader(); window.appUi.setIntegrationLoading(false); });
+        }());
 
     </script>
 </body>

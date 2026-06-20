@@ -25,8 +25,8 @@ class NovaAuthController extends Controller
     public function login(Request $request, LegacyUserProvider $users, NovaAuditRepository $audit): RedirectResponse
     {
         $credentials = $request->validate([
-            'username' => ['required', 'string'],
-            'password' => ['required', 'string'],
+            'username' => ['required', 'string', 'max:180'],
+            'password' => ['required', 'string', 'max:512'],
         ]);
 
         $user = $users->attempt($credentials['username'], $credentials['password']);
@@ -96,7 +96,7 @@ class NovaAuthController extends Controller
         }
 
         $credentials = $request->validate([
-            'password' => ['required', 'string'],
+            'password' => ['required', 'string', 'max:512'],
         ]);
 
         $user = $users->attempt((string) $sessionUser['id'], $credentials['password']);

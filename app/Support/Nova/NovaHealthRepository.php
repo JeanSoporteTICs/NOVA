@@ -3,7 +3,10 @@
 namespace App\Support\Nova;
 
 use App\Support\Modules\ModuleRegistry;
-use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
+use App\Support\Nova\NovaSettingsRepository;
+use App\Support\RedmineMantencion\MantencionConfigRepository;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class NovaHealthRepository
 {
@@ -17,8 +20,9 @@ final class NovaHealthRepository
     public function checks(): array
     {
         $checks = [];
-        $checks[] = $this->fileCheck('Usuarios NOVA', storage_path('app/nova/users.json'));
-        $checks[] = $this->fileCheck('Configuracion NOVA', storage_path('app/nova/settings.json'), false);
+        $checks[] = $this->tableCheck('Usuarios NOVA', 'usuarios_nova');
+        $checks[] = $this->tableCheck('Permisos de modulos', 'permisos_usuario_modulo');
+        $checks[] = $this->settingsCheck();
 
         foreach ($this->modules->all() as $key => $module) {
             $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR);
@@ -27,23 +31,6 @@ final class NovaHealthRepository
                 'status' => is_dir($path) ? 'ok' : 'error',
                 'detail' => is_dir($path) ? $path : 'No existe: ' . $path,
             ];
-            if ($key === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
-                try {
-                    $users = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
-                    $checks[] = [
-                        'name' => 'Usuarios ' . ($module['name'] ?? $key),
-                        'status' => is_array($users) ? 'ok' : 'error',
-                        'detail' => is_array($users) ? 'DB OK' : 'No disponible en DB',
-                    ];
-                } catch (\Throwable $e) {
-                    $checks[] = ['name' => 'Usuarios ' . ($module['name'] ?? $key), 'status' => 'error', 'detail' => $e->getMessage()];
-                }
-                continue;
-            }
-            $userFile = $path . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-            if (is_file($userFile)) {
-                $checks[] = $this->fileCheck('Usuarios ' . ($module['name'] ?? $key), $userFile);
-            }
         }
 
         $checks[] = $this->telegramCheck();
@@ -52,17 +39,27 @@ final class NovaHealthRepository
         return $checks;
     }
 
-    private function fileCheck(string $name, string $path, bool $required = true): array
+    private function settingsCheck(): array
     {
-        if (!is_file($path)) {
-            return ['name' => $name, 'status' => $required ? 'error' : 'warn', 'detail' => 'No existe: ' . $path];
+        try {
+            $count = DB::table('nova_settings')->count();
+            return ['name' => 'Configuracion NOVA', 'status' => 'ok', 'detail' => 'nova_settings OK (' . $count . ' claves)'];
+        } catch (\Throwable) {
+            return ['name' => 'Configuracion NOVA', 'status' => 'warn', 'detail' => 'Tabla nova_settings no disponible'];
         }
-        $json = json_decode((string) file_get_contents($path), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return ['name' => $name, 'status' => 'error', 'detail' => 'JSON invalido: ' . json_last_error_msg()];
-        }
+    }
 
-        return ['name' => $name, 'status' => is_writable($path) ? 'ok' : 'warn', 'detail' => is_writable($path) ? 'OK' : 'Sin permisos de escritura'];
+    private function tableCheck(string $name, string $table): array
+    {
+        try {
+            if (!Schema::hasTable($table)) {
+                return ['name' => $name, 'status' => 'error', 'detail' => 'Tabla no existe: ' . $table];
+            }
+
+            return ['name' => $name, 'status' => 'ok', 'detail' => 'DB OK (' . DB::table($table)->count() . ' registros)'];
+        } catch (\Throwable $e) {
+            return ['name' => $name, 'status' => 'error', 'detail' => $e->getMessage()];
+        }
     }
 
     private function telegramCheck(): array
@@ -87,15 +84,13 @@ final class NovaHealthRepository
 
     private function nextcloudCheck(): array
     {
-        $config = [];
-        if (class_exists(RedmineMantencionStorageRepository::class)) {
-            try {
-                $config = app(RedmineMantencionStorageRepository::class)->readJson('configuracion.json') ?: [];
-            } catch (\Throwable) {
-                $config = [];
-            }
+        $url = '';
+        try {
+            $repo = app(MantencionConfigRepository::class);
+            $config = $repo->loadAll() ?? [];
+            $url = trim((string) ($config['nextcloud_url'] ?? ''));
+        } catch (\Throwable) {
         }
-        $url = trim((string) ($config['nextcloud_url'] ?? ''));
 
         return [
             'name' => 'Nextcloud',

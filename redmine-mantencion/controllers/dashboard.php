@@ -89,6 +89,8 @@ function dashboard_core_compact_keys(): array {
         'id',
         'fuente',
         'fuente_id',
+        'id_core',
+        'core_solicitud_id',
         'estado',
         'redmine_id',
         'procesado_ts',
@@ -556,7 +558,7 @@ function dashboard_expand_message(array $message): array {
     } else {
         $message['categoria'] = dashboard_core_resolve_category(
             trim((string)($message['core_tipo_solicitud'] ?? '')),
-            dashboard_catalog_names(__DIR__ . '/../data/categorias.json')
+            dashboard_catalog_names('categorias')
         );
     }
     $message['unidad'] = dashboard_resolve_unit_value($message);
@@ -612,15 +614,30 @@ function save_messages(array $messages): void {
     $file = dashboard_messages_file();
     $compact = array_values(array_map(fn($message) => is_array($message) ? dashboard_compact_message($message) : [], $messages));
     storage_write_json($file, $compact, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    if ($repo !== null) {
+        $repo->syncMessages($messages, load_platform_config());
+    }
 }
 
 function load_platform_config(): array {
+    $repo = config_mantencion_repository();
+    if ($repo !== null) {
+        $data = $repo->loadAll();
+        if (is_array($data)) {
+            return $data;
+        }
+    }
     $path = __DIR__ . '/../data/configuracion.json';
     $data = storage_read_json($path, []);
     return is_array($data) ? $data : [];
 }
 
 function save_platform_config(array $cfg): void {
+    $repo = config_mantencion_repository();
+    if ($repo !== null) {
+        $repo->saveAll($cfg);
+    }
     $path = __DIR__ . '/../data/configuracion.json';
     storage_write_json($path, $cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
@@ -652,6 +669,17 @@ function dashboard_normalize_text(string $value): string {
         }
         $value = $bestValue;
     }
+    $value = strtr($value, [
+        'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u',
+        'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U',
+        'à' => 'a', 'è' => 'e', 'ì' => 'i', 'ò' => 'o', 'ù' => 'u',
+        'À' => 'A', 'È' => 'E', 'Ì' => 'I', 'Ò' => 'O', 'Ù' => 'U',
+        'ä' => 'a', 'ë' => 'e', 'ï' => 'i', 'ö' => 'o', 'ü' => 'u',
+        'Ä' => 'A', 'Ë' => 'E', 'Ï' => 'I', 'Ö' => 'O', 'Ü' => 'U',
+        'â' => 'a', 'ê' => 'e', 'î' => 'i', 'ô' => 'o', 'û' => 'u',
+        'Â' => 'A', 'Ê' => 'E', 'Î' => 'I', 'Ô' => 'O', 'Û' => 'U',
+        'ñ' => 'n', 'Ñ' => 'N',
+    ]);
     $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
     if ($ascii !== false) {
         $value = $ascii;
@@ -676,17 +704,48 @@ function dashboard_normalize_phone(string $value): string {
 }
 
 function dashboard_catalog_names(string $file): array {
-    $data = storage_read_json($file, []);
-    if (!is_array($data)) {
-        return [];
+    $base  = strtolower(basename($file));
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    if ($repo !== null) {
+        return match ($base) {
+            'categorias', 'categorias.json' => $repo->categoriaNames(),
+            'unidades', 'unidades.json' => $repo->unidadNames(),
+            default => [],
+        };
     }
-    $names = [];
-    foreach ($data as $row) {
-        if (is_array($row) && isset($row['nombre'])) {
-            $names[] = (string)$row['nombre'];
+
+    return [];
+}
+
+function load_name_map(string $file, string $nameKey = 'nombre'): array {
+    $base  = strtolower(basename($file));
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    if ($repo !== null) {
+        return match ($base) {
+            'categorias', 'categorias.json' => $repo->categoriaNameMap(),
+            'unidades', 'unidades.json' => $repo->unidadNameMap(),
+            default => [],
+        };
+    }
+
+    return [];
+}
+
+function parse_issue_date(string $value): ?string {
+    $value = trim($value);
+    if ($value === '') return null;
+    $formats = ['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'];
+    foreach ($formats as $fmt) {
+        $dt = DateTimeImmutable::createFromFormat($fmt, $value);
+        if ($dt instanceof DateTimeImmutable) {
+            return $dt->format('Y-m-d');
         }
     }
-    return $names;
+    $timestamp = strtotime($value);
+    if ($timestamp !== false && $timestamp > 0) {
+        return (new DateTimeImmutable())->setTimestamp($timestamp)->format('Y-m-d');
+    }
+    return null;
 }
 
 function dashboard_infer_catalog_match(string $value, array $catalog, string $fallback = ''): string {
@@ -774,7 +833,7 @@ function dashboard_load_user_maps(): array {
         return $result;
     }
     foreach ($users as $user) {
-        if (!is_array($user)) {
+        if (!is_array($user) || !dashboard_user_is_active($user)) {
             continue;
         }
         $id = trim((string)($user['id'] ?? ''));
@@ -792,6 +851,259 @@ function dashboard_load_user_maps(): array {
         }
     }
     return $result;
+}
+
+function dashboard_user_is_active(array $user): bool {
+    $state = strtolower(trim((string)($user['estado'] ?? $user['estado_usuario'] ?? $user['status'] ?? 'activo')));
+    return $state === '' || $state === 'activo' || $state === 'active';
+}
+
+function dashboard_active_mantencion_users(): array {
+    $path = __DIR__ . '/../data/usuarios.json';
+    $users = storage_read_json($path, []);
+    if (!is_array($users)) {
+        return [];
+    }
+
+    $active = [];
+    foreach ($users as $user) {
+        if (!is_array($user) || !dashboard_user_is_active($user)) {
+            continue;
+        }
+        $id = trim((string)($user['id'] ?? ''));
+        $nombre = trim((string)($user['nombre'] ?? ''));
+        $apellido = trim((string)($user['apellido'] ?? ''));
+        $displayName = trim($nombre . ($apellido !== '' ? ' ' . $apellido : ''));
+        if ($id === '' || $displayName === '') {
+            continue;
+        }
+        $user['nombre_completo'] = $displayName;
+        $active[] = $user;
+    }
+
+    usort($active, fn($a, $b) => strcasecmp((string)($a['nombre_completo'] ?? ''), (string)($b['nombre_completo'] ?? '')));
+    return $active;
+}
+
+function dashboard_find_user_name(string $userId): string {
+    $userId = trim($userId);
+    if ($userId === '') {
+        return '';
+    }
+    foreach (dashboard_active_mantencion_users() as $user) {
+        if ((string)($user['id'] ?? '') === $userId) {
+            return trim((string)($user['nombre_completo'] ?? ''));
+        }
+    }
+    return '';
+}
+
+function dashboard_central_user_from_needles(array $needles): ?array {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        return null;
+    }
+    try {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')) {
+            return null;
+        }
+        $values = array_values(array_unique(array_filter(array_map('trim', array_map('strval', $needles)))));
+        if (empty($values)) {
+            return null;
+        }
+        $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->where(function ($query) use ($values): void {
+                foreach ($values as $value) {
+                    $query->orWhere('uuid', $value)
+                        ->orWhere('usuario', $value)
+                        ->orWhere('rut', $value)
+                        ->orWhere('usuario_core', $value);
+                    if (ctype_digit($value)) {
+                        $query->orWhere('id', (int)$value)
+                            ->orWhere('redmine_id', (int)$value);
+                    }
+                }
+            })
+            ->first(['id', 'uuid', 'usuario', 'rut', 'redmine_id', 'nombre', 'apellido', 'rol', 'estado', 'usuario_core']);
+        if (!$row) {
+            return null;
+        }
+        $nombre = trim((string)($row->nombre ?? ''));
+        $apellido = trim((string)($row->apellido ?? ''));
+        return [
+            'id' => trim((string)($row->redmine_id ?? '')) ?: trim((string)($row->usuario ?? $row->uuid ?? '')),
+            '_nova_user_id' => trim((string)($row->uuid ?? $row->id ?? '')),
+            'rut_sin_dv' => trim((string)($row->usuario ?? '')),
+            'nombre' => $nombre,
+            'apellido' => $apellido,
+            'nombre_completo' => trim($nombre . ($apellido !== '' ? ' ' . $apellido : '')),
+            'rut' => trim((string)($row->rut ?? '')),
+            'core_user' => trim((string)($row->usuario_core ?? '')),
+            'rol' => trim((string)($row->rol ?? 'usuario')),
+            'estado' => trim((string)($row->estado ?? 'activo')),
+        ];
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+function dashboard_current_user(): array {
+    $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
+    $user = $userId !== '' && function_exists('auth_find_user_by_id') ? auth_find_user_by_id($userId) : null;
+    auth_start_session();
+    $sessionUser = is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
+    $novaUser = [];
+    if (function_exists('session')) {
+        $candidateNovaUser = session('nova_user');
+        if (is_array($candidateNovaUser)) {
+            $novaUser = $candidateNovaUser;
+        }
+    }
+    if (empty($novaUser) && function_exists('request')) {
+        try {
+            $candidateNovaUser = request()->session()->get('nova_user');
+            if (is_array($candidateNovaUser)) {
+                $novaUser = $candidateNovaUser;
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    $pickFirst = static function (...$values): string {
+        foreach ($values as $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return '';
+    };
+
+    if (!empty($novaUser)) {
+        $novaLegacy = is_array($novaUser['legacy'] ?? null) ? $novaUser['legacy'] : [];
+        $sessionUser = array_merge($novaLegacy, $sessionUser, [
+            '_nova_user_id' => $pickFirst($sessionUser['_nova_user_id'] ?? '', $novaUser['id'] ?? ''),
+            'id' => $pickFirst($sessionUser['id'] ?? '', $novaUser['redmine_id'] ?? '', $novaUser['username'] ?? '', $novaUser['id'] ?? ''),
+            'nombre' => $pickFirst($sessionUser['nombre'] ?? '', $novaUser['name'] ?? ''),
+            'apellido' => $pickFirst($sessionUser['apellido'] ?? '', $novaUser['apellido'] ?? ''),
+            'rut' => $pickFirst($sessionUser['rut'] ?? '', $novaUser['rut'] ?? ''),
+            'rut_sin_dv' => $pickFirst($sessionUser['rut_sin_dv'] ?? '', $novaUser['rut_sin_dv'] ?? '', $novaUser['username'] ?? ''),
+            'core_user' => $pickFirst($sessionUser['core_user'] ?? '', $novaUser['core_user'] ?? ''),
+            'rol' => $pickFirst($sessionUser['rol'] ?? '', $novaUser['role'] ?? '', 'usuario'),
+            'estado' => $pickFirst($sessionUser['estado'] ?? '', $novaUser['status'] ?? '', 'activo'),
+        ]);
+    }
+
+    $identityNeedles = [
+        $userId,
+        $sessionUser['_nova_user_id'] ?? '',
+        $sessionUser['id'] ?? '',
+        $sessionUser['rut'] ?? '',
+        $sessionUser['rut_sin_dv'] ?? '',
+        $sessionUser['core_user'] ?? '',
+        $novaUser['id'] ?? '',
+        $novaUser['username'] ?? '',
+        $novaUser['redmine_id'] ?? '',
+        $novaUser['rut'] ?? '',
+        $novaUser['rut_sin_dv'] ?? '',
+        $novaUser['core_user'] ?? '',
+    ];
+
+    if (!is_array($user)) {
+        $needles = array_filter(array_map('dashboard_normalize_text', $identityNeedles));
+        foreach (storage_read_json(__DIR__ . '/../data/usuarios.json', []) as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            $candidateNeedles = array_filter(array_map('dashboard_normalize_text', [
+                $candidate['id'] ?? '',
+                $candidate['_nova_user_id'] ?? '',
+                $candidate['rut'] ?? '',
+                $candidate['rut_sin_dv'] ?? '',
+                $candidate['core_user'] ?? '',
+            ]));
+            if (array_intersect($needles, $candidateNeedles) !== []) {
+                $user = $candidate;
+                break;
+            }
+        }
+    }
+
+    if (!is_array($user) || trim((string)($user['nombre'] ?? $user['name'] ?? $user['nombre_completo'] ?? '')) === '') {
+        $centralUser = dashboard_central_user_from_needles($identityNeedles);
+        if (is_array($centralUser)) {
+            $user = is_array($user) ? array_merge($user, $centralUser) : $centralUser;
+        }
+    }
+
+    $user = is_array($user) ? array_merge($sessionUser, $user) : $sessionUser;
+    $nombre = trim((string)($user['nombre'] ?? $user['name'] ?? ''));
+    $apellido = trim((string)($user['apellido'] ?? ''));
+    $fullName = trim((string)($user['nombre_completo'] ?? ''));
+    if ($fullName === '') {
+        $fullName = trim($nombre . ($apellido !== '' ? ' ' . $apellido : ''));
+    }
+    $user['nombre'] = $nombre;
+    $user['apellido'] = $apellido;
+    $user['nombre_completo'] = $fullName;
+    return $user;
+}
+
+function dashboard_current_user_full_name(): string {
+    return trim((string)(dashboard_current_user()['nombre_completo'] ?? ''));
+}
+
+function dashboard_can_assign_other_users(): bool {
+    if (function_exists('auth_user_has_all_permissions') && auth_user_has_all_permissions()) {
+        return true;
+    }
+    $scope = function_exists('auth_get_permission_value') ? auth_get_permission_value('mensajes') : null;
+    return strtolower(trim((string)$scope)) === 'todos';
+}
+
+function dashboard_enforced_assigned_name(string $submitted = ''): string {
+    $current = dashboard_current_user_full_name();
+    if (!dashboard_can_assign_other_users()) {
+        return $current !== '' ? $current : trim($submitted);
+    }
+    return trim($submitted);
+}
+
+function dashboard_find_active_user_by_name(string $name): ?array {
+    $name = trim($name);
+    if ($name === '') {
+        return null;
+    }
+    foreach (dashboard_active_mantencion_users() as $user) {
+        if (dashboard_name_tokens_match($name, (string)($user['nombre_completo'] ?? ''))) {
+            return $user;
+        }
+    }
+    return null;
+}
+
+function dashboard_apply_import_assignment(array $message, array $filters): array {
+    $targetUser = null;
+    if (!dashboard_can_assign_other_users()) {
+        $targetUser = dashboard_current_user();
+    } else {
+        $assigned = trim((string)($filters['assigned'] ?? ''));
+        if ($assigned !== '') {
+            $targetUser = dashboard_find_active_user_by_name($assigned);
+        }
+    }
+
+    if (is_array($targetUser) && !empty($targetUser)) {
+        $targetId = trim((string)($targetUser['id'] ?? ''));
+        $targetName = trim((string)($targetUser['nombre_completo'] ?? trim((string)($targetUser['nombre'] ?? $targetUser['name'] ?? '') . ' ' . (string)($targetUser['apellido'] ?? ''))));
+        if ($targetId !== '') {
+            $message['asignado_a'] = $targetId;
+        }
+        if ($targetName !== '') {
+            $message['asignado_nombre'] = $targetName;
+        }
+    }
+
+    return $message;
 }
 
 function dashboard_core_is_configured(array $cfg): bool {
@@ -1471,6 +1783,7 @@ function dashboard_core_source_row_matches_filters(array $row, array $filters = 
     $desde = trim((string)($filters['desde'] ?? ''));
     $hasta = trim((string)($filters['hasta'] ?? ''));
     $assigned = trim((string)($filters['assigned'] ?? ''));
+    $currentUser = is_array($filters['_current_user'] ?? null) ? $filters['_current_user'] : [];
     $fecha = parse_issue_date((string)($row['fecha de creacion'] ?? ''));
     if ($desde !== '' && $fecha !== null && $fecha < $desde) {
         return false;
@@ -1478,9 +1791,14 @@ function dashboard_core_source_row_matches_filters(array $row, array $filters = 
     if ($hasta !== '' && $fecha !== null && $fecha > $hasta) {
         return false;
     }
-    if ($assigned !== '') {
+    if (!empty($currentUser) || $assigned !== '') {
         $candidate = trim((string)($row['usuario asignado'] ?? ''));
-        if ($candidate === '' || !dashboard_name_tokens_match($assigned, $candidate)) {
+        if ($candidate === '') {
+            return false;
+        }
+        $matchesCurrentUser = !empty($currentUser) && dashboard_user_matches_assigned($candidate, $currentUser);
+        $matchesAssignedName = $assigned !== '' && dashboard_name_tokens_match($assigned, $candidate);
+        if (!$matchesCurrentUser && !$matchesAssignedName) {
             return false;
         }
     }
@@ -1498,20 +1816,39 @@ function dashboard_core_extract_json_rows(string $body): array {
         if (!is_array($item)) {
             continue;
         }
-        $row = [
-            'id' => dashboard_core_pick_first_recursive($item, ['id']),
-            'id_solicitud_core' => dashboard_core_pick_first_recursive($item, ['id']),
-            'solicitante' => dashboard_core_pick_first_recursive($item, ['solicitante']),
-            'fecha de creacion' => dashboard_core_pick_first_recursive($item, ['fec_creacion', 'fecha_creacion']),
-            'tipo de solicitud' => dashboard_core_pick_first_recursive($item, ['tipo_sol', 'tipo_solicitud']),
-            'establecimiento' => dashboard_core_pick_first_recursive($item, ['estab', 'establecimiento']),
-            'departamento' => dashboard_core_pick_first_recursive($item, ['departamento']),
-            'telefono' => dashboard_core_pick_first_recursive($item, ['fono', 'telefono']),
-            'celular' => dashboard_core_pick_first_recursive($item, ['celular']),
-            'email' => dashboard_core_pick_first_recursive($item, ['correo', 'email']),
-            'estado' => dashboard_core_pick_first_recursive($item, ['estado']),
-            'usuario asignado' => dashboard_core_pick_first_recursive($item, ['usuario_asignado', 'asignado']),
-        ];
+        if (dashboard_array_is_list($item)) {
+            $values = array_map(fn($value) => trim(html_entity_decode(strip_tags((string)$value), ENT_QUOTES | ENT_HTML5, 'UTF-8')), array_values($item));
+            $offset = isset($values[0]) && preg_match('/^\d{2,}$/', $values[0]) ? 1 : 0;
+            $row = [
+                'id' => $offset === 1 ? ($values[0] ?? '') : '',
+                'id_solicitud_core' => $offset === 1 ? ($values[0] ?? '') : '',
+                'solicitante' => $values[$offset] ?? '',
+                'fecha de creacion' => $values[$offset + 1] ?? '',
+                'tipo de solicitud' => $values[$offset + 2] ?? '',
+                'establecimiento' => $values[$offset + 3] ?? '',
+                'departamento' => $values[$offset + 4] ?? '',
+                'telefono' => $values[$offset + 5] ?? '',
+                'celular' => $values[$offset + 6] ?? '',
+                'email' => $values[$offset + 7] ?? '',
+                'estado' => $values[$offset + 8] ?? '',
+                'usuario asignado' => $values[$offset + 9] ?? '',
+            ];
+        } else {
+            $row = [
+                'id' => dashboard_core_pick_first_recursive($item, ['id']),
+                'id_solicitud_core' => dashboard_core_pick_first_recursive($item, ['id']),
+                'solicitante' => dashboard_core_pick_first_recursive($item, ['solicitante']),
+                'fecha de creacion' => dashboard_core_pick_first_recursive($item, ['fec_creacion', 'fecha_creacion']),
+                'tipo de solicitud' => dashboard_core_pick_first_recursive($item, ['tipo_sol', 'tipo_solicitud']),
+                'establecimiento' => dashboard_core_pick_first_recursive($item, ['estab', 'establecimiento']),
+                'departamento' => dashboard_core_pick_first_recursive($item, ['departamento']),
+                'telefono' => dashboard_core_pick_first_recursive($item, ['fono', 'telefono']),
+                'celular' => dashboard_core_pick_first_recursive($item, ['celular']),
+                'email' => dashboard_core_pick_first_recursive($item, ['correo', 'email']),
+                'estado' => dashboard_core_pick_first_recursive($item, ['estado']),
+                'usuario asignado' => dashboard_core_pick_first_recursive($item, ['usuario_asignado', 'asignado']),
+            ];
+        }
         $row = array_merge($row, dashboard_core_extract_detail_fields($item));
         if ($row['solicitante'] === '' && $row['tipo de solicitud'] === '' && $row['establecimiento'] === '') {
             continue;
@@ -1558,6 +1895,7 @@ function dashboard_core_build_message(array $row, array $catalogs, array $users)
     $email = trim((string)($row['email'] ?? ''));
     $estadoCore = trim((string)($row['estado'] ?? ''));
     $usuarioAsignado = trim((string)($row['usuario asignado'] ?? ''));
+    $coreSolicitudId = trim((string)($row['id_solicitud_core'] ?? $row['id'] ?? ''));
     $detalleTipoSolicitud = trim((string)($row['detalle_tipo_solicitud'] ?? ''));
     $detalleRun = trim((string)($row['detalle_run'] ?? ''));
     $detalleNombre = trim((string)($row['detalle_nombre'] ?? ''));
@@ -1626,6 +1964,8 @@ function dashboard_core_build_message(array $row, array $catalogs, array $users)
         'id' => 'core-' . substr($sourceKey, 0, 20),
         'fuente' => 'core',
         'fuente_id' => $sourceKey,
+        'id_core' => $coreSolicitudId,
+        'core_solicitud_id' => $coreSolicitudId,
         'numero' => $numero,
         'mensaje' => $tipoSolicitud,
         'descripcion' => $descripcion,
@@ -1674,6 +2014,7 @@ function dashboard_core_row_matches_filters(array $message, array $filters = [])
     $desde = trim((string)($filters['desde'] ?? ''));
     $hasta = trim((string)($filters['hasta'] ?? ''));
     $assigned = trim((string)($filters['assigned'] ?? ''));
+    $currentUser = is_array($filters['_current_user'] ?? null) ? $filters['_current_user'] : [];
     $fecha = parse_issue_date((string)($message['core_fecha_creacion'] ?? $message['fecha'] ?? ''));
     if ($desde !== '' && $fecha !== null && $fecha < $desde) {
         return false;
@@ -1681,9 +2022,14 @@ function dashboard_core_row_matches_filters(array $message, array $filters = [])
     if ($hasta !== '' && $fecha !== null && $fecha > $hasta) {
         return false;
     }
-    if ($assigned !== '') {
+    if (!empty($currentUser) || $assigned !== '') {
         $candidate = trim((string)($message['core_usuario_asignado'] ?? $message['asignado_nombre'] ?? ''));
-        if ($candidate === '' || !dashboard_name_tokens_match($assigned, $candidate)) {
+        if ($candidate === '') {
+            return false;
+        }
+        $matchesCurrentUser = !empty($currentUser) && dashboard_user_matches_assigned($candidate, $currentUser);
+        $matchesAssignedName = $assigned !== '' && dashboard_name_tokens_match($assigned, $candidate);
+        if (!$matchesCurrentUser && !$matchesAssignedName) {
             return false;
         }
     }
@@ -1716,7 +2062,6 @@ function dashboard_core_filter_payload(array $filters = []): array {
     $payload = [];
     $desde = trim((string)($filters['desde'] ?? ''));
     $hasta = trim((string)($filters['hasta'] ?? ''));
-    $assigned = trim((string)($filters['assigned'] ?? ''));
 
     if ($desde !== '') {
         $payload['desde'] = $desde;
@@ -1728,12 +2073,6 @@ function dashboard_core_filter_payload(array $filters = []): array {
         $payload['hasta'] = $hasta;
         $payload['fecha_hasta'] = $hasta;
         $payload['fecha_fin'] = $hasta;
-    }
-
-    if ($assigned !== '') {
-        $payload['assigned'] = $assigned;
-        $payload['asignado'] = $assigned;
-        $payload['usuario_asignado'] = $assigned;
     }
 
     return $payload;
@@ -1760,6 +2099,14 @@ function dashboard_core_json_items(array $payload): array {
     }
 
     return [$payload];
+}
+
+function dashboard_core_rows_from_response_body(string $body): array {
+    $rows = dashboard_core_extract_json_rows($body);
+    if (empty($rows)) {
+        $rows = dashboard_core_extract_rows($body);
+    }
+    return $rows;
 }
 
 function dashboard_core_base_admin_url(string $url): string {
@@ -1800,6 +2147,62 @@ function dashboard_archived_source_ids(string $baseDir): array {
         }
     }
     return $sourceIds;
+}
+
+function dashboard_core_date_matches_filters(array $row, array $filters = [], string $dateKey = 'fecha de creacion'): bool {
+    $desde = trim((string)($filters['desde'] ?? ''));
+    $hasta = trim((string)($filters['hasta'] ?? ''));
+    $fecha = parse_issue_date((string)($row[$dateKey] ?? ''));
+    if ($desde !== '' && $fecha !== null && $fecha < $desde) {
+        return false;
+    }
+    if ($hasta !== '' && $fecha !== null && $fecha > $hasta) {
+        return false;
+    }
+    return true;
+}
+
+function dashboard_core_import_trace_sample(array $row, array $filters, string $reason): array {
+    $currentUser = is_array($filters['_current_user'] ?? null) ? $filters['_current_user'] : [];
+    $candidate = trim((string)($row['usuario asignado'] ?? $row['core_usuario_asignado'] ?? $row['asignado_nombre'] ?? ''));
+    return [
+        'core_id' => trim((string)($row['id_solicitud_core'] ?? $row['id_core'] ?? $row['core_solicitud_id'] ?? $row['id'] ?? '')),
+        'core_assigned' => $candidate,
+        'filter_assigned' => trim((string)($filters['assigned'] ?? '')),
+        'nova_logged_user' => trim((string)($currentUser['nombre_completo'] ?? trim((string)($currentUser['nombre'] ?? $currentUser['name'] ?? '') . ' ' . (string)($currentUser['apellido'] ?? '')))),
+        'nova_core_user' => trim((string)($currentUser['core_user'] ?? '')),
+        'nova_user_id' => trim((string)($currentUser['_nova_user_id'] ?? $currentUser['id'] ?? '')),
+        'match_result' => dashboard_user_match_priority($candidate, $currentUser),
+        'skip_reason' => $reason,
+    ];
+}
+
+function dashboard_core_log_import_trace(array $counters, ?array $sample): void {
+    $summary = 'CORE import trace'
+        . ' | rows_raw ' . (int)($counters['rows_raw'] ?? 0)
+        . ' | rows_after_date_filter ' . (int)($counters['rows_after_date_filter'] ?? 0)
+        . ' | rows_after_user_match ' . (int)($counters['rows_after_user_match'] ?? 0)
+        . ' | skipped_user_mismatch ' . (int)($counters['skipped_user_mismatch'] ?? 0)
+        . ' | skipped_existing_json ' . (int)($counters['skipped_existing_json'] ?? 0)
+        . ' | skipped_existing_db ' . (int)($counters['skipped_existing_db'] ?? 0)
+        . ' | imported ' . (int)($counters['imported'] ?? 0)
+        . ' | updated ' . (int)($counters['updated'] ?? 0);
+    if (is_array($sample)) {
+        $summary .= ' | sample ' . json_encode($sample, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    dashboard_log_action('CORE_IMPORT_TRACE', $summary);
+}
+
+function dashboard_core_trace_assigned_summary(array $assignedCounts, int $limit = 5): string {
+    if (empty($assignedCounts)) {
+        return '';
+    }
+    arsort($assignedCounts);
+    $items = [];
+    foreach (array_slice($assignedCounts, 0, $limit, true) as $name => $count) {
+        $items[] = $name . ':' . (int)$count;
+    }
+    return implode(', ', $items);
 }
 
 function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $filters = [], bool $force = false, ?string $loginUrl = null, array $credentials = []): array {
@@ -1884,10 +2287,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
             continue;
         }
-        $rows = dashboard_core_extract_json_rows($page['body']);
-        if (empty($rows)) {
-            $rows = dashboard_core_extract_rows($page['body']);
-        }
+        $rows = dashboard_core_rows_from_response_body($page['body']);
         if (!empty($rows)) {
             $sourceUrl = $candidateUrl;
             break;
@@ -1912,9 +2312,21 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
             continue;
         }
-        $rows = dashboard_core_extract_json_rows($page['body']);
+        $rows = dashboard_core_rows_from_response_body($page['body']);
         if (empty($rows)) {
-            $rows = dashboard_core_extract_rows($page['body']);
+            $page = dashboard_core_curl($candidateUrl, [
+                CURLOPT_COOKIEJAR => $cookieJar,
+                CURLOPT_COOKIEFILE => $cookieJar,
+                CURLOPT_HTTPHEADER => $requestHeaders,
+            ]);
+            if ($page['error'] !== '') {
+                continue;
+            }
+            $pageNorm = dashboard_normalize_text($page['body']);
+            if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
+                continue;
+            }
+            $rows = dashboard_core_rows_from_response_body($page['body']);
         }
         if (!empty($rows)) {
             $sourceUrl = $candidateUrl;
@@ -1947,9 +2359,50 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     if (empty($rows)) {
         return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se encontró la tabla de solicitudes en CORE.'];
     }
+    $traceCounters = [
+        'rows_raw' => count($rows),
+        'rows_after_date_filter' => 0,
+        'rows_after_user_match' => 0,
+        'skipped_user_mismatch' => 0,
+        'skipped_existing_json' => 0,
+        'skipped_existing_db' => 0,
+        'imported' => 0,
+        'updated' => 0,
+    ];
+    $traceSample = null;
+    $traceAssignedCounts = [];
+    foreach ($rows as $traceRow) {
+        if (!is_array($traceRow) || !dashboard_core_date_matches_filters($traceRow, $filters)) {
+            continue;
+        }
+        $traceCounters['rows_after_date_filter']++;
+        $candidate = trim((string)($traceRow['usuario asignado'] ?? ''));
+        if ($candidate !== '') {
+            $traceAssignedCounts[$candidate] = ($traceAssignedCounts[$candidate] ?? 0) + 1;
+        }
+        $currentUser = is_array($filters['_current_user'] ?? null) ? $filters['_current_user'] : [];
+        $assigned = trim((string)($filters['assigned'] ?? ''));
+        $userMatches = true;
+        if (!empty($currentUser)) {
+            $userMatches = $candidate !== '' && (
+                dashboard_user_matches_assigned($candidate, $currentUser)
+                || ($assigned !== '' && dashboard_name_tokens_match($assigned, $candidate))
+            );
+        } elseif ($assigned !== '') {
+            $userMatches = $candidate !== '' && dashboard_name_tokens_match($assigned, $candidate);
+        }
+        if ($userMatches) {
+            $traceCounters['rows_after_user_match']++;
+            continue;
+        }
+        $traceCounters['skipped_user_mismatch']++;
+        if ($traceSample === null) {
+            $traceSample = dashboard_core_import_trace_sample($traceRow, $filters, 'user_mismatch');
+        }
+    }
     $catalogs = [
-        'categorias' => dashboard_catalog_names(__DIR__ . '/../data/categorias.json'),
-        'unidades' => dashboard_catalog_names(__DIR__ . '/../data/unidades.json'),
+        'categorias' => dashboard_catalog_names('categorias'),
+        'unidades' => dashboard_catalog_names('unidades'),
     ];
     $users = dashboard_load_user_maps();
     $existingBySource = [];
@@ -1959,15 +2412,28 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
             $existingBySource[$sourceId] = $index;
         }
     }
-    $archivedBySource = dashboard_archived_source_ids(retention_archive_base());
+    // DB-based duplicate guard: query redmine_mantencion_reportes for existing fuente_ids.
+    // This is the authoritative source for "does this record exist?".
+    // Archive blobs under reportes/* in redmine_mantencion_storage are historical only
+    // and must not block re-import of physically-deleted records.
+    $dbImportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    $dbFuenteIds = ($dbImportRepo !== null) ? $dbImportRepo->getExistingFuenteIds('core') : [];
     $imported = 0;
     $updated = 0;
     foreach ($rows as $row) {
         $message = dashboard_core_build_message($row, $catalogs, $users);
         if (!dashboard_core_row_matches_filters($message, $filters)) {
+            if ($traceSample === null) {
+                $traceSample = dashboard_core_import_trace_sample($message, $filters, 'message_filter_mismatch');
+            }
             continue;
         }
+        $message = dashboard_apply_import_assignment($message, $filters);
         $sourceId = $message['fuente_id'];
+        if ($sourceId === '') {
+            continue;
+        }
+        // Record is active in mensaje.json (dashboard view) — UPDATE, preserving local edits.
         if (isset($existingBySource[$sourceId])) {
             $idx = $existingBySource[$sourceId];
             $currentState = strtolower((string)($messages[$idx]['estado'] ?? 'pendiente'));
@@ -1978,14 +2444,25 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
             $message['id'] = $preserve['id'] ?? $message['id'];
             $messages[$idx] = array_merge($preserve, $message);
             $updated++;
+            $traceCounters['updated']++;
             continue;
         }
-        if (isset($archivedBySource[$sourceId])) {
+        // Record exists in DB but was archived out of the active dashboard view
+        // (e.g. by retention). Skip without duplicating; it is not physically deleted.
+        if (isset($dbFuenteIds[$sourceId])) {
+            $traceCounters['skipped_existing_db']++;
+            if ($traceSample === null) {
+                $traceSample = dashboard_core_import_trace_sample($message, $filters, 'existing_db');
+            }
             continue;
         }
+        // Not in active view and not in DB — import as new.
+        // Archive blobs are intentionally not checked here: if the record was deleted
+        // from redmine_mantencion_reportes it must be importable again.
         $messages[] = $message;
         $existingBySource[$sourceId] = count($messages) - 1;
         $imported++;
+        $traceCounters['imported']++;
     }
     $cfg['core_last_sync'] = (new DateTimeImmutable())->format(DateTime::ATOM);
     $cfg['core_last_error'] = '';
@@ -1993,7 +2470,16 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     if ($imported > 0 || $updated > 0) {
         save_messages($messages);
     }
-    return ['skipped' => false, 'imported' => $imported, 'updated' => $updated, 'error' => ''];
+    dashboard_core_log_import_trace($traceCounters, $traceSample);
+    return [
+        'skipped' => false,
+        'imported' => $imported,
+        'updated' => $updated,
+        'error' => '',
+        'trace' => $traceCounters,
+        'trace_sample' => $traceSample,
+        'trace_assigned_summary' => dashboard_core_trace_assigned_summary($traceAssignedCounts),
+    ];
 }
 
 function dashboard_sync_core(array &$messages, bool $force = false, array $credentials = []): array {
@@ -2028,36 +2514,6 @@ function dashboard_hora_extra_default_time(string $default = '1'): string {
 
 function redmine_log_path(): string {
     return __DIR__ . '/../data/envio_errores.log';
-}
-
-function load_name_map(string $file, string $nameKey = 'nombre'): array {
-    $out = [];
-    $data = storage_read_json($file, []);
-    if (!is_array($data)) {
-        return $out;
-    }
-    foreach ($data as $entry) {
-        if (!is_array($entry) || !isset($entry[$nameKey])) continue;
-        $out[strtoupper(trim($entry[$nameKey]))] = $entry['id'] ?? $entry[$nameKey];
-    }
-    return $out;
-}
-
-function parse_issue_date(string $value): ?string {
-    $value = trim($value);
-    if ($value === '') return null;
-    $formats = ['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'];
-    foreach ($formats as $fmt) {
-        $dt = DateTimeImmutable::createFromFormat($fmt, $value);
-        if ($dt instanceof DateTimeImmutable) {
-            return $dt->format('Y-m-d');
-        }
-    }
-    $timestamp = strtotime($value);
-    if ($timestamp !== false && $timestamp > 0) {
-        return (new DateTimeImmutable())->setTimestamp($timestamp)->format('Y-m-d');
-    }
-    return null;
 }
 
 function dashboard_normalize_stored_date($value): string {
@@ -2538,8 +2994,8 @@ function send_redmine_issue(array $issue, array $cfg, string $userToken = ''): a
 }
 
 function send_selected_messages(array &$messages, array $ids, array $cfg, string $userToken): array {
-    $catMap = load_name_map(__DIR__ . '/../data/categorias.json');
-    $unitMap = load_name_map(__DIR__ . '/../data/unidades.json');
+    $catMap = load_name_map('categorias');
+    $unitMap = load_name_map('unidades');
     $attempts = 0;
     $success = 0;
     $created = [];
@@ -2739,37 +3195,27 @@ function dashboard_filter_messages_by_scope(array $messages): array {
     if ($userId === '') {
         return [];
     }
-    auth_start_session();
-    $candidateNames = [];
-    $sessionUserName = trim((string)($_SESSION['user']['nombre'] ?? ''));
-    if ($sessionUserName !== '') {
-        $candidateNames[] = $sessionUserName;
-    }
-    if (function_exists('auth_find_user_by_id')) {
-        $user = auth_find_user_by_id($userId);
-        $storedName = trim((string)($user['nombre'] ?? ''));
-        if ($storedName !== '') {
-            $candidateNames[] = $storedName;
-        }
-    }
-    $candidateNames = array_values(array_unique(array_filter($candidateNames)));
-    return array_values(array_filter($messages, function ($row) use ($userId, $candidateNames) {
+    $currentUser = dashboard_current_user();
+    return array_values(array_filter($messages, function ($row) use ($userId, $currentUser) {
         if (!is_array($row)) {
             return false;
         }
         if ((string)($row['asignado_a'] ?? '') === $userId) {
             return true;
         }
-        $assignedName = (string)($row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? ''));
-        if (trim($assignedName) === '') {
+        $assignedName = trim((string)($row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? '')));
+        if ($assignedName === '') {
             return false;
         }
-        foreach ($candidateNames as $candidateName) {
-            if (dashboard_name_tokens_match($candidateName, $assignedName)) {
-                return true;
-            }
+        if (!empty($currentUser)) {
+            return dashboard_user_matches_assigned($assignedName, $currentUser);
         }
-        return false;
+        // Fallback when user record is not available
+        auth_start_session();
+        $nombre = trim((string)($_SESSION['user']['nombre'] ?? ''));
+        $apellido = trim((string)($_SESSION['user']['apellido'] ?? ''));
+        $fullName = trim($nombre . ($apellido !== '' ? ' ' . $apellido : ''));
+        return $fullName !== '' && dashboard_name_tokens_match($fullName, $assignedName);
     }));
 }
 
@@ -2799,18 +3245,68 @@ function dashboard_filter_ids_by_scope(array $messages, array $ids): array {
 }
 
 function dashboard_default_core_assigned_name(): string {
-    if (function_exists('auth_get_user_role') && auth_get_user_role() === 'root') {
-        return '';
+    return dashboard_current_user_full_name();
+}
+
+function dashboard_user_match_priority(string $candidate, array $user): string {
+    $candidate = trim($candidate);
+    if ($candidate === '' || empty($user)) {
+        return 'none';
     }
-    $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
-    if ($userId === '') {
-        return '';
+
+    // Priority 1: CORE username
+    $normalizedCandidate = dashboard_normalize_text($candidate);
+    $coreUser = trim((string)($user['core_user'] ?? ''));
+    if ($coreUser !== '' && $normalizedCandidate === dashboard_normalize_text($coreUser)) {
+        return 'P1';
     }
-    $user = function_exists('auth_find_user_by_id') ? auth_find_user_by_id($userId) : null;
-    if (!is_array($user)) {
-        return '';
+
+    // Priority 2: RUT (digits + optional K, both with and without DV)
+    $candidateDigits = strtolower(preg_replace('/[^0-9kK]/i', '', $candidate));
+    if ($candidateDigits !== '') {
+        $userRut = strtolower(preg_replace('/[^0-9kK]/i', '', (string)($user['rut'] ?? '')));
+        if ($userRut !== '' && $userRut === $candidateDigits) {
+            return 'P2';
+        }
+        $candidateNoK = preg_replace('/[^0-9]/', '', $candidateDigits);
+        $userRutSinDv = preg_replace('/[^0-9]/', '', (string)($user['rut_sin_dv'] ?? ''));
+        if ($userRutSinDv !== '' && $candidateNoK !== '' && $userRutSinDv === $candidateNoK) {
+            return 'P2';
+        }
     }
-    return trim((string)($user['nombre'] ?? ''));
+
+    // Priority 3: Username / ID
+    $userId = trim((string)($user['id'] ?? ''));
+    if ($userId !== '' && $normalizedCandidate === dashboard_normalize_text($userId)) {
+        return 'P3';
+    }
+
+    // Priority 4: Full name — all NOVA tokens must appear in the CORE candidate.
+    // Requires ≥ 2 NOVA tokens to avoid single-name false positives.
+    // Allows CORE to include extra middle names (e.g. "Jean Carlos Cortes Lorca" matches NOVA "Jean Cortés Lorca").
+    $nombre = trim((string)($user['nombre'] ?? $user['name'] ?? $user['nombre_completo'] ?? ''));
+    $apellido = trim((string)($user['apellido'] ?? ''));
+    $fullName = trim((string)($user['nombre_completo'] ?? ''));
+    if ($fullName === '') {
+        $fullName = trim($nombre . ($apellido !== '' ? ' ' . $apellido : ''));
+    }
+    if ($fullName !== '') {
+        $normFull = dashboard_normalize_text($fullName);
+        if ($normFull !== '' && $normalizedCandidate !== '') {
+            $fullTokens = array_values(array_filter(explode(' ', $normFull)));
+            $candidateTokens = array_values(array_filter(explode(' ', $normalizedCandidate)));
+            if (count($fullTokens) >= 2 && !empty($candidateTokens)
+                && empty(array_diff($fullTokens, $candidateTokens))) {
+                return 'P4';
+            }
+        }
+    }
+
+    return 'none';
+}
+
+function dashboard_user_matches_assigned(string $candidate, array $user): bool {
+    return dashboard_user_match_priority($candidate, $user) !== 'none';
 }
 
 function handle_request(): array {
@@ -2849,7 +3345,7 @@ function handle_request(): array {
                 }
                 $updated = false;
                 $fields = [
-                    'tipo','estado','asunto','prioridad','categoria',
+                    'asunto','categoria',
                     'asignado_a','solicitante','unidad','unidad_solicitante','establecimiento','departamento',
                     'hora_extra','fecha_inicio','fecha_fin','tiempo_estimado',
                     'fecha','hora','numero','descripcion','core_email'
@@ -2866,6 +3362,22 @@ function handle_request(): array {
                                 $value = dashboard_normalize_stored_date($value);
                             }
                             $message[$field] = $value;
+                        }
+                    }
+                    if (!dashboard_can_assign_other_users()) {
+                        $currentUser = dashboard_current_user();
+                        $currentUserId = trim((string)($currentUser['id'] ?? auth_get_user_id() ?? ''));
+                        $currentUserName = dashboard_current_user_full_name();
+                        if ($currentUserId !== '') {
+                            $message['asignado_a'] = $currentUserId;
+                        }
+                        if ($currentUserName !== '') {
+                            $message['asignado_nombre'] = $currentUserName;
+                        }
+                    } else {
+                        $postedAssignee = trim((string)($message['asignado_a'] ?? ''));
+                        if ($postedAssignee !== '' && dashboard_find_user_name($postedAssignee) === '') {
+                            $message['asignado_a'] = '';
                         }
                     }
                     $establecimiento = trim((string)($_POST['establecimiento'] ?? $message['core_establecimiento'] ?? $message['unidad_solicitante'] ?? ''));
@@ -2961,10 +3473,24 @@ function handle_request(): array {
                     $ajaxPayload['ok'] = false;
                     break;
                 }
+                $deletedFuenteIds = [];
+                foreach ($messages as $m) {
+                    if (is_array($m) && ($m['id'] ?? '') === $id) {
+                        $fid = trim((string)($m['fuente_id'] ?? $m['id'] ?? ''));
+                        if ($fid !== '') {
+                            $deletedFuenteIds[] = $fid;
+                        }
+                        break;
+                    }
+                }
                 $before = count($messages);
                 $messages = array_values(array_filter($messages, fn($m) => ($m['id'] ?? '') !== $id));
                 if ($before !== count($messages)) {
                     save_messages($messages);
+                    $dbRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+                    if ($dbRepo !== null && !empty($deletedFuenteIds)) {
+                        $dbRepo->deleteByFuenteIds($deletedFuenteIds);
+                    }
                     $flashMsg = 'Mensaje eliminado.';
                     dashboard_log_action('REPORT_DELETE', 'Elimino reporte ID ' . $id);
                     $ajaxPayload['ids'] = [$id];
@@ -2982,7 +3508,7 @@ function handle_request(): array {
                 }
                 $desde = trim((string)($_POST['core_desde'] ?? ''));
                 $hasta = trim((string)($_POST['core_hasta'] ?? ''));
-                $assigned = trim((string)($_POST['core_assigned_name'] ?? ''));
+                $assigned = dashboard_enforced_assigned_name((string)($_POST['core_assigned_name'] ?? ''));
                 $coreUser = trim((string)($_POST['core_runtime_user'] ?? ''));
                 $corePass = trim((string)($_POST['core_runtime_pass'] ?? ''));
                 $rememberCore = !empty($_POST['core_remember_credentials']);
@@ -2995,13 +3521,12 @@ function handle_request(): array {
                         $corePass = trim((string)($savedCoreCredentials['pass'] ?? ''));
                     }
                 }
-                if ($assigned === '') {
-                    $assigned = dashboard_default_core_assigned_name();
-                }
+                $currentUserData = dashboard_current_user();
                 $result = dashboard_sync_core_history($messages, [
                     'desde' => $desde,
                     'hasta' => $hasta,
                     'assigned' => $assigned,
+                    '_current_user' => !dashboard_can_assign_other_users() && is_array($currentUserData) ? $currentUserData : [],
                 ], true, [
                     'user' => $coreUser,
                     'pass' => $corePass,
@@ -3014,6 +3539,28 @@ function handle_request(): array {
                     dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE desde ' . $desde . ' hasta ' . $hasta . ': ' . $result['error']);
                 } else {
                     $flashMsg = 'Importación CORE completada. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
+                    if ((int)($result['imported'] ?? 0) === 0 && (int)($result['updated'] ?? 0) === 0 && is_array($result['trace'] ?? null)) {
+                        $trace = $result['trace'];
+                        $flashMsg .= ' | Diagnostico: rows_raw=' . (int)($trace['rows_raw'] ?? 0)
+                            . ', rows_after_date_filter=' . (int)($trace['rows_after_date_filter'] ?? 0)
+                            . ', rows_after_user_match=' . (int)($trace['rows_after_user_match'] ?? 0)
+                            . ', skipped_user_mismatch=' . (int)($trace['skipped_user_mismatch'] ?? 0)
+                            . ', skipped_existing_db=' . (int)($trace['skipped_existing_db'] ?? 0);
+                        if (is_array($result['trace_sample'] ?? null)) {
+                            $sample = $result['trace_sample'];
+                            $flashMsg .= ' | sample_core_id=' . (string)($sample['core_id'] ?? '')
+                                . ', sample_assigned="' . (string)($sample['core_assigned'] ?? '')
+                                . '", filter_assigned="' . (string)($sample['filter_assigned'] ?? '')
+                                . '", sample_match=' . (string)($sample['match_result'] ?? 'none')
+                                . ', nova_logged="' . (string)($sample['nova_logged_user'] ?? '')
+                                . '", nova_core_user="' . (string)($sample['nova_core_user'] ?? '')
+                                . '", nova_user_id="' . (string)($sample['nova_user_id'] ?? '')
+                                . ', sample_reason=' . (string)($sample['skip_reason'] ?? '');
+                        }
+                        if (trim((string)($result['trace_assigned_summary'] ?? '')) !== '') {
+                            $flashMsg .= ' | assigned_summary=' . (string)$result['trace_assigned_summary'];
+                        }
+                    }
                     dashboard_log_action(
                         'CORE_IMPORT',
                         'Obtuvo datos CORE desde ' . $desde . ' hasta ' . $hasta
@@ -3044,11 +3591,24 @@ function handle_request(): array {
                     $ajaxPayload['ok'] = false;
                     break;
                 }
+                $deletedFuenteIds = [];
+                foreach ($messages as $m) {
+                    if (is_array($m) && in_array(($m['id'] ?? ''), $ids, true)) {
+                        $fid = trim((string)($m['fuente_id'] ?? $m['id'] ?? ''));
+                        if ($fid !== '') {
+                            $deletedFuenteIds[] = $fid;
+                        }
+                    }
+                }
                 $before = count($messages);
                 $messages = array_values(array_filter($messages, fn($m) => !in_array(($m['id'] ?? ''), $ids, true)));
                 $deleted = $before - count($messages);
                 if ($deleted > 0) {
                     save_messages($messages);
+                    $dbRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+                    if ($dbRepo !== null && !empty($deletedFuenteIds)) {
+                        $dbRepo->deleteByFuenteIds($deletedFuenteIds);
+                    }
                     $flashMsg = $deleted . ' mensaje(s) eliminados.';
                     dashboard_log_action('REPORT_DELETE_BULK', 'Elimino ' . $deleted . ' reporte(s)');
                     $ajaxPayload['ids'] = $ids;

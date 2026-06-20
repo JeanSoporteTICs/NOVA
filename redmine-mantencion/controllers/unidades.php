@@ -3,16 +3,14 @@
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
 
-$GLOBALS['DATA_FILE'] = __DIR__ . '/../data/unidades.json';
+$GLOBALS['DATA_FILE'] = 'unidades';
 
 function ensure_uni_file($path) {
-    if (storage_read_json($path, null) === null) {
-        storage_write_json($path, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
-    }
+    // Legacy no-op: unidades.json is deprecated and no longer used at runtime.
 }
 function load_unidades($path) {
-    ensure_uni_file($path);
-    $data = storage_read_json($path, []);
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    $data = $repo !== null ? $repo->unidades() : [];
     if (!is_array($data)) $data = [];
     $changed = false;
     foreach ($data as &$item) {
@@ -23,7 +21,10 @@ function load_unidades($path) {
     return $data;
 }
 function save_unidades($path, $data) {
-    storage_write_json($path, $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    if ($repo !== null) {
+        $repo->upsertUnidades(is_array($data) ? $data : []);
+    }
 }
 function handle_unidades() {
     global $DATA_FILE;
@@ -52,8 +53,11 @@ function handle_unidades() {
             $flash = 'Unidad actualizada';
         } elseif ($action === 'delete') {
             $id = $_POST['id'] ?? '';
-            $rows = array_values(array_filter($rows, fn($r) => $r['id'] !== $id));
-            save_unidades($DATA_FILE, $rows);
+            $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+            if ($repo !== null) {
+                $repo->deactivateUnidad((string)$id);
+            }
+            $rows = load_unidades($DATA_FILE);
             $flash = 'Unidad eliminada';
         }
     }

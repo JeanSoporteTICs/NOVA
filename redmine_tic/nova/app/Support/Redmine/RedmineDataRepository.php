@@ -4,6 +4,7 @@ namespace RedmineTic\Support\Redmine;
 
 use App\Models\NovaUser;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
@@ -12,15 +13,27 @@ use Illuminate\Support\Str;
 
 final class RedmineDataRepository
 {
+    /** Permission keys that carry a string scope value instead of a boolean. */
+    private const PERMISSION_SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
+
     private string $projectKey = 'redmine_tic';
     private ?array $assignedUserNames = null;
     private ?array $catalogIdsByTypeValue = null;
     private ?array $catalogNamesById = null;
+    private ?array $activeReportsCache = null;
+    private ?array $archivedReportsCache = null;
+    private ?array $configurationCache = null;
 
     public function forProject(string $projectKey): self
     {
-        if (array_key_exists($projectKey, config('modules', []))) {
+        if (array_key_exists($projectKey, config('modules', [])) && $projectKey !== $this->projectKey) {
             $this->projectKey = $projectKey;
+            $this->activeReportsCache = null;
+            $this->archivedReportsCache = null;
+            $this->configurationCache = null;
+            $this->assignedUserNames = null;
+            $this->catalogIdsByTypeValue = null;
+            $this->catalogNamesById = null;
         }
 
         return $this;
@@ -46,9 +59,11 @@ final class RedmineDataRepository
      */
     public function activeReports(): array
     {
-        $databaseReports = $this->activeReportsFromDatabase();
+        if ($this->activeReportsCache === null) {
+            $this->activeReportsCache = $this->activeReportsFromDatabase();
+        }
 
-        return $databaseReports;
+        return $this->activeReportsCache;
     }
 
     /**
@@ -56,6 +71,7 @@ final class RedmineDataRepository
      */
     public function saveActiveReports(array $reports): void
     {
+        $this->activeReportsCache = null;
         $this->saveActiveReportsToDatabase(array_values($reports));
     }
 
@@ -64,7 +80,11 @@ final class RedmineDataRepository
      */
     public function archivedReports(): array
     {
-        return $this->archivedReportsFromDatabase();
+        if ($this->archivedReportsCache === null) {
+            $this->archivedReportsCache = $this->archivedReportsFromDatabase();
+        }
+
+        return $this->archivedReportsCache;
     }
 
     /**
@@ -97,10 +117,20 @@ final class RedmineDataRepository
      */
     public function configuration(): array
     {
-        $databaseConfig = $this->moduleConfigurationFromDatabase();
-        unset($databaseConfig['roles']);
+        if ($this->configurationCache === null) {
+            $databaseConfig = $this->moduleConfigurationFromDatabase();
+            unset($databaseConfig['roles'], $databaseConfig['trackers'], $databaseConfig['prioridades'], $databaseConfig['estados']);
 
-        return array_merge($this->defaultConfiguration(), $databaseConfig);
+            if ($this->moduleOptionsTableAvailable()) {
+                $databaseConfig['trackers']    = $this->optionsFromDatabase('tracker');
+                $databaseConfig['prioridades'] = $this->optionsFromDatabase('prioridad');
+                $databaseConfig['estados']     = $this->optionsFromDatabase('estado');
+            }
+
+            $this->configurationCache = array_merge($this->defaultConfiguration(), $databaseConfig);
+        }
+
+        return $this->configurationCache;
     }
 
     /**
@@ -108,8 +138,17 @@ final class RedmineDataRepository
      */
     public function saveConfiguration(array $config): void
     {
+        $this->configurationCache = null;
         $databaseConfig = $config;
         unset($databaseConfig['roles']);
+
+        foreach (['trackers' => 'tracker', 'prioridades' => 'prioridad', 'estados' => 'estado'] as $key => $tipo) {
+            if (array_key_exists($key, $databaseConfig)) {
+                $this->saveOptionsToDatabase($tipo, (array) $databaseConfig[$key]);
+                unset($databaseConfig[$key]);
+            }
+        }
+
         $this->saveModuleConfigurationToDatabase($databaseConfig);
     }
 
@@ -148,39 +187,114 @@ final class RedmineDataRepository
     }
 
     /**
-     * @return array<string,array<string,bool>>
+     * @return array<string,array<string,mixed>>
      */
     private function defaultRoles(): array
     {
         $all = [
-            'mensajes_acceso' => true,
-            'reportes_editar' => true,
-            'reportes_eliminar' => true,
-            'historico_acceso' => true,
-            'horas_extra_acceso' => true,
-            'usuarios_acceso' => true,
-            'configuracion_acceso' => true,
-            'estadisticas_acceso' => true,
-            'actividad_acceso' => true,
+            'mensajes'            => 'todos',
+            'mensajes_acceso'     => true,
+            'horas_extra'         => 'todos',
+            'historico'           => true,
+            'historico_acciones'  => true,
+            'historico_scope'     => 'todos',
+            'configuracion'       => true,
+            'estadisticas'        => true,
+            'estadisticas_manual' => true,
+            'usuarios'            => true,
+            'categorias'          => true,
+            'unidades'            => true,
+            'simulador'           => true,
+            'actividad'           => true,
+            'reportes_editar'     => true,
+            'reportes_eliminar'   => true,
+            'horas_extra_editar'  => true,
+            'horas_extra_eliminar'=> true,
+            'usuarios_editar'     => true,
+            'usuarios_eliminar'   => true,
+            'cfg_resumen'         => true,
+            'cfg_conexion'        => true,
+            'cfg_proyecto'        => true,
+            'cfg_redmine'         => true,
+            'cfg_campos'          => true,
+            'cfg_retencion'       => true,
+            'cfg_webhook'         => true,
+            'cfg_sesion'          => true,
+            'cfg_mantencion'      => true,
+            'cfg_trackers'        => true,
+            'cfg_prioridades'     => true,
+            'cfg_estados'         => true,
+            'cfg_roles'           => true,
+            'cfg_usuarios'        => true,
+            'cfg_catalogos'       => true,
+            'cfg_categorias'      => true,
+            'cfg_unidades'        => true,
         ];
 
         return [
-            'root' => $all,
+            'root'          => $all,
             'administrador' => $all,
-            'gestor' => array_merge($all, [
-                'usuarios_acceso' => false,
-                'configuracion_acceso' => false,
+            'gestor'        => array_merge($all, [
+                'usuarios'          => false,
+                'usuarios_editar'   => false,
+                'usuarios_eliminar' => false,
+                'configuracion'     => false,
+                'cfg_resumen'       => false,
+                'cfg_conexion'      => false,
+                'cfg_proyecto'      => false,
+                'cfg_redmine'       => false,
+                'cfg_campos'        => false,
+                'cfg_retencion'     => false,
+                'cfg_webhook'       => false,
+                'cfg_sesion'        => false,
+                'cfg_mantencion'    => false,
+                'cfg_trackers'      => false,
+                'cfg_prioridades'   => false,
+                'cfg_estados'       => false,
+                'cfg_roles'         => false,
+                'cfg_usuarios'      => false,
+                'cfg_catalogos'     => false,
+                'cfg_categorias'    => false,
+                'cfg_unidades'      => false,
             ]),
-            'usuario' => [
-                'mensajes_acceso' => true,
-                'reportes_editar' => false,
-                'reportes_eliminar' => false,
-                'historico_acceso' => true,
-                'horas_extra_acceso' => true,
-                'usuarios_acceso' => false,
-                'configuracion_acceso' => false,
-                'estadisticas_acceso' => true,
-                'actividad_acceso' => false,
+            'usuario'       => [
+                'mensajes'            => 'asignados',
+                'mensajes_acceso'     => true,
+                'horas_extra'         => 'asignados',
+                'historico'           => true,
+                'historico_acciones'  => false,
+                'historico_scope'     => 'asignados',
+                'configuracion'       => false,
+                'estadisticas'        => true,
+                'estadisticas_manual' => false,
+                'usuarios'            => false,
+                'categorias'          => false,
+                'unidades'            => false,
+                'simulador'           => true,
+                'actividad'           => false,
+                'reportes_editar'     => false,
+                'reportes_eliminar'   => false,
+                'horas_extra_editar'  => false,
+                'horas_extra_eliminar'=> false,
+                'usuarios_editar'     => false,
+                'usuarios_eliminar'   => false,
+                'cfg_resumen'         => false,
+                'cfg_conexion'        => false,
+                'cfg_proyecto'        => false,
+                'cfg_redmine'         => false,
+                'cfg_campos'          => false,
+                'cfg_retencion'       => false,
+                'cfg_webhook'         => false,
+                'cfg_sesion'          => false,
+                'cfg_mantencion'      => false,
+                'cfg_trackers'        => false,
+                'cfg_prioridades'     => false,
+                'cfg_estados'         => false,
+                'cfg_roles'           => false,
+                'cfg_usuarios'        => false,
+                'cfg_catalogos'       => false,
+                'cfg_categorias'      => false,
+                'cfg_unidades'        => false,
             ],
         ];
     }
@@ -388,24 +502,114 @@ final class RedmineDataRepository
 
     public function deleteUser(string $id): int
     {
+        $id = trim($id);
+        if ($id === '') {
+            return 0;
+        }
+
         $users = $this->users();
+        $novaUuid = '';
+        foreach ($users as $user) {
+            if ((string) ($user['id'] ?? '') === $id) {
+                $novaUuid = trim((string) ($user['_nova_user_id'] ?? ''));
+                break;
+            }
+        }
+
+        if ($novaUuid === '') {
+            return 0;
+        }
+
+        try {
+            $novaUserId = (int) DB::table('usuarios_nova')->where('uuid', $novaUuid)->value('id');
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        if ($novaUserId <= 0) {
+            return 0;
+        }
+
+        $moduleId = $this->databaseModuleId();
         $changed = 0;
 
-        foreach ($users as $index => $user) {
-            if ((string) ($user['id'] ?? '') !== $id) {
-                continue;
+        try {
+            if ($this->redmineTicProfilesTableAvailable()) {
+                DB::table('redmine_tic_perfiles_usuario')->where('usuario_id', $novaUserId)->delete();
+                $changed = 1;
             }
 
-            $users[$index]['estado_usuario'] = 'baneado';
-            $changed = 1;
-            break;
+            if ($moduleId !== null && $this->projectAccessTableAvailable()) {
+                DB::table('permisos_usuario_modulo')
+                    ->where('usuario_id', $novaUserId)
+                    ->where('modulo_id', $moduleId)
+                    ->delete();
+                $changed = 1;
+            }
+        } catch (\Throwable) {
+            return 0;
         }
 
-        if ($changed === 1) {
-            $this->saveProjectUsers($users);
-        }
+        $this->activeReportsCache = null;
 
         return $changed;
+    }
+
+    /**
+     * @return array{ok:bool,nuevo_estado:string}
+     */
+    public function toggleUserStatus(string $id): array
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return ['ok' => false, 'nuevo_estado' => ''];
+        }
+
+        $users = $this->users();
+        $foundUser = null;
+        foreach ($users as $user) {
+            if ((string) ($user['id'] ?? '') === $id) {
+                $foundUser = $user;
+                break;
+            }
+        }
+
+        if ($foundUser === null) {
+            return ['ok' => false, 'nuevo_estado' => ''];
+        }
+
+        $currentStatus = strtolower(trim((string) ($foundUser['estado_usuario'] ?? 'activo')));
+        $newStatus = $currentStatus === 'baneado' ? 'activo' : 'baneado';
+        $novaUuid = trim((string) ($foundUser['_nova_user_id'] ?? ''));
+
+        if ($novaUuid === '') {
+            return ['ok' => false, 'nuevo_estado' => ''];
+        }
+
+        try {
+            $novaUserId = (int) DB::table('usuarios_nova')->where('uuid', $novaUuid)->value('id');
+            if ($novaUserId <= 0) {
+                return ['ok' => false, 'nuevo_estado' => ''];
+            }
+
+            if ($this->redmineTicProfilesTableAvailable()) {
+                DB::table('redmine_tic_perfiles_usuario')
+                    ->where('usuario_id', $novaUserId)
+                    ->update(['estado_usuario' => $newStatus, 'actualizado_at' => now()]);
+            }
+
+            if ($this->novaUsersTableAvailable()) {
+                DB::table('usuarios_nova')
+                    ->where('id', $novaUserId)
+                    ->update(['estado' => $newStatus, 'actualizado_at' => now()]);
+            }
+
+            $this->activeReportsCache = null;
+
+            return ['ok' => true, 'nuevo_estado' => $newStatus];
+        } catch (\Throwable) {
+            return ['ok' => false, 'nuevo_estado' => ''];
+        }
     }
 
     /**
@@ -504,9 +708,7 @@ final class RedmineDataRepository
                 'nombre' => $firstName,
                 'apellido' => $lastName,
                 'rol' => 'usuario',
-                'estado_usuario' => 'activo',
                 'redmine_membership_id' => $membership['id'] ?? null,
-                'redmine_roles' => array_values(array_filter(array_map(static fn ($role): string => (string) ($role['name'] ?? ''), (array) ($membership['roles'] ?? [])))),
             ];
 
             if (isset($byId[$id])) {
@@ -516,7 +718,6 @@ final class RedmineDataRepository
                     'nombre' => $users[$index]['nombre'] ?? $firstName,
                     'apellido' => $users[$index]['apellido'] ?? $lastName,
                     'redmine_membership_id' => $membership['id'] ?? ($users[$index]['redmine_membership_id'] ?? null),
-                    'redmine_roles' => $row['redmine_roles'],
                 ]);
                 $updated++;
                 continue;
@@ -527,7 +728,7 @@ final class RedmineDataRepository
             $created++;
         }
 
-        $this->saveProjectUsers($users);
+        $this->saveProjectUsers($users, true, 'baneado');
 
         return ['ok' => true, 'created' => $created, 'updated' => $updated, 'error' => ''];
     }
@@ -987,10 +1188,10 @@ final class RedmineDataRepository
             return 0;
         }
 
-        return DB::table('reportes_redmine')
+        return DB::table('redmine_tic_reportes')
             ->where('modulo_id', $moduleId)
-            ->where('local_id', trim($id))
-            ->whereNotNull('archivado_at')
+            ->where('id', (int) $id)
+            ->where('estado', 'archivado')
             ->delete();
     }
 
@@ -1227,7 +1428,6 @@ final class RedmineDataRepository
             'usuarios' => ['users' => $this->users(), 'roles' => $this->roles()],
             'configuracion' => ['config' => $this->configuration(), 'roles' => $this->roles(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units(), 'webhookUrl' => $this->webhookUrl()],
             'estadisticas' => ['stats' => $this->statistics($filters)],
-            'estadisticas-api' => ['stats' => $this->redmineApiStatistics($filters, $user)],
             'actividad' => ['lines' => $this->activity()],
             default => [],
         };
@@ -1277,7 +1477,7 @@ final class RedmineDataRepository
         $summary['hours_extra_groups'] = count($hoursGroups);
 
         $users = $this->readList($this->dataPath('usuarios.json'));
-        $this->saveProjectUsers($users);
+        $this->saveProjectUsers($users, true, 'baneado');
         $summary['users'] = count($users);
 
         $config = $this->readJsonMap($this->dataPath('configuracion.json'));
@@ -1459,7 +1659,7 @@ final class RedmineDataRepository
                 'tiempo_estimado',
                 'fecha',
                 'hora',
-                'numero',
+                'estado',
                 'mensaje',
                 'descripcion',
             ]));
@@ -1531,6 +1731,12 @@ final class RedmineDataRepository
 
     public function archiveExpiredProcessedReports(): int
     {
+        $cacheKey = 'nova.redmine.archive_check.' . $this->projectKey;
+        if (Cache::has($cacheKey)) {
+            return 0;
+        }
+        Cache::put($cacheKey, 1, 300);
+
         $retentionHours = max(1, (int) ($this->configuration()['retencion_horas'] ?? 24));
         $limit = now('America/Santiago')->subHours($retentionHours)->getTimestamp();
         $reports = $this->activeReports();
@@ -1550,7 +1756,6 @@ final class RedmineDataRepository
                 continue;
             }
 
-            $report['_archivado_por'] = 'retencion';
             $report['_retencion_horas'] = $retentionHours;
             $this->archiveReport($report);
             $archived++;
@@ -1703,7 +1908,6 @@ final class RedmineDataRepository
         $reports = $this->activeReports();
         $now = now('America/Santiago');
         $report = [
-            'id' => (string) Str::uuid(),
             'tipo' => trim((string) ($payload['tipo'] ?? 'webhook')),
             'estado' => 'pendiente',
             'asunto' => trim((string) ($payload['asunto'] ?? 'Solicitud simulada')),
@@ -1714,7 +1918,7 @@ final class RedmineDataRepository
             'unidad_solicitante' => trim((string) ($payload['unidad_solicitante'] ?? $payload['unidad'] ?? '')),
             'categoria' => trim((string) ($payload['categoria'] ?? '')),
             'prioridad' => trim((string) ($payload['prioridad'] ?? 'NORMAL')),
-            'numero' => trim((string) ($payload['numero'] ?? '')),
+            'chat_id_telegram' => trim((string) ($payload['chat_id_telegram'] ?? $payload['numero'] ?? '')),
             'fecha' => trim((string) ($payload['fecha'] ?? $now->format('Y-m-d'))),
             'hora' => trim((string) ($payload['hora'] ?? $now->format('H:i'))),
             'fecha_inicio' => trim((string) ($payload['fecha_inicio'] ?? $now->format('Y-m-d'))),
@@ -1725,12 +1929,11 @@ final class RedmineDataRepository
             'origen' => trim((string) ($payload['origen'] ?? 'manual')),
             'created_at' => $now->toAtomString(),
         ];
-        $reports[] = $report;
-        $this->saveActiveReports($reports);
+        $report = $this->saveNewReport($report, false);
         $this->appendActivityLog('recepcion_datos', [
-            'message_id' => $report['id'],
+            'message_id' => $report['id'] ?? '',
             'tipo' => $report['tipo'],
-            'numero' => $report['numero'],
+            'chat_id_telegram' => $report['chat_id_telegram'],
             'asunto' => $report['asunto'],
             'categoria' => $report['categoria'],
             'unidad_solicitante' => $report['unidad_solicitante'],
@@ -1785,8 +1988,7 @@ final class RedmineDataRepository
         $assignee = $this->telegramProjectAssignee($telegramUser, $chatId);
 
         $report = [
-            'id' => (string) Str::uuid(),
-            'numero' => $chatId !== '' ? 'telegram:' . $chatId : 'telegram',
+            'chat_id_telegram' => $chatId,
             'mensaje' => $text,
             'fecha' => $now->format('d-m-Y'),
             'hora' => $now->format('H:i:s'),
@@ -1807,11 +2009,9 @@ final class RedmineDataRepository
             'created_at' => $now->toAtomString(),
         ];
 
-        $reports = $this->activeReports();
-        $reports[] = $report;
-        $this->saveActiveReports($reports);
+        $report = $this->saveNewReport($report, false);
         $this->appendActivityLog('recepcion_telegram', [
-            'message_id' => $report['id'],
+            'message_id' => $report['id'] ?? '',
             'chat_id' => $chatId,
             'asunto' => $report['asunto'],
             'categoria' => $report['categoria'],
@@ -1982,25 +2182,34 @@ final class RedmineDataRepository
             return;
         }
 
-        $row = DB::table('redmine_tic_horas_extra_grupos')
-            ->where('modulo_id', $moduleId)
-            ->where('fecha', $targetDate)
-            ->first();
-        $ids = $row ? json_decode((string) ($row->report_local_ids ?? '[]'), true) : [];
-        $ids = is_array($ids) ? array_values(array_filter(array_map('strval', $ids))) : [];
-        if (!in_array($id, $ids, true)) {
-            $ids[] = $id;
-        }
-
         DB::table('redmine_tic_horas_extra_grupos')->updateOrInsert(
             ['modulo_id' => $moduleId, 'fecha' => $targetDate],
             [
                 'hora_inicio' => $this->parseTime($report['hora_inicio'] ?? $report['hora'] ?? null),
                 'hora_fin' => $this->parseTime($report['hora_fin'] ?? $report['hora'] ?? null),
-                'report_local_ids' => json_encode($ids, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'actualizado_at' => now(),
             ]
         );
+
+        if ($this->hoursExtraPivotTableAvailable()) {
+            $reporteId = is_numeric($id) ? (int) $id : 0;
+            if ($reporteId > 0) {
+                $grupoId = (int) DB::table('redmine_tic_horas_extra_grupos')
+                    ->where('modulo_id', $moduleId)
+                    ->where('fecha', $targetDate)
+                    ->value('id');
+                if ($grupoId > 0) {
+                    try {
+                        DB::table('redmine_tic_horas_extra_grupo_reportes')->updateOrInsert(
+                            ['grupo_id' => $grupoId, 'reporte_id' => $reporteId],
+                            ['creado_at' => now()]
+                        );
+                    } catch (\Throwable) {
+                        // ignore duplicate
+                    }
+                }
+            }
+        }
     }
 
     public function removeHoursExtraRecord(string $id): void
@@ -2014,21 +2223,34 @@ final class RedmineDataRepository
             return;
         }
 
-        $rows = DB::table('redmine_tic_horas_extra_grupos')->where('modulo_id', $moduleId)->get();
-        foreach ($rows as $row) {
-            $ids = json_decode((string) ($row->report_local_ids ?? '[]'), true);
-            $ids = is_array($ids) ? array_values(array_filter(array_map('strval', $ids))) : [];
-            $next = array_values(array_filter($ids, static fn (string $value): bool => $value !== $id));
-            if (count($ids) === count($next)) {
+        $reporteId = is_numeric($id) ? (int) $id : 0;
+        if ($reporteId <= 0 || !$this->hoursExtraPivotTableAvailable()) {
+            return;
+        }
+
+        $grupoIds = DB::table('redmine_tic_horas_extra_grupo_reportes')
+            ->where('reporte_id', $reporteId)
+            ->pluck('grupo_id')
+            ->all();
+
+        DB::table('redmine_tic_horas_extra_grupo_reportes')
+            ->where('reporte_id', $reporteId)
+            ->delete();
+
+        foreach ($grupoIds as $grupoId) {
+            $grupoId = (int) $grupoId;
+            $inModule = DB::table('redmine_tic_horas_extra_grupos')
+                ->where('id', $grupoId)
+                ->where('modulo_id', $moduleId)
+                ->exists();
+            if (!$inModule) {
                 continue;
             }
-            if ($next === []) {
-                DB::table('redmine_tic_horas_extra_grupos')->where('id', $row->id)->delete();
-            } else {
-                DB::table('redmine_tic_horas_extra_grupos')->where('id', $row->id)->update([
-                    'report_local_ids' => json_encode($next, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'actualizado_at' => now(),
-                ]);
+            $hasReports = DB::table('redmine_tic_horas_extra_grupo_reportes')
+                ->where('grupo_id', $grupoId)
+                ->exists();
+            if (!$hasReports) {
+                DB::table('redmine_tic_horas_extra_grupos')->where('id', $grupoId)->delete();
             }
         }
     }
@@ -2073,30 +2295,46 @@ final class RedmineDataRepository
             return [];
         }
 
+        if (!$this->hoursExtraPivotTableAvailable()) {
+            return [];
+        }
+
         $reports = collect(array_merge($this->activeReportsFromDatabase(), $this->archivedReportsFromDatabase()))
             ->keyBy(static fn (array $report): string => (string) ($report['id'] ?? ''));
 
-        return DB::table('redmine_tic_horas_extra_grupos')
+        $grupos = DB::table('redmine_tic_horas_extra_grupos')
             ->where('modulo_id', $moduleId)
             ->orderByDesc('fecha')
-            ->get()
-            ->map(function ($row) use ($reports): array {
-                $ids = json_decode((string) ($row->report_local_ids ?? '[]'), true);
-                $ids = is_array($ids) ? array_values(array_filter(array_map('strval', $ids))) : [];
+            ->get(['id', 'fecha', 'hora_inicio', 'hora_fin']);
 
-                return [
-                    'fecha' => $this->databaseDate($row->fecha ?? null),
-                    'hora_inicio' => $this->databaseTime($row->hora_inicio ?? null),
-                    'hora_fin' => $this->databaseTime($row->hora_fin ?? null),
-                    'reports' => array_values(array_filter(array_map(
-                        static fn (string $id): ?array => $reports->get($id),
-                        $ids
-                    ))),
-                    '_source_file' => $this->databaseDate($row->fecha ?? null),
-                ];
-            })
-            ->values()
-            ->all();
+        if ($grupos->isEmpty()) {
+            return [];
+        }
+
+        $grupoIds = $grupos->pluck('id')->all();
+        $pivotRows = DB::table('redmine_tic_horas_extra_grupo_reportes')
+            ->whereIn('grupo_id', $grupoIds)
+            ->get(['grupo_id', 'reporte_id'])
+            ->groupBy('grupo_id');
+
+        return $grupos->map(function ($row) use ($reports, $pivotRows): array {
+            $ids = ($pivotRows->get($row->id) ?? collect())
+                ->pluck('reporte_id')
+                ->map(static fn ($v): string => (string) $v)
+                ->values()
+                ->all();
+
+            return [
+                'fecha'       => $this->databaseDate($row->fecha ?? null),
+                'hora_inicio' => $this->databaseTime($row->hora_inicio ?? null),
+                'hora_fin'    => $this->databaseTime($row->hora_fin ?? null),
+                'reports'     => array_values(array_filter(array_map(
+                    static fn (string $id): ?array => $reports->get($id),
+                    $ids
+                ))),
+                '_source_file' => $this->databaseDate($row->fecha ?? null),
+            ];
+        })->values()->all();
     }
 
     /**
@@ -2130,10 +2368,13 @@ final class RedmineDataRepository
                 }
                 $id = trim((string) ($report['id'] ?? ''));
                 if ($id !== '') {
-                    $ids[$id] = $id;
-                    $this->saveArchivedReportToDatabase(array_merge($report, [
+                    $savedReport = $this->saveArchivedReportToDatabase(array_merge($report, [
                         'hora_extra' => 'SI',
                     ]));
+                    $savedId = trim((string) ($savedReport['id'] ?? $id));
+                    if ($savedId !== '' && is_numeric($savedId)) {
+                        $ids[(int) $savedId] = (int) $savedId;
+                    }
                 }
             }
 
@@ -2141,11 +2382,34 @@ final class RedmineDataRepository
                 ['modulo_id' => $moduleId, 'fecha' => $date],
                 [
                     'hora_inicio' => $this->parseTime($group['hora_inicio'] ?? null),
-                    'hora_fin' => $this->parseTime($group['hora_fin'] ?? null),
-                    'report_local_ids' => json_encode(array_values($ids), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'hora_fin'    => $this->parseTime($group['hora_fin'] ?? null),
                     'actualizado_at' => now(),
                 ]
             );
+
+            if ($this->hoursExtraPivotTableAvailable() && !empty($ids)) {
+                $grupoId = (int) DB::table('redmine_tic_horas_extra_grupos')
+                    ->where('modulo_id', $moduleId)
+                    ->where('fecha', $date)
+                    ->value('id');
+
+                if ($grupoId > 0) {
+                    DB::table('redmine_tic_horas_extra_grupo_reportes')
+                        ->where('grupo_id', $grupoId)
+                        ->delete();
+                    foreach ($ids as $reporteId) {
+                        try {
+                            DB::table('redmine_tic_horas_extra_grupo_reportes')->insertOrIgnore([
+                                'grupo_id'   => $grupoId,
+                                'reporte_id' => $reporteId,
+                                'creado_at'  => now(),
+                            ]);
+                        } catch (\Throwable) {
+                            continue;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2205,6 +2469,41 @@ final class RedmineDataRepository
     }
 
     /**
+     * @param array<string,mixed> $report
+     * @return array<string,mixed>
+     */
+    private function saveNewReport(array $report, bool $archived): array
+    {
+        if (!$this->reportsTableAvailable()) {
+            return $report;
+        }
+
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return $report;
+        }
+
+        try {
+            $id = (int) DB::table('redmine_tic_reportes')->insertGetId(
+                $this->databaseReportPayload($moduleId, $report, $archived)
+            );
+            $this->activeReportsCache = null;
+            $this->archivedReportsCache = null;
+
+            return array_merge($report, ['id' => (string) $id]);
+        } catch (\Throwable) {
+            return $report;
+        }
+    }
+
+    private function reportDatabaseId($value): int
+    {
+        $id = trim((string) $value);
+
+        return ctype_digit($id) ? (int) $id : 0;
+    }
+
+    /**
      * @return array<int,array<string,mixed>>
      */
     private function activeReportsFromDatabase(): array
@@ -2219,9 +2518,11 @@ final class RedmineDataRepository
         }
 
         try {
-            return DB::table('reportes_redmine')
+            return DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->whereNull('archivado_at')
+                ->where(function ($query): void {
+                    $query->whereNull('estado')->orWhere('estado', '<>', 'archivado');
+                })
                 ->orderBy('creado_at')
                 ->get()
                 ->map(fn ($row): array => $this->databaseReportToArray($row))
@@ -2252,29 +2553,33 @@ final class RedmineDataRepository
                 continue;
             }
 
-            $localId = trim((string) ($report['id'] ?? ''));
-            if ($localId === '') {
-                continue;
-            }
-            $activeIds[] = $localId;
+            $reportId = $this->reportDatabaseId($report['id'] ?? null);
 
             try {
-                DB::table('reportes_redmine')->updateOrInsert(
-                    ['modulo_id' => $moduleId, 'local_id' => $localId],
-                    $this->databaseReportPayload($moduleId, $report, false)
-                );
+                $payload = $this->databaseReportPayload($moduleId, $report, false);
+                if ($reportId > 0) {
+                    DB::table('redmine_tic_reportes')
+                        ->where('modulo_id', $moduleId)
+                        ->where('id', $reportId)
+                        ->update($payload);
+                    $activeIds[] = $reportId;
+                } else {
+                    $activeIds[] = (int) DB::table('redmine_tic_reportes')->insertGetId($payload);
+                }
             } catch (\Throwable) {
                 continue;
             }
         }
 
         try {
-            $query = DB::table('reportes_redmine')
+            $query = DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->whereNull('archivado_at');
+                ->where(function ($query): void {
+                    $query->whereNull('estado')->orWhere('estado', '<>', 'archivado');
+                });
 
             if ($activeIds !== []) {
-                $query->whereNotIn('local_id', $activeIds);
+                $query->whereNotIn('id', $activeIds);
             }
 
             $query->delete();
@@ -2282,25 +2587,33 @@ final class RedmineDataRepository
         }
     }
 
-    private function saveArchivedReportToDatabase(array $report): void
+    private function saveArchivedReportToDatabase(array $report): array
     {
         if (!$this->reportsTableAvailable()) {
-            return;
+            return $report;
         }
 
         $moduleId = $this->databaseModuleId();
-        $localId = trim((string) ($report['id'] ?? ''));
-        if ($moduleId === null || $localId === '') {
-            return;
+        if ($moduleId === null) {
+            return $report;
         }
 
         try {
-            DB::table('reportes_redmine')->updateOrInsert(
-                ['modulo_id' => $moduleId, 'local_id' => $localId],
-                $this->databaseReportPayload($moduleId, $report, true)
-            );
+            $payload = $this->databaseReportPayload($moduleId, $report, true);
+            $reportId = $this->reportDatabaseId($report['id'] ?? null);
+            if ($reportId > 0) {
+                DB::table('redmine_tic_reportes')
+                    ->where('modulo_id', $moduleId)
+                    ->where('id', $reportId)
+                    ->update($payload);
+            } else {
+                $reportId = (int) DB::table('redmine_tic_reportes')->insertGetId($payload);
+                $report['id'] = (string) $reportId;
+            }
         } catch (\Throwable) {
         }
+
+        return $report;
     }
 
     private function assignedUserName(string $assigneeId): string
@@ -2453,11 +2766,8 @@ final class RedmineDataRepository
      */
     private function databaseReportToArray(object $row): array
     {
-        $extra = json_decode((string) ($row->datos_extra ?? ''), true);
-        $extra = is_array($extra) ? $extra : [];
-
-        return array_merge($extra, [
-            'id' => (string) ($row->local_id ?? $extra['id'] ?? ''),
+        return [
+            'id' => (string) ($row->id ?? ''),
             'redmine_id' => (string) ($row->redmine_id ?? ''),
             'estado' => (string) ($row->estado ?? ''),
             'estado_redmine' => (string) ($row->estado_redmine ?? ''),
@@ -2471,16 +2781,18 @@ final class RedmineDataRepository
             'descripcion' => (string) ($row->descripcion ?? ''),
             'fecha' => $this->databaseDate($row->fecha ?? null),
             'hora' => $this->databaseTime($row->hora ?? null),
+            'fecha_inicio' => $this->databaseDate($row->fecha_inicio ?? null),
+            'fecha_fin' => $this->databaseDate($row->fecha_fin ?? null),
+            'chat_id_telegram' => (string) ($row->chat_id_telegram ?? ''),
+            'mensaje' => (string) ($row->mensaje ?? ''),
             'asignado_a' => (string) ($row->asignado_a ?? ''),
             'asignado_nombre' => $this->assignedUserName((string) ($row->asignado_a ?? '')),
             'hora_extra' => !empty($row->hora_extra) ? 'SI' : 'NO',
             'tiempo_estimado' => $row->tiempo_estimado !== null ? (string) $row->tiempo_estimado : '',
             'origen' => (string) ($row->origen ?? ''),
-            'procesado_ts' => $row->procesado_at !== null ? (string) $row->procesado_at : (string) ($extra['procesado_ts'] ?? ''),
-            '_archivado_por' => (string) ($row->archivado_por ?? $extra['_archivado_por'] ?? ''),
-            '_archivado_en' => $row->archivado_at !== null ? (string) $row->archivado_at : (string) ($extra['_archivado_en'] ?? ''),
-            'created_at' => $row->creado_at !== null ? (string) $row->creado_at : (string) ($extra['created_at'] ?? ''),
-        ]);
+            'procesado_ts' => $row->procesado_at !== null ? (string) $row->procesado_at : '',
+            'created_at' => $row->creado_at !== null ? (string) $row->creado_at : '',
+        ];
     }
 
     /**
@@ -2488,21 +2800,12 @@ final class RedmineDataRepository
      */
     private function databaseReportPayload(int $moduleId, array $report, bool $archived): array
     {
-        $extra = $report;
-        foreach ([
-            'id', 'redmine_id', 'estado', 'estado_redmine', 'tipo', 'prioridad', 'categoria',
-            'categoria_catalogo_id', 'unidad', 'unidad_catalogo_id', 'unidad_solicitante',
-            'unidad_solicitante_catalogo_id', 'solicitante', 'asunto', 'descripcion', 'fecha', 'hora', 'asignado_a',
-            'asignado_nombre', 'hora_extra', 'tiempo_estimado', 'origen',
-        ] as $key) {
-            unset($extra[$key]);
-        }
+        $estado = $archived ? 'archivado' : (trim((string) ($report['estado'] ?? 'pendiente')) ?: 'pendiente');
 
         return [
             'modulo_id' => $moduleId,
-            'local_id' => trim((string) ($report['id'] ?? '')),
             'redmine_id' => $this->unsignedIntegerOrNull($report['redmine_id'] ?? null),
-            'estado' => trim((string) ($report['estado'] ?? 'pendiente')) ?: null,
+            'estado' => $estado,
             'estado_redmine' => trim((string) ($report['estado_redmine'] ?? '')) ?: null,
             'tipo' => trim((string) ($report['tipo'] ?? '')) ?: null,
             'prioridad' => trim((string) ($report['prioridad'] ?? '')) ?: null,
@@ -2514,14 +2817,15 @@ final class RedmineDataRepository
             'descripcion' => trim((string) ($report['descripcion'] ?? '')) ?: null,
             'fecha' => $this->parseDate($report['fecha'] ?? $report['fecha_inicio'] ?? '') ?: null,
             'hora' => $this->parseTime($report['hora'] ?? ''),
+            'fecha_inicio' => $this->parseDate($report['fecha_inicio'] ?? $report['fecha'] ?? '') ?: null,
+            'fecha_fin' => $this->parseDate($report['fecha_fin'] ?? '') ?: null,
+            'chat_id_telegram' => trim((string) ($report['chat_id_telegram'] ?? $report['numero'] ?? '')) ?: null,
+            'mensaje' => trim((string) ($report['mensaje'] ?? '')) ?: null,
             'asignado_a' => $this->unsignedIntegerOrNull($report['asignado_a'] ?? null),
             'hora_extra' => $this->isHoursExtraReport($report) ? 1 : 0,
             'tiempo_estimado' => $this->decimalHours($report['tiempo_estimado'] ?? null),
             'origen' => trim((string) ($report['origen'] ?? '')) ?: null,
             'procesado_at' => $this->parseDateTime($report['procesado_ts'] ?? ''),
-            'archivado_por' => $archived ? trim((string) ($report['_archivado_por'] ?? '')) ?: null : null,
-            'archivado_at' => $archived ? ($this->parseDateTime($report['_archivado_en'] ?? '') ?: now()) : null,
-            'datos_extra' => json_encode($extra, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'actualizado_at' => now(),
         ];
     }
@@ -2536,15 +2840,15 @@ final class RedmineDataRepository
 
             DB::table('modulos_nova')->insert([
                 'clave_modulo' => $this->projectKey,
-                'nombre' => $this->projectName(),
-                'descripcion' => '',
-                'icono' => '',
-                'tipo' => 'native',
-                'ruta' => $this->projectKey,
-                'entrada' => 'laravel:redmine.native.dashboard',
-                'activo' => 1,
-                'orden' => 100,
-                'creado_at' => now(),
+                'nombre'       => $this->projectName(),
+                'descripcion'  => '',
+                'icono'        => '',
+                'tipo'         => 'native',
+                'ruta'         => $this->projectKey,
+                'entrada'      => 'laravel:redmine.native.dashboard',
+                'habilitado'   => 1,
+                'orden'        => 100,
+                'creado_at'    => now(),
                 'actualizado_at' => now(),
             ]);
 
@@ -2557,7 +2861,7 @@ final class RedmineDataRepository
     private function reportsTableAvailable(): bool
     {
         try {
-            return Schema::hasTable('modulos_nova') && Schema::hasTable('reportes_redmine');
+            return Schema::hasTable('modulos_nova') && Schema::hasTable('redmine_tic_reportes');
         } catch (\Throwable) {
             return false;
         }
@@ -2578,10 +2882,10 @@ final class RedmineDataRepository
         }
 
         try {
-            return DB::table('reportes_redmine')
+            return DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->whereNotNull('archivado_at')
-                ->orderByDesc('archivado_at')
+                ->where('estado', 'archivado')
+                ->orderByDesc('actualizado_at')
                 ->get()
                 ->map(fn ($row): array => $this->databaseReportToArray($row))
                 ->values()
@@ -2761,6 +3065,13 @@ final class RedmineDataRepository
      */
     private function rolesFromDatabase(): array
     {
+        // Phase 3+: read from relational table first
+        $relational = $this->rolesFromRelational();
+        if ($relational !== []) {
+            return $relational;
+        }
+
+        // Fallback: JSON blob in configuraciones_modulo
         $roles = $this->moduleConfigurationFromDatabase()['roles'] ?? [];
 
         return is_array($roles) ? $roles : [];
@@ -2771,6 +3082,8 @@ final class RedmineDataRepository
      */
     private function saveRolesToDatabase(array $roles): void
     {
+        // Dual-write: relational table (Phase 3 primary) + JSON (fallback backup)
+        $this->saveRolesToRelational($roles);
         $this->saveModuleConfigurationToDatabase(['roles' => $roles], ['roles' => 'json']);
     }
 
@@ -2819,12 +3132,342 @@ final class RedmineDataRepository
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Phase 3a — Relational permissions helpers
+    // -------------------------------------------------------------------------
+
+    private function permissionsTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('redmine_tic_permisos_usuario');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function rolPermissionsTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('redmine_tic_permisos_rol');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function encodePermissionValue(string $clave, mixed $value): string
+    {
+        if (in_array($clave, self::PERMISSION_SCOPE_KEYS, true)) {
+            if (is_string($value)) {
+                return $value; // 'todos', 'asignados', or ''
+            }
+            // Legacy bool stored as scope key: convert to safe string
+            return $value ? 'asignados' : '';
+        }
+
+        return $value ? 'si' : 'no';
+    }
+
+    private function decodePermissionValue(string $clave, string $valor): mixed
+    {
+        if (in_array($clave, self::PERMISSION_SCOPE_KEYS, true)) {
+            return $valor; // return 'todos', 'asignados', or '' as-is
+        }
+
+        return $valor === 'si';
+    }
+
+    /**
+     * Loads all user permissions in one query, keyed by perfil_id.
+     * Returns null when the table does not exist (caller falls back to JSON for all users).
+     * Returns empty array when the table exists but has no rows.
+     *
+     * @return array<int,array<string,mixed>>|null
+     */
+    private function allPermissionsFromRelational(): ?array
+    {
+        if (!$this->permissionsTableAvailable()) {
+            return null;
+        }
+
+        try {
+            $rows = DB::table('redmine_tic_permisos_usuario')->get(['perfil_id', 'clave', 'valor']);
+            if ($rows->isEmpty()) {
+                return null; // empty table → use JSON fallback for all users
+            }
+
+            $byPerfil = [];
+            foreach ($rows as $row) {
+                $perfilId = (int) $row->perfil_id;
+                $clave    = (string) $row->clave;
+                $byPerfil[$perfilId][$clave] = $this->decodePermissionValue($clave, (string) $row->valor);
+            }
+
+            return $byPerfil;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Writes one user's permissions to the relational table (upsert + prune stale keys).
+     *
+     * @param array<string,mixed> $permissions
+     */
+    private function savePermissionsToRelational(int $perfilId, array $permissions): void
+    {
+        if (!$this->permissionsTableAvailable() || $perfilId <= 0) {
+            return;
+        }
+
+        $savedClaves = [];
+        foreach ($permissions as $clave => $valor) {
+            $clave = trim((string) $clave);
+            if ($clave === '') {
+                continue;
+            }
+            try {
+                DB::table('redmine_tic_permisos_usuario')->updateOrInsert(
+                    ['perfil_id' => $perfilId, 'clave' => $clave],
+                    ['valor' => $this->encodePermissionValue($clave, $valor), 'actualizado_at' => now()]
+                );
+                $savedClaves[] = $clave;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        // Prune keys that are no longer in the permissions set
+        if (!empty($savedClaves)) {
+            try {
+                DB::table('redmine_tic_permisos_usuario')
+                    ->where('perfil_id', $perfilId)
+                    ->whereNotIn('clave', $savedClaves)
+                    ->delete();
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    /**
+     * Reads all role→key→value triplets from the relational table.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function rolesFromRelational(): array
+    {
+        if (!$this->rolPermissionsTableAvailable()) {
+            return [];
+        }
+
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return [];
+        }
+
+        try {
+            $rows = DB::table('redmine_tic_permisos_rol')
+                ->where('modulo_id', $moduleId)
+                ->get(['rol', 'clave', 'valor']);
+
+            if ($rows->isEmpty()) {
+                return [];
+            }
+
+            $roles = [];
+            foreach ($rows as $row) {
+                $rol   = (string) $row->rol;
+                $clave = (string) $row->clave;
+                $roles[$rol][$clave] = $this->decodePermissionValue($clave, (string) $row->valor);
+            }
+
+            return $roles;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Writes the full roles dict to the relational table (upsert per key + prune removed roles/keys).
+     *
+     * @param array<string,array<string,mixed>> $roles
+     */
+    private function saveRolesToRelational(array $roles): void
+    {
+        if (!$this->rolPermissionsTableAvailable()) {
+            return;
+        }
+
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return;
+        }
+
+        foreach ($roles as $rol => $permissions) {
+            $rol = trim((string) $rol);
+            if ($rol === '' || !is_array($permissions)) {
+                continue;
+            }
+
+            $savedClaves = [];
+            foreach ($permissions as $clave => $valor) {
+                $clave = trim((string) $clave);
+                if ($clave === '') {
+                    continue;
+                }
+                try {
+                    DB::table('redmine_tic_permisos_rol')->updateOrInsert(
+                        ['modulo_id' => $moduleId, 'rol' => $rol, 'clave' => $clave],
+                        ['valor' => $this->encodePermissionValue($clave, $valor), 'actualizado_at' => now()]
+                    );
+                    $savedClaves[] = $clave;
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+
+            // Prune keys removed from this role
+            if (!empty($savedClaves)) {
+                try {
+                    DB::table('redmine_tic_permisos_rol')
+                        ->where('modulo_id', $moduleId)
+                        ->where('rol', $rol)
+                        ->whereNotIn('clave', $savedClaves)
+                        ->delete();
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        // Prune roles no longer in the roles dict
+        $roleNames = array_values(array_filter(array_map('trim', array_keys($roles))));
+        if (!empty($roleNames)) {
+            try {
+                DB::table('redmine_tic_permisos_rol')
+                    ->where('modulo_id', $moduleId)
+                    ->whereNotIn('rol', $roleNames)
+                    ->delete();
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+
     private function hoursExtraTableAvailable(): bool
     {
         try {
             return Schema::hasTable('modulos_nova') && Schema::hasTable('redmine_tic_horas_extra_grupos');
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    private function hoursExtraPivotTableAvailable(): bool
+    {
+        try {
+            return $this->hoursExtraTableAvailable() && Schema::hasTable('redmine_tic_horas_extra_grupo_reportes');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function moduleOptionsTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('modulo_opciones');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param 'tracker'|'prioridad'|'estado' $tipo
+     * @return array<int,array<string,mixed>>
+     */
+    private function optionsFromDatabase(string $tipo): array
+    {
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return [];
+        }
+
+        try {
+            return DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->orderBy('orden')
+                ->get(['id_externo', 'nombre', 'predeterminado'])
+                ->map(static function ($row): array {
+                    $id = (string) ($row->id_externo ?? '');
+                    return [
+                        'id'      => is_numeric($id) ? (int) $id : $id,
+                        'nombre'  => (string) ($row->nombre ?? ''),
+                        'default' => (bool) $row->predeterminado,
+                    ];
+                })
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param 'tracker'|'prioridad'|'estado' $tipo
+     * @param array<int,array<string,mixed>> $items
+     */
+    private function saveOptionsToDatabase(string $tipo, array $items): void
+    {
+        if (!$this->moduleOptionsTableAvailable()) {
+            return;
+        }
+
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return;
+        }
+
+        $savedExternalIds = [];
+
+        foreach ($items as $orden => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $idExterno = isset($item['id']) ? (string) $item['id'] : null;
+            $nombre    = trim((string) ($item['nombre'] ?? $item['name'] ?? ''));
+            if ($nombre === '') {
+                continue;
+            }
+
+            try {
+                DB::table('modulo_opciones')->updateOrInsert(
+                    ['modulo_id' => $moduleId, 'tipo' => $tipo, 'id_externo' => $idExterno],
+                    [
+                        'nombre'         => $nombre,
+                        'predeterminado' => !empty($item['default']) ? 1 : 0,
+                        'activo'         => 1,
+                        'orden'          => (int) $orden + 1,
+                        'actualizado_at' => now(),
+                    ]
+                );
+                if ($idExterno !== null) {
+                    $savedExternalIds[] = $idExterno;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        // Remove options no longer in the list
+        try {
+            $deleteQuery = DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo);
+            if (!empty($savedExternalIds)) {
+                $deleteQuery->whereNotIn('id_externo', $savedExternalIds);
+            }
+            $deleteQuery->delete();
+        } catch (\Throwable) {
         }
     }
 
@@ -2839,8 +3482,9 @@ final class RedmineDataRepository
 
     private function archiveReport(array $report): void
     {
-        $report['_archivado_en'] = now('America/Santiago')->toAtomString();
-        $this->saveArchivedReportToDatabase($report);
+        $this->archivedReportsCache = null;
+        $report['estado'] = 'archivado';
+        $report = $this->saveArchivedReportToDatabase($report);
 
         if ($this->isHoursExtraReport($report)) {
             $this->syncHoursExtraForReport($report);
@@ -3187,87 +3831,54 @@ final class RedmineDataRepository
      */
     private function projectUsersFromNova(): array
     {
-        if (!$this->redmineTicUsersTableAvailable()) {
+        if (!$this->novaUsersTableAvailable()) {
             return [];
         }
 
-        $novaByRedmineId = [];
-        if ($this->novaUsersTableAvailable()) {
-            try {
-                foreach (NovaUser::query()->whereNotNull('redmine_id')->get() as $novaUser) {
-                    $novaByRedmineId[(string) $novaUser->redmine_id] = $novaUser;
-                }
-            } catch (\Throwable) {
-                $novaByRedmineId = [];
-            }
-        }
-
-        $users = DB::table('redmine_tic_usuarios')
-            ->orderBy('nombre')
-            ->orderBy('apellido')
-            ->get()
-            ->map(function ($row) use ($novaByRedmineId): array {
-                $redmineId = (string) ($row->redmine_id ?? '');
-                $nova = $novaByRedmineId[$redmineId] ?? null;
-                $permissions = json_decode((string) ($row->permisos ?? '[]'), true);
-                $redmineRoles = json_decode((string) ($row->redmine_roles ?? '[]'), true);
-                $telegramChatId = trim((string) ($row->telegram_chat_id ?? ''));
-
-                return [
-                    'id' => $redmineId,
-                    'rut_sin_dv' => trim((string) ($nova?->usuario ?? $row->rut_sin_dv ?? '')),
-                    'nombre' => trim((string) ($nova?->nombre ?? $row->nombre ?? '')),
-                    'apellido' => trim((string) ($nova?->apellido ?? $row->apellido ?? '')),
-                    'rut' => trim((string) ($nova?->rut ?? $row->rut ?? '')),
-                    'numero_celular' => '',
-                    'telegram_chat_id' => $telegramChatId,
-                    'telegram_source' => $telegramChatId !== '' ? 'redmine_tic' : '',
-                    'api' => $this->integrationSecret((int) ($nova?->id ?? 0), 'redmine_tic') ?: trim((string) ($row->api_token ?? '')),
-                    'rol' => trim((string) ($row->rol ?? 'usuario')) ?: 'usuario',
-                    'password' => (string) ($nova?->password ?? ''),
-                    'permisos' => is_array($permissions) ? $permissions : [],
-                    'estado_usuario' => trim((string) ($row->estado_usuario ?? $nova?->estado ?? 'activo')) ?: 'activo',
-                    'redmine_membership_id' => $row->redmine_membership_id ?? null,
-                    'redmine_roles' => is_array($redmineRoles) ? $redmineRoles : [],
-                    '_nova_user_id' => (string) ($nova?->uuid ?? ''),
-                ];
-            })
-            ->values()
-            ->all();
-
-        $known = [];
-        foreach ($users as $user) {
-            $id = trim((string) ($user['id'] ?? ''));
-            if ($id !== '') {
-                $known[$id] = true;
-            }
-        }
-
+        $profiles = $this->redmineTicProfilesByUserId();
+        $central = [];
         foreach ($this->novaUsersWithProjectAccess() as $nova) {
+            $central[(int) $nova->id] = $nova;
+        }
+
+        // Phase 3+: batch-load all relational permissions in one query
+        $allRelationalPerms = $this->allPermissionsFromRelational();
+
+        $users = [];
+        foreach ($central as $nova) {
+            $profile = $profiles[(int) $nova->id] ?? null;
             $redmineId = trim((string) ($nova->redmine_id ?? ''));
-            if ($redmineId === '' || isset($known[$redmineId])) {
+            $projectId = $redmineId !== '' ? $redmineId : trim((string) ($nova->uuid ?? $nova->usuario ?? ''));
+            if ($projectId === '') {
                 continue;
             }
+            $telegramChatId = trim((string) ($nova->telegram_id_chat ?? ''));
+
+            // Resolve permissions: relational table first, JSON fallback
+            $perfilId    = (int) ($profile->id ?? 0);
+            $permissions = ($allRelationalPerms !== null && $perfilId > 0 && isset($allRelationalPerms[$perfilId]))
+                ? $allRelationalPerms[$perfilId]
+                : $this->jsonArray($profile->permisos ?? null);
 
             $users[] = [
-                'id' => $redmineId,
+                'id' => $projectId,
+                'redmine_id' => $redmineId,
                 'rut_sin_dv' => trim((string) ($nova->usuario ?? '')),
                 'nombre' => trim((string) ($nova->nombre ?? '')),
                 'apellido' => trim((string) ($nova->apellido ?? '')),
                 'rut' => trim((string) ($nova->rut ?? '')),
                 'numero_celular' => '',
-                'telegram_chat_id' => '',
-                'telegram_source' => '',
+                'telegram_chat_id' => $telegramChatId,
+                'telegram_source' => $telegramChatId !== '' ? 'nova' : '',
                 'api' => $this->integrationSecret((int) ($nova->id ?? 0), 'redmine_tic'),
-                'rol' => trim((string) ($nova->rol ?? 'usuario')) ?: 'usuario',
+                'rol' => trim((string) ($profile->rol ?? $nova->rol ?? 'usuario')) ?: 'usuario',
                 'password' => (string) ($nova->password ?? ''),
-                'permisos' => [],
-                'estado_usuario' => trim((string) ($nova->estado ?? 'activo')) ?: 'activo',
-                'redmine_membership_id' => null,
-                'redmine_roles' => [],
+                'permisos' => $permissions,
+                'estado_usuario' => trim((string) ($profile->estado_usuario ?? $nova->estado ?? 'activo')) ?: 'activo',
+                'redmine_membership_id' => $profile->redmine_membership_id ?? null,
                 '_nova_user_id' => (string) ($nova->uuid ?? ''),
+                '_central_only' => $redmineId === '',
             ];
-            $known[$redmineId] = true;
         }
 
         usort($users, static fn (array $a, array $b): int => strcasecmp(
@@ -3281,9 +3892,9 @@ final class RedmineDataRepository
     /**
      * @param array<int,array<string,mixed>> $projectUsers
      */
-    private function saveProjectUsers(array $projectUsers): void
+    private function saveProjectUsers(array $projectUsers, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): void
     {
-        if (!$this->redmineTicUsersTableAvailable()) {
+        if (!$this->novaUsersTableAvailable()) {
             return;
         }
 
@@ -3296,7 +3907,6 @@ final class RedmineDataRepository
             if ($redmineId === '') {
                 continue;
             }
-
             $name = trim((string) ($projectUser['nombre'] ?? ''));
             $lastName = trim((string) ($projectUser['apellido'] ?? ''));
             if ($lastName === '' && str_contains($name, ' ')) {
@@ -3305,39 +3915,56 @@ final class RedmineDataRepository
                 $lastName = $rest;
             }
 
-            $nova = $this->upsertNovaUserFromProjectUser($projectUser, $name, $lastName);
+            $nova = $this->upsertNovaUserFromProjectUser($projectUser, $name, $lastName, $preserveExistingStatus, $defaultStatus);
             $apiToken = trim((string) ($projectUser['api'] ?? ''));
             $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
             if ($nova instanceof NovaUser) {
                 $this->saveUserIntegration((int) $nova->id, 'redmine_tic', $apiToken, (string) $redmineId);
-                $this->saveUserIntegration((int) $nova->id, 'telegram', '', '', $telegramChatId);
+                $this->saveTelegramChatId((int) $nova->id, $telegramChatId);
                 $this->grantProjectAccess((int) $nova->id);
             }
 
-            DB::table('redmine_tic_usuarios')->updateOrInsert(
-                ['redmine_id' => (int) $redmineId],
+            if (!$nova instanceof NovaUser || !$this->redmineTicProfilesTableAvailable()) {
+                continue;
+            }
+
+            $currentProfile = DB::table('redmine_tic_perfiles_usuario')
+                ->where('usuario_id', (int) $nova->id)
+                ->first();
+            $incomingStatus = array_key_exists('estado_usuario', $projectUser)
+                ? trim((string) $projectUser['estado_usuario'])
+                : '';
+            $status = $preserveExistingStatus && $currentProfile !== null
+                ? trim((string) ($currentProfile->estado_usuario ?? 'activo'))
+                : ($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
+
+            $permsToSave = is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [];
+
+            // Phase 3c: 'permisos' column was dropped — write only relational columns
+            DB::table('redmine_tic_perfiles_usuario')->updateOrInsert(
+                ['usuario_id' => (int) $nova->id],
                 [
-                    'rut_sin_dv' => null,
-                    'rut' => null,
-                    'nombre' => null,
-                    'apellido' => null,
-                    'telegram_chat_id' => $telegramChatId ?: null,
-                    'api_token' => null,
                     'rol' => trim((string) ($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
-                    'estado_usuario' => $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? 'activo')),
-                    'permisos' => json_encode(is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'estado_usuario' => $this->normalizeProjectStatus($status),
                     'redmine_membership_id' => $this->unsignedIntegerOrNull($projectUser['redmine_membership_id'] ?? null),
-                    'redmine_roles' => json_encode(is_array($projectUser['redmine_roles'] ?? null) ? $projectUser['redmine_roles'] : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'actualizado_at' => now(),
                 ]
             );
+
+            // Phase 3+: write permissions to the relational table
+            if ($this->permissionsTableAvailable()) {
+                $perfilId = (int) DB::table('redmine_tic_perfiles_usuario')
+                    ->where('usuario_id', (int) $nova->id)
+                    ->value('id');
+                $this->savePermissionsToRelational($perfilId, $permsToSave);
+            }
         }
     }
 
     /**
      * @param array<string,mixed> $projectUser
      */
-    private function upsertNovaUserFromProjectUser(array $projectUser, string $name, string $lastName): ?NovaUser
+    private function upsertNovaUserFromProjectUser(array $projectUser, string $name, string $lastName, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): ?NovaUser
     {
         if (!$this->novaUsersTableAvailable()) {
             return null;
@@ -3347,13 +3974,41 @@ final class RedmineDataRepository
         if ($redmineId === '') {
             return null;
         }
+        $uuid = trim((string) ($projectUser['_nova_user_id'] ?? ''));
+        if (!ctype_digit($redmineId)) {
+            try {
+                $user = $uuid !== ''
+                    ? NovaUser::query()->where('uuid', $uuid)->first()
+                    : null;
+                if (!$user) {
+                    return null;
+                }
+                if ($name !== '') {
+                    $user->nombre = $name;
+                }
+                if ($lastName !== '') {
+                    $user->apellido = $lastName;
+                }
+                if (!$preserveExistingStatus) {
+                    $user->estado = $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? $user->estado ?? 'activo'));
+                }
+                $user->save();
+
+                return $user;
+            } catch (\Throwable) {
+                return null;
+            }
+        }
 
         $username = trim((string) ($projectUser['rut_sin_dv'] ?? $projectUser['username'] ?? '')) ?: $redmineId;
         $rut = trim((string) ($projectUser['rut'] ?? ''));
         $name = $name !== '' ? $name : 'Redmine';
         $lastName = $lastName !== '' ? $lastName : 'Usuario';
         $role = $this->normalizeNovaRoleForProject((string) ($projectUser['rol'] ?? 'usuario'));
-        $status = $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? 'activo'));
+        $incomingStatus = array_key_exists('estado_usuario', $projectUser)
+            ? trim((string) $projectUser['estado_usuario'])
+            : '';
+        $status = $this->normalizeProjectStatus($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
 
         try {
             $user = NovaUser::query()->where('redmine_id', $redmineId)->first();
@@ -3376,7 +4031,9 @@ final class RedmineDataRepository
             $user->nombre = $name;
             $user->apellido = $lastName;
             $user->rol = $role;
-            $user->estado = $status;
+            if (!$user->exists || !$preserveExistingStatus) {
+                $user->estado = $status;
+            }
             $user->save();
 
             return $user;
@@ -3418,11 +4075,13 @@ final class RedmineDataRepository
             return;
         }
 
-        $values = [
-            'usuario_externo' => $externalUser !== '' ? $externalUser : null,
-            'chat_id' => $chatId !== '' ? $chatId : null,
-            'actualizado_at' => now(),
-        ];
+        $values = ['actualizado_at' => now()];
+        if (Schema::hasColumn('integraciones_usuario', 'usuario_externo')) {
+            $values['usuario_externo'] = $externalUser !== '' ? $externalUser : null;
+        }
+        if ($chatId !== '' && Schema::hasColumn('integraciones_usuario', 'chat_id')) {
+            $values['chat_id'] = $chatId;
+        }
         if ($secret !== '') {
             $values['valor_secreto'] = $this->encryptIntegrationSecret($secret);
         }
@@ -3499,6 +4158,24 @@ final class RedmineDataRepository
             return $this->decryptIntegrationSecret($secret);
         } catch (\Throwable) {
             return '';
+        }
+    }
+
+    private function saveTelegramChatId(int $novaUserId, string $chatId): void
+    {
+        $chatId = trim($chatId);
+        if ($novaUserId <= 0 || $chatId === '' || !$this->novaUsersTableAvailable()) {
+            return;
+        }
+
+        try {
+            DB::table('usuarios_nova')
+                ->where('id', $novaUserId)
+                ->update([
+                    'telegram_id_chat' => $chatId,
+                    'actualizado_at' => now(),
+                ]);
+        } catch (\Throwable) {
         }
     }
 
@@ -3657,7 +4334,6 @@ final class RedmineDataRepository
                                 'api' => trim((string) ($project['api'] ?? $current['api'] ?? '')),
                                 'permisos' => is_array($project['permisos'] ?? null) ? $project['permisos'] : [],
                                 'redmine_membership_id' => $project['redmine_membership_id'] ?? null,
-                                'redmine_roles' => is_array($project['redmine_roles'] ?? null) ? $project['redmine_roles'] : [],
                             ]),
                         ]),
                     ]);
@@ -3726,20 +4402,48 @@ final class RedmineDataRepository
         }
     }
 
-    private function redmineTicUsersTableAvailable(): bool
+    private function redmineTicProfilesTableAvailable(): bool
     {
         try {
-            return Schema::hasTable('redmine_tic_usuarios');
+            return Schema::hasTable('redmine_tic_perfiles_usuario');
         } catch (\Throwable) {
             return false;
         }
     }
 
-    private function novaUsersPath(): string
+    /**
+     * @return array<int,object>
+     */
+    private function redmineTicProfilesByUserId(): array
     {
-        return function_exists('storage_path')
-            ? storage_path('app/nova/users.json')
-            : dirname($this->basePath()) . '/storage/app/nova/users.json';
+        if (!$this->redmineTicProfilesTableAvailable()) {
+            return [];
+        }
+
+        try {
+            $profiles = [];
+            foreach (DB::table('redmine_tic_perfiles_usuario')->get() as $profile) {
+                $profiles[(int) ($profile->usuario_id ?? 0)] = $profile;
+            }
+
+            return array_filter($profiles, static fn (object $profile): bool => (int) ($profile->usuario_id ?? 0) > 0);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array<int,mixed>
+     */
+    private function jsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        $decoded = json_decode((string) $value, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function normalizeUnifiedIdentity(string $value): string
@@ -3792,17 +4496,26 @@ final class RedmineDataRepository
      */
     private function novaTelegramByRedmineId(): array
     {
-        if (!$this->redmineTicUsersTableAvailable()) {
+        if (!$this->novaUsersTableAvailable()) {
             return [];
         }
 
         $mapped = [];
-        foreach (DB::table('redmine_tic_usuarios')->get(['redmine_id', 'telegram_chat_id']) as $row) {
-            $redmineId = trim((string) ($row->redmine_id ?? ''));
-            $chatId = trim((string) ($row->telegram_chat_id ?? ''));
-            if ($redmineId !== '' && $chatId !== '') {
-                $mapped[$redmineId] = $chatId;
+        try {
+            $rows = DB::table('usuarios_nova')
+                ->whereNotNull('usuarios_nova.redmine_id')
+                ->whereNotNull('usuarios_nova.telegram_id_chat')
+                ->select('usuarios_nova.redmine_id', 'usuarios_nova.telegram_id_chat')
+                ->get();
+
+            foreach ($rows as $row) {
+                $redmineId = trim((string) ($row->redmine_id ?? ''));
+                $chatId = trim((string) ($row->telegram_id_chat ?? ''));
+                if ($redmineId !== '' && $chatId !== '') {
+                    $mapped[$redmineId] = $chatId;
+                }
             }
+        } catch (\Throwable) {
         }
 
         return $mapped;
@@ -4756,7 +5469,7 @@ final class RedmineDataRepository
                     $out[$date]['hora_fin'] = (string) ($group['hora_fin'] ?? $out[$date]['hora_fin']);
                     $out[$date]['_source_file'] = (string) ($group['_source_file'] ?? $out[$date]['_source_file']);
                 }
-                $key = (string) ($report['id'] ?? (($report['numero'] ?? '') . '|' . ($report['hora'] ?? '') . '|' . ($report['asunto'] ?? '')));
+                $key = (string) ($report['id'] ?? (($report['chat_id_telegram'] ?? $report['numero'] ?? '') . '|' . ($report['hora'] ?? '') . '|' . ($report['asunto'] ?? '')));
                 if ($key === '') {
                     continue;
                 }
@@ -5131,7 +5844,7 @@ final class RedmineDataRepository
             'db/configuration' => $this->saveConfiguration($incoming),
             'db/roles' => $this->saveRolesToDatabase($incoming),
             'db/categories' => $this->saveCatalogRowsToDatabase('categoria', $incoming),
-            'db/users' => $this->saveProjectUsers($incoming),
+            'db/users' => $this->saveProjectUsers($incoming, true, 'baneado'),
             'db/units' => $this->saveCatalogRowsToDatabase('unidad', $incoming),
             default => null,
         };

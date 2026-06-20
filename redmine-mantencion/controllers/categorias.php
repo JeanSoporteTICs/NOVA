@@ -3,18 +3,16 @@
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
 
-$GLOBALS['DATA_FILE'] = __DIR__ . '/../data/categorias.json';
+$GLOBALS['DATA_FILE'] = 'categorias';
 $GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
 $GLOBALS['USERS_FILE'] = __DIR__ . '/../data/usuarios.json';
 
 function ensure_cat_file($path) {
-    if (storage_read_json($path, null) === null) {
-        storage_write_json($path, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
-    }
+    // Legacy no-op: categorias.json is deprecated and no longer used at runtime.
 }
 function load_categorias($path) {
-    ensure_cat_file($path);
-    $data = storage_read_json($path, []);
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    $data = $repo !== null ? $repo->categorias() : [];
     if (!is_array($data)) $data = [];
     foreach ($data as &$item) {
         if (!isset($item['id'])) { $item['id'] = uniqid('', true); }
@@ -23,7 +21,10 @@ function load_categorias($path) {
     return $data;
 }
 function save_categorias($path, $data) {
-    storage_write_json($path, $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    if ($repo !== null) {
+        $repo->upsertCategorias(is_array($data) ? $data : []);
+    }
 }
 
 function categorias_api_url($platformUrl) {
@@ -98,7 +99,7 @@ function user_api_token_fallback($usersFile) {
 }
 
 
-function sync_categorias_desde_api($configPath, $dataPath) {
+function sync_categorias_desde_api($configPath, $dataPath = null) {
     $cfg = storage_read_json($configPath, []);
     $platformUrl = $cfg['platform_url'] ?? '';
     $apiKey = $cfg['platform_token'] ?? '';
@@ -148,7 +149,7 @@ function sync_categorias_desde_api($configPath, $dataPath) {
     if (empty($cats)) {
         return ['error' => 'La respuesta no contiene categor&iacute;as v&aacute;lidas.'];
     }
-    save_categorias($dataPath, $cats);
+    save_categorias((string)$dataPath, $cats);
     return ['ok' => count($cats)];
 }
 
@@ -163,7 +164,7 @@ function handle_categorias() {
         if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
         $action = $_POST['action'] ?? '';
         if ($action === 'sync_remote') {
-            $res = sync_categorias_desde_api($CONFIG_FILE, $DATA_FILE);
+            $res = sync_categorias_desde_api($CONFIG_FILE);
             if (isset($res['error'])) {
                 $error = $res['error'];
             } else {

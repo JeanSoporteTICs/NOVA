@@ -32,6 +32,38 @@ La migracion se hace por modulo, sin mezclar carpetas ni datos entre proyectos:
 
 Esta estructura permite agregar nuevos modulos sin duplicar la aplicacion base ni acoplar los proyectos Redmine entre si.
 
+## Identidad central de usuarios
+
+NOVA debe usar `usuarios_nova` como tabla unica de identidad para las personas. Los modulos no deben crear una segunda fuente principal de usuarios cuando ya existe una relacion por `redmine_id`, RUT, `usuario` o `usuario_core`.
+
+Campos centrales esperados:
+
+- `id`/`uuid`: identificador interno NOVA.
+- `usuario`: usuario de acceso.
+- `rut`: identidad nacional cuando exista.
+- `nombre` y `apellido`: nombre personal separado; los listados deben mostrar ambos.
+- `password`, `rol` y `estado`: acceso global NOVA.
+- `redmine_id`: ID Redmine asociado cuando exista.
+- `usuario_core`: usuario externo CORE.
+- Auditoria: `ultimo_login_at`, `creado_at`, `actualizado_at`.
+
+Las integraciones por usuario, como API Redmine, Nextcloud, EMACH o Telegram, deben quedar asociadas al usuario central. Los secretos y credenciales se guardan mediante `integraciones_usuario` o repositorios/helpers existentes, no incrustados en vistas ni logs. Los permisos de acceso por modulo se resuelven con `modulos_nova` y `permisos_usuario_modulo`.
+
+Las vistas y repositorios de runtime no deben reconstruir usuarios ni accesos desde archivos `.json`. `storage/app/nova/users.json`, `storage/app/nova/access.json` y los `data/usuarios.json` de los modulos quedan como artefactos historicos o de importacion manual; la consulta viva debe salir de `usuarios_nova`, `integraciones_usuario`, `modulos_nova`, `permisos_usuario_modulo` y las tablas propias de cada modulo.
+
+La sincronizacion de usuarios sigue estas reglas:
+
+1. Al importar desde Redmine Mantencion o Redmine TIC, crear o actualizar `usuarios_nova` con nombre y apellido separados. Primero usar `firstname`/`lastname` de Redmine; si no existen, consultar el formulario `/users/{id}/edit`; partir `name` solo como fallback.
+2. Si NOVA edita datos centrales de un usuario, esos cambios deben reflejarse en el proyecto correspondiente cuando el usuario este registrado o tenga acceso a ese modulo.
+3. Si NOVA concede acceso a Redmine Mantencion o Redmine TIC para un usuario creado centralmente, ese usuario debe aparecer en la vista/listado de usuarios del modulo.
+4. Redmine Mantencion y Redmine TIC conservan permisos, roles y estados propios por modulo; esos valores no reemplazan el rol global de NOVA.
+
+Estado actual:
+
+- Redmine TIC guarda reportes en `redmine_tic_reportes` y perfil de usuario por modulo en `redmine_tic_perfiles_usuario`; no usa `redmine_tic_usuarios`.
+- Redmine Mantencion proyecta las lecturas legacy de `usuarios.json` desde `usuarios_nova`/permisos y guarda cambios de usuarios contra la identidad central.
+- Los comandos de importacion JSON siguen existiendo solo como puente historico controlado; no deben ejecutarse automaticamente al pintar vistas.
+
 ## Estado migracion Redmine
 
 Redmine tiene una capa Laravel nativa bajo:

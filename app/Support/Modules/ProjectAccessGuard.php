@@ -3,7 +3,6 @@
 namespace App\Support\Modules;
 
 use App\Support\Nova\NovaAccessRepository;
-use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
 use RedmineTic\Support\Redmine\RedmineDataRepository;
 
 final class ProjectAccessGuard
@@ -42,6 +41,10 @@ final class ProjectAccessGuard
         $module = $this->modules->get($projectKey);
         $needles = $this->sessionNeedles($sessionUser);
 
+        if ($explicitAccess === true) {
+            return $this->sessionProjectUser($sessionUser);
+        }
+
         if ($projectKey === 'redmine_tic' && class_exists(RedmineDataRepository::class)) {
             try {
                 $user = $this->projectUserFromRows(app(RedmineDataRepository::class)->forProject($projectKey)->users(), $needles);
@@ -50,41 +53,6 @@ final class ProjectAccessGuard
                 }
             } catch (\Throwable) {
             }
-        }
-
-        if ($projectKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
-            try {
-                $users = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
-                if (is_array($users)) {
-                    $user = $this->projectUserFromRows($users, $needles);
-                    if ($user !== null) {
-                        return $user;
-                    }
-                }
-            } catch (\Throwable) {
-            }
-        }
-
-        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-
-        if (is_file($path)) {
-            $users = json_decode((string) file_get_contents($path), true);
-            if (is_array($users)) {
-                $user = $this->projectUserFromRows($users, $needles);
-                if ($user !== null) {
-                    return $user;
-                }
-            }
-        }
-
-        $novaProjectUser = $this->novaProjectUser($projectKey, $sessionUser, $needles);
-        if ($novaProjectUser !== null) {
-            return $novaProjectUser;
-        }
-
-        if ($explicitAccess === true) {
-            return $this->sessionProjectUser($sessionUser);
         }
 
         return null;
@@ -105,8 +73,11 @@ final class ProjectAccessGuard
             'apellido' => (string) ($sessionUser['apellido'] ?? ''),
             'rut' => (string) ($sessionUser['rut'] ?? ''),
             'api' => (string) ($sessionUser['api'] ?? ''),
+            'core_user' => (string) ($sessionUser['core_user'] ?? ''),
+            'nextcloud_user' => (string) ($sessionUser['nextcloud_user'] ?? ''),
             'rol' => $isAdmin ? 'root' : (string) ($sessionUser['role'] ?? 'usuario'),
             'estado_usuario' => (string) ($sessionUser['status'] ?? 'activo'),
+            'estado' => (string) ($sessionUser['status'] ?? 'activo'),
             'permisos' => $isAdmin ? ['all' => true] : [],
             '_nova_user_id' => (string) ($sessionUser['id'] ?? ''),
         ];
@@ -167,51 +138,6 @@ final class ProjectAccessGuard
      */
     private function novaProjectUser(string $projectKey, array $sessionUser, ?array $needles = null): ?array
     {
-        $rows = json_decode((string) @file_get_contents(storage_path('app/nova/users.json')), true);
-        if (!is_array($rows)) {
-            return null;
-        }
-
-        $needles = $needles ?? $this->sessionNeedles($sessionUser);
-
-        foreach ($rows as $row) {
-            if (!is_array($row) || $this->isBlocked($row)) {
-                continue;
-            }
-
-            $project = is_array(data_get($row, 'projects.' . $projectKey)) ? data_get($row, 'projects.' . $projectKey) : [];
-            if ($project === [] || $this->isBlocked($project)) {
-                continue;
-            }
-
-            $candidates = array_filter(array_map([$this, 'normalize'], [
-                $row['username'] ?? '',
-                $row['redmine_id'] ?? '',
-                $row['id'] ?? '',
-                $row['rut'] ?? '',
-                $row['rut_sin_dv'] ?? '',
-                $row['core_user'] ?? '',
-                $project['id'] ?? '',
-            ]));
-
-            if (array_intersect($needles, $candidates) === []) {
-                continue;
-            }
-
-            return [
-                'id' => (string) ($project['id'] ?? $row['redmine_id'] ?? ''),
-                'rut_sin_dv' => (string) ($row['rut_sin_dv'] ?? $row['username'] ?? ''),
-                'nombre' => (string) ($row['name'] ?? ''),
-                'apellido' => (string) ($row['apellido'] ?? ''),
-                'rut' => (string) ($row['rut'] ?? ''),
-                'api' => (string) ($project['api'] ?? $row['api'] ?? ''),
-                'rol' => (string) ($project['rol'] ?? $row['role'] ?? 'usuario'),
-                'estado_usuario' => (string) ($project['estado_usuario'] ?? $row['status'] ?? 'activo'),
-                'permisos' => is_array($project['permisos'] ?? null) ? $project['permisos'] : [],
-                '_nova_user_id' => (string) ($row['id'] ?? ''),
-            ];
-        }
-
         return null;
     }
 
@@ -231,38 +157,7 @@ final class ProjectAccessGuard
             }
         }
 
-        if ($projectKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
-            try {
-                $users = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
-                if (is_array($users)) {
-                    $user = $this->projectUserFromRows($users, $needles);
-                    if ($user !== null) {
-                        return $user;
-                    }
-                }
-            } catch (\Throwable) {
-            }
-        }
-
-        try {
-            $module = $this->modules->get($projectKey);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-
-        if (!is_file($path)) {
-            return null;
-        }
-
-        $users = json_decode((string) file_get_contents($path), true);
-        if (!is_array($users)) {
-            return null;
-        }
-
-        return $this->projectUserFromRows($users, $needles);
+        return null;
     }
 
     private function normalize(string $value): string

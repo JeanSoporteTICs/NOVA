@@ -182,32 +182,23 @@ Artisan::command('nova:consolidate-users', function () {
     }
 
     $tic = 0;
-    if (\Illuminate\Support\Facades\Schema::hasTable('redmine_tic_usuarios')) {
-        foreach (DB::table('redmine_tic_usuarios')->get() as $row) {
-            $payload = [
-                'id' => $row->redmine_id ?? '',
-                'rut_sin_dv' => $row->rut_sin_dv ?? '',
-                'rut' => $row->rut ?? '',
-                'nombre' => $row->nombre ?? '',
-                'apellido' => $row->apellido ?? '',
-                'rol' => $row->rol ?? 'usuario',
-                'estado_usuario' => $row->estado_usuario ?? 'activo',
-            ];
-            $userId = $upsertNova($payload, 'redmine_tic');
-            if ($userId !== null) {
-                $saveIntegration($userId, 'redmine_tic', trim((string) ($row->api_token ?? '')), (string) ($row->redmine_id ?? ''));
-                $saveIntegration($userId, 'telegram', '', '', trim((string) ($row->telegram_chat_id ?? '')));
+    if (\Illuminate\Support\Facades\Schema::hasTable('redmine_tic_perfiles_usuario')) {
+        foreach (DB::table('redmine_tic_perfiles_usuario')
+            ->join('usuarios_nova', 'usuarios_nova.id', '=', 'redmine_tic_perfiles_usuario.usuario_id')
+            ->select([
+                'usuarios_nova.id',
+                'usuarios_nova.redmine_id',
+                'redmine_tic_perfiles_usuario.rol',
+                'redmine_tic_perfiles_usuario.estado_usuario',
+            ])
+            ->get() as $row) {
+            $userId = (int) ($row->id ?? 0);
+            if ($userId > 0) {
+                $saveIntegration($userId, 'redmine_tic', '', trim((string) ($row->redmine_id ?? '')));
                 $grantAccess($userId, 'redmine_tic');
                 $tic++;
             }
         }
-        DB::table('redmine_tic_usuarios')->update([
-            'rut_sin_dv' => null,
-            'rut' => null,
-            'nombre' => null,
-            'apellido' => null,
-            'api_token' => null,
-        ]);
     }
 
     $mantencion = 0;
@@ -237,7 +228,7 @@ Artisan::command('nova:consolidate-users', function () {
     return 0;
 })->purpose('Consolidate NOVA, Redmine TIC and Redmine Mantencion users into central tables');
 
-Artisan::command('redmine:mantencion-repair-user-names', function () {
+Artisan::command('redmine:mantencion-repair-user-names {--write-json : Escribe tambien en usuarios.json legacy (solo modo migracion)}', function () {
     $fixMojibake = static function (string $value): string {
         $value = strtr($value, [
             'ÃƒÆ’Ã‚Â¡' => 'á', 'ÃƒÆ’Ã‚Â©' => 'é', 'ÃƒÆ’Ã‚Â­' => 'í', 'ÃƒÆ’Ã‚Â³' => 'ó', 'ÃƒÆ’Ã‚Âº' => 'ú',
@@ -417,13 +408,16 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
                 'checksum' => hash('sha256', (string) $payload),
                 'updated_at' => now(),
             ]);
-            file_put_contents(base_path('redmine-mantencion/data/usuarios.json'), json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
+            if ($this->option('write-json')) {
+                file_put_contents(base_path('redmine-mantencion/data/usuarios.json'), json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
+                $this->line('Archivo redmine-mantencion/data/usuarios.json actualizado (modo migracion).');
+            }
         }
     }
 
     $novaFileUpdated = 0;
     $novaFile = storage_path('app/nova/users.json');
-    if (is_file($novaFile)) {
+    if ($this->option('write-json') && is_file($novaFile)) {
         $users = json_decode((string) file_get_contents($novaFile), true);
         if (is_array($users)) {
             foreach ($users as &$user) {
@@ -449,5 +443,9 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
 
     $this->info('usuarios_nova reparados: ' . $novaUpdated);
     $this->info('usuarios Mantencion reparados: ' . $mantUpdated);
-    $this->info('storage/app/nova/users.json reparados: ' . $novaFileUpdated);
+    if ($this->option('write-json')) {
+        $this->info('storage/app/nova/users.json reparados: ' . $novaFileUpdated);
+    } else {
+        $this->line('Nota: escritura JSON desactivada. Use --write-json para modo migracion.');
+    }
 })->purpose('Repair duplicated first/last names after Redmine Mantencion migration');

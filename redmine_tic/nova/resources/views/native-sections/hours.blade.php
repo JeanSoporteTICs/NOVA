@@ -24,6 +24,19 @@
     $fmtMinutes = static fn ($mins): string => $mins === null ? '' : str_pad((string) floor($mins / 60), 2, '0', STR_PAD_LEFT) . ':' . str_pad((string) ($mins % 60), 2, '0', STR_PAD_LEFT);
 @endphp
 
+<section class="rm-module-head">
+    <span class="rm-module-head-icon is-cyan"><i class="bi bi-clock-history"></i></span>
+    <div>
+        <small>Control mensual</small>
+        <h2>Horas extra</h2>
+        <p>Revisa grupos, tiempos y ajustes asociados a reportes marcados como hora extra.</p>
+    </div>
+    <div class="rm-module-meter">
+        <strong>{{ $meta['totalHours'] ?? '00:00' }}</strong>
+        <span>total</span>
+    </div>
+</section>
+
 <div class="rm-section-head">
     <div>
         <h2>Horas extra</h2>
@@ -117,7 +130,7 @@
                             </tr>
                         @endforeach
                     @empty
-                        <tr><td colspan="3">No hay horas extra registradas para el filtro seleccionado.</td></tr>
+                        <tr><td colspan="3" class="nova-empty"><i class="bi bi-clock" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay horas extra para el filtro seleccionado.</td></tr>
                     @endforelse
                 </tbody>
             </table>

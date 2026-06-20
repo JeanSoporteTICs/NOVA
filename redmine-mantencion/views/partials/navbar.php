@@ -28,6 +28,7 @@ $navItems = [
     ['key' => 'horas', 'label' => 'Horas extra', 'href' => '../HorasExtra/horas_extra.php', 'icon' => 'bi-clock-history', 'can' => auth_can('horas_extra')],
     ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => '../Historico/historico.php', 'icon' => 'bi-archive', 'can' => auth_can('historico')],
     ['key' => 'procedimientos', 'label' => 'Procedimientos', 'href' => '../Procedimientos/procedimientos.php', 'icon' => 'bi-journal-richtext', 'can' => auth_can('procedimientos')],
+    ['key' => 'mis_integraciones', 'label' => 'Mis integraciones', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => true],
     ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => '../Usuarios/usuarios.php', 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
     [
         'key' => 'integraciones',
@@ -65,11 +66,22 @@ $navItems = [
             <span>Mantenci&oacute;n activa<?= $maintenanceUntil !== '' ? ' hasta ' . $h($maintenanceUntil) : '' ?></span>
           </span>
         <?php endif; ?>
-        <?php if (!empty($_SESSION['user']['nombre'])): ?>
-          <span class="sb-user-pill text-white-50 small d-none d-sm-inline"><i class="bi bi-person-circle"></i> <strong><?= $h($_SESSION['user']['nombre']) ?></strong></span>
+        <?php
+          $navNombre   = trim((string)($_SESSION['user']['nombre'] ?? ''));
+          $navApellido = trim((string)($_SESSION['user']['apellido'] ?? ''));
+          $navDisplay  = trim($navNombre . ($navApellido !== '' ? ' ' . $navApellido : ''));
+          if ($navDisplay === '') {
+              $navDisplay = trim((string)($_SESSION['user']['id'] ?? '')) !== '' ? 'usuario' : '';
+          }
+        ?>
+        <?php if ($navDisplay !== ''): ?>
+          <span class="sb-user-pill text-white-50 small d-none d-sm-inline"><i class="bi bi-person-circle"></i> <strong><?= $h($navDisplay) ?></strong></span>
         <?php endif; ?>
         <a class="btn btn-outline-light btn-sm sb-nova-home-btn" href="<?= $h($novaHomeUrl) ?>"><i class="bi bi-house-door"></i> <span>NOVA</span></a>
-        <a class="btn btn-outline-light btn-sm sb-logout-btn" href="<?= $h($novaLogoutUrl) ?>"><i class="bi bi-box-arrow-right"></i> <span>Salir</span></a>
+        <form method="POST" action="<?= $h($novaLogoutUrl) ?>" style="display:inline">
+          <input type="hidden" name="_token" value="<?= function_exists('csrf_token') ? htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') : '' ?>">
+          <button type="submit" class="btn btn-outline-light btn-sm sb-logout-btn"><i class="bi bi-box-arrow-right"></i> <span>Salir</span></button>
+        </form>
       </div>
     </div>
   </div>
@@ -136,7 +148,153 @@ $navItems = [
     </ul>
   </div>
 </div>
+<div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
+<div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
+  <div class="nova-integration-card">
+    <span class="nova-integration-icon"><i class="bi bi-cloud-arrow-down"></i></span>
+    <strong id="nova-integration-title">Consultando integraci&oacute;n</strong>
+    <span id="nova-integration-detail">La operaci&oacute;n puede tardar unos segundos.</span>
+    <div class="nova-integration-bar" aria-hidden="true"><i></i></div>
+  </div>
+</div>
 <script>
+(function () {
+  const loader = document.getElementById('app-page-loader');
+  const integrationOverlay = document.getElementById('nova-integration-overlay');
+  window.appUi = window.appUi || {};
+  window.appUi.setLoading = function (state) {
+    if (!loader) return;
+    if (state) {
+      loader.classList.add('is-visible');
+    } else {
+      loader.classList.remove('is-visible');
+    }
+  };
+  const cleanupModalState = function () {
+    document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) { backdrop.remove(); });
+    if (!document.querySelector('.modal.show')) {
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  };
+  window.appUi.closeModal = function (modal) {
+    if (!modal) return;
+    if (window.bootstrap && window.bootstrap.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modal).hide();
+      window.setTimeout(cleanupModalState, 180);
+      return;
+    }
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.removeAttribute('aria-modal');
+    modal.style.display = 'none';
+    cleanupModalState();
+  };
+  window.appUi.openModal = function (modal) {
+    if (!modal) return;
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+    if (window.bootstrap && window.bootstrap.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modal).show();
+      return;
+    }
+    modal.classList.add('show');
+    modal.removeAttribute('aria-hidden');
+    modal.setAttribute('aria-modal', 'true');
+    modal.style.display = 'block';
+    document.body.classList.add('modal-open');
+  };
+  const promoteModalToBody = function (modal) {
+    if (!modal || modal.parentElement === document.body) return;
+    document.body.appendChild(modal);
+  };
+  document.addEventListener('click', function (e) {
+    const modalTrigger = e.target.closest('[data-bs-toggle="modal"][data-bs-target]');
+    if (!modalTrigger) return;
+    const selector = modalTrigger.getAttribute('data-bs-target');
+    if (!selector || selector.charAt(0) !== '#') return;
+    promoteModalToBody(document.querySelector(selector));
+  }, true);
+  window.appUi.setIntegrationLoading = function (state, options) {
+    if (!integrationOverlay) return;
+    options = options || {};
+    const title = document.getElementById('nova-integration-title');
+    const detail = document.getElementById('nova-integration-detail');
+    const icon = integrationOverlay.querySelector('.nova-integration-icon i');
+    if (state) {
+      if (title) title.textContent = options.title || 'Consultando integración';
+      if (detail) detail.textContent = options.detail || 'La operación puede tardar unos segundos.';
+      if (icon) icon.className = 'bi ' + (options.icon || 'bi-cloud-arrow-down');
+      integrationOverlay.classList.add('is-active');
+      integrationOverlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('nova-integration-loading');
+    } else {
+      integrationOverlay.classList.remove('is-active');
+      integrationOverlay.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('nova-integration-loading');
+    }
+  };
+  const integrationCopyForForm = function (form, submitter) {
+    const actionInput = form.querySelector('input[name="action"]');
+    const action = ((actionInput && actionInput.value) || '') + ' ' + ((submitter && submitter.value) || '') + ' ' + ((submitter && submitter.textContent) || '');
+    const lower = action.toLowerCase();
+    if (!/(sync|sincron|import|fetch|consult|confirm|core|api)/i.test(lower)) return null;
+    if (lower.indexOf('nextcloud') !== -1) return { title: 'Procesando Nextcloud', detail: 'Conectando con Nextcloud y preparando la respuesta.', icon: 'bi-cloud-arrow-up' };
+    if (lower.indexOf('core') !== -1) return { title: 'Consultando CORE', detail: 'Buscando y normalizando datos recibidos desde CORE.', icon: 'bi-database-down' };
+    if (lower.indexOf('onlyoffice') !== -1) return { title: 'Consultando OnlyOffice', detail: 'Validando datos con el servicio configurado.', icon: 'bi-file-earmark-richtext' };
+    if (lower.indexOf('redmine') !== -1 || lower.indexOf('sync') !== -1 || lower.indexOf('sincron') !== -1) return { title: 'Sincronizando Redmine', detail: 'Actualizando catálogos y datos desde Redmine.', icon: 'bi-arrow-repeat' };
+    if (lower.indexOf('import') !== -1) return { title: 'Importando datos', detail: 'Procesando archivo o datos externos.', icon: 'bi-file-earmark-arrow-up' };
+    return { title: 'Consultando integración', detail: 'La operación puede tardar unos segundos.', icon: 'bi-cloud-arrow-down' };
+  };
+  document.addEventListener('click', function (e) {
+    const closeTrigger = e.target.closest('[data-nova-modal-close], [data-bs-dismiss="modal"]');
+    if (closeTrigger) {
+      e.preventDefault();
+      window.appUi.closeModal(closeTrigger.closest('.modal'));
+      return;
+    }
+    const openTrigger = e.target.closest('[data-nova-modal-open]');
+    if (openTrigger && !openTrigger.matches('[data-bs-toggle]')) {
+      const target = document.getElementById(openTrigger.getAttribute('data-nova-modal-open'));
+      if (target) {
+        e.preventDefault();
+        promoteModalToBody(target);
+        window.appUi.openModal(target);
+      }
+    }
+    if (e.target.classList && e.target.classList.contains('modal') && e.target.dataset.novaSessionModal !== '') {
+      window.appUi.closeModal(e.target);
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.modal.show:not([data-nova-session-modal])').forEach(window.appUi.closeModal);
+  });
+  // Show loader on full-page navigations
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest('a[href]');
+    if (!a || e.defaultPrevented || a.target === '_blank') return;
+    const url = new URL(a.href, window.location.href);
+    if (url.origin !== window.location.origin) return;
+    window.appUi.setLoading(true);
+  });
+  // Show loader on form submits
+  document.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
+    const copy = integrationCopyForForm(e.target, e.submitter || document.activeElement);
+    if (copy) {
+      window.appUi.setIntegrationLoading(true, copy);
+      const button = e.submitter || e.target.querySelector('button[type="submit"], button:not([type])');
+      if (button && button.classList) button.classList.add('is-submitting');
+    }
+    window.appUi.setLoading(true);
+  });
+  // Hide loader when page finishes loading
+  window.addEventListener('pageshow', function () { window.appUi.setLoading(false); window.appUi.setIntegrationLoading(false); });
+  window.addEventListener('load', function () { window.appUi.setLoading(false); window.appUi.setIntegrationLoading(false); });
+}());
 window.addEventListener('load', () => {
   // Navegaci&oacute;n parcial: carga vistas sin recargar navbar/footer si existe #page-content en destino.
   (function partialNav() {
@@ -350,13 +508,27 @@ window.addEventListener('load', () => {
     return {ok: true, timeout: baseTimeout, remaining: getRemainingSeconds()};
   };
 
+  function submitLogout() {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = logoutUrl;
+    form.style.display = 'none';
+    if (csrfToken) {
+      const tokenInput = document.createElement('input');
+      tokenInput.type = 'hidden';
+      tokenInput.name = '_token';
+      tokenInput.value = csrfToken;
+      form.appendChild(tokenInput);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  }
+
   restartTick();
   document.addEventListener('visibilitychange', syncTimerState);
   window.addEventListener('focus', syncTimerState);
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      window.location.href = logoutUrl;
-    });
+    closeBtn.addEventListener('click', submitLogout);
   }
   if (extendBtn && extendPwd) {
     extendBtn.addEventListener('click', async () => {

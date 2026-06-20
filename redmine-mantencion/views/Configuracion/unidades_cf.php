@@ -11,7 +11,6 @@ if (!auth_can('configuracion')) {
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
 $cfgPath = __DIR__ . '/../../data/configuracion.json';
-$dataPath = __DIR__ . '/../../data/unidades.json';
 
 function build_cf_url($platformUrl) {
   if (!$platformUrl) return '';
@@ -30,12 +29,15 @@ function build_cf_url($platformUrl) {
   return '';
 }
 
-function load_unidades_local($path) {
-  $data = storage_read_json($path, []);
-  return is_array($data) ? $data : [];
+function load_unidades_local() {
+  $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+  return $repo !== null ? $repo->unidades() : [];
 }
-function save_unidades_local($path, $arr) {
-  storage_write_json($path, $arr, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+function save_unidades_local($arr) {
+  $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+  if ($repo !== null) {
+    $repo->upsertUnidades(is_array($arr) ? $arr : []);
+  }
 }
 
 $cfg = storage_read_json($cfgPath, []);
@@ -63,7 +65,7 @@ $apiKey = $userToken ?: $apiKey;
 $cfUrl = $cfOverride ?: build_cf_url($platformUrl);
 $flash = null;
 $error = null;
-$unidades = load_unidades_local($dataPath);
+$unidades = load_unidades_local();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (function_exists('csrf_validate')) csrf_validate();
@@ -114,8 +116,8 @@ if (!$apiKey) {
               $parsed[] = ['id' => $v, 'nombre' => $v];
             }
           }
-          save_unidades_local($dataPath, $parsed);
-          $unidades = $parsed;
+          save_unidades_local($parsed);
+          $unidades = load_unidades_local();
           $flash = 'Unidades sincronizadas (' . count($parsed) . ' registros).';
         }
       }

@@ -29,8 +29,13 @@ $rolesData = is_array($rolesData) ? $rolesData : [];
 $usuariosFile = __DIR__ . '/../../data/usuarios.json';
 $usuariosData = storage_read_json($usuariosFile, []);
 if (!is_array($usuariosData)) $usuariosData = [];
+$usuariosSelectableData = array_values(array_filter($usuariosData, static function ($u): bool {
+  if (!is_array($u)) return false;
+  $estadoUsuario = strtolower(trim((string)($u['estado'] ?? $u['estado_usuario'] ?? 'activo')));
+  return in_array($estadoUsuario, ['activo', 'active'], true);
+}));
 $usuariosIndex = [];
-foreach ($usuariosData as $u) {
+foreach ($usuariosSelectableData as $u) {
   if (is_array($u) && isset($u['id'])) {
     $usuariosIndex[(string)$u['id']] = $u;
   }
@@ -55,9 +60,8 @@ foreach (array_keys($rolesData) as $roleName) {
   $ensureRolePermission((string)$roleName, 'procedimientos_editar', in_array((string)$roleName, ['root', 'gestor', 'administrador'], true));
 }
 $categoriasData = [];
-$categoriasFile = __DIR__ . '/../../data/categorias.json';
-$categoriasData = storage_read_json($categoriasFile, []);
-if (!is_array($categoriasData)) $categoriasData = [];
+$catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+$categoriasData = $catalogRepo !== null ? $catalogRepo->categorias() : [];
 if (empty($rolesData)) {
   $rolesData = [
     'root' => [
@@ -321,7 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sync_remote') {
   if (function_exists('csrf_validate')) csrf_validate();
   if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
-  $res = sync_categorias_desde_api(__DIR__ . '/../../data/configuracion.json', __DIR__ . '/../../data/categorias.json');
+  $res = sync_categorias_desde_api(__DIR__ . '/../../data/configuracion.json');
   $msg = isset($res['error']) ? $res['error'] : ('Categorías sincronizadas (' . ($res['ok'] ?? 0) . ' registros).');
   $configRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
   header('Location: ' . $configRedirectUrl . '?panel=categorias&synccat=' . urlencode($msg));
@@ -1002,7 +1006,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <input name="nextcloud_url" class="form-control" value="<?= $h($nextcloudCfg['url'] ?? 'https://www.coresalud.cl/nextcloud') ?>" placeholder="https://www.coresalud.cl/nextcloud" required>
               </div>
               <div class="alert alert-info py-2 small">
-                Las credenciales de Nextcloud se administran desde <strong>Usuarios</strong>, junto a las credenciales CORE de cada usuario.
+                Las credenciales de Nextcloud se administran desde <strong>Mis integraciones</strong>, junto a las credenciales CORE de cada usuario.
               </div>
               <div class="mb-3">
                 <label class="form-label">Grupo por defecto</label>
@@ -1449,7 +1453,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   if ($canManageUsers):
     // Datos para modal de usuarios
     $usersList = [];
-    foreach ($usuariosData as $u) {
+    foreach ($usuariosSelectableData as $u) {
       if (!isset($u['id'])) continue;
       $label = ($u['nombre'] ?? '') . ' ' . ($u['apellido'] ?? '') . ' (ID ' . $u['id'] . ')';
       $usersList[(string)$u['id']] = trim($label);
@@ -2093,12 +2097,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </div> <!-- #page-content -->
 </body>
 </html>
-
-
-
-
-
-
 
 
 

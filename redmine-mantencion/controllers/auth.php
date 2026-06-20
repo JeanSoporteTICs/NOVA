@@ -39,11 +39,14 @@ function auth_start_session() {
 function auth_config_timeout() {
     static $cache = null;
     if ($cache !== null) return $cache;
-    $cache = 300; // valor por defecto
-    $file = __DIR__ . '/../data/configuracion.json';
-    $data = storage_read_json($file, []);
-    if (is_array($data) && isset($data['session_timeout'])) {
-        $cache = max(60, (int)$data['session_timeout']);
+    $cache = 300;
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    if ($repo !== null) {
+        $data = $repo->loadAll();
+        if (is_array($data) && isset($data['session_timeout'])) {
+            $cache = max(60, (int)$data['session_timeout']);
+            return $cache;
+        }
     }
     return $cache;
 }
@@ -60,6 +63,101 @@ function auth_norm_key($v) {
 
 function auth_users_file() {
     return __DIR__ . '/../data/usuarios.json';
+}
+
+function auth_central_users_for_mantencion(): array {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        return [];
+    }
+
+    try {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')
+            || !\Illuminate\Support\Facades\Schema::hasTable('modulos_nova')
+            || !\Illuminate\Support\Facades\Schema::hasTable('permisos_usuario_modulo')) {
+            return [];
+        }
+
+        $moduleId = \Illuminate\Support\Facades\DB::table('modulos_nova')
+            ->where('clave_modulo', 'redmine-mantencion')
+            ->value('id');
+
+        $rows = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->leftJoin('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
+            ->distinct()
+            ->select([
+                'usuarios_nova.id as nova_id',
+                'usuarios_nova.uuid',
+                'usuarios_nova.usuario',
+                'usuarios_nova.rut',
+                'usuarios_nova.redmine_id',
+                'usuarios_nova.nombre',
+                'usuarios_nova.apellido',
+                'usuarios_nova.rol',
+                'usuarios_nova.estado',
+                'usuarios_nova.password',
+                'usuarios_nova.usuario_core',
+                'usuarios_nova.telegram_id_chat',
+            ])
+            ->where(function ($where) use ($moduleId): void {
+                $where->whereIn('usuarios_nova.rol', ['admin', 'administrador', 'root']);
+                if ($moduleId !== null) {
+                    $where->orWhere(function ($access) use ($moduleId): void {
+                        $access->where('permisos_usuario_modulo.modulo_id', (int)$moduleId)
+                            ->where('permisos_usuario_modulo.permitido', 1);
+                    });
+                }
+            })
+            ->orderBy('usuarios_nova.nombre')
+            ->orderBy('usuarios_nova.apellido')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $ids = $rows->pluck('nova_id')->map(fn ($id) => (int)$id)->all();
+        $integrations = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+            ->whereIn('usuario_id', $ids)
+            ->get()
+            ->groupBy('usuario_id');
+
+        return $rows->map(function ($row) use ($integrations): array {
+            $rowIntegrations = $integrations[(int)$row->nova_id] ?? collect();
+            $byType = $rowIntegrations->keyBy('tipo');
+            $redmine = $byType['redmine_mantencion'] ?? null;
+            $core = $byType['core'] ?? null;
+            $nextcloud = $byType['nextcloud'] ?? null;
+            $role = strtolower(trim((string)($row->rol ?? 'usuario')));
+            $legacyRole = in_array($role, ['admin', 'administrador', 'root'], true) ? 'root' : $role;
+            $api = trim((string)($redmine->valor_secreto ?? ''));
+            if ($api !== '') {
+                try {
+                    $api = (string)decrypt($api);
+                } catch (\Throwable) {
+                }
+            }
+
+            return [
+                'id' => trim((string)($row->redmine_id ?? '')) ?: trim((string)($row->usuario ?? $row->uuid ?? '')),
+                'rut_sin_dv' => trim((string)($row->usuario ?? '')),
+                'nombre' => trim((string)($row->nombre ?? '')),
+                'apellido' => trim((string)($row->apellido ?? '')),
+                'rut' => trim((string)($row->rut ?? '')),
+                'api' => $api,
+                'password' => (string)($row->password ?? ''),
+                'rol' => $legacyRole !== '' ? $legacyRole : 'usuario',
+                'estado_usuario' => trim((string)($row->estado ?? 'activo')) ?: 'activo',
+                'estado' => trim((string)($row->estado ?? 'activo')) ?: 'activo',
+                'core_user' => trim((string)($row->usuario_core ?? '')) ?: trim((string)($core->usuario_externo ?? '')),
+                'nextcloud_user' => trim((string)($nextcloud->usuario_externo ?? '')),
+                'telegram_chat_id' => trim((string)($row->telegram_id_chat ?? '')),
+                'permisos' => $legacyRole === 'root' ? ['all' => true] : [],
+                '_nova_user_id' => trim((string)($row->uuid ?? '')),
+            ];
+        })->values()->all();
+    } catch (\Throwable) {
+        return [];
+    }
 }
 
 function auth_find_user($username) {
@@ -153,6 +251,7 @@ function auth_login($username, $password) {
         $_SESSION['user'] = [
             'id' => $user['id'] ?? '',
             'nombre' => trim((string)($user['nombre'] ?? '')),
+            'apellido' => trim((string)($user['apellido'] ?? '')),
             'rut' => $user['rut'] ?? '',
             'rol' => $user['rol'] ?? 'usuario',
         ];
@@ -215,10 +314,6 @@ function auth_get_user_role() {
 }
 
 // ----------------- Roles y permisos -----------------
-function auth_roles_file() {
-    return __DIR__ . '/../data/roles.json';
-}
-
 function auth_apply_role_permission_defaults(array $roles): array {
     foreach ($roles as $name => &$cfg) {
         if (!is_array($cfg)) {
@@ -235,10 +330,37 @@ function auth_apply_role_permission_defaults(array $roles): array {
     return $roles;
 }
 
-function auth_load_roles() {
+function auth_load_roles(): array {
     static $cache = null;
     if ($cache !== null) return $cache;
-    $file = auth_roles_file();
+
+    // Primary: read from mantencion_permisos_rol (relational table — S30)
+    if (class_exists(\Illuminate\Support\Facades\DB::class) && class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('mantencion_permisos_rol')) {
+                $rows = \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')
+                    ->get(['rol', 'permiso', 'valor']);
+                $roles = [];
+                foreach ($rows as $row) {
+                    $valor = (string)$row->valor;
+                    if ($valor === '1') {
+                        $decoded = true;
+                    } elseif ($valor === '') {
+                        $decoded = false;
+                    } else {
+                        $decoded = $valor; // 'todos', 'asignados', etc.
+                    }
+                    $roles[(string)$row->rol][(string)$row->permiso] = $decoded;
+                }
+                if ($roles !== []) {
+                    return $cache = auth_apply_role_permission_defaults($roles);
+                }
+            }
+        } catch (\Throwable) {}
+    }
+
+    // Fallback: storage (only reached if table not ready yet)
+    $file = __DIR__ . '/../data/roles.json';
     $data = storage_read_json($file, []);
     return $cache = is_array($data) ? auth_apply_role_permission_defaults($data) : [];
 }

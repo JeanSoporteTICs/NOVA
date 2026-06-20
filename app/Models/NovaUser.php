@@ -23,6 +23,7 @@ class NovaUser extends Model
         'estado',
         'password',
         'usuario_core',
+        'telegram_id_chat',
         'ultimo_login_at',
     ];
 

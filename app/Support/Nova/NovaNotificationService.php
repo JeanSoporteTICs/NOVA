@@ -4,10 +4,13 @@ namespace App\Support\Nova;
 
 final class NovaNotificationService
 {
+    public function __construct(private NovaSettingsRepository $settings)
+    {
+    }
+
     public function notify(string $message): bool
     {
-        $settings = json_decode((string) @file_get_contents(storage_path('app/nova/settings.json')), true);
-        if (!is_array($settings) || empty($settings['notification_enabled'])) {
+        if (empty($this->settings->all()['notification_enabled'])) {
             return false;
         }
 
@@ -23,7 +26,7 @@ final class NovaNotificationService
         }
 
         $config = telegram_read_config();
-        $token = trim((string) ($config['bot_token'] ?? ''));
+        $token  = trim((string) ($config['bot_token'] ?? ''));
         $chatId = trim((string) ($config['chat_id'] ?? ''));
         if ($token === '' || $chatId === '') {
             return false;

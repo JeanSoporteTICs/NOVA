@@ -11,6 +11,7 @@ $h = fn($v) => htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
 [$cfg, $users, $categorias, $form, $flash, $error] = handle_manual_pending();
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
+$canAssignOtherUsers = dashboard_can_assign_other_users();
 ?>
 <!doctype html>
 <html lang="es">
@@ -135,15 +136,18 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
             <div class="field-label">Asignado a</div>
             <div>
               <div class="d-flex align-items-center gap-2">
-                <select name="asignado_a" id="asignado_a" class="form-select">
-                  <option value=""></option>
-                  <?php foreach ($users as $user): ?>
-                    <option value="<?= $h($user['id']) ?>" <?= (string)($form['asignado_a'] ?? '') === (string)$user['id'] ? 'selected' : '' ?>>
-                      <?= $h($user['nombre']) ?>
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="assign-me">Assign to me</button>
+                <?php if ($canAssignOtherUsers): ?>
+                  <select name="asignado_a" id="asignado_a" class="form-select">
+                    <?php foreach ($users as $user): ?>
+                      <option value="<?= $h($user['id']) ?>" <?= (string)($form['asignado_a'] ?? '') === (string)$user['id'] ? 'selected' : '' ?>>
+                        <?= $h($user['nombre']) ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="assign-me">Asignarme</button>
+                <?php else: ?>
+                  <input type="text" class="form-control" value="<?= $h($form['core_usuario_asignado'] ?? '') ?>" readonly>
+                <?php endif; ?>
               </div>
             </div>
             <div class="field-label">Tiempo estimado</div>
@@ -207,7 +211,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
   (() => {
     const assignMeBtn = document.getElementById('assign-me');
     const assignedSelect = document.getElementById('asignado_a');
-    const currentUserId = <?= json_encode((string)(auth_get_user_id() ?? '')) ?>;
+    const currentUserId = <?= json_encode((string)($form['asignado_a'] ?? '')) ?>;
     if (assignMeBtn && assignedSelect) {
       assignMeBtn.addEventListener('click', () => {
         assignedSelect.value = currentUserId;

@@ -43,31 +43,6 @@ $columns = [
   'Precision',
 ];
 
-function emach_nova_users_path(): string {
-  return function_exists('storage_path') ? storage_path('app/nova/users.json') : __DIR__ . '/../storage/app/nova/users.json';
-}
-
-function emach_read_nova_users(): array {
-  $path = emach_nova_users_path();
-  $raw = (string) @file_get_contents($path);
-  $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw) ?? $raw;
-  $users = json_decode($raw, true);
-  return is_array($users) ? array_values(array_filter($users, 'is_array')) : [];
-}
-
-function emach_write_nova_users(array $users): bool {
-  $path = emach_nova_users_path();
-  $directory = dirname($path);
-  if (!is_dir($directory) && !@mkdir($directory, 0777, true) && !is_dir($directory)) {
-    return false;
-  }
-  $written = @file_put_contents($path, json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL, LOCK_EX);
-  if ($written !== false) {
-    @chmod($path, 0666);
-  }
-  return $written !== false;
-}
-
 function emach_session_user(): array {
   if (function_exists('request')) {
     $novaUser = request()->session()->get('nova_user');
@@ -78,71 +53,11 @@ function emach_session_user(): array {
   return is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
 }
 
-function emach_find_current_user_index(array $users): ?int {
-  $sessionUser = emach_session_user();
-  $needles = array_values(array_filter(array_map(static fn($value): string => strtolower((string) preg_replace('/[^0-9a-z]/i', '', (string) $value)), [
-    $sessionUser['id'] ?? '',
-    $sessionUser['username'] ?? '',
-    $sessionUser['rut'] ?? '',
-    $sessionUser['rut_sin_dv'] ?? '',
-    $sessionUser['core_user'] ?? '',
-    $sessionUser['redmine_id'] ?? '',
-    $sessionUser['legacy']['id'] ?? '',
-  ])));
-  if ($needles === []) {
-    return null;
-  }
-  foreach ($users as $index => $user) {
-    $candidates = array_values(array_filter(array_map(static fn($value): string => strtolower((string) preg_replace('/[^0-9a-z]/i', '', (string) $value)), [
-      $user['id'] ?? '',
-      $user['username'] ?? '',
-      $user['rut'] ?? '',
-      $user['rut_sin_dv'] ?? '',
-      $user['core_user'] ?? '',
-      $user['redmine_id'] ?? '',
-    ])));
-    if (array_intersect($needles, $candidates) !== []) {
-      return $index;
-    }
-  }
-  return null;
-}
-
-function emach_encrypt_secret(string $secret): string {
-  return function_exists('encrypt') ? encrypt($secret) : $secret;
-}
-
-function emach_decrypt_secret(string $secret): string {
-  if ($secret === '') {
-    return '';
-  }
-  if (function_exists('decrypt')) {
-    try {
-      return (string) decrypt($secret);
-    } catch (Throwable) {
-    }
-  }
-  return $secret;
-}
-
 function emach_current_user_credentials(): array {
   if (function_exists('app')) {
     return app(\App\Support\Integrations\UserIntegrationRepository::class)->emachForSession(emach_session_user());
   }
-
-  $users = emach_read_nova_users();
-  $index = emach_find_current_user_index($users);
-  if ($index === null) {
-    return ['user' => '', 'password' => '', 'stored' => false];
-  }
-  $credentials = is_array($users[$index]['emach_credentials'] ?? null) ? $users[$index]['emach_credentials'] : [];
-  $user = trim((string) ($credentials['user'] ?? ''));
-  $password = emach_decrypt_secret((string) ($credentials['password'] ?? ''));
-  return [
-    'user' => $user,
-    'password' => $password,
-    'stored' => $user !== '' && $password !== '',
-  ];
+  return ['user' => '', 'password' => '', 'stored' => false];
 }
 
 function emach_save_current_user_credentials(string $username, string $password): bool {
@@ -157,26 +72,7 @@ function emach_save_current_user_credentials(string $username, string $password)
     }
     return $saved;
   }
-
-  $users = emach_read_nova_users();
-  $index = emach_find_current_user_index($users);
-  if ($index === null || $username === '' || $password === '') {
-    return false;
-  }
-  $users[$index]['emach_credentials'] = [
-    'user' => $username,
-    'password' => emach_encrypt_secret($password),
-    'updated_at' => date(DATE_ATOM),
-  ];
-  $saved = emach_write_nova_users($users);
-  if ($saved && function_exists('request')) {
-    $sessionUser = request()->session()->get('nova_user');
-    if (is_array($sessionUser)) {
-      $sessionUser['has_emach_credentials'] = true;
-      request()->session()->put('nova_user', $sessionUser);
-    }
-  }
-  return $saved;
+  return false;
 }
 
 $storedEmachCredentials = emach_current_user_credentials();
@@ -642,7 +538,7 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
   <main class="container-fluid py-4">
-    <section class="card card-hero sb-page-hero emach-hero mb-4">
+    <section class="card card-hero sb-page-hero emach-hero nova-system-hero mb-4">
       <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div class="d-flex align-items-center gap-3">
           <span class="emach-hero-icon"><i class="bi bi-heart-pulse"></i></span>

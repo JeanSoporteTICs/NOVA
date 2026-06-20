@@ -59,7 +59,6 @@ return new class extends Migration
             Schema::create('reportes_redmine', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('modulo_id')->constrained('modulos_nova')->cascadeOnDelete();
-                $table->char('local_id', 36)->nullable();
                 $table->unsignedInteger('redmine_id')->nullable()->index();
                 $table->string('estado', 20)->nullable();
                 $table->string('estado_redmine', 40)->nullable();
@@ -73,17 +72,17 @@ return new class extends Migration
                 $table->longText('descripcion')->nullable();
                 $table->date('fecha')->nullable()->index();
                 $table->time('hora')->nullable();
+                $table->date('fecha_inicio')->nullable()->index();
+                $table->date('fecha_fin')->nullable()->index();
+                $table->string('chat_id_telegram', 120)->nullable();
+                $table->text('mensaje')->nullable();
                 $table->unsignedInteger('asignado_a')->nullable()->index();
                 $table->boolean('hora_extra')->nullable();
                 $table->decimal('tiempo_estimado', 10, 2)->nullable();
                 $table->string('origen', 40)->nullable()->index();
                 $table->dateTime('procesado_at')->nullable();
-                $table->string('archivado_por', 255)->nullable();
-                $table->dateTime('archivado_at')->nullable();
-                $table->json('datos_extra')->nullable();
                 $table->timestamp('creado_at')->useCurrent();
                 $table->timestamp('actualizado_at')->useCurrent()->useCurrentOnUpdate();
-                $table->unique(['modulo_id', 'local_id'], 'uq_reporte_modulo_local');
                 $table->index(['modulo_id', 'estado'], 'idx_reportes_modulo_estado');
             });
         }
@@ -95,7 +94,7 @@ return new class extends Migration
                 $table->date('fecha');
                 $table->time('hora_inicio')->nullable();
                 $table->time('hora_fin')->nullable();
-                $table->json('report_local_ids')->nullable();
+                $table->json('report_ids')->nullable();
                 $table->timestamp('creado_at')->useCurrent();
                 $table->timestamp('actualizado_at')->useCurrent()->useCurrentOnUpdate();
                 $table->unique(['modulo_id', 'fecha'], 'uq_redmine_tic_horas_fecha');
@@ -116,7 +115,6 @@ return new class extends Migration
                 $table->string('estado_usuario', 40)->default('activo')->index();
                 $table->json('permisos')->nullable();
                 $table->unsignedInteger('redmine_membership_id')->nullable();
-                $table->json('redmine_roles')->nullable();
                 $table->timestamp('creado_at')->useCurrent();
                 $table->timestamp('actualizado_at')->useCurrent()->useCurrentOnUpdate();
             });

@@ -77,6 +77,11 @@ if (!function_exists('storage_base_path')) {
     }
 
     function storage_read_json(string $path, $default = []) {
+        if (strtolower(basename($path)) === 'usuarios.json' && function_exists('auth_central_users_for_mantencion')) {
+            $centralUsers = auth_central_users_for_mantencion();
+            return $centralUsers !== [] ? $centralUsers : $default;
+        }
+
         $rel = storage_relative_data_path($path);
         $repo = $rel !== null ? storage_db_repository() : null;
         if ($repo !== null) {
@@ -309,6 +314,42 @@ if (!function_exists('storage_base_path')) {
             } elseif ($item->isDir()) {
                 @rmdir($item->getPathname());
             }
+        }
+    }
+
+    function config_mantencion_repository() {
+        if (!function_exists('app') || !class_exists(\App\Support\RedmineMantencion\MantencionConfigRepository::class)) {
+            return null;
+        }
+        try {
+            $repo = app(\App\Support\RedmineMantencion\MantencionConfigRepository::class);
+            return $repo->tableReady() ? $repo : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    function mantencion_catalog_repository() {
+        if (!function_exists('app') || !class_exists(\App\Support\Mantencion\MantencionCatalogRepository::class)) {
+            return null;
+        }
+        try {
+            $repo = app(\App\Support\Mantencion\MantencionCatalogRepository::class);
+            return $repo->tableReady() ? $repo : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    function mantencion_report_repository() {
+        if (!function_exists('app') || !class_exists(\App\Support\Mantencion\MantencionReportRepository::class)) {
+            return null;
+        }
+        try {
+            $repo = app(\App\Support\Mantencion\MantencionReportRepository::class);
+            return $repo->tableReady() ? $repo : null;
+        } catch (\Throwable) {
+            return null;
         }
     }
 

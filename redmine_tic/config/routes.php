@@ -37,10 +37,6 @@ return [
         'view' => 'views/Estadisticas/estadisticas.php',
         'active' => 'estadisticas',
     ],
-    'estadisticas-api' => [
-        'view' => 'views/Estadisticas/estadisticas_manual.php',
-        'active' => 'estadisticas_api',
-    ],
     'actividad' => [
         'view' => 'views/Security/activity.php',
         'active' => 'security',

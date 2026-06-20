@@ -700,7 +700,7 @@ ksort($catsSel);
           </thead>
           <tbody>
             <?php if (empty($pagedRows)): ?>
-              <tr><td colspan="<?= $tableColspan ?>" class="text-center text-muted py-4">Sin registros para el criterio seleccionado.</td></tr>
+              <tr><td colspan="<?= $tableColspan ?>" class="nova-empty"><i class="bi bi-archive" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>Sin registros para el criterio seleccionado.</td></tr>
             <?php else: ?>
               <?php foreach ($pagedRows as $row): ?>
                 <?php

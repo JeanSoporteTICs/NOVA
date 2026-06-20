@@ -179,21 +179,23 @@ function ensure_user_fields(array &$item) {
 }
 
 function load_usuarios($path) {
-    ensure_usr_file($path);
     $data = storage_read_json($path, []);
     if (!is_array($data)) $data = [];
-    $changed = false;
     foreach ($data as &$item) {
-        $prev = $item;
         ensure_user_fields($item);
-        if ($item !== $prev) $changed = true;
     }
-    if ($changed) save_usuarios($path, $data);
-    return usuarios_merge_central_access($data);
+    return $data;
 }
 
 function save_usuarios($path, $data) {
-    storage_write_json($path, is_array($data) ? array_values($data) : [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if (!is_array($data)) {
+        return;
+    }
+    foreach (array_values($data) as $row) {
+        if (is_array($row)) {
+            usuarios_central_upsert($row);
+        }
+    }
 }
 
 function usuarios_norm_identity(string $value): string {
@@ -352,6 +354,20 @@ function usuarios_central_user_api(string $redmineId, string $type = 'redmine_ma
     }
 }
 
+function usuarios_central_integration_external(int $userId, string $type): string {
+    if ($userId <= 0 || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return '';
+    }
+    try {
+        return trim((string)\Illuminate\Support\Facades\DB::table('integraciones_usuario')
+            ->where('usuario_id', $userId)
+            ->where('tipo', $type)
+            ->value('usuario_externo'));
+    } catch (\Throwable) {
+        return '';
+    }
+}
+
 function usuarios_central_save_integration(int $userId, string $type, string $secret = '', string $externalUser = ''): void {
     if ($userId <= 0 || !class_exists(\Illuminate\Support\Facades\DB::class)) {
         return;
@@ -379,6 +395,14 @@ function usuarios_central_save_integration(int $userId, string $type, string $se
     }
 }
 
+function usuarios_central_save_integration_encrypted(int $userId, string $type, string $encryptedSecret = '', string $externalUser = ''): void {
+    $secret = '';
+    if ($encryptedSecret !== '' && function_exists('core_credentials_decrypt')) {
+        $secret = core_credentials_decrypt($encryptedSecret);
+    }
+    usuarios_central_save_integration($userId, $type, $secret, $externalUser);
+}
+
 function usuarios_central_grant_access(int $userId, string $moduleKey = 'redmine-mantencion'): void {
     $moduleId = usuarios_central_module_id($moduleKey);
     if ($userId <= 0 || $moduleId === null || !class_exists(\Illuminate\Support\Facades\DB::class)) {
@@ -397,8 +421,15 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
     if (!class_exists(\App\Models\NovaUser::class)) {
         return null;
     }
-    $redmineId = trim((string)($user['id'] ?? $user['redmine_id'] ?? ''));
-    if ($redmineId === '') {
+    $redmineId = trim((string)($user['redmine_id'] ?? ''));
+    if ($redmineId === '' && ctype_digit(trim((string)($user['id'] ?? '')))) {
+        $redmineId = trim((string)$user['id']);
+    }
+    $uuid = trim((string)($user['_nova_user_id'] ?? ''));
+    if ($uuid === '' && $redmineId === '' && !ctype_digit(trim((string)($user['id'] ?? '')))) {
+        $uuid = trim((string)($user['id'] ?? ''));
+    }
+    if ($redmineId === '' && $uuid === '') {
         return null;
     }
     $name = trim((string)($user['nombre'] ?? $user['name'] ?? ''));
@@ -414,7 +445,13 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
     $status = in_array(strtolower(trim((string)($user['estado'] ?? $user['estado_usuario'] ?? 'activo'))), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
     $role = in_array(strtolower(trim((string)($user['rol'] ?? 'usuario'))), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
     try {
-        $model = \App\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+        $model = null;
+        if ($redmineId !== '') {
+            $model = \App\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+        }
+        if (!$model && $uuid !== '') {
+            $model = \App\Models\NovaUser::query()->where('uuid', $uuid)->first();
+        }
         if (!$model && $rut !== '') {
             $model = \App\Models\NovaUser::query()->where('rut', $rut)->first();
         }
@@ -431,7 +468,9 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
         }
         $model->usuario = $username;
         $model->rut = $rut !== '' ? $rut : null;
-        $model->redmine_id = $redmineId;
+        if ($redmineId !== '') {
+            $model->redmine_id = $redmineId;
+        }
         $model->nombre = $name;
         $model->apellido = $lastName;
         $model->rol = $role;
@@ -439,6 +478,8 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
         $model->save();
         $userId = (int)$model->id;
         usuarios_central_save_integration($userId, 'redmine_mantencion', trim((string)($user['api'] ?? '')), $redmineId);
+        usuarios_central_save_integration_encrypted($userId, 'core', trim((string)($user['core_pass_enc'] ?? '')), trim((string)($user['core_user'] ?? '')));
+        usuarios_central_save_integration_encrypted($userId, 'nextcloud', trim((string)($user['nextcloud_pass_enc'] ?? '')), trim((string)($user['nextcloud_user'] ?? '')));
         usuarios_central_grant_access($userId, $moduleKey);
         return $userId;
     } catch (\Throwable) {
@@ -469,11 +510,13 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
     }
     foreach ($central as $user) {
         $redmineId = trim((string)($user->redmine_id ?? ''));
-        if ($redmineId === '') {
+        $rowId = $redmineId !== '' ? $redmineId : trim((string)($user->uuid ?? $user->usuario ?? ''));
+        if ($rowId === '') {
             continue;
         }
         $row = [
-            'id' => $redmineId,
+            'id' => $rowId,
+            'redmine_id' => $redmineId,
             'rut_sin_dv' => trim((string)($user->usuario ?? '')),
             'nombre' => trim((string)($user->nombre ?? '')),
             'apellido' => trim((string)($user->apellido ?? '')),
@@ -481,20 +524,21 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
             'numero_celular' => '',
             'estamento' => '',
             'api' => usuarios_central_user_api($redmineId, 'redmine_mantencion'),
-            'core_user' => trim((string)($user->usuario_core ?? '')),
+            'core_user' => trim((string)($user->usuario_core ?? '')) ?: usuarios_central_integration_external((int)($user->id ?? 0), 'core'),
             'core_pass_enc' => '',
-            'nextcloud_user' => '',
+            'nextcloud_user' => usuarios_central_integration_external((int)($user->id ?? 0), 'nextcloud'),
             'nextcloud_pass_enc' => '',
             'rol' => trim((string)($user->rol ?? 'usuario')) === 'admin' ? 'administrador' : 'usuario',
             'estado' => trim((string)($user->estado ?? 'activo')),
             'password' => (string)($user->password ?? ''),
             'permisos' => [],
+            '_central_only' => $redmineId === '',
         ];
-        if (isset($indexed[$redmineId])) {
-            $rows[$indexed[$redmineId]] = array_merge($rows[$indexed[$redmineId]], $row);
+        if (isset($indexed[$rowId])) {
+            $rows[$indexed[$rowId]] = array_merge($rows[$indexed[$rowId]], $row);
         } else {
             $rows[] = $row;
-            $indexed[$redmineId] = count($rows) - 1;
+            $indexed[$rowId] = count($rows) - 1;
         }
     }
     return $rows;
@@ -847,10 +891,16 @@ function handle_usuarios() {
                 }
             }
             $requiredName = sanitize_input($_POST['nombre'] ?? '');
+            $requiredLast = sanitize_input($_POST['apellido'] ?? '');
             if ($requiredName === '') {
                 return [$rows, 'Error: el nombre es obligatorio'];
             }
-            [$newNombre, $newApellido] = usuarios_split_name($requiredName);
+            [$newNombre, $newApellido] = $requiredLast !== ''
+                ? [$requiredName, $requiredLast]
+                : usuarios_split_name($requiredName);
+            if ($newApellido === '') {
+                return [$rows, 'Error: el apellido es obligatorio'];
+            }
             $newRow = [
                 'id' => $id_input !== '' ? $id_input : uniqid('', true),
                 'rut_sin_dv' => '',
@@ -861,11 +911,11 @@ function handle_usuarios() {
                 'estamento' => '',
                 'rol' => $assignedRole,
                 'estado' => in_array(($_POST['estado'] ?? 'activo'), ['activo', 'baneado'], true) ? $_POST['estado'] : 'activo',
-                'api' => sanitize_input($_POST['api'] ?? ''),
-                'core_user' => sanitize_input($_POST['core_user'] ?? ''),
-                'core_pass_enc' => core_credentials_encrypt(sanitize_input($_POST['core_pass'] ?? '')),
-                'nextcloud_user' => sanitize_input($_POST['nextcloud_user'] ?? ''),
-                'nextcloud_pass_enc' => core_credentials_encrypt(sanitize_input($_POST['nextcloud_pass'] ?? '')),
+                'api' => '',
+                'core_user' => '',
+                'core_pass_enc' => '',
+                'nextcloud_user' => '',
+                'nextcloud_pass_enc' => '',
                 'permisos' => $rolePerms,
             ];
             $rows[] = $newRow;
@@ -879,10 +929,16 @@ function handle_usuarios() {
             if ($index === null) return [$rows, 'Error: usuario no encontrado'];
             $current = &$rows[$index];
             $requiredNameUp = sanitize_input($_POST['nombre'] ?? $current['nombre']);
+            $requiredLastUp = sanitize_input($_POST['apellido'] ?? $current['apellido'] ?? '');
             if ($requiredNameUp === '') {
                 return [$rows, 'Error: el nombre es obligatorio'];
             }
-            [$upNombre, $upApellido] = usuarios_split_name($requiredNameUp);
+            [$upNombre, $upApellido] = $requiredLastUp !== ''
+                ? [$requiredNameUp, $requiredLastUp]
+                : usuarios_split_name($requiredNameUp);
+            if ($upApellido === '') {
+                return [$rows, 'Error: el apellido es obligatorio'];
+            }
             $current['rut_sin_dv'] = '';
             $current['nombre'] = $upNombre !== '' ? $upNombre : $requiredNameUp;
             $current['apellido'] = $upApellido;
@@ -892,41 +948,7 @@ function handle_usuarios() {
             $current['rol'] = sanitize_input($_POST['rol'] ?? ($current['rol'] ?? 'usuario'));
             $postedEstado = sanitize_input($_POST['estado'] ?? ($current['estado'] ?? 'activo'));
             $current['estado'] = in_array($postedEstado, ['activo', 'baneado'], true) ? $postedEstado : 'activo';
-            $postedApi = sanitize_input($_POST['api'] ?? '');
-            if ($postedApi !== '') {
-                $current['api'] = $postedApi;
-            }
             usuarios_central_upsert($current);
-            $postedCoreUser = sanitize_input($_POST['core_user'] ?? '');
-            $postedCorePass = sanitize_input($_POST['core_pass'] ?? '');
-            if (!empty($_POST['core_clear_credentials'])) {
-                $current['core_user'] = '';
-                $current['core_pass_enc'] = '';
-                unset($current['core_pass']);
-            } else {
-                if ($postedCoreUser !== '') {
-                    $current['core_user'] = $postedCoreUser;
-                }
-                if ($postedCorePass !== '') {
-                    $current['core_pass_enc'] = core_credentials_encrypt($postedCorePass);
-                    unset($current['core_pass']);
-                }
-            }
-            $postedNextcloudUser = sanitize_input($_POST['nextcloud_user'] ?? '');
-            $postedNextcloudPass = sanitize_input($_POST['nextcloud_pass'] ?? '');
-            if (!empty($_POST['nextcloud_clear_credentials'])) {
-                $current['nextcloud_user'] = '';
-                $current['nextcloud_pass_enc'] = '';
-                unset($current['nextcloud_pass']);
-            } else {
-                if ($postedNextcloudUser !== '') {
-                    $current['nextcloud_user'] = $postedNextcloudUser;
-                }
-                if ($postedNextcloudPass !== '') {
-                    $current['nextcloud_pass_enc'] = core_credentials_encrypt($postedNextcloudPass);
-                    unset($current['nextcloud_pass']);
-                }
-            }
             save_usuarios($DATA_FILE, $rows);
             usuarios_set_flash('Usuario actualizado');
             usuarios_redirect_back();

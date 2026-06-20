@@ -3,6 +3,8 @@
 namespace App\Support\Nova;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class NovaAuditRepository
 {
@@ -11,19 +13,37 @@ final class NovaAuditRepository
      */
     public function record(string $event, string $message, array $context = [], ?Request $request = null): void
     {
-        $items = $this->recent(500);
         $sessionUser = $request?->session()->get('nova_user', []);
-        $items[] = [
-            'at' => now('America/Santiago')->toIso8601String(),
-            'event' => $event,
-            'message' => $message,
-            'user_id' => is_array($sessionUser) ? (string) ($sessionUser['id'] ?? '') : '',
-            'user_name' => is_array($sessionUser) ? trim((string) (($sessionUser['name'] ?? '') . ' ' . ($sessionUser['apellido'] ?? ''))) : '',
-            'ip' => $request?->ip() ?? '',
-            'context' => $context,
-        ];
 
-        $this->write(array_slice($items, -500));
+        if ($this->tableReady()) {
+            try {
+                DB::table('nova_audit_logs')->insert([
+                    'event'         => $event,
+                    'message'       => $message,
+                    'user_id'       => is_array($sessionUser) ? (string) ($sessionUser['id'] ?? '') : '',
+                    'user_name'     => is_array($sessionUser)
+                        ? trim((string) (($sessionUser['name'] ?? '') . ' ' . ($sessionUser['apellido'] ?? '')))
+                        : '',
+                    'ip'            => $request?->ip() ?? '',
+                    'contexto'      => $context !== [] ? json_encode($context, JSON_UNESCAPED_UNICODE) : null,
+                    'registrado_at' => now('America/Santiago')->toDateTimeString(),
+                ]);
+
+                // Keep only the most recent 500 entries
+                $oldest = DB::table('nova_audit_logs')
+                    ->orderByDesc('id')
+                    ->skip(500)
+                    ->take(1)
+                    ->value('id');
+                if ($oldest !== null) {
+                    DB::table('nova_audit_logs')->where('id', '<=', $oldest)->delete();
+                }
+
+                return;
+            } catch (\Throwable) {
+                // Fall through — table may not be ready yet
+            }
+        }
     }
 
     /**
@@ -31,29 +51,40 @@ final class NovaAuditRepository
      */
     public function recent(int $limit = 100): array
     {
-        $raw = (string) @file_get_contents($this->path());
-        $items = json_decode($raw, true);
-        $items = is_array($items) ? array_values(array_filter($items, 'is_array')) : [];
-
-        return array_reverse(array_slice($items, -max(1, $limit)));
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $items
-     */
-    private function write(array $items): void
-    {
-        $directory = dirname($this->path());
-        if (!is_dir($directory)) {
-            mkdir($directory, 0777, true);
+        if ($this->tableReady()) {
+            try {
+                $rows = DB::table('nova_audit_logs')
+                    ->orderByDesc('registrado_at')
+                    ->orderByDesc('id')
+                    ->limit(max(1, $limit))
+                    ->get(['event', 'message', 'user_id', 'user_name', 'ip', 'contexto', 'registrado_at'])
+                    ->map(static function (object $row): array {
+                        $ctx = $row->contexto !== null ? json_decode((string) $row->contexto, true) : [];
+                        return [
+                            'at'        => (string) $row->registrado_at,
+                            'event'     => (string) $row->event,
+                            'message'   => (string) $row->message,
+                            'user_id'   => (string) $row->user_id,
+                            'user_name' => (string) $row->user_name,
+                            'ip'        => (string) $row->ip,
+                            'context'   => is_array($ctx) ? $ctx : [],
+                        ];
+                    })
+                    ->all();
+                return $rows;
+            } catch (\Throwable) {
+            }
         }
 
-        file_put_contents($this->path(), json_encode(array_values($items), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
-        @chmod($this->path(), 0666);
+        return [];
     }
 
-    private function path(): string
+    private function tableReady(): bool
     {
-        return storage_path('app/nova/audit.json');
+        try {
+            return Schema::hasTable('nova_audit_logs');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

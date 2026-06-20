@@ -22,7 +22,6 @@ class RedmineDashboardController extends Controller
         'usuarios' => 'Usuarios',
         'configuracion' => 'Configuracion',
         'estadisticas' => 'Estadisticas',
-        'estadisticas-api' => 'Redmine API',
         'actividad' => 'Actividad',
     ];
 
@@ -141,11 +140,15 @@ class RedmineDashboardController extends Controller
             return back()->with('redmine_status', $message);
         }
 
-        $message = $action === 'delete'
-            ? $redmine->deleteUser((string) $request->input('id')) . ' usuario(s) eliminado(s).'
-            : 'Usuario guardado.';
-
-        if ($action !== 'delete') {
+        if ($action === 'delete') {
+            $deleted = $redmine->deleteUser((string) $request->input('id'));
+            $message = $deleted > 0 ? 'Usuario eliminado del proyecto.' : 'No se encontro el usuario.';
+        } elseif ($action === 'toggle_status') {
+            $result = $redmine->toggleUserStatus((string) $request->input('id'));
+            $message = $result['ok']
+                ? 'Estado cambiado a ' . $result['nuevo_estado'] . '.'
+                : 'No se encontro el usuario.';
+        } else {
             $result = $redmine->saveUser($request->all());
             $message = $result['ok'] ? 'Usuario guardado.' : $result['error'];
         }
@@ -255,34 +258,7 @@ class RedmineDashboardController extends Controller
                 ->with('redmine_status', $result['ok'] ? 'Rol eliminado.' : $result['error']);
         }
 
-        if ($request->input('config_action') === 'test_webhook') {
-            $url = trim((string) $request->input('webhook_url', ''));
-            $result = $redmine->testWebhookConnection($url);
-            if ($result['ok']) {
-                $request->session()->put('redmine_webhook_tested_url', $url);
-            } else {
-                $request->session()->forget('redmine_webhook_tested_url');
-            }
-
-            return redirect()
-                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'webhook']))
-                ->withInput(['webhook_url' => $url])
-                ->with('redmine_status', $result['ok'] ? 'Conexion webhook correcta. HTTP ' . $result['http_code'] . '.' : 'No se pudo conectar al webhook: ' . ($result['error'] ?: 'HTTP ' . $result['http_code']))
-                ->with('redmine_status_type', $result['ok'] ? 'success' : 'danger')
-                ->with('redmine_webhook_test_result', $result);
-        }
-
         $config = $redmine->configuration();
-        if ($request->input('config_action') === 'save_webhook') {
-            $url = trim((string) $request->input('webhook_url', ''));
-            if ($url === '' || $request->session()->get('redmine_webhook_tested_url') !== $url) {
-                return redirect()
-                    ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'webhook']))
-                    ->withInput(['webhook_url' => $url])
-                    ->with('redmine_status', 'Debes probar correctamente la conexion del webhook antes de guardar.')
-                    ->with('redmine_status_type', 'danger');
-            }
-        }
         foreach ([
             'platform_url',
             'platform_token',
@@ -369,6 +345,10 @@ class RedmineDashboardController extends Controller
             return $blocked;
         }
 
+        $request->validate([
+            'maintenance_file' => ['required', 'file', 'max:5120'],
+        ]);
+
         $selected = $this->maintenanceSections($request->input('maintenance_sections', []), $redmine);
         if ($selected === []) {
             return back()->with('redmine_status', 'Selecciona al menos una seccion para importar.');
@@ -377,6 +357,9 @@ class RedmineDashboardController extends Controller
         $file = $request->file('maintenance_file');
         if (!$file || !$file->isValid()) {
             return back()->with('redmine_status', 'No se pudo leer el archivo de importacion.');
+        }
+        if (strtolower((string) $file->getClientOriginalExtension()) !== 'json') {
+            return back()->with('redmine_status', 'El respaldo debe ser un archivo .json.');
         }
 
         $bundle = json_decode((string) file_get_contents($file->getRealPath()), true);
@@ -471,12 +454,23 @@ class RedmineDashboardController extends Controller
             'prioridad' => ['nullable', 'string', 'max:80'],
             'tipo' => ['nullable', 'string', 'max:80'],
             'asignado_a' => ['nullable', 'integer', 'min:1', 'max:4294967295'],
+            'fecha_inicio' => ['nullable', 'date'],
+            'fecha_fin' => ['nullable', 'date'],
+            'fecha' => ['nullable', 'date'],
+            'hora' => ['nullable', 'date_format:H:i'],
+            'chat_id_telegram' => ['nullable', 'string', 'max:120'],
+            'numero' => ['nullable', 'string', 'max:120'],
+            'mensaje' => ['nullable', 'string', 'max:500'],
             'hora_extra' => ['nullable', 'string', 'max:8'],
             'tiempo_estimado' => ['nullable', 'string', 'max:40'],
         ]);
+        if (trim((string) ($payload['chat_id_telegram'] ?? '')) === '' && trim((string) ($payload['numero'] ?? '')) !== '') {
+            $payload['chat_id_telegram'] = trim((string) $payload['numero']);
+        }
+        unset($payload['numero']);
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         if (is_array($user) && trim((string) ($payload['asignado_a'] ?? '')) === '') {
-            $payload['asignado_a'] = (string) ($user['id'] ?? '');
+            $payload['asignado_a'] = (string) ($user['redmine_id'] ?? $user['id'] ?? '');
         }
         $payload['origen'] = 'manual';
         $report = $redmine->createSimulatedReport($payload);

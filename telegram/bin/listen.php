@@ -204,60 +204,30 @@ function telegram_bootstrap_laravel(): void
     }
 }
 
-function telegram_storage_users_path(): string
-{
-    return function_exists('storage_path')
-        ? storage_path('app/nova/users.json')
-        : dirname(__DIR__, 2) . '/storage/app/nova/users.json';
-}
-
 function telegram_user_by_chat_id(string $chatId): array
 {
-    $users = json_decode((string) @file_get_contents(telegram_storage_users_path()), true);
-    if (is_array($users)) {
-        foreach ($users as $user) {
-            if (!is_array($user)) {
-                continue;
+    // Primary: look up by telegram_id_chat in usuarios_nova (DB-only since S30)
+    if (class_exists(\Illuminate\Support\Facades\DB::class) && class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')
+                && \Illuminate\Support\Facades\Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
+                $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+                    ->where('telegram_id_chat', $chatId)
+                    ->where('estado', 'activo')
+                    ->first(['id', 'uuid', 'usuario', 'nombre', 'apellido', 'rut', 'rol', 'redmine_id']);
+                if ($row !== null) {
+                    return [
+                        'id'               => (string) ($row->uuid ?? $row->id ?? ''),
+                        'name'             => (string) ($row->nombre ?? ''),
+                        'apellido'         => (string) ($row->apellido ?? ''),
+                        'username'         => (string) ($row->usuario ?? $row->rut ?? ''),
+                        'redmine_id'       => (string) ($row->redmine_id ?? ''),
+                        'telegram_settings'=> ['chat_id' => $chatId],
+                    ];
+                }
             }
-            $settings = is_array($user['telegram_settings'] ?? null) ? $user['telegram_settings'] : [];
-            if ((string) ($settings['chat_id'] ?? '') === $chatId) {
-                return $user;
-            }
+        } catch (\Throwable) {
         }
-    }
-
-    return telegram_redmine_tic_user_by_chat_id($chatId);
-}
-
-function telegram_redmine_tic_users_path(): string
-{
-    return dirname(__DIR__, 2) . '/redmine_tic/data/usuarios.json';
-}
-
-function telegram_redmine_tic_user_by_chat_id(string $chatId): array
-{
-    $users = json_decode((string) @file_get_contents(telegram_redmine_tic_users_path()), true);
-    if (!is_array($users)) {
-        return [];
-    }
-
-    foreach ($users as $user) {
-        if (!is_array($user)) {
-            continue;
-        }
-        $candidate = (string) ($user['telegram_chat_id'] ?? ($user['telegram_settings']['chat_id'] ?? ''));
-        if ($candidate !== $chatId) {
-            continue;
-        }
-
-        return [
-            'id' => (string) ($user['id'] ?? ''),
-            'name' => (string) ($user['nombre'] ?? ''),
-            'apellido' => (string) ($user['apellido'] ?? ''),
-            'username' => (string) ($user['rut'] ?? $user['id'] ?? ''),
-            'telegram_settings' => ['chat_id' => $chatId],
-            'redmine_tic_user' => $user,
-        ];
     }
 
     return [];

@@ -8,79 +8,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
-    <style>
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: grid;
-            place-items: center;
-            background: #eef3fb;
-        }
-
-        .login {
-            width: min(420px, calc(100% - 32px));
-            padding: 0;
-            overflow: hidden;
-        }
-
-        .login-hero {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 22px;
-            color: #fff;
-            background: linear-gradient(130deg, #4f86f7 0%, #2f9ed9 48%, #31c5ae 100%);
-        }
-
-        .login-mark {
-            display: grid;
-            width: 48px;
-            height: 48px;
-            place-items: center;
-            border-radius: 14px;
-            background: rgba(255,255,255,.16);
-            border: 1px solid rgba(255,255,255,.28);
-            font-size: 1.3rem;
-        }
-
-        .login-body {
-            padding: 24px;
-            background: #fff;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: 28px;
-            letter-spacing: 0;
-            color: #fff;
-            font-weight: 800;
-        }
-
-        p {
-            margin: 4px 0 0;
-            color: rgba(255,255,255,.76);
-            line-height: 1.4;
-        }
-
-        label {
-            display: block;
-            margin: 0 0 7px;
-            font-size: 14px;
-            font-weight: 700;
-        }
-
-        .field {
-            margin-bottom: 16px;
-        }
-
-        .error {
-            margin: 0 0 16px;
-            color: var(--nova-danger);
-            font-size: 14px;
-        }
-    </style>
 </head>
-<body class="nova-page">
+<body class="nova-page nova-login-page">
     <main class="login nova-card">
         <section class="login-hero">
             <span class="login-mark"><i class="bi bi-grid-1x2-fill"></i></span>

@@ -2,6 +2,9 @@
 
 namespace App\Support\Integrations;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 final class UserIntegrationRepository
 {
     /**
@@ -9,11 +12,51 @@ final class UserIntegrationRepository
      */
     public function users(): array
     {
-        $raw = (string) @file_get_contents($this->path());
-        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw) ?? $raw;
-        $users = json_decode($raw, true);
+        if (!$this->tablesAvailable()) {
+            return [];
+        }
 
-        return is_array($users) ? array_values(array_filter($users, 'is_array')) : [];
+        try {
+            $integrations = DB::table('integraciones_usuario')->get()->groupBy('usuario_id');
+
+            return DB::table('usuarios_nova')
+                ->orderBy('nombre')
+                ->orderBy('apellido')
+                ->get()
+                ->map(function ($row) use ($integrations): array {
+                    $byType = ($integrations[(int) $row->id] ?? collect())->keyBy('tipo');
+                    $emach = $byType['emach'] ?? null;
+                    $telegramChatId = trim((string) ($row->telegram_id_chat ?? ''));
+
+                    $user = [
+                        'id' => (string) ($row->uuid ?? ''),
+                        'username' => (string) ($row->usuario ?? ''),
+                        'rut' => (string) ($row->rut ?? ''),
+                        'rut_sin_dv' => (string) ($row->usuario ?? ''),
+                        'core_user' => (string) ($row->usuario_core ?? ''),
+                        'redmine_id' => (string) ($row->redmine_id ?? ''),
+                    ];
+                    if ($emach !== null) {
+                        $user['emach_credentials'] = [
+                            'user' => (string) ($emach->usuario_externo ?? ''),
+                            'password' => (string) ($emach->valor_secreto ?? ''),
+                            'updated_at' => (string) ($emach->actualizado_at ?? ''),
+                        ];
+                    }
+                    if ($telegramChatId !== '') {
+                        $user['telegram_settings'] = [
+                            'chat_id' => $telegramChatId,
+                            'updated_at' => (string) ($row->actualizado_at ?? ''),
+                        ];
+                    }
+
+                    return $user;
+                })
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     public function userIndexForSession(array $sessionUser): ?int
@@ -96,82 +139,124 @@ final class UserIntegrationRepository
 
     public function saveEmachForSession(array $sessionUser, string $emachUser, string $password): bool
     {
-        $users = $this->users();
-        $index = $this->userIndexForSession($sessionUser);
-        if ($index === null || trim($emachUser) === '' || $password === '') {
-            return false;
-        }
-
-        $users[$index]['emach_credentials'] = [
-            'user' => trim($emachUser),
-            'password' => $this->encryptSecret($password),
-            'updated_at' => date(DATE_ATOM),
-        ];
-
-        return $this->write($users);
+        return $this->saveCredentialForSession($sessionUser, 'emach', $emachUser, $password);
     }
 
     public function saveTelegramForSession(array $sessionUser, string $chatId): bool
     {
-        $users = $this->users();
-        $index = $this->userIndexForSession($sessionUser);
-        if ($index === null || trim($chatId) === '') {
+        $userId = $this->databaseUserIdForSession($sessionUser);
+        if ($userId === null || trim($chatId) === '') {
             return false;
         }
 
-        $users[$index]['telegram_settings'] = [
-            'chat_id' => trim($chatId),
-            'updated_at' => date(DATE_ATOM),
-        ];
-
-        return $this->write($users);
+        return $this->writeTelegramChatId($userId, trim($chatId));
     }
 
     /**
-     * @param array<string,mixed> $payload
-     * @param array<string,mixed> $current
-     * @return array<string,string>
+     * @return array<string,array<string,mixed>>
      */
-    public function emachFromPayload(array $payload, array $current): array
+    public function integrationsForSession(array $sessionUser, array $types): array
     {
-        $currentCredentials = is_array($current['emach_credentials'] ?? null) ? $current['emach_credentials'] : [];
-        $user = trim((string) ($payload['emach_user'] ?? $currentCredentials['user'] ?? ''));
-        $password = (string) ($payload['emach_password'] ?? '');
-        $passwordStored = (string) ($currentCredentials['password'] ?? '');
-
-        if ($password !== '') {
-            $passwordStored = $this->encryptSecret($password);
-        }
-
-        if ($user === '' && $passwordStored === '') {
+        $userId = $this->databaseUserIdForSession($sessionUser);
+        if ($userId === null || !$this->tablesAvailable()) {
             return [];
         }
 
-        return [
-            'user' => $user,
-            'password' => $passwordStored,
-            'updated_at' => date(DATE_ATOM),
-        ];
+        $types = array_values(array_unique(array_filter(array_map('strval', $types))));
+        if ($types === []) {
+            return [];
+        }
+
+        try {
+            $rows = DB::table('integraciones_usuario')
+                ->where('usuario_id', $userId)
+                ->whereIn('tipo', $types)
+                ->get()
+                ->keyBy('tipo');
+
+            $result = [];
+            foreach ($types as $type) {
+                $row = $rows[$type] ?? null;
+                $externalUser = trim((string) ($row->usuario_externo ?? ''));
+                $secret = trim((string) ($row->valor_secreto ?? ''));
+                $result[$type] = [
+                    'type' => $type,
+                    'external_user' => $externalUser,
+                    'has_external_user' => $externalUser !== '',
+                    'has_secret' => $secret !== '',
+                    'stored' => $externalUser !== '' || $secret !== '',
+                    'updated_at' => (string) ($row->actualizado_at ?? ''),
+                    'masked_external_user' => $this->mask($externalUser),
+                ];
+            }
+
+            return $result;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
-     * @param array<string,mixed> $payload
-     * @param array<string,mixed> $current
-     * @return array<string,string>
+     * @return array<string,mixed>
      */
-    public function telegramFromPayload(array $payload, array $current): array
+    public function integrationForSession(array $sessionUser, string $type): array
     {
-        $currentSettings = is_array($current['telegram_settings'] ?? null) ? $current['telegram_settings'] : [];
-        $chatId = trim((string) ($payload['telegram_chat_id'] ?? $currentSettings['chat_id'] ?? ''));
+        return $this->integrationsForSession($sessionUser, [$type])[$type] ?? [
+            'type' => $type,
+            'external_user' => '',
+            'has_external_user' => false,
+            'has_secret' => false,
+            'stored' => false,
+            'updated_at' => '',
+            'masked_external_user' => '',
+        ];
+    }
 
-        if ($chatId === '') {
-            return [];
+    public function saveCredentialForSession(array $sessionUser, string $type, string $externalUser, string $secret): bool
+    {
+        $userId = $this->databaseUserIdForSession($sessionUser);
+        $type = trim($type);
+        $externalUser = trim($externalUser);
+        if ($userId === null || $type === '' || !$this->tablesAvailable()) {
+            return false;
         }
 
-        return [
-            'chat_id' => $chatId,
-            'updated_at' => date(DATE_ATOM),
-        ];
+        $currentSecret = '';
+        try {
+            $currentSecret = (string) DB::table('integraciones_usuario')
+                ->where('usuario_id', $userId)
+                ->where('tipo', $type)
+                ->value('valor_secreto');
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $storedSecret = $secret !== '' ? $this->encryptSecret($secret) : $currentSecret;
+        if ($externalUser === '' && $storedSecret === '') {
+            return false;
+        }
+
+        return $this->writeIntegration($userId, $type, $externalUser, $storedSecret, '');
+    }
+
+    public function deleteCredentialForSession(array $sessionUser, string $type): bool
+    {
+        $userId = $this->databaseUserIdForSession($sessionUser);
+        $type = trim($type);
+        if ($userId === null || $type === '' || !$this->tablesAvailable()) {
+            return false;
+        }
+
+        try {
+            DB::table('integraciones_usuario')
+                ->where('usuario_id', $userId)
+                ->where('tipo', $type)
+                ->delete();
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -195,17 +280,7 @@ final class UserIntegrationRepository
      */
     private function write(array $users): bool
     {
-        $directory = dirname($this->path());
-        if (!is_dir($directory) && !@mkdir($directory, 0777, true) && !is_dir($directory)) {
-            return false;
-        }
-
-        $written = @file_put_contents($this->path(), json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL, LOCK_EX);
-        if ($written !== false) {
-            @chmod($this->path(), 0666);
-        }
-
-        return $written !== false;
+        return true;
     }
 
     private function encryptSecret(string $secret): string
@@ -251,8 +326,111 @@ final class UserIntegrationRepository
         return strtolower((string) preg_replace('/[^0-9a-z]/i', '', (string) $value));
     }
 
-    private function path(): string
+    private function tablesAvailable(): bool
     {
-        return storage_path('app/nova/users.json');
+        try {
+            return Schema::hasTable('usuarios_nova') && Schema::hasTable('integraciones_usuario');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function databaseUserIdForSession(array $sessionUser): ?int
+    {
+        if (!$this->tablesAvailable()) {
+            return null;
+        }
+
+        try {
+            foreach ([
+                'uuid' => $sessionUser['id'] ?? '',
+                'usuario' => $sessionUser['username'] ?? '',
+                'rut' => $sessionUser['rut'] ?? '',
+                'redmine_id' => $sessionUser['redmine_id'] ?? '',
+                'usuario_core' => $sessionUser['core_user'] ?? '',
+            ] as $column => $value) {
+                $value = trim((string) $value);
+                if ($value === '') {
+                    continue;
+                }
+                $id = DB::table('usuarios_nova')->where($column, $value)->value('id');
+                if ($id !== null) {
+                    return (int) $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function writeIntegration(int $userId, string $type, string $externalUser, string $secret, string $chatId): bool
+    {
+        if ($userId <= 0 || !$this->tablesAvailable()) {
+            return false;
+        }
+
+        $values = ['actualizado_at' => now()];
+        if ($externalUser !== '') {
+            $values['usuario_externo'] = $externalUser;
+        }
+        if ($secret !== '') {
+            $values['valor_secreto'] = $secret;
+        }
+        if ($chatId !== '' && Schema::hasColumn('integraciones_usuario', 'chat_id')) {
+            $values['chat_id'] = $chatId;
+        }
+
+        try {
+            DB::table('integraciones_usuario')->updateOrInsert(
+                ['usuario_id' => $userId, 'tipo' => $type],
+                $values
+            );
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function mask(string $value): string
+    {
+        $value = trim($value);
+        $length = mb_strlen($value);
+        if ($length === 0) {
+            return '';
+        }
+        if ($length <= 4) {
+            return str_repeat('*', $length);
+        }
+
+        return mb_substr($value, 0, 2) . str_repeat('*', max(3, $length - 4)) . mb_substr($value, -2);
+    }
+
+    private function writeTelegramChatId(int $userId, string $chatId): bool
+    {
+        if ($userId <= 0 || $chatId === '' || !Schema::hasTable('usuarios_nova') || !Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
+            return false;
+        }
+
+        try {
+            DB::table('usuarios_nova')
+                ->where('id', $userId)
+                ->update([
+                    'telegram_id_chat' => $chatId,
+                    'actualizado_at' => now(),
+                ]);
+
+            if (Schema::hasTable('integraciones_usuario')) {
+                DB::table('integraciones_usuario')
+                    ->where('usuario_id', $userId)
+                    ->where('tipo', 'telegram')
+                    ->delete();
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

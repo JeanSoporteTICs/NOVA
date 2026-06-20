@@ -58,8 +58,10 @@ $batches = nextcloud_created_history_load();
 
     <?php if (!$batches): ?>
       <div class="card nextcloud-panel">
-        <div class="card-body p-4 text-muted">
-          No hay lotes temporales disponibles.
+        <div class="nova-empty-state">
+          <div class="nova-empty-state-icon"><i class="bi bi-clock-history"></i></div>
+          <h3>Sin historial disponible</h3>
+          <p>Los lotes de usuarios creados aparecen aquí durante 24 horas. Una vez expirados se eliminan automáticamente.</p>
         </div>
       </div>
     <?php endif; ?>

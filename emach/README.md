@@ -19,15 +19,15 @@ Archivos principales:
 
 El monitor consulta EMACH, crea una linea base de marcaciones ya vistas y luego envia solo las marcaciones nuevas. Puede enviar al servicio central de notificaciones NOVA, a Make o a ambos.
 
-Puedes guardar credenciales y webhook desde:
+Cada usuario guarda sus credenciales personales desde:
 
 ```text
-http://localhost/NOVA/public/index.php/emach/views/Mantenedor/mantenedor.php
+http://localhost/NOVA/public/index.php/emach/configuracion
 ```
 
-Se guardan en `storage/app/emach/monitor_config.json`, archivo ignorado por git. Las variables de entorno siguen teniendo prioridad si las defines.
+Se guardan en `integraciones_usuario` con el secreto cifrado por Laravel. Las variables de entorno siguen teniendo prioridad para el monitor tecnico global si las defines.
 
-Credenciales por variables de entorno, opcional si ya usas el mantenedor:
+Credenciales por variables de entorno para el monitor tecnico global:
 
 ```bash
 export EMACH_USER='19006667-3'

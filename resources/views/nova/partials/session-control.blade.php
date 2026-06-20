@@ -1,20 +1,3 @@
-@once
-    <style>
-        .nova-session-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 31px; padding: 6px 10px; border-radius: 999px; font-weight: 900; }
-        .nova-session-badge.is-ok { background: #f8fafc; color: #0f172a; }
-        .nova-session-badge.is-warning { background: #fef3c7; color: #78350f; }
-        .nova-session-badge.is-danger { background: #fee2e2; color: #991b1b; }
-        .nova-session-modal { border: 0; border-radius: 18px; box-shadow: 0 28px 70px rgba(15, 23, 42, .28); overflow: hidden; }
-        .nova-session-modal .modal-header { background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%); border-bottom: 1px solid #d8e3f4; }
-        .nova-session-modal .modal-title { color: #0f172a; font-weight: 900; }
-        .nova-session-modal .modal-body { padding: 22px; }
-        .nova-session-modal .modal-body p { margin: 0 0 14px; color: #334155; font-weight: 700; }
-        .nova-session-modal .form-label { color: #334155; font-weight: 900; }
-        .nova-session-modal .form-control { min-height: 42px; border-color: #d8e3f4; border-radius: 12px; font-weight: 700; }
-        .nova-session-modal .modal-footer { background: #f8fbff; border-top: 1px solid #d8e3f4; }
-    </style>
-@endonce
-
 @php
     $novaSessionTimeout = app(\App\Support\Nova\NovaSettingsRepository::class)->sessionTimeout();
     $novaSessionLastActivity = (int) session('nova_last_activity', time());
@@ -139,7 +122,16 @@
             };
 
             logoutButton?.addEventListener('click', () => {
-                window.location.href = @json(route('logout'));
+                const logoutForm = document.createElement('form');
+                logoutForm.method = 'POST';
+                logoutForm.action = @json(route('logout'));
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '_token';
+                tokenInput.value = csrf;
+                logoutForm.appendChild(tokenInput);
+                document.body.appendChild(logoutForm);
+                logoutForm.submit();
             });
 
             extendButton?.addEventListener('click', async () => {

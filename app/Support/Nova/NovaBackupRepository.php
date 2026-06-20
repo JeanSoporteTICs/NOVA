@@ -2,6 +2,9 @@
 
 namespace App\Support\Nova;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 final class NovaBackupRepository
 {
     /**
@@ -10,13 +13,7 @@ final class NovaBackupRepository
     public function targets(): array
     {
         return [
-            ['key' => 'nova_users', 'label' => 'Usuarios NOVA', 'path' => storage_path('app/nova/users.json')],
-            ['key' => 'nova_settings', 'label' => 'Configuracion NOVA', 'path' => storage_path('app/nova/settings.json')],
-            ['key' => 'nova_access', 'label' => 'Accesos NOVA', 'path' => storage_path('app/nova/access_overrides.json')],
-            ['key' => 'redmine_tic_users', 'label' => 'Usuarios Redmine TICS', 'path' => $this->moduleDataPath('redmine_tic', 'usuarios.json')],
-            ['key' => 'redmine_mantencion_users', 'label' => 'Usuarios Redmine Mantencion', 'path' => $this->moduleDataPath('redmine-mantencion', 'usuarios.json')],
-            ['key' => 'redmine_tic_config', 'label' => 'Configuracion Redmine TICS', 'path' => $this->moduleDataPath('redmine_tic', 'configuracion.json')],
-            ['key' => 'redmine_mantencion_config', 'label' => 'Configuracion Redmine Mantencion', 'path' => $this->moduleDataPath('redmine-mantencion', 'configuracion.json')],
+            ['key' => 'nova_settings', 'label' => 'Configuracion NOVA', 'type' => 'db_table', 'table' => 'nova_settings'],
         ];
     }
 
@@ -27,17 +24,10 @@ final class NovaBackupRepository
             if ($key !== 'all' && $key !== (string) $target['key']) {
                 continue;
             }
-            $source = (string) $target['path'];
-            if (!is_file($source)) {
-                continue;
-            }
-            $directory = storage_path('app/nova/backups/' . date('Y-m-d'));
-            if (!is_dir($directory)) {
-                mkdir($directory, 0777, true);
-            }
-            $name = pathinfo($source, PATHINFO_FILENAME) . '.' . date('His') . '.bak.json';
-            if (@copy($source, $directory . DIRECTORY_SEPARATOR . $name)) {
-                $count++;
+            if (($target['type'] ?? '') === 'db_table') {
+                if ($this->backupDbTable((string) $target['table'], (string) $target['key'])) {
+                    $count++;
+                }
             }
         }
 
@@ -66,10 +56,23 @@ final class NovaBackupRepository
         return array_slice($items, 0, 30);
     }
 
-    private function moduleDataPath(string $moduleKey, string $file): string
+    private function backupDbTable(string $table, string $key): bool
     {
-        $base = rtrim((string) data_get(config("modules.{$moduleKey}", []), 'path', base_path($moduleKey)), DIRECTORY_SEPARATOR);
-
-        return $base . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . $file;
+        try {
+            if (!Schema::hasTable($table)) {
+                return false;
+            }
+            $rows = DB::table($table)->get()->map(static fn ($row) => (array) $row)->all();
+            $json = json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+            $directory = storage_path('app/nova/backups/' . date('Y-m-d'));
+            if (!is_dir($directory) && !@mkdir($directory, 0777, true) && !is_dir($directory)) {
+                return false;
+            }
+            $name = $key . '.' . date('His') . '.bak.json';
+            $written = @file_put_contents($directory . DIRECTORY_SEPARATOR . $name, $json, LOCK_EX);
+            return $written !== false;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

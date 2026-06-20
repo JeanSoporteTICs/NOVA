@@ -69,9 +69,22 @@ function ensure_config_file($path) {
 }
 
 function load_config($path) {
-    ensure_config_file($path);
-    $data = storage_read_json($path, []);
-    if (!is_array($data)) $data = [];
+    $repo = config_mantencion_repository();
+    if ($repo !== null) {
+        $data = $repo->loadAll();
+        if ($data === null) {
+            ensure_config_file($path);
+            $migrated = storage_read_json($path, []);
+            $data = is_array($migrated) ? $migrated : [];
+            if (!empty($data)) {
+                $repo->saveAll($data);
+            }
+        }
+    } else {
+        ensure_config_file($path);
+        $data = storage_read_json($path, []);
+        if (!is_array($data)) $data = [];
+    }
     if (!array_key_exists('categories_url', $data)) $data['categories_url'] = '';
     if (!array_key_exists('unidades_url', $data)) $data['unidades_url'] = '';
     if (!array_key_exists('cf_solicitante', $data) || $data['cf_solicitante'] === null || $data['cf_solicitante'] === '') {
@@ -113,7 +126,11 @@ function load_config($path) {
 }
 
 function save_config($path, $cfg) {
-    storage_write_json($path, $cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $repo = config_mantencion_repository();
+    if ($repo !== null) {
+        $repo->saveAll($cfg);
+    }
+    // No filesystem write: configuraciones_modulo is now the single source of truth (S30)
 }
 
 function config_set_flash(string $message): void {

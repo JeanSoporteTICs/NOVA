@@ -95,9 +95,23 @@ window.addEventListener('load', () => {
     tick();
   }
 
-  closeBtn?.addEventListener('click', () => {
-    window.location.href = logoutUrl;
-  });
+  function submitLogout() {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = logoutUrl;
+    form.style.display = 'none';
+    if (csrfToken) {
+      const tokenInput = document.createElement('input');
+      tokenInput.type = 'hidden';
+      tokenInput.name = '_token';
+      tokenInput.value = csrfToken;
+      form.appendChild(tokenInput);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  closeBtn?.addEventListener('click', submitLogout);
 
   extendBtn?.addEventListener('click', async () => {
     const password = (extendPwd?.value || '').trim();

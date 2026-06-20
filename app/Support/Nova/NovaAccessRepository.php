@@ -4,10 +4,8 @@ namespace App\Support\Nova;
 
 use App\Support\Auth\NovaUserRepository;
 use App\Support\Modules\ModuleRegistry;
-use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RedmineTic\Support\Redmine\RedmineDataRepository;
 
 final class NovaAccessRepository
 {
@@ -196,7 +194,7 @@ final class NovaAccessRepository
             return 'sin acceso';
         }
 
-        return $moduleKey === 'administracion' ? 'admin' : 'redmine';
+        return $moduleKey === 'administracion' ? 'admin' : 'bd';
     }
 
     /**
@@ -204,127 +202,6 @@ final class NovaAccessRepository
      */
     private function projectUserExists(string $moduleKey, array $sessionUser): bool
     {
-        if ($moduleKey === 'redmine_tic' && class_exists(RedmineDataRepository::class)) {
-            try {
-                return $this->projectUserExistsInRows(app(RedmineDataRepository::class)->forProject($moduleKey)->users(), $sessionUser);
-            } catch (\Throwable) {
-                return false;
-            }
-        }
-
-        if ($this->novaProjectUserExists($moduleKey, $sessionUser)) {
-            return true;
-        }
-
-        try {
-            $module = $this->modules->get($moduleKey);
-        } catch (\Throwable) {
-            return false;
-        }
-
-        if ($moduleKey === 'redmine-mantencion' && class_exists(RedmineMantencionStorageRepository::class)) {
-            try {
-                $records = app(RedmineMantencionStorageRepository::class)->readJson('usuarios.json');
-                return is_array($records) ? $this->projectUserExistsInRows($records, $sessionUser) : false;
-            } catch (\Throwable) {
-            }
-        }
-
-        $path = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'usuarios.json';
-
-        if (!is_file($path)) {
-            return false;
-        }
-
-        $records = json_decode((string) file_get_contents($path), true);
-        if (!is_array($records)) {
-            return false;
-        }
-
-        return $this->projectUserExistsInRows($records, $sessionUser);
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $records
-     * @param array<string,mixed> $sessionUser
-     */
-    private function projectUserExistsInRows(array $records, array $sessionUser): bool
-    {
-        $needles = array_filter(array_map([$this, 'normalize'], [
-            $sessionUser['username'] ?? '',
-            $sessionUser['redmine_id'] ?? '',
-            $sessionUser['id'] ?? '',
-            $sessionUser['rut'] ?? '',
-            $sessionUser['rut_sin_dv'] ?? '',
-            $sessionUser['core_user'] ?? '',
-        ]));
-
-        foreach ($records as $record) {
-            if (!is_array($record) || $this->isBlocked($record)) {
-                continue;
-            }
-
-            $candidates = array_filter(array_map([$this, 'normalize'], [
-                $record['id'] ?? '',
-                $record['rut'] ?? '',
-                $record['rut_sin_dv'] ?? '',
-                $record['core_user'] ?? '',
-                $record['nextcloud_user'] ?? '',
-            ]));
-
-            if (array_intersect($needles, $candidates) !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string,mixed> $sessionUser
-     */
-    private function novaProjectUserExists(string $moduleKey, array $sessionUser): bool
-    {
-        $rows = json_decode((string) @file_get_contents(storage_path('app/nova/users.json')), true);
-        if (!is_array($rows)) {
-            return false;
-        }
-
-        $needles = array_filter(array_map([$this, 'normalize'], [
-            $sessionUser['username'] ?? '',
-            $sessionUser['redmine_id'] ?? '',
-            $sessionUser['id'] ?? '',
-            $sessionUser['rut'] ?? '',
-            $sessionUser['rut_sin_dv'] ?? '',
-            $sessionUser['core_user'] ?? '',
-        ]));
-
-        foreach ($rows as $row) {
-            if (!is_array($row) || $this->isBlocked($row)) {
-                continue;
-            }
-
-            $project = is_array(data_get($row, 'projects.' . $moduleKey)) ? data_get($row, 'projects.' . $moduleKey) : [];
-            if ($project === [] || $this->isBlocked($project)) {
-                continue;
-            }
-
-            $candidates = array_filter(array_map([$this, 'normalize'], [
-                $row['username'] ?? '',
-                $row['redmine_id'] ?? '',
-                $row['id'] ?? '',
-                $row['rut'] ?? '',
-                $row['rut_sin_dv'] ?? '',
-                $row['core_user'] ?? '',
-                $project['id'] ?? '',
-            ]));
-
-            if (array_intersect($needles, $candidates) !== []) {
-                return true;
-            }
-        }
-
         return false;
     }
 
@@ -333,14 +210,7 @@ final class NovaAccessRepository
      */
     private function overrides(): array
     {
-        $databaseOverrides = $this->databaseOverrides();
-        $raw = (string) @file_get_contents($this->path());
-        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw) ?? $raw;
-        $data = json_decode($raw, true);
-
-        $fileOverrides = is_array($data) ? $data : [];
-
-        return array_replace_recursive($fileOverrides, $databaseOverrides);
+        return $this->databaseOverrides();
     }
 
     /**
@@ -349,13 +219,6 @@ final class NovaAccessRepository
     private function write(array $overrides): void
     {
         $this->writeDatabaseOverrides($overrides);
-
-        $directory = dirname($this->path());
-        if (!is_dir($directory)) {
-            mkdir($directory, 0777, true);
-        }
-
-        file_put_contents($this->path(), json_encode($overrides, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
     }
 
     /**
@@ -417,6 +280,23 @@ final class NovaAccessRepository
 
         $users = $this->users->all();
         $modules = $this->manageableModules();
+        $moduleIds = [];
+
+        foreach ($modules as $moduleKey => $module) {
+            $moduleId = $this->databaseModuleId((string) $moduleKey, $module);
+            if ($moduleId !== null) {
+                $moduleIds[(string) $moduleKey] = $moduleId;
+            }
+        }
+
+        if ($moduleIds !== []) {
+            try {
+                DB::table('permisos_usuario_modulo')
+                    ->whereIn('modulo_id', array_values($moduleIds))
+                    ->delete();
+            } catch (\Throwable) {
+            }
+        }
 
         foreach ($overrides as $identity => $moduleOverrides) {
             $userId = $this->databaseUserIdForIdentity((string) $identity, $users);
@@ -428,7 +308,7 @@ final class NovaAccessRepository
                 if (!array_key_exists((string) $moduleKey, $modules)) {
                     continue;
                 }
-                $moduleId = $this->databaseModuleId((string) $moduleKey, $modules[(string) $moduleKey]);
+                $moduleId = $moduleIds[(string) $moduleKey] ?? null;
                 if ($moduleId === null) {
                     continue;
                 }
@@ -501,15 +381,15 @@ final class NovaAccessRepository
 
             DB::table('modulos_nova')->insert([
                 'clave_modulo' => $moduleKey,
-                'nombre' => (string) ($module['name'] ?? $moduleKey),
-                'descripcion' => (string) ($module['description'] ?? ''),
-                'icono' => (string) ($module['icon'] ?? ''),
-                'tipo' => (string) ($module['type'] ?? 'native'),
-                'ruta' => (string) ($module['route'] ?? $module['path'] ?? ''),
-                'entrada' => (string) ($module['entry'] ?? ''),
-                'activo' => !empty($module['enabled']) ? 1 : 0,
-                'orden' => (int) ($module['order'] ?? 100),
-                'creado_at' => now(),
+                'nombre'       => (string) ($module['name'] ?? $moduleKey),
+                'descripcion'  => (string) ($module['description'] ?? ''),
+                'icono'        => (string) ($module['icon'] ?? ''),
+                'tipo'         => (string) ($module['type'] ?? 'native'),
+                'ruta'         => (string) ($module['route'] ?? $module['path'] ?? ''),
+                'entrada'      => (string) ($module['entry'] ?? ''),
+                'habilitado'   => !empty($module['enabled']) ? 1 : 0,
+                'orden'        => (int) ($module['order'] ?? 100),
+                'creado_at'    => now(),
                 'actualizado_at' => now(),
             ]);
 
@@ -570,8 +450,4 @@ final class NovaAccessRepository
         return strtolower((string) preg_replace('/[^0-9a-z]/i', '', $value));
     }
 
-    private function path(): string
-    {
-        return storage_path('app/nova/access.json');
-    }
 }

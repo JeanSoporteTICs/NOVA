@@ -27,7 +27,6 @@ $navItems = [
     ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => $routeUrl('usuarios'), 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
     ['key' => 'configuracion', 'label' => 'Configuracion', 'href' => $routeUrl('configuracion'), 'icon' => 'bi-sliders', 'can' => auth_can('configuracion') || auth_can('categorias') || auth_can('unidades')],
     ['key' => 'estadisticas', 'label' => 'Estadisticas', 'href' => $routeUrl('estadisticas'), 'icon' => 'bi-bar-chart-line', 'can' => auth_can('estadisticas')],
-    ['key' => 'estadisticas_api', 'label' => 'Redmine API', 'href' => $routeUrl('estadisticas-api'), 'icon' => 'bi-cloud-arrow-down', 'can' => auth_can('estadisticas_manual')],
     ['key' => 'security', 'label' => 'Actividad reciente', 'href' => $routeUrl('actividad'), 'icon' => 'bi-activity', 'can' => auth_can('actividad')],
 ];
 ?>

@@ -215,7 +215,10 @@
                         @include('nova.partials.session-control')
                         <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
                         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
-                        <a class="btn btn-outline-light" href="{{ route('logout') }}"><i class="bi bi-box-arrow-right"></i>Salir</a>
+                        <form method="POST" action="{{ route('logout') }}" style="display:inline">
+                            @csrf
+                            <button class="btn btn-outline-light" type="submit"><i class="bi bi-box-arrow-right"></i>Salir</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -234,7 +237,7 @@
                         'telegram' => ['label' => 'Telegram', 'icon' => 'bi-telegram', 'description' => 'Configura el bot global y revisa el estado del servicio.'],
                         'telegram-mensajes' => ['label' => 'Mensajes Telegram', 'icon' => 'bi-chat-square-text', 'description' => 'Edita las respuestas programadas que envia el bot.'],
                         'emach' => ['label' => 'EMACH', 'icon' => 'bi-heart-pulse', 'description' => 'Define frecuencias de consulta y ventanas horarias EMACH.'],
-                        'usuarios' => ['label' => 'Usuarios', 'icon' => 'bi-people', 'description' => 'Crea usuarios, actualiza credenciales y administra estados.'],
+                        'usuarios' => ['label' => 'Usuarios', 'icon' => 'bi-people', 'description' => 'Crea usuarios, revisa integraciones personales y administra estados.'],
                         'accesos' => ['label' => 'Accesos', 'icon' => 'bi-shield-lock', 'description' => 'Define a que vistas NOVA puede entrar cada usuario.'],
                     ];
                     $activeAdminSection = $adminSections[$section] ?? $adminSections['centro'];
@@ -1000,24 +1003,10 @@
                         </div>
                     </div>
 
-                    <div class="form-section-title">Credenciales EMACH</div>
-                    <div class="form-section is-two">
-                        <div class="field">
-                            <label for="emach_user">Usuario EMACH</label>
-                            <input class="form-control" id="emach_user" name="emach_user" autocomplete="off" placeholder="RUT trabajador" data-user-emach-user>
-                        </div>
-                        <div class="field">
-                            <label for="emach_password">Contrasena EMACH</label>
-                            <input class="form-control" id="emach_password" name="emach_password" type="password" autocomplete="new-password" placeholder="Dejar vacia para conservar" data-user-emach-password>
-                        </div>
-                    </div>
-
-                    <div class="form-section-title">Telegram</div>
-                    <div class="form-section">
-                        <div class="field">
-                            <label for="telegram_chat_id">Chat ID Telegram</label>
-                            <input class="form-control" id="telegram_chat_id" name="telegram_chat_id" autocomplete="off" placeholder="7449883192" data-user-telegram-chat-id>
-                        </div>
+                    <div class="form-section-title">Integraciones personales</div>
+                    <div class="alert alert-info fw-semibold mb-0">
+                        <i class="bi bi-person-lock"></i>
+                        Cada usuario debe ingresar sus propias credenciales desde el modulo correspondiente. Administracion solo ve si estan configuradas.
                     </div>
                 </div>
                 <div class="nova-user-form__footer">
@@ -1032,7 +1021,7 @@
                     <div>
                         <h2>Usuarios registrados</h2>
                         <div class="nova-muted small"><span data-user-count>{{ count($users) }}</span> usuario(s) visibles</div>
-                        <div class="nova-muted small">Busca, filtra y edita datos de acceso, EMACH o Telegram.</div>
+                        <div class="nova-muted small">Busca, filtra y edita identidad, acceso y estado. Las credenciales personales las gestiona cada usuario.</div>
                     </div>
                     <div class="user-filters">
                         <div class="user-search">
@@ -1112,8 +1101,6 @@
                                             data-name="{{ $user['name'] ?? '' }}"
                                             data-apellido="{{ $user['apellido'] ?? '' }}"
                                             data-rut="{{ $user['rut'] ?? '' }}"
-                                            data-emach-user="{{ $emachCredentials['user'] ?? '' }}"
-                                            data-telegram-chat-id="{{ $telegramSettings['chat_id'] ?? '' }}"
                                             data-role="{{ $novaRole }}"
                                             data-status="{{ $user['status'] ?? 'activo' }}">
                                             <i class="bi bi-pencil"></i>
@@ -1321,9 +1308,6 @@
             setValue('[data-user-id]', '');
             setValue('[data-user-redmine-id]', '');
             setValue('[data-user-username]', '');
-            setValue('[data-user-emach-user]', '');
-            setValue('[data-user-emach-password]', '');
-            setValue('[data-user-telegram-chat-id]', '');
             setCreatePasswordVisible(true);
             rutField?.classList.remove('is-invalid');
             if (formTitle) formTitle.textContent = 'Crear usuario';
@@ -1438,9 +1422,6 @@
                 updateRutState(false);
                 setValue('[data-user-role]', button.dataset.role);
                 setValue('[data-user-status]', button.dataset.status);
-                setValue('[data-user-emach-user]', button.dataset.emachUser);
-                setValue('[data-user-emach-password]', '');
-                setValue('[data-user-telegram-chat-id]', button.dataset.telegramChatId);
                 setValue('#password', '');
                 setValue('#password_confirmation', '');
                 setCreatePasswordVisible(false);

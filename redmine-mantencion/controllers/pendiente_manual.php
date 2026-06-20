@@ -19,18 +19,13 @@ function manual_pending_flash_consume(): ?string {
 }
 
 function manual_pending_users(): array {
-    $path = __DIR__ . '/../data/usuarios.json';
-    $data = storage_read_json($path, []);
-    if (!is_array($data)) {
-        return [];
-    }
     $users = [];
-    foreach ($data as $row) {
+    foreach (dashboard_active_mantencion_users() as $row) {
         if (!is_array($row)) {
             continue;
         }
         $id = trim((string)($row['id'] ?? ''));
-        $nombre = trim((string)($row['nombre'] ?? ''));
+        $nombre = trim((string)($row['nombre_completo'] ?? ''));
         if ($id === '' || $nombre === '') {
             continue;
         }
@@ -212,14 +207,14 @@ function manual_pending_normalize_email($value): string {
 }
 
 function manual_pending_category_options(): array {
-    $path = __DIR__ . '/../data/categorias.json';
-    $data = storage_read_json($path, []);
-    return is_array($data) ? $data : [];
+    $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+    return $repo !== null ? $repo->categorias() : [];
 }
 
 function manual_pending_default_form(array $cfg, array $users): array {
-    $currentUserId = (string)(auth_get_user_id() ?? '');
-    $currentUserName = $currentUserId !== '' ? manual_pending_find_user_name($currentUserId, $users) : '';
+    $currentUser = dashboard_current_user();
+    $currentUserId = (string)($currentUser['id'] ?? auth_get_user_id() ?? '');
+    $currentUserName = $currentUserId !== '' ? manual_pending_find_user_name($currentUserId, $users) : dashboard_current_user_full_name();
     $today = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
     return [
         'project_id' => (string)($cfg['project_id'] ?? 48),
@@ -285,6 +280,8 @@ function manual_pending_build_record(array $input, array $cfg, array $users): ar
         'priority_id' => trim((string)($input['priority_id'] ?? '')),
         'status_id' => trim((string)($input['status_id'] ?? '')),
         'project_id' => trim((string)($input['project_id'] ?? ($cfg['project_id'] ?? 48))),
+        'proyecto' => trim((string)($cfg['project_name'] ?? '')),
+        'project_name' => trim((string)($cfg['project_name'] ?? '')),
         'estado' => 'pendiente',
         'estado_redmine' => $statusName,
         'hora_extra' => !empty($input['hora_extra']) ? '1' : '0',
@@ -343,7 +340,16 @@ function handle_manual_pending(): array {
         $form['tracker_id'] = manual_pending_normalize_option_id($form['tracker_id'] ?? '', $cfg['trackers'] ?? [], $cfg['tracker_id'] ?? 3);
         $form['status_id'] = manual_pending_normalize_option_id($form['status_id'] ?? '', $cfg['estados'] ?? [], $cfg['status_id'] ?? 1);
         $form['priority_id'] = manual_pending_normalize_option_id($form['priority_id'] ?? '', $cfg['prioridades'] ?? [], $cfg['priority_id'] ?? 2);
-        $form['asignado_a'] = manual_pending_normalize_user_id($form['asignado_a'] ?? '', $users);
+        $currentUser = dashboard_current_user();
+        $currentUserId = (string)($currentUser['id'] ?? auth_get_user_id() ?? '');
+        if (!dashboard_can_assign_other_users()) {
+            $form['asignado_a'] = manual_pending_normalize_user_id($currentUserId, $users);
+        } else {
+            $form['asignado_a'] = manual_pending_normalize_user_id($form['asignado_a'] ?? '', $users);
+            if ($form['asignado_a'] === '') {
+                $form['asignado_a'] = manual_pending_normalize_user_id($currentUserId, $users);
+            }
+        }
         $form['categoria'] = manual_pending_normalize_category_name($form['categoria'] ?? '', $categorias);
         $form['fecha_inicio'] = manual_pending_normalize_date($form['fecha_inicio'] ?? '');
         $form['fecha_fin'] = manual_pending_normalize_date($form['fecha_fin'] ?? '');

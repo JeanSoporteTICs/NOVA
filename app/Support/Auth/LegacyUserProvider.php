@@ -8,9 +8,9 @@ final class LegacyUserProvider
     {
     }
 
-    public function attempt(string $username, string $password): ?array
+    public function attempt(string $username, string $password, bool $allowApiToken = false): ?array
     {
-        return $this->users->attempt($username, $password);
+        return $this->users->attempt($username, $password, $allowApiToken);
     }
 
     public function find(string $username): ?array

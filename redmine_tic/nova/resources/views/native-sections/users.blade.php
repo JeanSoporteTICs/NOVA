@@ -4,6 +4,19 @@
     $usersWithTelegram = collect($users)->filter(fn ($user) => trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', ''))) !== '')->count();
 @endphp
 
+<section class="rm-module-head">
+    <span class="rm-module-head-icon is-green"><i class="bi bi-people"></i></span>
+    <div>
+        <small>Acceso del proyecto</small>
+        <h2>Usuarios TIC</h2>
+        <p>Administra usuarios del modulo, estado operativo, rol y datos de integracion.</p>
+    </div>
+    <div class="rm-module-meter">
+        <strong>{{ count($users) }}</strong>
+        <span>registros</span>
+    </div>
+</section>
+
 <section class="row g-3 mb-4" aria-label="Resumen usuarios">
     <div class="col-12 col-md-4">
         <article class="card nova-card rm-stat-card">
@@ -31,7 +44,7 @@
     </div>
 </section>
 
-<section class="card nova-card rm-work-panel">
+<section id="tabla-usuarios" class="card nova-card rm-work-panel">
     <div class="card-body p-4">
         <div class="rm-section-head">
             <div>
@@ -54,27 +67,26 @@
                     <tr>
                         <th>Nombre</th>
                         <th>Telegram</th>
-                        <th>RUT</th>
                         <th>Rol</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
+                        <th>Estado TIC</th>
+                        <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                 @forelse ($users as $user)
                     @php
                         $name = trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: 'Sin nombre';
-                        $state = $user['estado_usuario'] ?? $user['estado'] ?? 'sin estado';
+                        $state = strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'sin estado')));
                         $telegramChatId = trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', '')));
+                        $stateClass = $state === 'activo' ? 'is-success' : ($state === 'baneado' ? 'is-danger' : 'is-warning');
                     @endphp
                     <tr>
                         <td><strong>{{ $name }}</strong><div class="small nova-muted">ID: {{ $user['id'] ?? '-' }}</div></td>
                         <td>{{ $telegramChatId !== '' ? $telegramChatId : '-' }}</td>
-                        <td>{{ $user['rut'] ?? $user['rut_sin_dv'] ?? '-' }}</td>
                         <td><span class="nova-badge">{{ $user['rol'] ?? 'sin rol' }}</span></td>
-                        <td><span class="nova-badge {{ $state === 'activo' ? 'is-success' : '' }}">{{ $state }}</span></td>
-                        <td>
-                            <div class="nova-row-actions">
+                        <td><span class="nova-badge {{ $stateClass }}" title="Estado especifico del usuario en Redmine TIC">{{ $state }}</span></td>
+                        <td class="text-center">
+                            <div class="nova-row-actions justify-content-center">
                                 <button class="btn btn-primary nova-btn-icon" type="button"
                                     data-user-edit
                                     data-id="{{ $user['id'] ?? '' }}"
@@ -91,21 +103,59 @@
                                 </button>
                                 <form method="post" action="{{ $redmineRoute('redmine.native.users.action') }}">
                                     @csrf
-                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="action" value="toggle_status">
                                     <input type="hidden" name="id" value="{{ $user['id'] ?? '' }}">
-                                    <button class="btn btn-danger nova-btn-icon" type="submit" title="Eliminar usuario" aria-label="Eliminar usuario"><i class="bi bi-trash"></i></button>
+                                    @if ($state === 'baneado')
+                                        <button class="btn btn-success nova-btn-icon" type="submit" title="Activar usuario" aria-label="Activar usuario"><i class="bi bi-person-check"></i></button>
+                                    @else
+                                        <button class="btn btn-warning nova-btn-icon" type="submit" title="Banear usuario" aria-label="Banear usuario"><i class="bi bi-person-dash"></i></button>
+                                    @endif
                                 </form>
+                                <button class="btn btn-danger nova-btn-icon"
+                                    type="button"
+                                    data-delete-user
+                                    data-id="{{ $user['id'] ?? '' }}"
+                                    data-nombre="{{ trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: 'este usuario' }}"
+                                    title="Eliminar del proyecto"
+                                    aria-label="Eliminar usuario del proyecto">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No hay usuarios registrados.</td></tr>
+                    <tr><td colspan="5" class="nova-empty"><i class="bi bi-people" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay usuarios registrados.</td></tr>
                 @endforelse
                 </tbody>
             </table>
         </div>
     </div>
 </section>
+
+{{-- Modal confirmación eliminar --}}
+<div class="modal fade" id="delete-user-modal" tabindex="-1" aria-labelledby="delete-user-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="delete-user-modal-title"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Eliminar del proyecto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">¿Eliminar a <strong id="delete-user-name"></strong> del proyecto TIC?</p>
+                <p class="small nova-muted mt-2 mb-0">Se eliminarán su perfil TIC y acceso al módulo. El usuario central en NOVA no se borrará.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i>Cancelar</button>
+                <form id="delete-user-form" method="post" action="{{ $redmineRoute('redmine.native.users.action') }}" class="m-0">
+                    @csrf
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" id="delete-user-id" value="">
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i>Eliminar del proyecto</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade detail-drawer-modal" id="usuario-modal" tabindex="-1" aria-labelledby="user-form-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
@@ -174,6 +224,16 @@
     </div>
 </div>
 
+{{-- Botón flotante volver arriba --}}
+<button id="users-scroll-top"
+    type="button"
+    title="Volver arriba"
+    aria-label="Volver arriba"
+    style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);"
+    class="btn btn-primary">
+    <i class="bi bi-arrow-up"></i>
+</button>
+
 <script>
     (() => {
         const form = document.getElementById('user-form');
@@ -207,7 +267,21 @@
             openModal();
         });
 
-        document.querySelectorAll('[data-user-edit]').forEach((button) => {
+        // Modal confirmar eliminación
+    const deleteModal = document.getElementById('delete-user-modal');
+    const deleteNameEl = document.getElementById('delete-user-name');
+    const deleteIdEl = document.getElementById('delete-user-id');
+    const bsDeleteModal = deleteModal && window.bootstrap ? new bootstrap.Modal(deleteModal) : null;
+
+    document.querySelectorAll('[data-delete-user]').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (deleteNameEl) deleteNameEl.textContent = button.dataset.nombre || 'este usuario';
+            if (deleteIdEl) deleteIdEl.value = button.dataset.id || '';
+            bsDeleteModal ? bsDeleteModal.show() : deleteModal?.classList.add('show');
+        });
+    });
+
+    document.querySelectorAll('[data-user-edit]').forEach((button) => {
             button.addEventListener('click', () => {
                 setValue('id', button.dataset.id);
                 setValue('rut', button.dataset.rut);
@@ -222,5 +296,37 @@
                 openModal();
             });
         });
+
+        // ── Preservar posición de scroll entre acciones ─────────────────
+        const SCROLL_KEY = 'nova_tic_users_scroll';
+
+        const savedY = sessionStorage.getItem(SCROLL_KEY);
+        if (savedY !== null) {
+            sessionStorage.removeItem(SCROLL_KEY);
+            const pos = parseInt(savedY, 10);
+            if (pos > 0) window.scrollTo({ top: pos, behavior: 'instant' });
+        }
+
+        document.querySelectorAll('#tabla-usuarios form, #delete-user-form').forEach((f) => {
+            f.addEventListener('submit', () => {
+                sessionStorage.setItem(SCROLL_KEY, String(Math.round(window.scrollY)));
+            });
+        });
+
+        // ── Botón flotante volver arriba ────────────────────────────────
+        const scrollTopBtn = document.getElementById('users-scroll-top');
+        const summarySection = document.querySelector('[aria-label="Resumen usuarios"]');
+
+        if (scrollTopBtn && summarySection) {
+            const observer = new IntersectionObserver(([entry]) => {
+                scrollTopBtn.style.display = entry.isIntersecting ? 'none' : 'flex';
+            }, { threshold: 0 });
+            observer.observe(summarySection);
+
+            scrollTopBtn.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
     })();
 </script>

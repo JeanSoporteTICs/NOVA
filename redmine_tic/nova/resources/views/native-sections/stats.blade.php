@@ -27,8 +27,6 @@
     }
     $donutBackground = $segments ? implode(', ', $segments) : '#e2e8f0 0 100%';
     $filters = $stats['filters'] ?? ['desde' => '', 'hasta' => ''];
-    $isRedmineApi = ($stats['source'] ?? '') === 'redmine-api';
-    $hasFetchedRedmineApi = !$isRedmineApi || !empty($stats['fetched']);
     $statusOptions = $stats['status_options'] ?? [
         ['value' => 'open', 'label' => 'Abiertos'],
         ['value' => 'closed', 'label' => 'Cerrados'],
@@ -169,16 +167,26 @@
     };
 @endphp
 
+<section class="rm-module-head">
+    <span class="rm-module-head-icon"><i class="bi bi-bar-chart-line"></i></span>
+    <div>
+        <small>Analitica operacional</small>
+        <h2>Estadisticas</h2>
+        <p>Explora volumen de reportes por fecha, categoria, unidad y asignado.</p>
+    </div>
+    <div class="rm-module-meter">
+        <strong>{{ number_format($total, 0, ',', '.') }}</strong>
+        <span>tickets</span>
+    </div>
+</section>
+
 <div data-stats-content>
-    @if ($isRedmineApi && !empty($stats['error']))
-        <div class="alert alert-danger fw-semibold">{{ $stats['error'] }}</div>
-    @endif
     <section class="rm-stats-layout">
         <article class="nova-card rm-stats-hero">
             <div>
-                <span class="rm-stats-eyebrow">{{ $isRedmineApi ? 'Redmine API' : 'Resumen' }}</span>
+                <span class="rm-stats-eyebrow">Resumen</span>
                 <h2>{{ number_format($total, 0, ',', '.') }} reportes</h2>
-                <p>{{ $isRedmineApi ? 'Consulta directa a Redmine' : 'Actualizado ' . ($stats['updated_at'] ?? '-') }}</p>
+                <p>Actualizado {{ $stats['updated_at'] ?? '-' }}</p>
             </div>
             <div class="rm-stats-kpis">
                 <div><strong>{{ count($byDate) }}</strong><span>Dias con datos</span></div>
@@ -187,57 +195,6 @@
             </div>
         </article>
 
-        @if ($isRedmineApi)
-            <form class="nova-card rm-stats-panel" method="get" action="{{ $redmineRoute('redmine.native.section', $section ?? 'estadisticas-api') }}" data-redmine-api-import-form>
-                <input type="hidden" name="fetch" value="1">
-                <div class="rm-stats-panel-head mb-3">
-                    <div>
-                        <h3><i class="bi bi-calendar-range"></i> Rango de importacion</h3>
-                        <p>Los datos se importan directamente desde Redmine para el rango definido.</p>
-                    </div>
-                </div>
-                <div class="rm-api-import-row">
-                    <input type="date" name="desde" class="form-control form-control-sm" value="{{ $dateInputValue((string) ($filters['desde'] ?? '')) }}" aria-label="Fecha inicio">
-                    <input type="date" name="hasta" class="form-control form-control-sm" value="{{ $dateInputValue((string) ($filters['hasta'] ?? '')) }}" aria-label="Fecha fin">
-                    <select name="status_scope" class="form-select form-select-sm" aria-label="Estado">
-                        @foreach ($statusOptions as $option)
-                            <option value="{{ $option['value'] }}" @selected($statusSelection === (string) $option['value'])>{{ $option['label'] }}</option>
-                        @endforeach
-                    </select>
-                    <select name="tracker_scope" class="form-select form-select-sm" aria-label="Tipo">
-                        @foreach ($trackerOptions as $option)
-                            <option value="{{ $option['value'] }}" @selected($trackerSelection === (string) $option['value'])>{{ $option['label'] }}</option>
-                        @endforeach
-                    </select>
-                    <select name="priority_scope" class="form-select form-select-sm" aria-label="Prioridad">
-                        @foreach ($priorityOptions as $option)
-                            <option value="{{ $option['value'] }}" @selected($prioritySelection === (string) $option['value'])>{{ $option['label'] }}</option>
-                        @endforeach
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-primary" data-redmine-api-import-button @disabled($maintenanceActive) title="{{ $maintenanceActive ? 'Modulo en mantencion: sincronizacion bloqueada' : 'Importar datos desde Redmine' }}"><i class="bi bi-cloud-arrow-down"></i><span>Importar</span></button>
-                </div>
-                @if ($maintenanceActive)
-                    <div class="alert alert-warning small fw-semibold mb-0 mt-3">Modo mantencion activo: la sincronizacion desde Redmine API esta bloqueada. La vista usa los datos guardados.</div>
-                @endif
-                <div class="rm-api-loading-overlay" role="status" aria-live="polite" aria-label="Importando datos desde Redmine">
-                    <div class="rm-api-loading-card">
-                        <img src="{{ asset('assets/img/redmine.gif') }}" alt="Redmine">
-                        <div>
-                            <strong>Importando datos desde Redmine</strong>
-                            <span>La consulta puede tardar segun el rango seleccionado.</span>
-                        </div>
-                        <div class="rm-api-loading-bar"><i></i></div>
-                    </div>
-                </div>
-            </form>
-        @endif
-
-        @if ($isRedmineApi && !$hasFetchedRedmineApi)
-            <article class="nova-card rm-stats-panel">
-                <div class="rm-empty-state">Define un rango y presiona Obtener datos para consultar Redmine.</div>
-            </article>
-        @else
-        @unless ($isRedmineApi)
         <section class="rm-stats-charts">
             <article class="nova-card rm-stats-panel rm-line-panel rm-stats-rank-card" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#stats-date-modal" aria-label="Ver detalle de reportes por fecha">
                 <div class="rm-stats-panel-head">
@@ -284,105 +241,7 @@
                 </div>
             </article>
         </section>
-        @endunless
-        @endif
 
-        @if ($isRedmineApi && $hasFetchedRedmineApi)
-        <section class="rm-api-summary-grid">
-            <article class="nova-card rm-api-hero-card rm-api-click-card" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#stats-list-by-category-modal" aria-label="Ver detalle por categoria">
-                <span>Tickets en rango</span>
-                <strong>{{ number_format($total, 0, ',', '.') }}</strong>
-                <p>Detalle por categoria (click para ver).</p>
-            </article>
-            <article class="nova-card rm-api-hero-card rm-api-click-card is-cyan" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#stats-list-by-unit-modal" aria-label="Ver detalle por unidad">
-                <span>Unidades en rango</span>
-                <strong>{{ number_format(count($unitRows), 0, ',', '.') }}</strong>
-                <p>Detalle por unidad (click para ver).</p>
-            </article>
-
-            <article class="nova-card rm-api-card rm-api-card-wide">
-                <div class="rm-api-card-head">
-                    <h3>Totales rapidos</h3>
-                    <span>Consultan datos importados</span>
-                </div>
-                <div class="rm-api-quick-grid">
-                    <div><span>Ultimos 2 meses</span><strong>{{ number_format($quickTwoMonths, 0, ',', '.') }}</strong></div>
-                    <div><span>Ultimos 6 meses</span><strong>{{ number_format($quickSixMonths, 0, ',', '.') }}</strong></div>
-                    <div><span>Ultimo ano</span><strong>{{ number_format($quickLastYear, 0, ',', '.') }}</strong></div>
-                </div>
-            </article>
-
-            <article class="nova-card rm-api-card rm-api-card-wide rm-api-click-card" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#stats-category-filter-modal" aria-label="Seleccionar categorias para filtrar estadisticas">
-                <div class="rm-api-card-head">
-                    <h3>Suma por categorias (seleccion)</h3>
-                    <span>Usa las categorias del rango actual</span>
-                </div>
-                <div class="rm-api-selected-total">Total seleccionado: <strong>{{ number_format($categorySelectedTotal, 0, ',', '.') }}</strong></div>
-                <p>Haz clic en la tarjeta para elegir categorias.</p>
-                <div class="rm-api-chip-row">
-                    @foreach (array_slice($categoryChipRows, 0, 6, true) as $name => $count)
-                        <span>{{ $name }}</span>
-                    @endforeach
-                    @if (count($categoryChipRows) > 6)
-                        <span>+{{ count($categoryChipRows) - 6 }} mas</span>
-                    @endif
-                </div>
-            </article>
-
-            <article class="nova-card rm-api-card">
-                <div class="rm-api-card-head"><h3>Desglose por estado</h3></div>
-                <div class="rm-api-mini-list">
-                    @forelse ($statusRows as $name => $count)
-                        <div><span>{{ $name }}</span><strong>{{ number_format((int) $count, 0, ',', '.') }}</strong></div>
-                    @empty
-                        <p>Sin datos.</p>
-                    @endforelse
-                </div>
-            </article>
-
-            <article class="nova-card rm-api-card">
-                <div class="rm-api-card-head"><h3>Prioridades principales</h3></div>
-                <div class="rm-api-mini-list">
-                    @forelse ($priorityRows as $name => $count)
-                        <div><span>{{ $name }}</span><strong>{{ number_format((int) $count, 0, ',', '.') }}</strong></div>
-                    @empty
-                        <p>Sin datos.</p>
-                    @endforelse
-                </div>
-            </article>
-
-            <article class="nova-card rm-api-card">
-                <div class="rm-api-card-head"><h3>Trackers dominantes</h3></div>
-                <div class="rm-api-mini-list">
-                    @forelse ($trackerRows as $name => $count)
-                        <div><span>{{ $name }}</span><strong>{{ number_format((int) $count, 0, ',', '.') }}</strong></div>
-                    @empty
-                        <p>Sin datos.</p>
-                    @endforelse
-                </div>
-            </article>
-
-            <article class="nova-card rm-api-card rm-api-top-card rm-api-click-card" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#stats-top-categories-modal" aria-label="Ver top 10 categorias completo">
-                <div class="rm-api-card-head">
-                    <h3>Top 10 categorias</h3>
-                    <span>Mayor numero de tickets en el rango <b>{{ number_format($categorySelectedTotal, 0, ',', '.') }}</b></span>
-                </div>
-                <table class="rm-api-top-table">
-                    <thead><tr><th>#</th><th>Categoria</th><th>Total</th></tr></thead>
-                    <tbody>
-                        @forelse (array_slice($topCategories, 0, 3, true) as $name => $count)
-                            <tr><td>{{ $loop->iteration }}</td><td>{{ $name }}</td><td>{{ number_format((int) $count, 0, ',', '.') }}</td></tr>
-                        @empty
-                            <tr><td colspan="3">Sin datos.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-                <p>Click en cualquier parte del card para ver el top 10 completo.</p>
-            </article>
-        </section>
-        @endif
-
-        @unless ($isRedmineApi)
         <form class="nova-card rm-stats-panel rm-timeline-box" method="get" action="{{ $redmineRoute('redmine.native.section', $section ?? 'estadisticas') }}" data-stats-filter-form>
             <div class="rm-timeline-header">
                 <span>Fecha</span>
@@ -414,9 +273,7 @@
                 <span>Fin</span>
             </div>
         </form>
-        @endunless
 
-        @if ($hasFetchedRedmineApi)
         <section class="nova-card rm-interactive-charts-head">
             <div>
                 <h3>Graficos interactivos</h3>
@@ -507,64 +364,7 @@
             </article>
         @endforeach
         </section>
-        @endif
     </section>
-
-    @if ($hasFetchedRedmineApi)
-    @if ($isRedmineApi)
-    <div class="modal fade" id="stats-category-filter-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <form class="modal-content" method="get" action="{{ $redmineRoute('redmine.native.section', $section ?? 'estadisticas-api') }}">
-                <div class="modal-header">
-                    <div>
-                        <h2 class="modal-title fs-5">Seleccionar categorias</h2>
-                        <div class="text-muted fw-semibold">{{ count($categoryOptionRows) }} categoria(s) disponibles</div>
-                    </div>
-                    <button type="button" class="btn-close" data-nova-modal-close data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    @foreach ($filters as $filterKey => $filterValue)
-                        @continue(in_array($filterKey, ['category_scope', 'category_filter'], true) || $filterValue === '')
-                        @if (is_array($filterValue))
-                            @foreach ($filterValue as $filterItem)
-                                <input type="hidden" name="{{ $filterKey }}[]" value="{{ $filterItem }}">
-                            @endforeach
-                        @else
-                            <input type="hidden" name="{{ $filterKey }}" value="{{ $filterValue }}">
-                        @endif
-                    @endforeach
-                    <input type="hidden" name="chart_sort" value="{{ $chartSort }}">
-                    <input type="hidden" name="show_chart_totals" value="{{ $showChartTotals ? 1 : 0 }}">
-                    <input type="hidden" name="category_filter" value="1">
-                    <div class="rm-category-select-controls">
-                        <label class="form-check">
-                            <input class="form-check-input" type="checkbox" data-category-filter-all @checked(!$categoryFilterActive || count($selectedCategories) >= count($categoryOptionRows))>
-                            <span class="form-check-label">Marcar/Desmarcar todas</span>
-                        </label>
-                        <input class="form-control form-control-sm" type="search" placeholder="Buscar categoria..." data-category-filter-search>
-                    </div>
-                    <div class="rm-category-check-list" data-category-filter-list>
-                        @forelse ($categoryOptionRows as $name => $count)
-                            @php
-                                $categoryKey = \Illuminate\Support\Str::lower(\Illuminate\Support\Str::ascii((string) $name));
-                                $isChecked = !$hasCategorySelection || isset($selectedCategoryLookup[$categoryKey]);
-                            @endphp
-                            <label class="rm-category-check-row" data-category-name="{{ \Illuminate\Support\Str::lower($name) }}">
-                                <input class="form-check-input" type="checkbox" name="category_scope[]" value="{{ $name }}" @checked($isChecked) data-category-filter-item>
-                                <span>{{ $name }} ({{ number_format((int) $count, 0, ',', '.') }})</span>
-                            </label>
-                        @empty
-                            <div class="rm-empty-state">No hay categorias para seleccionar.</div>
-                        @endforelse
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-sm btn-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
-                    <button type="submit" class="btn btn-sm btn-primary">Guardar seleccion</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
     @foreach ([
         'stats-list-by-category-modal' => ['title' => 'Categorias en rango', 'label' => 'Categoria', 'rows' => $categoryRows],
@@ -647,7 +447,6 @@
             </div>
         </div>
     </div>
-    @endif
 
     @foreach ($rankSections as $key => $meta)
     @php
@@ -724,7 +523,6 @@
     </div>
     @endforeach
 
-    @unless ($isRedmineApi)
     <div class="modal fade" id="stats-date-modal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
         <div class="modal-content">
@@ -767,38 +565,12 @@
         </div>
     </div>
     </div>
-    @endunless
-    @endif
 </div>
 
 <script>
     let pendingMonthStart = null;
     const getStatsForm = () => document.querySelector('[data-stats-filter-form]');
     const getStatsContent = () => document.querySelector('[data-stats-content]');
-    const cleanRedmineApiFetchParam = () => {
-        const url = new URL(window.location.href);
-        if (url.searchParams.get('fetch') !== '1' || !url.pathname.includes('/estadisticas-api')) {
-            return;
-        }
-
-        url.searchParams.delete('fetch');
-        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-    };
-    cleanRedmineApiFetchParam();
-    document.addEventListener('submit', (event) => {
-        const form = event.target;
-        if (!(form instanceof HTMLFormElement) || !form.matches('[data-redmine-api-import-form]')) {
-            return;
-        }
-
-        document.body.classList.add('rm-api-is-importing');
-        form.classList.add('is-importing');
-        form.setAttribute('aria-busy', 'true');
-        const button = form.querySelector('[data-redmine-api-import-button]');
-        if (button) {
-            button.querySelector('span').textContent = 'Importando';
-        }
-    });
     const refreshListModal = (modal) => {
         const table = modal.querySelector('[data-rm-list-table]');
         if (!table) return;
@@ -837,43 +609,6 @@
             refreshListModal(control.closest('.modal'));
         }
     });
-    const updateCategoryFilterState = (modal) => {
-        if (!modal) return;
-        const all = modal.querySelector('[data-category-filter-all]');
-        const items = Array.from(modal.querySelectorAll('[data-category-filter-item]'));
-        if (!(all instanceof HTMLInputElement) || items.length === 0) return;
-
-        const checked = items.filter((item) => item.checked).length;
-        all.checked = checked === items.length;
-        all.indeterminate = checked > 0 && checked < items.length;
-    };
-    document.addEventListener('input', (event) => {
-        const control = event.target;
-        if (!(control instanceof HTMLInputElement) || !control.matches('[data-category-filter-search]')) {
-            return;
-        }
-
-        const query = control.value.trim().toLowerCase();
-        control.closest('.modal')?.querySelectorAll('[data-category-name]').forEach((row) => {
-            row.hidden = query !== '' && !String(row.dataset.categoryName || '').includes(query);
-        });
-    });
-    document.addEventListener('change', (event) => {
-        const control = event.target;
-        if (!(control instanceof HTMLInputElement)) {
-            return;
-        }
-        if (control.matches('[data-category-filter-all]')) {
-            control.closest('.modal')?.querySelectorAll('[data-category-filter-item]').forEach((item) => {
-                item.checked = control.checked;
-            });
-            updateCategoryFilterState(control.closest('.modal'));
-            return;
-        }
-        if (control.matches('[data-category-filter-item]')) {
-            updateCategoryFilterState(control.closest('.modal'));
-        }
-    });
     const padDate = (value) => String(value).padStart(2, '0');
     const setDateRange = (from, to, submit = true) => {
         const statsForm = getStatsForm();
@@ -908,7 +643,6 @@
             }
             content.innerHTML = nextContent.innerHTML;
             window.history.pushState({}, '', url);
-            cleanRedmineApiFetchParam();
             pendingMonthStart = null;
             highlightSelectedMonths();
         } catch (error) {
@@ -1012,4 +746,3 @@
 
     highlightSelectedMonths();
 </script>
-

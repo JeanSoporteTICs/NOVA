@@ -43,7 +43,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
   <?php
     $heroIcon = 'bi-people';
     $heroTitle = 'Usuarios';
-    $heroSubtitle = 'Gestión de usuarios y credenciales';
+    $heroSubtitle = 'Gestion de usuarios e integraciones personales';
     $heroExtras = '';
     if ($flash) {
       $heroExtras = '<div class="alert alert-success py-2 px-3 mb-0" id="flash-msg"><i class="bi bi-info-circle"></i> ' . $h($flash) . '</div>';
@@ -87,10 +87,13 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
             </tr>
           </thead>
           <tbody>
+          <?php if (!$usuarios): ?>
+            <tr><td colspan="6" class="nova-empty"><i class="bi bi-people" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.4"></i>No hay usuarios registrados.</td></tr>
+          <?php endif; ?>
           <?php foreach ($usuarios as $u): ?>
             <tr>
               <td data-col="id"><?= $h($u['id'] ?? '') ?></td>
-              <td data-col="nombre"><?= $h($u['nombre'] ?? '') ?></td>
+              <td data-col="nombre"><?= $h(trim((string)($u['nombre'] ?? '') . ' ' . (string)($u['apellido'] ?? ''))) ?></td>
               <td data-col="rol"><?= $h($u['rol'] ?? 'usuario') ?></td>
               <td data-col="estado">
                 <?php $userEstado = strtolower(trim((string)($u['estado'] ?? 'activo'))); ?>
@@ -117,10 +120,9 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
                 <button type="button" class="btn btn-sm btn-outline-primary btn-icon" data-bs-toggle="modal" data-bs-target="#editModal" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>
                   data-id="<?= $h($u['id'] ?? '') ?>"
                   data-nombre="<?= $h($u['nombre'] ?? '') ?>"
+                  data-apellido="<?= $h($u['apellido'] ?? '') ?>"
                   data-rol="<?= $h($u['rol'] ?? 'usuario') ?>"
                   data-estado="<?= $h($u['estado'] ?? 'activo') ?>"
-                  data-core_user="<?= $h($u['core_user'] ?? '') ?>"
-                  data-nextcloud_user="<?= $h($u['nextcloud_user'] ?? '') ?>"
                   aria-label="Editar usuario">
                   <i class="bi bi-pencil-square"></i> Editar
                 </button>
@@ -154,7 +156,8 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
           <input type="hidden" name="id" id="em-id">
           <div class="row g-3">
             <div class="col-md-4"><label class="form-label">ID</label><input name="id_display" id="em-id-display" class="form-control" readonly></div>
-            <div class="col-md-8"><label class="form-label">Nombre completo</label><input name="nombre" id="em-nombre" class="form-control" required></div>
+            <div class="col-md-4"><label class="form-label">Nombre</label><input name="nombre" id="em-nombre" class="form-control" required></div>
+            <div class="col-md-4"><label class="form-label">Apellido</label><input name="apellido" id="em-apellido" class="form-control" required></div>
             <div class="col-md-4">
               <label class="form-label">Rol</label>
               <select name="rol" id="em-rol" class="form-select">
@@ -172,42 +175,12 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
               </select>
               <div class="form-text">Los usuarios baneados no pueden iniciar sesión.</div>
             </div>
-            <div class="col-md-4">
-              <label class="form-label">API</label>
-              <input name="api" id="em-api" class="form-control" autocomplete="off" placeholder="Escribe un nuevo token para reemplazar el actual">
-              <div class="form-text">Por seguridad no se muestra el token guardado. Deja este campo vacío para conservarlo.</div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Usuario CORE</label>
-              <input name="core_user" id="em-core-user" class="form-control" autocomplete="off" placeholder="RUT sin DV o email">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Contraseña CORE</label>
-              <input type="password" name="core_pass" id="em-core-pass" class="form-control" autocomplete="new-password" placeholder="Nuevo valor para reemplazar">
-              <div class="form-text">No se muestra la contraseña guardada.</div>
-            </div>
             <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="core_clear_credentials" value="1" id="em-core-clear">
-                <label class="form-check-label" for="em-core-clear">Eliminar credenciales CORE guardadas</label>
+              <div class="alert alert-info mb-0">
+                <i class="bi bi-person-lock"></i>
+                Las credenciales de Redmine, CORE y Nextcloud son personales. Cada usuario debe ingresarlas desde el modulo correspondiente.
               </div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label">Usuario Nextcloud</label>
-              <input name="nextcloud_user" id="em-nextcloud-user" class="form-control" autocomplete="off" placeholder="Usuario administrador Nextcloud">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Contraseña Nextcloud</label>
-              <input type="password" name="nextcloud_pass" id="em-nextcloud-pass" class="form-control" autocomplete="new-password" placeholder="Nuevo valor para reemplazar">
-              <div class="form-text">No se muestra la contraseña guardada.</div>
-            </div>
-            <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="nextcloud_clear_credentials" value="1" id="em-nextcloud-clear">
-                <label class="form-check-label" for="em-nextcloud-clear">Eliminar credenciales Nextcloud guardadas</label>
-              </div>
-            </div>
-            <div class="col-12"><div class="alert alert-info mb-0">La contraseña se administra solo desde Usuarios NOVA.</div></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -232,7 +205,8 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="row g-3">
             <div class="col-md-4"><label class="form-label">ID (manual)</label><input name="id_manual" id="new-id" class="form-control" placeholder="ID" aria-label="ID"></div>
-            <div class="col-md-8"><label class="form-label">Nombre completo</label><input name="nombre" class="form-control" placeholder="Nombre completo" required></div>
+            <div class="col-md-4"><label class="form-label">Nombre</label><input name="nombre" class="form-control" placeholder="Nombre" required></div>
+            <div class="col-md-4"><label class="form-label">Apellido</label><input name="apellido" class="form-control" placeholder="Apellido" required></div>
             <div class="col-md-4">
               <label class="form-label">Rol</label>
               <select name="rol" class="form-select">
@@ -249,12 +223,12 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
                 <option value="baneado">Baneado</option>
               </select>
             </div>
-            <div class="col-md-4"><label class="form-label">API</label><input name="api" class="form-control" placeholder="API"></div>
-            <div class="col-md-6"><label class="form-label">Usuario CORE</label><input name="core_user" class="form-control" autocomplete="off" placeholder="RUT sin DV o email"></div>
-            <div class="col-md-6"><label class="form-label">Contraseña CORE</label><input type="password" name="core_pass" class="form-control" autocomplete="new-password" placeholder="Opcional"></div>
-            <div class="col-md-6"><label class="form-label">Usuario Nextcloud</label><input name="nextcloud_user" class="form-control" autocomplete="off" placeholder="Usuario administrador Nextcloud"></div>
-            <div class="col-md-6"><label class="form-label">Contraseña Nextcloud</label><input type="password" name="nextcloud_pass" class="form-control" autocomplete="new-password" placeholder="Opcional"></div>
-            <div class="col-12"><div class="alert alert-info mb-0">La contraseña se administra solo desde Usuarios NOVA.</div></div>
+            <div class="col-12">
+              <div class="alert alert-info mb-0">
+                <i class="bi bi-person-lock"></i>
+                Las credenciales de Redmine, CORE y Nextcloud son personales. Cada usuario debe ingresarlas desde el modulo correspondiente.
+              </div>
+            </div>
           </div>
           <div class="text-end mt-3">
             <button class="btn btn-primary btn-icon" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>><i class="bi bi-check-lg"></i> Guardar</button>
@@ -296,20 +270,9 @@ function setupEditModal() {
     set('em-id', 'data-id');
     set('em-id-display', 'data-id');
     set('em-nombre', 'data-nombre');
+    set('em-apellido', 'data-apellido');
     set('em-rol', 'data-rol');
     set('em-estado', 'data-estado');
-    set('em-core-user', 'data-core_user');
-    set('em-nextcloud-user', 'data-nextcloud_user');
-    const apiInput = document.getElementById('em-api');
-    if (apiInput) apiInput.value = '';
-    const corePassInput = document.getElementById('em-core-pass');
-    if (corePassInput) corePassInput.value = '';
-    const coreClearInput = document.getElementById('em-core-clear');
-    if (coreClearInput) coreClearInput.checked = false;
-    const nextcloudPassInput = document.getElementById('em-nextcloud-pass');
-    if (nextcloudPassInput) nextcloudPassInput.value = '';
-    const nextcloudClearInput = document.getElementById('em-nextcloud-clear');
-    if (nextcloudClearInput) nextcloudClearInput.checked = false;
   });
 }
 

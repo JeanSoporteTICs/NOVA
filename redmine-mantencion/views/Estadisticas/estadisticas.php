@@ -50,25 +50,16 @@ $units = [];
 $users = [];
 $selectedUserId = $_POST['usuario'] ?? $_GET['usuario'] ?? '';
 $selectedUserLabel = '';
-$catPath = __DIR__ . '/../../data/categorias.json';
-$unitPath = __DIR__ . '/../../data/unidades.json';
 $userPath = __DIR__ . '/../../data/usuarios.json';
-$parsed = storage_read_json($catPath, []);
-  if (is_array($parsed)) {
-    foreach ($parsed as $c) {
-      if (is_array($c) && isset($c['nombre'])) $cats[] = $c['nombre'];
-    }
-  }
-$parsed = storage_read_json($unitPath, []);
-  if (is_array($parsed)) {
-    foreach ($parsed as $u) {
-      if (is_array($u) && isset($u['nombre'])) $units[] = $u['nombre'];
-    }
-  }
+$catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+$cats = $catalogRepo !== null ? $catalogRepo->categoriaNames() : [];
+$units = $catalogRepo !== null ? $catalogRepo->unidadNames() : [];
 $parsed = storage_read_json($userPath, []);
   if (is_array($parsed)) {
     foreach ($parsed as $u) {
       if (!is_array($u)) continue;
+      $estadoUsuario = strtolower(trim((string)($u['estado'] ?? $u['estado_usuario'] ?? 'activo')));
+      if (!in_array($estadoUsuario, ['activo', 'active'], true)) continue;
       $id = $u['id'] ?? '';
       $nombre = trim(($u['nombre'] ?? '') . ' ' . ($u['apellido'] ?? ''));
       if ($id !== '') $users[$id] = $nombre ?: $id;

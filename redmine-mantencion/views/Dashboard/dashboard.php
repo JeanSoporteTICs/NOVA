@@ -33,7 +33,9 @@ $dashboardActionUrl = function_exists('legacy_app_url')
 $chileToday = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
 $coreDesde = $_GET['core_desde'] ?? $chileToday;
 $coreHasta = $_GET['core_hasta'] ?? $chileToday;
-$coreAssignedName = $_GET['core_assigned_name'] ?? dashboard_default_core_assigned_name();
+$coreAssignedName = dashboard_can_assign_other_users()
+    ? (string)($_GET['core_assigned_name'] ?? dashboard_default_core_assigned_name())
+    : dashboard_default_core_assigned_name();
 $currentRole = auth_get_user_role();
 $hasSavedCoreCredentials = dashboard_core_has_saved_credentials();
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
@@ -79,27 +81,24 @@ $retencionHoras = get_retencion_horas();
 
 $userOptions = [];
 $userLookup = [];
-$usersPath = __DIR__ . '/../../data/usuarios.json';
-$parsedUsers = storage_read_json($usersPath, []);
-    if (is_array($parsedUsers)) {
-        foreach ($parsedUsers as $u) {
-            if (!is_array($u) || empty($u['id'])) continue;
-            $nombre = trim(($u['nombre'] ?? '') . ' ' . ($u['apellido'] ?? ''));
-            $displayName = $nombre !== '' ? $nombre : $u['id'];
-            $userOptions[] = [
-                'id' => $u['id'],
-                'nombre' => $displayName
-            ];
-            $userLookup[$u['id']] = $displayName;
-            $phoneKey = normalize_phone_key($u['numero_celular'] ?? '');
-            if ($phoneKey !== '') {
-                $userLookup[$phoneKey] = $displayName;
-            }
-            $rutKey = normalize_rut_key($u['rut'] ?? '');
-            if ($rutKey !== '') {
-                $userLookup[$rutKey] = $displayName;
-            }
-        }
+foreach (dashboard_active_mantencion_users() as $u) {
+    $displayName = trim((string)($u['nombre_completo'] ?? ''));
+    if ($displayName === '' || empty($u['id'])) {
+        continue;
+    }
+    $userOptions[] = [
+        'id' => $u['id'],
+        'nombre' => $displayName
+    ];
+    $userLookup[$u['id']] = $displayName;
+    $phoneKey = normalize_phone_key($u['numero_celular'] ?? '');
+    if ($phoneKey !== '') {
+        $userLookup[$phoneKey] = $displayName;
+    }
+    $rutKey = normalize_rut_key($u['rut'] ?? '');
+    if ($rutKey !== '') {
+        $userLookup[$rutKey] = $displayName;
+    }
 }
 $userMap = [];
 if (count($userOptions) > 0) {
@@ -108,44 +107,11 @@ if (count($userOptions) > 0) {
 
 
 $catOptions = [];
-
-$catPath = __DIR__ . '/../../data/categorias.json';
-
-$parsed = storage_read_json($catPath, []);
-
-    if (is_array($parsed)) {
-
-        foreach ($parsed as $c) {
-
-            if (is_array($c) && isset($c['nombre'])) {
-
-                $catOptions[] = $c['nombre'];
-
-            }
-
-        }
-
-    }
+$catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+$catOptions = $catalogRepo !== null ? $catalogRepo->categoriaNames() : [];
 
 $unitOptions = [];
-
-$unitPath = __DIR__ . '/../../data/unidades.json';
-
-$parsed = storage_read_json($unitPath, []);
-
-    if (is_array($parsed)) {
-
-        foreach ($parsed as $u) {
-
-            if (is_array($u) && isset($u['nombre'])) {
-
-                $unitOptions[] = $u['nombre'];
-
-            }
-
-        }
-
-    }
+$unitOptions = $catalogRepo !== null ? $catalogRepo->unidadNames() : [];
 
 $tipoOptions = [];
 $prioridadOptions = [];
@@ -287,7 +253,7 @@ $csrf = legacy_csrf_token();
     font-weight: 800;
   }
   .dashboard-table { margin-top: 1rem; }
-  .dashboard-table__subject { font-weight: 600; color: var(--text-primary); max-width: 460px; min-width: 280px; }
+  .dashboard-table__subject { font-weight: 600; color: var(--text-primary); min-width: 0; max-width: none; }
   .dashboard-table__meta { display: block; color: var(--text-muted); font-size: .78rem; margin-top: .2rem; }
   .dashboard-status-icon {
     width: 28px;
@@ -319,9 +285,7 @@ $csrf = legacy_csrf_token();
     padding-top: .45rem;
     padding-bottom: .45rem;
   }
-  .dashboard-table-card.is-compact .dashboard-table__subject {
-    min-width: 220px;
-  }
+  .dashboard-table-card.is-compact .dashboard-table__subject { min-width: 0; }
   .dashboard-toast {
     position: fixed;
     right: 22px;
@@ -354,7 +318,7 @@ $csrf = legacy_csrf_token();
     height: 56px;
     border: 0;
     border-radius: 18px;
-    display: inline-flex;
+    display: none;
     align-items: center;
     justify-content: center;
     font-size: 1.25rem;
@@ -368,12 +332,13 @@ $csrf = legacy_csrf_token();
     z-index: 1040;
   }
   .dashboard-scroll-top.is-visible {
+    display: inline-flex;
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
   }
   #detalleModal {
-    --drawer-width: min(1040px, calc(100vw - 18px));
+    --drawer-width: min(1280px, calc(100vw - 12px));
   }
   #detalleModal .detail-drawer-dialog {
     width: var(--drawer-width);
@@ -453,6 +418,8 @@ $csrf = legacy_csrf_token();
     background: #f8fafc;
   }
   #detalleModal .modal-body .row {
+    --bs-gutter-x: 1rem;
+    --bs-gutter-y: 1rem;
     padding: 1rem;
     border: 1px solid rgba(148, 163, 184, .24);
     border-radius: 16px;
@@ -462,6 +429,16 @@ $csrf = legacy_csrf_token();
   #detalleModal .form-control,
   #detalleModal .form-select {
     min-height: 44px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+  }
+  #detalleModal .form-control:disabled,
+  #detalleModal .form-select:disabled {
+    color: #475569;
+    background: #f1f5f9;
+    border-color: #d8e3f4;
+    opacity: 1;
+    cursor: not-allowed;
   }
   #detalleModal textarea.form-control {
     min-height: 76px;
@@ -529,7 +506,10 @@ $csrf = legacy_csrf_token();
     box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
   }
   .detail-preview-wrap .table {
-    min-width: 860px;
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+    font-size: .82rem;
   }
   .detail-preview-wrap thead th {
     position: sticky;
@@ -537,10 +517,45 @@ $csrf = legacy_csrf_token();
     z-index: 1;
     background: #eef4ff;
     color: #1e3a8a;
+    padding: .55rem .6rem;
     white-space: nowrap;
+    overflow-wrap: normal;
   }
   .detail-preview-wrap tbody td {
+    min-width: 90px;
+    max-width: 240px;
+    padding: .58rem .6rem;
     vertical-align: top;
+    white-space: normal;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    hyphens: none;
+    line-height: 1.28;
+  }
+  .detail-preview-wrap th:nth-child(1),
+  .detail-preview-wrap td:nth-child(1) { min-width: 128px; }
+  .detail-preview-wrap th:nth-child(2),
+  .detail-preview-wrap td:nth-child(2) { min-width: 84px; }
+  .detail-preview-wrap th:nth-child(3),
+  .detail-preview-wrap td:nth-child(3) { min-width: 170px; }
+  .detail-preview-wrap th:nth-child(4),
+  .detail-preview-wrap td:nth-child(4) { min-width: 150px; }
+  .detail-preview-wrap th:nth-child(5),
+  .detail-preview-wrap td:nth-child(5) { min-width: 190px; }
+  .detail-preview-wrap th:nth-child(6),
+  .detail-preview-wrap td:nth-child(6) { min-width: 190px; }
+  .detail-preview-wrap th:nth-child(7),
+  .detail-preview-wrap td:nth-child(7) { min-width: 120px; }
+  .detail-preview-wrap th:nth-child(8),
+  .detail-preview-wrap td:nth-child(8) { min-width: 150px; }
+  .detail-preview-wrap td:nth-child(2),
+  .detail-preview-wrap td:nth-child(4) {
+    white-space: nowrap;
+  }
+  .detail-preview-wrap td:nth-child(4):last-child,
+  .detail-preview-wrap td:nth-child(5):last-child,
+  .detail-preview-wrap td:nth-child(6):last-child {
     white-space: normal;
   }
   .core-import-overlay {
@@ -669,7 +684,7 @@ $csrf = legacy_csrf_token();
       </div>
       <div class="col-md-4">
         <label class="form-label">Asignado CORE</label>
-        <?php if ($currentRole === 'root'): ?>
+        <?php if (dashboard_can_assign_other_users()): ?>
           <select name="core_assigned_name" class="form-select">
             <option value="">Todos</option>
             <?php foreach ($userOptions as $userOption): ?>
@@ -681,7 +696,8 @@ $csrf = legacy_csrf_token();
             <?php endforeach; ?>
           </select>
         <?php else: ?>
-          <input type="text" name="core_assigned_name" class="form-control" value="<?= $h($coreAssignedName) ?>" placeholder="Opcional" readonly>
+          <input type="text" class="form-control" value="<?= $h($coreAssignedName) ?>" readonly>
+          <input type="hidden" name="core_assigned_name" value="<?= $h($coreAssignedName) ?>">
         <?php endif; ?>
       </div>
       </div>
@@ -760,18 +776,18 @@ $csrf = legacy_csrf_token();
         </div>
       </div>
 
-      <div class="table-responsive">
+      <div class="table-responsive rm-table-wrap dashboard-table-wrap">
 
         <table class="table table-striped align-middle w-100 dashboard-table">
 
-          <thead class="table-light position-sticky top-0" style="z-index:1;">
+          <thead class="table-light position-sticky top-0">
 
             <tr>
 
-              <th style="width:40px;"><input type="checkbox" id="sel-all-top"></th>
-              <th style="width:100px;">Redmine ID</th>
+              <th><input type="checkbox" id="sel-all-top"></th>
+              <th>Redmine ID</th>
 
-              <th style="min-width:340px;">Asunto</th>
+              <th>Asunto</th>
 
               <th>Solicitante</th>
 
@@ -783,11 +799,9 @@ $csrf = legacy_csrf_token();
 
               <th>Departamento</th>
 
-              <th>Asignado CORE</th>
-
               <th>Estado local</th>
 
-              <th style="width:170px;">Acciones</th>
+              <th>Acciones</th>
 
             </tr>
 
@@ -795,6 +809,9 @@ $csrf = legacy_csrf_token();
 
           <tbody>
 
+          <?php if (!$messages): ?>
+            <tr id="dashboard-empty-row"><td colspan="10" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes. Usa el formulario de importación para traer datos desde CORE.</td></tr>
+          <?php endif; ?>
           <?php foreach ($messages as $m): ?>
 
             <?php
@@ -833,8 +850,6 @@ $csrf = legacy_csrf_token();
               <td><?= $h($m['core_establecimiento'] ?? ($m['unidad_solicitante'] ?? '')) ?></td>
 
               <td><?= $h($displayDepartamento) ?></td>
-
-              <td><?= $h($m['core_usuario_asignado'] ?? $displayAsignado) ?></td>
 
               <?php
                 $statusIconClass = $estado === 'pendiente' ? 'dashboard-status-icon--pending' : ($estado === 'procesado' ? 'dashboard-status-icon--processed' : 'dashboard-status-icon--error');
@@ -1115,18 +1130,26 @@ $csrf = legacy_csrf_token();
 
           <div class="row g-3">
 
-            <div class="col-md-3"><label class="form-label">Tipo</label><input name="tipo" id="md-tipo" class="form-control" list="tipo-list"></div>
+            <div class="col-md-4">
+              <label class="form-label">Tipo</label>
+              <input id="md-tipo" class="form-control" list="tipo-list" disabled>
+              <input type="hidden" name="tipo" id="md-tipo-hidden">
+            </div>
 
-            <div class="col-md-3 position-relative">
+            <div class="col-md-4 position-relative">
               <label class="form-label">Estado</label>
-              <input name="estado_display" id="md-estado" class="form-control" list="estado-list" placeholder="pendiente/procesado/error">
+              <input id="md-estado" class="form-control" list="estado-list" placeholder="pendiente/procesado/error" disabled>
               <input type="hidden" name="estado" id="md-estado-hidden" value="pendiente">
               <!-- <div class="form-text" id="estado-help"></div> -->
             </div>
 
-            <div class="col-12"><label class="form-label">Asunto</label><textarea name="asunto" id="md-asunto" class="form-control" rows="2"></textarea></div>
+            <div class="col-md-4">
+              <label class="form-label">Prioridad</label>
+              <input id="md-prioridad" class="form-control" list="prioridad-list" disabled>
+              <input type="hidden" name="prioridad" id="md-prioridad-hidden">
+            </div>
 
-            <div class="col-md-3"><label class="form-label">Prioridad</label><input name="prioridad" id="md-prioridad" class="form-control" list="prioridad-list"></div>
+            <div class="col-12"><label class="form-label">Asunto</label><textarea name="asunto" id="md-asunto" class="form-control" rows="2"></textarea></div>
 
             <div class="col-md-6"><label class="form-label">Categorías</label><input name="categoria" id="md-categoria" class="form-control" list="cat-list"></div>
 
@@ -1389,12 +1412,15 @@ $csrf = legacy_csrf_token();
   set('md-id', 'data-id');
 
   set('md-tipo', 'data-tipo');
+  set('md-tipo-hidden', 'data-tipo');
 
   set('md-estado', 'data-estado');
+  set('md-estado-hidden', 'data-estado');
 
   set('md-asunto', 'data-asunto');
 
   set('md-prioridad', 'data-prioridad');
+  set('md-prioridad-hidden', 'data-prioridad');
 
   set('md-categoria', 'data-categoria');
 
@@ -1561,16 +1587,9 @@ $csrf = legacy_csrf_token();
   const estadoActual = (btn.getAttribute('data-estado') || '').toLowerCase();
   const estadoHidden = document.getElementById('md-estado-hidden');
   if (estadoInput) {
-    estadoInput.disabled = false;
-    estadoInput.setAttribute('list', 'estado-list');
+    estadoInput.disabled = true;
+    estadoInput.removeAttribute('list');
     if (estadoHelp) estadoHelp.textContent = '';
-    if (estadoActual === 'pendiente' || estadoActual === 'procesado') {
-      estadoInput.disabled = true;
-      if (estadoHelp) estadoHelp.textContent = '';
-    } else if (estadoActual === 'error') {
-      estadoInput.setAttribute('list', 'estado-error-list');
-      if (estadoHelp) estadoHelp.textContent = 'Solo puede cambiar a pendiente.';
-    }
     if (estadoHidden) {
       estadoHidden.value = estadoInput.value || estadoActual || 'pendiente';
     }
@@ -2203,16 +2222,42 @@ if (coreCredentialsModal) {
 
 const scrollTopBtn = document.getElementById('dashboard-scroll-top');
 if (scrollTopBtn) {
-  const updateScrollTopVisibility = () => {
-    const formRect = coreImportForm ? coreImportForm.getBoundingClientRect() : null;
-    const shouldShow = !!formRect && formRect.bottom < 0;
-    scrollTopBtn.classList.toggle('is-visible', shouldShow);
-  };
   scrollTopBtn.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
-  window.addEventListener('scroll', updateScrollTopVisibility, { passive: true });
-  window.addEventListener('resize', updateScrollTopVisibility);
+  const scrollTopTarget = filterNav || document.getElementById('status-filters');
+  let statusFiltersVisible = true;
+  const currentPageScrollTop = () => window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+  const updateScrollTopVisibility = () => {
+    const rect = scrollTopTarget?.getBoundingClientRect();
+    const hiddenByGeometry = rect ? rect.bottom <= 0 : false;
+    const shouldShow = hiddenByGeometry || !statusFiltersVisible || currentPageScrollTop() > 220;
+    scrollTopBtn.classList.toggle('is-visible', shouldShow);
+    scrollTopBtn.style.display = shouldShow ? 'flex' : 'none';
+  };
+  let scrollTopTicking = false;
+  const queueScrollTopVisibility = () => {
+    if (scrollTopTicking) return;
+    scrollTopTicking = true;
+    window.requestAnimationFrame(() => {
+      updateScrollTopVisibility();
+      scrollTopTicking = false;
+    });
+  };
+  if (scrollTopTarget && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(([entry]) => {
+      statusFiltersVisible = entry.isIntersecting;
+      queueScrollTopVisibility();
+    }, { threshold: 0 });
+    observer.observe(scrollTopTarget);
+  }
+  window.addEventListener('scroll', queueScrollTopVisibility, { passive: true });
+  window.addEventListener('resize', queueScrollTopVisibility);
+  window.addEventListener('load', queueScrollTopVisibility);
+  if (filterNav) {
+    filterNav.addEventListener('click', () => window.setTimeout(queueScrollTopVisibility, 0));
+  }
+  window.setTimeout(queueScrollTopVisibility, 250);
   updateScrollTopVisibility();
 }
 

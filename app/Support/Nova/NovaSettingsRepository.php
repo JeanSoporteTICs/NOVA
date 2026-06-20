@@ -2,20 +2,23 @@
 
 namespace App\Support\Nova;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 final class NovaSettingsRepository
 {
+    private const DEFAULTS = [
+        'session_timeout'          => 3600,
+        'notification_enabled'     => false,
+        'health_warning_threshold' => 1,
+    ];
+
     /**
      * @return array<string,mixed>
      */
     public function all(): array
     {
-        $settings = $this->read();
-
-        return array_merge([
-            'session_timeout' => max(60, (int) config('nova.session_timeout', 3600)),
-            'notification_enabled' => false,
-            'health_warning_threshold' => 1,
-        ], $settings);
+        return array_merge(self::DEFAULTS, $this->read());
     }
 
     public function sessionTimeout(): int
@@ -28,12 +31,11 @@ final class NovaSettingsRepository
      */
     public function save(array $payload): void
     {
-        $settings = $this->all();
-        $settings['session_timeout'] = max(60, (int) ($payload['session_timeout'] ?? $settings['session_timeout'] ?? 3600));
-        $settings['notification_enabled'] = !empty($payload['notification_enabled']);
-        $settings['health_warning_threshold'] = max(1, (int) ($payload['health_warning_threshold'] ?? $settings['health_warning_threshold'] ?? 1));
-
-        $this->write($settings);
+        $current = $this->all();
+        $current['session_timeout']          = max(60, (int) ($payload['session_timeout'] ?? $current['session_timeout']));
+        $current['notification_enabled']     = ! empty($payload['notification_enabled']);
+        $current['health_warning_threshold'] = max(1, (int) ($payload['health_warning_threshold'] ?? $current['health_warning_threshold']));
+        $this->write($current);
     }
 
     /**
@@ -41,11 +43,19 @@ final class NovaSettingsRepository
      */
     private function read(): array
     {
-        $raw = (string) @file_get_contents($this->path());
-        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw) ?? $raw;
-        $data = json_decode($raw, true);
-
-        return is_array($data) ? $data : [];
+        if (! $this->tableReady()) {
+            return [];
+        }
+        try {
+            $rows = DB::table('nova_settings')->get(['clave', 'valor', 'tipo']);
+            $out  = [];
+            foreach ($rows as $row) {
+                $out[(string) $row->clave] = $this->cast((string) ($row->valor ?? ''), (string) ($row->tipo ?? 'string'));
+            }
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -53,16 +63,46 @@ final class NovaSettingsRepository
      */
     private function write(array $settings): void
     {
-        $directory = dirname($this->path());
-        if (!is_dir($directory)) {
-            mkdir($directory, 0777, true);
+        if (! $this->tableReady()) {
+            return;
         }
-
-        file_put_contents($this->path(), json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+        $types = [
+            'session_timeout'          => 'int',
+            'notification_enabled'     => 'bool',
+            'health_warning_threshold' => 'int',
+        ];
+        foreach ($settings as $key => $value) {
+            $tipo   = $types[$key] ?? 'string';
+            $stored = match ($tipo) {
+                'bool'  => $value ? '1' : '0',
+                'int'   => (string) (int) $value,
+                default => (string) $value,
+            };
+            try {
+                DB::table('nova_settings')->updateOrInsert(
+                    ['clave' => $key],
+                    ['valor' => $stored, 'tipo' => $tipo]
+                );
+            } catch (\Throwable) {
+            }
+        }
     }
 
-    private function path(): string
+    private function cast(string $value, string $type): mixed
     {
-        return storage_path('app/nova/settings.json');
+        return match ($type) {
+            'bool'  => in_array(strtolower($value), ['1', 'true'], true),
+            'int'   => (int) $value,
+            default => $value,
+        };
+    }
+
+    private function tableReady(): bool
+    {
+        try {
+            return Schema::hasTable('nova_settings');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

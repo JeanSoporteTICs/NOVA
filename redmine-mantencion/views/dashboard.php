@@ -64,27 +64,24 @@ $retencionHoras = get_retencion_horas();
 
 $userOptions = [];
 $userLookup = [];
-$usersPath = __DIR__ . '/../../data/usuarios.json';
-$parsedUsers = storage_read_json($usersPath, []);
-    if (is_array($parsedUsers)) {
-        foreach ($parsedUsers as $u) {
-            if (!is_array($u) || empty($u['id'])) continue;
-            $nombre = trim(($u['nombre'] ?? '') . ' ' . ($u['apellido'] ?? ''));
-            $displayName = $nombre !== '' ? $nombre : $u['id'];
-            $userOptions[] = [
-                'id' => $u['id'],
-                'nombre' => $displayName
-            ];
-            $userLookup[$u['id']] = $displayName;
-            $phoneKey = normalize_phone_key($u['numero_celular'] ?? '');
-            if ($phoneKey !== '') {
-                $userLookup[$phoneKey] = $displayName;
-            }
-            $rutKey = normalize_rut_key($u['rut'] ?? '');
-            if ($rutKey !== '') {
-                $userLookup[$rutKey] = $displayName;
-            }
-        }
+foreach (dashboard_active_mantencion_users() as $u) {
+    $displayName = trim((string)($u['nombre_completo'] ?? ''));
+    if ($displayName === '' || empty($u['id'])) {
+        continue;
+    }
+    $userOptions[] = [
+        'id' => $u['id'],
+        'nombre' => $displayName
+    ];
+    $userLookup[$u['id']] = $displayName;
+    $phoneKey = normalize_phone_key($u['numero_celular'] ?? '');
+    if ($phoneKey !== '') {
+        $userLookup[$phoneKey] = $displayName;
+    }
+    $rutKey = normalize_rut_key($u['rut'] ?? '');
+    if ($rutKey !== '') {
+        $userLookup[$rutKey] = $displayName;
+    }
 }
 $userMap = [];
 if (count($userOptions) > 0) {
@@ -93,44 +90,11 @@ if (count($userOptions) > 0) {
 
 
 $catOptions = [];
-
-$catPath = __DIR__ . '/../../data/categorias.json';
-
-$parsed = storage_read_json($catPath, []);
-
-    if (is_array($parsed)) {
-
-        foreach ($parsed as $c) {
-
-            if (is_array($c) && isset($c['nombre'])) {
-
-                $catOptions[] = $c['nombre'];
-
-            }
-
-        }
-
-    }
+$catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
+$catOptions = $catalogRepo !== null ? $catalogRepo->categoriaNames() : [];
 
 $unitOptions = [];
-
-$unitPath = __DIR__ . '/../../data/unidades.json';
-
-$parsed = storage_read_json($unitPath, []);
-
-    if (is_array($parsed)) {
-
-        foreach ($parsed as $u) {
-
-            if (is_array($u) && isset($u['nombre'])) {
-
-                $unitOptions[] = $u['nombre'];
-
-            }
-
-        }
-
-    }
+$unitOptions = $catalogRepo !== null ? $catalogRepo->unidadNames() : [];
 
 $tipoOptions = [];
 $prioridadOptions = [];
@@ -879,8 +843,6 @@ if (logModal) {
 </body>
 
 </html>
-
-
 
 
 

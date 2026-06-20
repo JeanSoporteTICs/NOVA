@@ -2,7 +2,44 @@
     $categoryOptions = collect($categories ?? [])->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))->filter()->unique()->values();
     $unitOptions = collect($units ?? [])->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))->filter()->unique()->values();
     $activeUsers = collect($users ?? [])->filter(fn ($user) => strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo'))) === 'activo')->values();
+    $sessionUser = session('redmine_project_user', session('nova_user', []));
+    $sessionUser = is_array($sessionUser) ? $sessionUser : [];
+    $sessionIds = collect([
+        $sessionUser['redmine_id'] ?? null,
+        $sessionUser['id'] ?? null,
+        $sessionUser['uuid'] ?? null,
+        $sessionUser['_nova_user_id'] ?? null,
+    ])->map(fn ($value) => trim((string) $value))->filter()->values()->all();
+    $currentAssignee = $activeUsers->first(function ($user) use ($sessionIds) {
+        $ids = [
+            trim((string) ($user['id'] ?? '')),
+            trim((string) ($user['redmine_id'] ?? '')),
+            trim((string) ($user['_nova_user_id'] ?? '')),
+            trim((string) ($user['rut'] ?? '')),
+            trim((string) ($user['rut_sin_dv'] ?? '')),
+        ];
+
+        return count(array_intersect(array_filter($ids), $sessionIds)) > 0;
+    }) ?? [];
+    $currentAssigneeId = trim((string) ($currentAssignee['redmine_id'] ?? $currentAssignee['id'] ?? $sessionUser['redmine_id'] ?? ''));
+    $currentAssigneeId = ctype_digit($currentAssigneeId) ? $currentAssigneeId : '';
+    $currentAssigneeName = trim((string) (($currentAssignee['nombre'] ?? $sessionUser['nombre'] ?? '') . ' ' . ($currentAssignee['apellido'] ?? $sessionUser['apellido'] ?? '')));
+    $today = now('America/Santiago')->format('Y-m-d');
+    $timeNow = now('America/Santiago')->format('H:i');
 @endphp
+
+<section class="rm-module-head">
+    <span class="rm-module-head-icon is-orange"><i class="bi bi-pencil-square"></i></span>
+    <div>
+        <small>Ingreso manual</small>
+        <h2>Reporte manual</h2>
+        <p>Crea un pendiente con datos completos para revisar y enviar a Redmine.</p>
+    </div>
+    <div class="rm-module-meter">
+        <strong>{{ $activeUsers->count() }}</strong>
+        <span>asignables</span>
+    </div>
+</section>
 
 <section class="row g-3 align-items-start rm-manual-view">
     <div class="col-12">
@@ -24,7 +61,7 @@
 
                 <div class="col-md-6">
                     <label class="form-label" for="manual-unidad">Ubicacion</label>
-                    <input class="form-control" id="manual-unidad" name="unidad" list="manual-units" maxlength="180" placeholder="Ej: SOME HBV">
+                    <input class="form-control" id="manual-unidad" name="unidad" maxlength="180" placeholder="Ej: SOME HBV">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="manual-unidad-solicitante">Unidad solicitante</label>
@@ -56,12 +93,32 @@
                 <div class="col-md-4">
                     <label class="form-label" for="manual-asignado">Asignar a</label>
                     <select class="form-select" id="manual-asignado" name="asignado_a">
-                        <option value="">Mi usuario</option>
+                        <option value="{{ $currentAssigneeId }}">Mi usuario{{ $currentAssigneeName !== '' ? ': ' . $currentAssigneeName : '' }}</option>
                         @foreach ($activeUsers as $user)
                             @php($displayName = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? ''))) ?: (string) ($user['id'] ?? ''))
-                            <option value="{{ $user['id'] ?? '' }}">{{ $displayName }}</option>
+                            @php($userId = trim((string) ($user['redmine_id'] ?? $user['id'] ?? '')))
+                            @if (ctype_digit($userId))
+                                <option value="{{ $userId }}" @selected($userId !== '' && $userId === $currentAssigneeId)>{{ $displayName }}</option>
+                            @endif
                         @endforeach
                     </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label" for="manual-fecha-inicio">Fecha inicio</label>
+                    <input class="form-control" id="manual-fecha-inicio" type="date" name="fecha_inicio" value="{{ $today }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="manual-fecha-fin">Fecha fin</label>
+                    <input class="form-control" id="manual-fecha-fin" type="date" name="fecha_fin" value="{{ $today }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="manual-fecha">Fecha reporte</label>
+                    <input class="form-control" id="manual-fecha" type="date" name="fecha" value="{{ $today }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="manual-hora">Hora</label>
+                    <input class="form-control" id="manual-hora" type="time" name="hora" value="{{ $timeNow }}">
                 </div>
 
                 <div class="col-12">
@@ -76,7 +133,7 @@
                             <span>Hora extra</span>
                         </label>
                         <div class="manual-extra-time" data-manual-extra-time hidden>
-                            <input class="form-control" id="manual-tiempo-estimado" name="tiempo_estimado" placeholder="Tiempo estimado: 01:30" aria-label="Tiempo estimado">
+                            <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" aria-label="Tiempo estimado">
                         </div>
                     </div>
                 </div>

@@ -72,9 +72,98 @@ function core_credentials_save_users(array $rows): bool {
     return storage_write_json(core_credentials_users_file(), array_values($rows), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
+function core_credentials_central_user_id(string $userId): ?int {
+    $userId = trim($userId);
+    if ($userId === '' || !class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        return null;
+    }
+    try {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova') || !\Illuminate\Support\Facades\Schema::hasTable('integraciones_usuario')) {
+            return null;
+        }
+        $rowId = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->where('redmine_id', $userId)
+            ->orWhere('uuid', $userId)
+            ->orWhere('usuario', $userId)
+            ->value('id');
+
+        return $rowId === null ? null : (int)$rowId;
+    } catch (\Throwable) {
+        return null;
+    }
+}
+
+function core_credentials_central_for_user(string $userId, string $type): array {
+    $novaUserId = core_credentials_central_user_id($userId);
+    if ($novaUserId === null) {
+        return ['user' => '', 'pass' => ''];
+    }
+    try {
+        $row = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+            ->where('usuario_id', $novaUserId)
+            ->where('tipo', $type)
+            ->first();
+        $secret = trim((string)($row->valor_secreto ?? ''));
+        if ($secret !== '') {
+            try {
+                $secret = (string)decrypt($secret);
+            } catch (\Throwable) {
+            }
+        }
+        return [
+            'user' => trim((string)($row->usuario_externo ?? '')),
+            'pass' => $secret,
+        ];
+    } catch (\Throwable) {
+        return ['user' => '', 'pass' => ''];
+    }
+}
+
+function core_credentials_central_save_for_user(string $userId, string $type, string $externalUser, string $secret): bool {
+    $novaUserId = core_credentials_central_user_id($userId);
+    $externalUser = trim($externalUser);
+    $secret = trim($secret);
+    if ($novaUserId === null || $type === '' || $externalUser === '' || $secret === '') {
+        return false;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::table('integraciones_usuario')->updateOrInsert(
+            ['usuario_id' => $novaUserId, 'tipo' => $type],
+            [
+                'usuario_externo' => $externalUser,
+                'valor_secreto' => encrypt($secret),
+                'actualizado_at' => now(),
+            ]
+        );
+        return true;
+    } catch (\Throwable) {
+        return false;
+    }
+}
+
+function core_credentials_central_clear_for_user(string $userId, string $type): bool {
+    $novaUserId = core_credentials_central_user_id($userId);
+    if ($novaUserId === null || $type === '') {
+        return false;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+            ->where('usuario_id', $novaUserId)
+            ->where('tipo', $type)
+            ->delete();
+        return true;
+    } catch (\Throwable) {
+        return false;
+    }
+}
+
 function core_credentials_for_user(string $userId): array {
     if ($userId === '') {
         return ['user' => '', 'pass' => ''];
+    }
+    $central = core_credentials_central_for_user($userId, 'core');
+    if ($central['user'] !== '' || $central['pass'] !== '') {
+        return $central;
     }
     foreach (core_credentials_load_users() as $row) {
         if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
@@ -91,6 +180,10 @@ function core_credentials_for_user(string $userId): array {
 function nextcloud_credentials_for_user(string $userId): array {
     if ($userId === '') {
         return ['user' => '', 'pass' => ''];
+    }
+    $central = core_credentials_central_for_user($userId, 'nextcloud');
+    if ($central['user'] !== '' || $central['pass'] !== '') {
+        return $central;
     }
     foreach (core_credentials_load_users() as $row) {
         if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
@@ -121,6 +214,9 @@ function core_credentials_save_for_user(string $userId, string $coreUser, string
     if ($userId === '' || $coreUser === '' || $corePass === '') {
         return false;
     }
+    if (core_credentials_central_save_for_user($userId, 'core', $coreUser, $corePass)) {
+        return true;
+    }
     $rows = core_credentials_load_users();
     foreach ($rows as &$row) {
         if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
@@ -142,6 +238,9 @@ function nextcloud_credentials_save_for_user(string $userId, string $nextcloudUs
     if ($userId === '' || $nextcloudUser === '' || $nextcloudPass === '') {
         return false;
     }
+    if (core_credentials_central_save_for_user($userId, 'nextcloud', $nextcloudUser, $nextcloudPass)) {
+        return true;
+    }
     $rows = core_credentials_load_users();
     foreach ($rows as &$row) {
         if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
@@ -157,6 +256,9 @@ function nextcloud_credentials_save_for_user(string $userId, string $nextcloudUs
 }
 
 function core_credentials_clear_for_user(string $userId): bool {
+    if (core_credentials_central_clear_for_user($userId, 'core')) {
+        return true;
+    }
     $rows = core_credentials_load_users();
     $changed = false;
     foreach ($rows as &$row) {

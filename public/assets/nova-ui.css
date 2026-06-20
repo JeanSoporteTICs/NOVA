@@ -762,3 +762,3987 @@ select {
     justify-content: center;
   }
 }
+
+/* ============================================================
+   Nova Home — topbar, módulos, métricas, usuarios
+   ============================================================ */
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #eef3fb;
+}
+
+.nova-home {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 24px 44px;
+}
+
+.nova-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 68px;
+  margin: 0 -24px 24px;
+  padding: 12px 24px;
+  background: linear-gradient(115deg, #1f2f56 0%, #314ed8 62%, #4966ff 100%);
+  box-shadow: 0 16px 36px rgba(31, 47, 86, .22);
+}
+
+.nova-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.nova-brand-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.24);
+  color: #fff;
+}
+
+.nova-brand-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nova-brand-title strong {
+  color: #fff;
+  font-size: 1.55rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.nova-brand-title span {
+  color: rgba(255,255,255,.62);
+  font-size: 0.86rem;
+}
+
+.nova-session {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nova-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  max-width: 260px;
+  padding: 0 12px;
+  border: 1px solid var(--nova-line);
+  border-radius: var(--nova-radius);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nova-topbar .nova-badge,
+.nova-topbar .btn-outline-secondary {
+  border-color: rgba(255,255,255,.35);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+}
+
+.nova-topbar .btn-outline-secondary:hover {
+  border-color: rgba(255,255,255,.62);
+  background: rgba(255,255,255,.2);
+  color: #fff;
+}
+
+.nova-icon-btn {
+  width: 42px;
+  min-width: 42px;
+  padding-inline: 0;
+}
+
+.nova-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(130deg, #4f86f7 0%, #2f9ed9 48%, #31c5ae 100%);
+  box-shadow: 0 18px 34px rgba(49, 91, 170, .14);
+}
+
+.nova-summary h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  line-height: 1.08;
+  font-weight: 800;
+}
+
+.nova-metrics {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.nova-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 94px;
+  padding: 10px 12px;
+  border: 1px solid var(--nova-line);
+  border-radius: var(--nova-radius-lg);
+  background: rgba(255,255,255,.14);
+  color: #fff;
+}
+
+button.nova-metric {
+  cursor: pointer;
+  text-align: left;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+button.nova-metric:hover {
+  transform: translateY(-1px);
+  border-color: rgba(245, 158, 11, .38);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, .08);
+}
+
+.nova-metric i {
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.nova-metric strong {
+  display: inline;
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.nova-metric span {
+  display: block;
+  margin-top: 1px;
+  color: rgba(255,255,255,.76);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.nova-metric.is-warning strong {
+  color: var(--nova-warning);
+}
+
+.nova-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 12px;
+}
+
+.nova-section-header h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.nova-section-header span {
+  color: var(--nova-muted);
+  font-size: 0.88rem;
+}
+
+.nova-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.nova-module {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  min-height: 210px;
+  padding: 24px 22px;
+  overflow: hidden;
+  border: 1px solid rgba(216, 227, 244, .95);
+  background: #fff;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.nova-module:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, .32);
+  box-shadow: 0 20px 42px rgba(15, 23, 42, .1);
+}
+
+.nova-module-link {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+}
+
+.nova-module-link:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .28);
+  outline-offset: -4px;
+}
+
+.nova-module::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--nova-primary), #14b8a6);
+}
+
+.nova-module-head {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.nova-module-title {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+.nova-module-title-row {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  min-width: 0;
+  text-align: center;
+}
+
+.nova-module-title h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.25rem, 2.1vw, 1.58rem);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.nova-module-title p {
+  display: none;
+}
+
+.nova-module-icon {
+  display: grid;
+  width: 98px;
+  height: 98px;
+  place-items: center;
+  border-radius: 26px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #fff;
+  font-size: 2.9rem;
+  box-shadow: 0 20px 38px rgba(37, 99, 235, .22);
+}
+
+.nova-module-icon.is-maintenance {
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  box-shadow: 0 16px 30px rgba(249, 115, 22, .2);
+}
+
+.nova-module-icon.is-legacy {
+  background: linear-gradient(135deg, #475569, #64748b);
+  box-shadow: 0 16px 30px rgba(71, 85, 105, .18);
+}
+
+.nova-module-status-icon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid #bae6fd;
+  background: #e0f2fe;
+  color: #0369a1;
+  box-shadow: 0 10px 24px rgba(14, 165, 233, .2);
+}
+
+.nova-module-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid #d8e3f4;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: .76rem;
+  font-weight: 900;
+}
+
+.nova-module-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nova-module-meta .nova-badge:first-child {
+  display: none;
+}
+
+.nova-badge.is-maintenance {
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.nova-module-actions {
+  display: none;
+}
+
+.nova-module-actions .btn {
+  min-width: 132px;
+}
+
+.nova-users-tools input {
+  width: min(420px, 100%);
+}
+
+.nova-users-table-wrap {
+  overflow: auto;
+  background: #fff;
+}
+
+.nova-users-table {
+  margin: 0;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.nova-users-table td,
+.nova-users-table th {
+  vertical-align: top;
+}
+
+.nova-project-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 6px 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--nova-line);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.nova-project-role.is-active {
+  border-color: rgba(22, 163, 74, 0.28);
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.nova-project-role.is-banned {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.nova-maintenance-list {
+  display: grid;
+  gap: 10px;
+}
+
+.nova-maintenance-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--nova-line);
+  border-radius: var(--nova-radius-lg);
+  background: #fff;
+}
+
+.nova-maintenance-item i {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 1.15rem;
+}
+
+.nova-maintenance-item strong,
+.nova-maintenance-item span {
+  display: block;
+}
+
+.nova-maintenance-item span {
+  color: var(--nova-muted);
+  font-size: .86rem;
+  margin-top: 2px;
+}
+
+@media (max-width: 860px) {
+  .nova-topbar,
+  .nova-summary {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .nova-session,
+  .nova-metrics {
+    justify-content: flex-start;
+  }
+
+  .nova-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .nova-home {
+    padding-inline: 10px;
+  }
+
+  .nova-summary,
+  .nova-module {
+    padding: 16px;
+  }
+
+  .nova-module-head {
+    flex-direction: column;
+  }
+
+  .nova-users-tools { padding: 14px; }
+}
+
+/* ============================================================
+   Nova Global Components — page-loader, empty-state,
+   integration-status, toasts, spinner
+   ============================================================ */
+
+/* rm-empty-state: used in Redmine TIC native sections */
+.rm-empty-state {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--nova-muted);
+  font-weight: 700;
+  font-size: .9rem;
+}
+
+/* Page loader: slim progress bar at top of viewport */
+.nova-page-loader {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 9999;
+  height: 3px;
+  width: 100%;
+  background: rgba(215, 226, 239, 0.5);
+  display: none;
+  overflow: hidden;
+}
+
+.nova-page-loader.is-active {
+  display: block;
+}
+
+.nova-page-loader::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(90deg, #2563eb, #0ea5e9, #14b8a6);
+  border-radius: 999px;
+  animation: nova-page-loader-slide 1s ease-in-out infinite;
+}
+
+@keyframes nova-page-loader-slide {
+  0%   { transform: translateX(-110%); }
+  50%  { transform: translateX(80%); }
+  100% { transform: translateX(270%); }
+}
+
+/* Integration loading overlay */
+.nova-integration-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(4px);
+}
+
+.nova-integration-overlay.is-active {
+  display: flex;
+}
+
+.nova-integration-card {
+  width: min(460px, 100%);
+  padding: 28px 24px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(215, 226, 239, 0.92);
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.28);
+  text-align: center;
+}
+
+.nova-integration-icon {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #fff;
+  font-size: 2rem;
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.22);
+}
+
+.nova-integration-card strong {
+  display: block;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.nova-integration-card span {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: .84rem;
+  font-weight: 700;
+}
+
+.nova-integration-bar {
+  position: relative;
+  height: 8px;
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.nova-integration-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #0ea5e9, #14b8a6);
+  animation: nova-page-loader-slide 1.05s ease-in-out infinite;
+  font-style: normal;
+  font-size: 0;
+}
+
+/* Empty state */
+.nova-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.nova-empty-state-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 1.75rem;
+  margin-bottom: 4px;
+}
+
+.nova-empty-state h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.nova-empty-state p {
+  margin: 0;
+  color: var(--nova-muted);
+  font-size: .88rem;
+  font-weight: 600;
+  max-width: 320px;
+}
+
+/* Inline empty cell inside tables */
+td.nova-empty,
+.nova-empty {
+  padding: 28px 16px;
+  color: var(--nova-muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Integration status banner */
+.nova-integration-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(215, 226, 239, 0.9);
+  background: #f8fafc;
+}
+
+.nova-integration-status.is-loading {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.nova-integration-status.is-success {
+  border-color: rgba(22, 163, 74, 0.28);
+  background: #f0fdf4;
+}
+
+.nova-integration-status.is-error {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: #fef2f2;
+}
+
+.nova-integration-status.is-warning {
+  border-color: rgba(217, 119, 6, 0.3);
+  background: #fff7ed;
+}
+
+.nova-integration-status-icon {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+  margin-top: 1px;
+}
+
+.nova-integration-status.is-loading .nova-integration-status-icon { color: #0284c7; }
+.nova-integration-status.is-success .nova-integration-status-icon { color: #16a34a; }
+.nova-integration-status.is-error .nova-integration-status-icon { color: #dc2626; }
+.nova-integration-status.is-warning .nova-integration-status-icon { color: #d97706; }
+
+.nova-integration-status-body strong {
+  display: block;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.nova-integration-status-body span {
+  display: block;
+  margin-top: 2px;
+  color: var(--nova-muted);
+  font-size: .84rem;
+  font-weight: 600;
+}
+
+/* Toast notifications — unified for nova and rm modules */
+.nova-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 2000;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #eff6ff;
+  color: #0f172a;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.18);
+  font-weight: 800;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.nova-toast i { color: var(--nova-primary); font-size: 1.1rem; margin-top: 1px; }
+
+.nova-toast.is-success { border-color: #86efac; background: #ecfdf5; color: #14532d; }
+.nova-toast.is-success i { color: #16a34a; }
+
+.nova-toast.is-info { border-color: #fde68a; background: #fffbeb; color: #713f12; }
+.nova-toast.is-info i { color: #d97706; }
+
+.nova-toast.is-danger { border-color: #fecaca; background: #fef2f2; color: #7f1d1d; }
+.nova-toast.is-danger i { color: #dc2626; }
+
+.nova-toast.is-hiding {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+/* Spinner inline */
+@keyframes nova-spin {
+  to { transform: rotate(360deg); }
+}
+
+.nova-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(37, 99, 235, 0.25);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: nova-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.nova-spinner.is-white {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+}
+
+.nova-spinner.is-lg {
+  width: 2em;
+  height: 2em;
+  border-width: 3px;
+}
+
+/* Submit button loading state */
+.btn.is-submitting {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.btn.is-submitting i.bi::before {
+  animation: nova-spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+/* Alert variants aligned with Bootstrap */
+.nova-alert-warning {
+  border-color: rgba(217, 119, 6, 0.3);
+  background: #fff7ed;
+  color: #78350f;
+}
+
+.nova-alert-info {
+  border-color: rgba(2, 132, 199, 0.28);
+  background: #f0f9ff;
+  color: #075985;
+}
+
+/* ================================================================
+   NOVA Unified Design System — Cross-Module Standardisation
+   Aligns Redmine TIC (.rm-*) and Redmine Mantencion (.sb-*)
+   ================================================================ */
+
+/* ---- 1. Unified Navbar Gradient ---- */
+
+nav.sb-navbar,
+.sb-navbar {
+  background:
+    linear-gradient(115deg, #0c1f3a 0%, #1d4ed8 58%, #0ea5b0 100%),
+    radial-gradient(circle at 18% 20%, rgba(56, 189, 248, 0.14), transparent 34%),
+    radial-gradient(circle at 82% 10%, rgba(20, 184, 166, 0.12), transparent 32%) !important;
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.28) !important;
+}
+
+.sb-brand-mark {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.26) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 10px 22px rgba(15, 23, 42, 0.16) !important;
+}
+
+.sb-navbar .nav-link.active {
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #0c1f3a !important;
+  font-weight: 800 !important;
+}
+
+.sb-navbar .nav-link.active::after {
+  background: linear-gradient(90deg, #2563eb, #14b8a6) !important;
+}
+
+.sb-navbar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+/* ---- 2. Unified Hero Card ---- */
+
+.card.card-hero,
+.card.card-hero.sb-page-hero {
+  background:
+    linear-gradient(135deg, rgba(12, 31, 58, 0.97) 0%, rgba(29, 78, 216, 0.94) 55%, rgba(14, 165, 176, 0.91) 100%),
+    radial-gradient(circle at 12% 22%, rgba(255, 255, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(20, 184, 166, 0.22), transparent 32%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 28px 64px rgba(12, 31, 58, 0.24) !important;
+}
+
+.rm-hero {
+  background:
+    linear-gradient(135deg, rgba(12, 31, 58, 0.97) 0%, rgba(29, 78, 216, 0.94) 55%, rgba(14, 165, 176, 0.91) 100%),
+    radial-gradient(circle at 12% 22%, rgba(255, 255, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(20, 184, 166, 0.22), transparent 32%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 28px 64px rgba(12, 31, 58, 0.24) !important;
+}
+
+.card.card-hero .hero-icon,
+.card.card-hero.sb-page-hero .hero-icon {
+  background: rgba(255, 255, 255, 0.17) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 14px 30px rgba(15, 23, 42, 0.2) !important;
+  color: #fff !important;
+}
+
+.rm-hero-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 18px;
+  font-size: 1.4rem;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.17) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 14px 30px rgba(15, 23, 42, 0.2) !important;
+}
+
+.card.card-hero h2,
+.card.card-hero.sb-page-hero h2 {
+  font-weight: 800 !important;
+}
+
+/* rm-hero: improve title and retention badge */
+.rm-page-title {
+  font-size: clamp(1.1rem, 2.8vw, 1.5rem) !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+  color: #fff !important;
+  margin: 0 !important;
+}
+
+.rm-hero-retention {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  padding: 0.35rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* ---- 3. Section Nav (Mantención — .sb-native-menu-wrap) ---- */
+
+.sb-native-menu-wrap {
+  background: rgba(248, 251, 255, 0.88) !important;
+  backdrop-filter: blur(8px) !important;
+  border-bottom: 1px solid rgba(215, 226, 239, 0.75) !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05) !important;
+}
+
+.sb-native-menu-wrap .nav-link {
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  font-size: 0.875rem !important;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease !important;
+}
+
+.sb-native-menu-wrap .nav-link:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+  color: #1d4ed8 !important;
+  transform: translateY(-1px);
+}
+
+.sb-native-menu-wrap .nav-link.active {
+  background: #2563eb !important;
+  color: #fff !important;
+  font-weight: 900 !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22) !important;
+}
+
+/* ---- 4. Unified Report Status Badges ---- */
+
+.badge-estado,
+.badge[data-estado],
+.rm-badge,
+[class*="estado-"] {
+  font-weight: 900 !important;
+  border-radius: 999px !important;
+}
+
+/* Common report states — applied via extra class on badge or td */
+.nova-estado-pendiente {
+  background: #fef9c3 !important;
+  color: #713f12 !important;
+  border: 1px solid #fde68a !important;
+}
+
+.nova-estado-procesado,
+.nova-estado-procesada {
+  background: #dcfce7 !important;
+  color: #14532d !important;
+  border: 1px solid #86efac !important;
+}
+
+.nova-estado-error,
+.nova-estado-fallido,
+.nova-estado-fallida {
+  background: #fee2e2 !important;
+  color: #7f1d1d !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+.nova-estado-enviando,
+.nova-estado-procesando {
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+  border: 1px solid #93c5fd !important;
+}
+
+/* ---- 5. Improved Typography Hierarchy ---- */
+
+.rm-section-head h2,
+.rm-section-head h3,
+.access-panel-head h2,
+.access-panel-head h3,
+.table-panel-head h2,
+.table-panel-head h3,
+.form-title h2,
+.form-title h3 {
+  font-weight: 800 !important;
+  color: #0f172a !important;
+}
+
+.nova-muted,
+.text-muted {
+  color: #526071 !important;
+}
+
+label,
+.form-label {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  font-size: 0.88rem !important;
+}
+
+/* ---- 6. Improved Input Focus Ring ---- */
+
+.form-control:focus,
+.form-select:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16) !important;
+}
+
+/* ---- 7. Table Refinements ---- */
+
+.table > thead > tr > th {
+  font-size: 0.8rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.045em !important;
+  color: #1e3a8a !important;
+  background: #eef4ff !important;
+  font-weight: 900 !important;
+  border-bottom-width: 1px !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(even) > * {
+  background-color: #f8fbff !important;
+}
+
+/* ---- 8. Dropdown / Select Menu ---- */
+
+.dropdown-menu {
+  border-radius: 10px !important;
+  border: 1px solid rgba(215, 226, 239, 0.9) !important;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14) !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+/* ---- 9. Scrollbar Refinements (WebKit) ---- */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.75);
+}
+
+/* ---- 10. Mobile Improvements ---- */
+
+@media (max-width: 768px) {
+  .card.card-hero.sb-page-hero .hero-content {
+    grid-template-columns: auto 1fr !important;
+    min-height: auto !important;
+    padding: 1rem 1rem !important;
+  }
+
+  .card.card-hero.sb-page-hero .hero-icon,
+  .card.card-hero .hero-icon {
+    width: 46px !important;
+    height: 46px !important;
+    flex: 0 0 46px !important;
+  }
+
+  .card.card-hero.sb-page-hero h2,
+  .card.card-hero h2 {
+    font-size: 1.2rem !important;
+  }
+
+  .rm-hero-retention {
+    margin-left: 0;
+    flex: 0 0 auto;
+  }
+
+  .hero-extras {
+    grid-column: 1 / -1;
+    justify-content: flex-start !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  .rm-section-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .rm-section-nav::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .sb-nav-actions {
+    gap: 0.4rem !important;
+  }
+
+  .sb-nav-actions .btn span,
+  .sb-logout-btn span,
+  .sb-nova-home-btn span {
+    display: none !important;
+  }
+
+  .sb-user-pill {
+    display: none !important;
+  }
+}
+
+/* ---- 11. NOVA/EMACH visual hardening ---- */
+
+body.emach-page .card.emach-hero,
+body.emach-page .card.card-hero.emach-hero,
+.card.telegram-hero,
+.card.card-hero,
+.card.card-hero.sb-page-hero {
+  color: #fff !important;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(20, 184, 166, 0.24), transparent 34%),
+    linear-gradient(135deg, #0c1f3a 0%, #1d4ed8 58%, #0ea5b0 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 28px 64px rgba(12, 31, 58, 0.24) !important;
+  overflow: hidden;
+}
+
+body.emach-page .emach-hero .card-body,
+.telegram-hero .card-body,
+.card.card-hero > .card-body.d-flex,
+.card.card-hero.sb-page-hero > .card-body.d-flex {
+  min-height: 116px;
+  color: #fff !important;
+}
+
+body.emach-page .emach-hero h1,
+body.emach-page .emach-hero h2,
+body.emach-page .emach-hero h3,
+.telegram-hero h1,
+.telegram-hero h2,
+.telegram-hero h3,
+.card.card-hero h1,
+.card.card-hero h2,
+.card.card-hero h3 {
+  color: #fff !important;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.24);
+}
+
+body.emach-page .emach-hero p,
+body.emach-page .emach-hero .text-white-50,
+.telegram-hero p,
+.telegram-hero .text-white-50,
+.card.card-hero .text-white-50,
+.emach-navbar .text-white-50,
+.telegram-topbar .text-white-50,
+.navbar .text-white-50 {
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+body.emach-page .emach-status-pill,
+.telegram-status-pill,
+.rm-hero-retention {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.17) !important;
+  border-color: rgba(255, 255, 255, 0.34) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+.emach-navbar .btn-outline-light,
+.telegram-topbar .btn-outline-light,
+.sb-navbar .btn-outline-light,
+.nova-topbar .btn-outline-light,
+.navbar-dark .btn-outline-light {
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.emach-navbar .btn-outline-light:hover,
+.emach-navbar .btn-outline-light:focus,
+.telegram-topbar .btn-outline-light:hover,
+.telegram-topbar .btn-outline-light:focus,
+.sb-navbar .btn-outline-light:hover,
+.sb-navbar .btn-outline-light:focus,
+.nova-topbar .btn-outline-light:hover,
+.nova-topbar .btn-outline-light:focus,
+.navbar-dark .btn-outline-light:hover,
+.navbar-dark .btn-outline-light:focus {
+  color: #0f172a !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+}
+
+body.emach-page .card:not(.emach-hero) .text-muted,
+.telegram-page .card:not(.telegram-hero) .text-muted,
+.nova-shell .card .text-muted {
+  color: #526071 !important;
+}
+
+@media (max-width: 576px) {
+  body.emach-page .emach-hero .card-body,
+  .telegram-hero .card-body,
+  .card.card-hero > .card-body.d-flex,
+  .card.card-hero.sb-page-hero > .card-body.d-flex {
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    min-height: auto;
+    padding: 1rem !important;
+  }
+
+  body.emach-page .emach-hero .emach-status-pill,
+  .telegram-hero .telegram-status-pill {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ================================================================
+   NOVA Visual System — global identity based on Redmine TIC
+   Applies to NOVA, EMACH, Telegram, Redmine TIC/Mantencion,
+   CORE/Nextcloud/admin/integration screens that load nova-ui.css.
+   ================================================================ */
+
+:root {
+  --nova-color-navy: #102033;
+  --nova-color-blue: #2563eb;
+  --nova-color-sky: #0ea5e9;
+  --nova-color-teal: #14b8a6;
+  --nova-color-hero-start: #1f4f7e;
+  --nova-color-hero-end: #244a75;
+  --nova-color-ink: #0f172a;
+  --nova-color-text: #1e293b;
+  --nova-color-muted: #526071;
+  --nova-color-border: #dbe4f0;
+  --nova-color-panel: rgba(255, 255, 255, 0.96);
+  --nova-color-panel-soft: #f8fbff;
+  --nova-gradient-brand: #102033;
+  --nova-gradient-hero: linear-gradient(135deg, var(--nova-color-hero-start), var(--nova-color-hero-end)), var(--nova-color-hero-end);
+  --nova-ui-radius: 12px;
+  --nova-ui-radius-sm: 8px;
+  --nova-ui-shadow: 0 18px 42px rgba(15, 23, 42, 0.09);
+  --nova-ui-shadow-strong: 0 28px 68px rgba(12, 31, 58, 0.24);
+}
+
+body.nova-page,
+body.telegram-page,
+body.emach-page,
+body:not(.proc-public-share) {
+  color: var(--nova-color-text);
+  background:
+    radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.08), transparent 32%),
+    radial-gradient(circle at 88% 6%, rgba(20, 184, 166, 0.08), transparent 30%),
+    #eef3fb !important;
+}
+
+.nova-shell,
+.rm-shell,
+.telegram-page main,
+.emach-page main,
+.container-fluid.py-4 {
+  min-width: 0;
+}
+
+/* Global navbars */
+.nova-topbar,
+.rm-navbar,
+.telegram-navbar,
+.emach-navbar,
+.sb-navbar,
+nav.sb-navbar {
+  background: var(--nova-gradient-brand) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-top: 0 !important;
+  border-radius: 0 0 22px 22px !important;
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.24) !important;
+}
+
+.nova-brand-mark,
+.rm-brand-mark,
+.sb-brand-mark,
+.telegram-brand-mark,
+.emach-brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 14px !important;
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.26) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 12px 24px rgba(15, 23, 42, 0.18) !important;
+}
+
+.nova-topbar .navbar-brand,
+.rm-navbar .navbar-brand,
+.sb-navbar .navbar-brand,
+.telegram-navbar .navbar-brand,
+.emach-navbar .navbar-brand,
+.nova-brand-title strong,
+.telegram-brand h1 {
+  color: #fff !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.nova-topbar .text-white-50,
+.rm-navbar .text-white-50,
+.sb-navbar .text-white-50,
+.telegram-navbar .text-white-50,
+.emach-navbar .text-white-50,
+.telegram-brand span {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+.nova-session,
+.rm-top-actions,
+.sb-nav-actions,
+.telegram-nav-actions,
+.emach-nav-actions {
+  gap: 0.5rem !important;
+}
+
+/* Section navigation */
+.admin-nav-shell,
+.rm-section-nav,
+.telegram-menu-wrap,
+.emach-menu-wrap,
+.sb-native-menu-wrap {
+  background: rgba(248, 251, 255, 0.9) !important;
+  border-bottom: 1px solid rgba(219, 228, 240, 0.82) !important;
+  backdrop-filter: blur(12px);
+}
+
+.admin-section-nav .nav-link,
+.rm-section-nav .nav-link,
+.telegram-nav-link,
+.emach-nav-link,
+.sb-native-menu-wrap .nav-link,
+.sb-nav-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  min-height: 40px !important;
+  border: 1px solid rgba(219, 228, 240, 0.96) !important;
+  border-radius: var(--nova-ui-radius-sm) !important;
+  background: #fff !important;
+  color: #334155 !important;
+  font-size: 0.86rem !important;
+  font-weight: 800 !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05) !important;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, color 0.16s ease !important;
+  white-space: nowrap;
+}
+
+.admin-section-nav .nav-link:hover,
+.rm-section-nav .nav-link:hover,
+.telegram-nav-link:hover,
+.emach-nav-link:hover,
+.sb-native-menu-wrap .nav-link:hover,
+.sb-nav-link:hover {
+  color: var(--nova-color-blue) !important;
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.11) !important;
+}
+
+.admin-section-nav .nav-link.active,
+.rm-section-nav .nav-link.active,
+.telegram-nav-link.active,
+.emach-nav-link.active,
+.sb-native-menu-wrap .nav-link.active,
+.sb-nav-link.active {
+  color: #fff !important;
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: var(--nova-color-blue) !important;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22) !important;
+}
+
+/* Global hero */
+.nova-summary,
+.rm-hero,
+.telegram-hero,
+.emach-hero,
+.card.card-hero,
+.card.card-hero.sb-page-hero {
+  position: relative;
+  color: #fff !important;
+  background: var(--nova-gradient-hero) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 24px 58px rgba(37, 99, 235, 0.2) !important;
+  overflow: hidden;
+}
+
+.nova-summary::after,
+.rm-hero::after,
+.telegram-hero::after,
+.emach-hero::after,
+.card.card-hero::after,
+.card.card-hero.sb-page-hero::after {
+  content: "";
+  position: absolute;
+  right: -5rem;
+  top: -6rem;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.nova-summary > *,
+.rm-hero .card-body,
+.telegram-hero .card-body,
+.emach-hero .card-body,
+.card.card-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.nova-summary h1,
+.rm-hero h1,
+.rm-hero h2,
+.telegram-hero h1,
+.telegram-hero h2,
+.emach-hero h1,
+.emach-hero h2,
+.card.card-hero h1,
+.card.card-hero h2,
+.rm-page-title {
+  color: #fff !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.rm-page-subtitle,
+.rm-hero p,
+.telegram-hero p,
+.emach-hero p,
+.nova-summary p,
+.card.card-hero p,
+.card.card-hero .text-white-50 {
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.rm-hero-icon,
+.telegram-hero-icon,
+.emach-hero-icon,
+.hero-icon,
+.card.card-hero .hero-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 52px !important;
+  height: 52px !important;
+  flex: 0 0 52px !important;
+  border-radius: 16px !important;
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.17) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 14px 30px rgba(15, 23, 42, 0.2) !important;
+}
+
+.rm-hero-retention,
+.telegram-status-pill,
+.emach-status-pill,
+.nova-metric,
+.nova-badge {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.32) !important;
+}
+
+/* Cards and panels */
+.card,
+.nova-card,
+.telegram-card,
+.emach-card,
+.platform-card,
+.control-card,
+.access-view-card,
+.rm-work-panel,
+.rm-panel,
+.rm-stats-panel,
+.rm-api-hero-card,
+.rm-api-card {
+  border: 1px solid rgba(219, 228, 240, 0.96) !important;
+  border-radius: var(--nova-ui-radius) !important;
+  background: var(--nova-color-panel) !important;
+  box-shadow: var(--nova-ui-shadow) !important;
+}
+
+.card:hover,
+.nova-module:hover,
+.platform-card:hover,
+.control-card:hover,
+.access-view-card:hover,
+.telegram-card:hover,
+.emach-card:hover {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+}
+
+.card-header,
+.table-panel-head,
+.access-panel-head,
+.form-title,
+.rm-stats-panel-head,
+.telegram-message-editor-head {
+  border-color: rgba(219, 228, 240, 0.96) !important;
+  background: var(--nova-color-panel-soft) !important;
+}
+
+.rm-section-head h2,
+.rm-section-head h3,
+.table-panel-head h2,
+.access-panel-head h2,
+.form-title h2,
+.platform-card h3,
+.control-card h3,
+.telegram-message-editor-head h3,
+.nova-section-header h2 {
+  color: var(--nova-color-ink) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.rm-section-head p,
+.access-help,
+.control-card span,
+.platform-card p,
+.telegram-message-editor-head p,
+.text-muted,
+.nova-muted {
+  color: var(--nova-color-muted) !important;
+}
+
+/* Tables */
+.table,
+.rm-api-top-table {
+  margin-bottom: 0;
+  color: var(--nova-color-text);
+}
+
+.table > :not(caption) > * > *,
+.rm-api-top-table td,
+.rm-api-top-table th {
+  padding: 0.82rem 0.9rem !important;
+  border-color: rgba(219, 228, 240, 0.9) !important;
+}
+
+.table thead th,
+.table > thead > tr > th,
+.rm-table-wrap .table thead th,
+.rm-api-top-table thead th,
+.telegram-command-table thead th {
+  color: #1e3a8a !important;
+  background: #eef4ff !important;
+  font-size: 0.76rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.table tbody tr,
+.rm-api-top-table tbody tr {
+  transition: background 0.14s ease;
+}
+
+.table tbody tr:hover > *,
+.rm-api-top-table tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+.table-responsive,
+.rm-table-wrap {
+  border-radius: var(--nova-ui-radius);
+}
+
+/* Forms */
+.form-control,
+.form-select,
+input.form-control,
+textarea.form-control,
+select.form-select {
+  min-height: 42px;
+  border-color: #cbd7e6 !important;
+  border-radius: var(--nova-ui-radius-sm) !important;
+  color: var(--nova-color-ink);
+  background-color: #fff !important;
+  font-weight: 700;
+}
+
+textarea.form-control {
+  min-height: 112px;
+}
+
+.form-control::placeholder {
+  color: #94a3b8;
+}
+
+.form-label,
+label {
+  color: #1e293b !important;
+  font-size: 0.86rem !important;
+  font-weight: 800 !important;
+}
+
+.form-text {
+  color: var(--nova-color-muted) !important;
+  font-weight: 700;
+}
+
+.form-check-input:checked {
+  background-color: var(--nova-color-blue);
+  border-color: var(--nova-color-blue);
+}
+
+/* Buttons */
+.btn,
+.nova-btn,
+button.btn,
+a.btn {
+  min-height: 40px;
+  border-radius: var(--nova-ui-radius-sm) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+.btn-primary,
+.telegram-submit {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--nova-color-blue), var(--nova-color-sky)) !important;
+  color: #fff !important;
+}
+
+.btn-outline-primary {
+  border-color: rgba(37, 99, 235, 0.38) !important;
+  color: var(--nova-color-blue) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+  color: #fff !important;
+  background: var(--nova-color-blue) !important;
+}
+
+.btn-outline-secondary,
+.btn-secondary {
+  border-color: #cbd7e6 !important;
+  color: #334155 !important;
+  background: #fff !important;
+}
+
+.btn-outline-secondary:hover,
+.btn-secondary:hover {
+  color: var(--nova-color-blue) !important;
+  border-color: rgba(37, 99, 235, 0.32) !important;
+  background: #eff6ff !important;
+}
+
+.btn-outline-light {
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.btn-outline-light:hover,
+.btn-outline-light:focus {
+  color: var(--nova-color-ink) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+}
+
+/* Badges and states */
+.badge,
+.config-status,
+.health-dot,
+.command-alias,
+.access-source,
+.emach-credential-badge,
+.telegram-user-badge,
+.nova-project-role,
+.rm-badge,
+[class*="nova-estado-"] {
+  border-radius: 999px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.badge.text-bg-primary,
+.bg-primary,
+.config-status.is-info {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+}
+
+.badge.text-bg-success,
+.bg-success,
+.health-dot.is-ok,
+.config-status.is-ok,
+.telegram-user-badge {
+  background-color: #dcfce7 !important;
+  color: #14532d !important;
+}
+
+.badge.text-bg-warning,
+.bg-warning,
+.health-dot.is-warn,
+.config-status.is-warn {
+  background-color: #fef3c7 !important;
+  color: #713f12 !important;
+}
+
+.badge.text-bg-danger,
+.bg-danger,
+.health-dot.is-error {
+  background-color: #fee2e2 !important;
+  color: #7f1d1d !important;
+}
+
+/* Alerts and floating messages */
+.alert,
+.nova-integration-status,
+.telegram-success {
+  border-radius: var(--nova-ui-radius) !important;
+  border-width: 1px !important;
+  font-weight: 800;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.alert-success,
+.nova-alert-success,
+.telegram-success,
+.nova-integration-status.is-success {
+  border-color: rgba(22, 163, 74, 0.28) !important;
+  background: #f0fdf4 !important;
+  color: #14532d !important;
+}
+
+.alert-warning,
+.nova-alert-warning,
+.nova-integration-status.is-warning {
+  border-color: rgba(217, 119, 6, 0.3) !important;
+  background: #fff7ed !important;
+  color: #78350f !important;
+}
+
+.alert-danger,
+.nova-alert-danger,
+.nova-integration-status.is-error {
+  border-color: rgba(220, 38, 38, 0.28) !important;
+  background: #fef2f2 !important;
+  color: #7f1d1d !important;
+}
+
+.alert-info,
+.nova-alert-info,
+.nova-integration-status.is-loading {
+  border-color: rgba(2, 132, 199, 0.28) !important;
+  background: #f0f9ff !important;
+  color: #075985 !important;
+}
+
+.nova-toast,
+.nova-toast-stack .nova-toast {
+  border-radius: var(--nova-ui-radius) !important;
+  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.18) !important;
+}
+
+/* Modals */
+.modal-content,
+.nova-confirm,
+.nova-user-form,
+.rm-redmine-send-modal {
+  border: 1px solid rgba(219, 228, 240, 0.96) !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.26) !important;
+}
+
+.modal-header,
+.nova-user-form__footer,
+.nova-confirm__actions,
+.modal-footer {
+  border-color: rgba(219, 228, 240, 0.96) !important;
+  background: #f8fbff !important;
+}
+
+.modal-title,
+.nova-confirm__body h2 {
+  color: var(--nova-color-ink) !important;
+  font-weight: 900 !important;
+}
+
+/* Integration/load indicators */
+.nova-page-loader,
+.app-page-loader {
+  position: fixed !important;
+  inset: 0 0 auto 0 !important;
+  z-index: 9999 !important;
+  height: 3px !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  background: rgba(219, 228, 240, 0.62) !important;
+}
+
+.app-page-loader:not(.is-visible),
+.nova-page-loader:not(.is-active) {
+  display: none;
+}
+
+.app-page-loader.is-visible,
+.nova-page-loader.is-active {
+  display: block !important;
+}
+
+.app-page-loader::after,
+.nova-page-loader::after,
+.nova-integration-bar i,
+.rm-redmine-send-bar i {
+  background: linear-gradient(90deg, var(--nova-color-blue), var(--nova-color-sky), var(--nova-color-teal)) !important;
+}
+
+.nova-spinner {
+  border-top-color: var(--nova-color-blue) !important;
+}
+
+/* Drawer modals shared by TIC and Mantencion */
+.detail-drawer-modal {
+  padding: 0 !important;
+}
+
+.detail-drawer-modal.show {
+  display: block !important;
+  background: rgba(15, 23, 42, 0.48) !important;
+}
+
+.detail-drawer-modal .detail-drawer-dialog,
+#detalleModal .detail-drawer-dialog,
+#editar-solicitud .detail-drawer-dialog {
+  width: min(720px, calc(100vw - 24px)) !important;
+  max-width: none !important;
+  height: calc(100vh - 24px) !important;
+  margin: 12px 12px 12px auto !important;
+  transform: translateX(34px) !important;
+  transition: transform 0.22s ease !important;
+}
+
+.detail-drawer-modal.show .detail-drawer-dialog,
+#detalleModal.show .detail-drawer-dialog,
+#editar-solicitud.show .detail-drawer-dialog {
+  transform: translateX(0) !important;
+}
+
+.detail-drawer-modal .modal-content,
+#detalleModal .modal-content,
+#editar-solicitud .modal-content {
+  height: 100% !important;
+  max-height: 100% !important;
+  border-radius: 18px 0 0 18px !important;
+  overflow: hidden !important;
+}
+
+.detail-drawer-modal .modal-content > form,
+#detalleModal .modal-content > form,
+#editar-solicitud .modal-content > form {
+  display: flex !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  flex-direction: column !important;
+}
+
+.detail-drawer-modal .modal-header,
+#detalleModal .modal-header,
+#editar-solicitud .modal-header {
+  flex: 0 0 auto !important;
+  padding: 18px 20px !important;
+}
+
+.detail-drawer-modal .modal-body,
+#detalleModal .modal-body,
+#editar-solicitud .modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: 18px 20px !important;
+}
+
+.detail-drawer-modal .modal-footer,
+#detalleModal .modal-footer,
+#editar-solicitud .modal-footer {
+  flex: 0 0 auto !important;
+  padding: 14px 20px !important;
+}
+
+.detail-drawer-kicker {
+  margin: 0 0 4px !important;
+  color: var(--nova-color-blue, #2563eb) !important;
+  font-size: .74rem !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .06em !important;
+}
+
+.detail-drawer-icon {
+  display: inline-grid !important;
+  width: 38px !important;
+  height: 38px !important;
+  place-items: center !important;
+  margin-right: 8px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, var(--nova-color-blue, #2563eb), var(--nova-color-teal, #14b8a6)) !important;
+  color: #fff !important;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, .18) !important;
+  vertical-align: middle !important;
+}
+
+.detail-drawer-panel {
+  border: 1px solid rgba(219, 228, 240, .94) !important;
+  border-radius: 12px !important;
+  background: #f8fbff !important;
+  padding: 12px !important;
+}
+
+.detail-drawer-view:not(.is-active) {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .detail-drawer-modal .detail-drawer-dialog,
+  #detalleModal .detail-drawer-dialog,
+  #editar-solicitud .detail-drawer-dialog {
+    width: 100vw !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+  }
+
+  .detail-drawer-modal .modal-content,
+  #detalleModal .modal-content,
+  #editar-solicitud .modal-content {
+    border-radius: 0 !important;
+  }
+}
+
+body.nova-integration-loading {
+  overflow: hidden !important;
+}
+
+.nova-integration-overlay {
+  z-index: 2600 !important;
+}
+
+.nova-integration-overlay.is-active {
+  display: flex !important;
+}
+
+/* Responsive rules */
+@media (max-width: 992px) {
+  .nova-topbar,
+  .rm-navbar,
+  .telegram-navbar,
+  .emach-navbar {
+    min-height: 64px;
+  }
+
+  .rm-layout,
+  .telegram-page main,
+  .emach-page main,
+  .container-fluid.py-4 {
+    padding-inline: 14px !important;
+  }
+
+  .admin-section-nav,
+  .rm-section-nav,
+  .telegram-nav-list,
+  .emach-nav-list,
+  .sb-nav-list {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .admin-section-nav::-webkit-scrollbar,
+  .rm-section-nav::-webkit-scrollbar,
+  .telegram-nav-list::-webkit-scrollbar,
+  .emach-nav-list::-webkit-scrollbar,
+  .sb-nav-list::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .nova-topbar,
+  .rm-navbar .container-fluid,
+  .telegram-navbar .container-fluid,
+  .emach-navbar .container-fluid {
+    padding-inline: 12px !important;
+  }
+
+  .nova-brand-mark,
+  .rm-brand-mark,
+  .sb-brand-mark,
+  .telegram-brand-mark,
+  .emach-brand-mark {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+
+  .nova-summary,
+  .rm-hero .card-body,
+  .telegram-hero .card-body,
+  .emach-hero .card-body,
+  .card.card-hero > .card-body {
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    padding: 1rem !important;
+  }
+
+  .table > :not(caption) > * > *,
+  .rm-api-top-table td,
+  .rm-api-top-table th {
+    padding: 0.7rem !important;
+  }
+
+  .btn,
+  .nova-btn {
+    min-height: 38px;
+  }
+}
+
+/* NOVA native screens moved out of inline styles */
+.shell {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 24px 44px;
+}
+
+.nova-login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.login {
+  width: min(420px, calc(100% - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+
+.login-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px;
+  color: #fff;
+  background: var(--nova-gradient-hero);
+}
+
+.login-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .28);
+  font-size: 1.3rem;
+}
+
+.login-body {
+  padding: 24px;
+  background: #fff;
+}
+
+.login h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.login p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, .82);
+  line-height: 1.4;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.field-help {
+  display: none;
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.form-control.is-invalid + .field-help {
+  display: block;
+}
+
+.error {
+  margin: 0 0 16px;
+  color: var(--nova-danger);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.module-name {
+  font-weight: 900;
+}
+
+.module-key {
+  margin-top: 3px;
+  color: var(--nova-color-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input[type="number"] {
+  max-width: 90px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.user-grid {
+  display: block;
+}
+
+.form-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 40px);
+}
+
+.form-section {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.form-section.is-two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.form-section-title {
+  margin: 16px 0 10px;
+  color: #64748b;
+  font-size: .78rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.table-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+}
+
+.user-filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.user-search {
+  position: relative;
+  width: min(360px, 100%);
+}
+
+.user-search i {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  color: #64748b;
+  transform: translateY(-50%);
+}
+
+.user-search input {
+  padding-left: 38px;
+}
+
+.column-filter {
+  width: 150px;
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.nova-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1070;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, .54);
+}
+
+.nova-modal-backdrop.is-open {
+  display: flex;
+}
+
+.nova-confirm {
+  width: min(460px, 100%);
+  overflow: hidden;
+}
+
+.nova-user-form {
+  width: min(760px, 100%);
+  overflow: hidden;
+}
+
+.nova-user-form__body,
+.nova-confirm__body {
+  padding: 22px;
+}
+
+.nova-user-form__footer,
+.nova-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+}
+
+.modal-close {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.nova-session-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 31px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.nova-session-badge.is-ok {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.nova-session-badge.is-warning {
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.nova-session-badge.is-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.nova-session-modal .modal-body {
+  padding: 22px;
+}
+
+.nova-session-modal .modal-body p {
+  margin: 0 0 14px;
+  color: #334155;
+  font-weight: 700;
+}
+
+.fw-black {
+  font-weight: 900;
+}
+
+.telegram-page {
+  padding: 0 24px 44px;
+}
+
+.telegram-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 72px;
+  margin: 0 -24px 24px;
+  padding: 12px 24px;
+  background: var(--nova-gradient-brand);
+  box-shadow: 0 16px 36px rgba(31, 47, 86, .22);
+}
+
+.telegram-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #fff;
+}
+
+.telegram-brand-title,
+.telegram-brand h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.telegram-listener-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.telegram-listener-metric {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-height: 76px;
+  padding: .9rem;
+  border: 1px solid #d7e2ef;
+  border-radius: var(--nova-ui-radius-sm);
+  background: #f8fafc;
+}
+
+.telegram-listener-metric i {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.telegram-listener-metric.is-ok i {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.telegram-listener-metric.is-warn i {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.telegram-listener-metric.is-bad i {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.telegram-listener-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+.telegram-command {
+  color: var(--nova-color-ink);
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.telegram-aliases {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.telegram-aliases span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: .1rem .45rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.telegram-log-tail,
+.config-code,
+.rm-log,
+.telegram-code-block {
+  border-radius: var(--nova-ui-radius-sm);
+  background: #020617 !important;
+  color: #86efac !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+@keyframes toastIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .user-grid,
+  .config-grid,
+  .telegram-admin-grid,
+  .telegram-message-grid,
+  .telegram-message-editor-layout,
+  .emach-time-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-section.is-two {
+    grid-template-columns: 1fr;
+  }
+
+  .table-panel-head,
+  .access-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+    grid-template-columns: 1fr !important;
+  }
+
+  .user-search,
+  .column-filter,
+  .user-filters {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .modules-table th:nth-child(3),
+  .modules-table td:nth-child(3) {
+    display: none;
+  }
+}
+
+/* ================================================================
+   NOVA Global Design System — Skeleton Loading + Connecting State
+   Agrega componentes de carga diferida y animación de conexión
+   para todos los módulos (EMACH, Telegram, TIC, Mantencion, CORE).
+   ================================================================ */
+
+/* --- Skeleton shimmer ---------------------------------------- */
+@keyframes nova-skeleton-wave {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+
+.nova-skeleton {
+  background: linear-gradient(90deg, #e8edf3 25%, #f1f5f9 50%, #e8edf3 75%);
+  background-size: 600px 100%;
+  border-radius: 6px;
+  animation: nova-skeleton-wave 1.5s ease-in-out infinite;
+}
+
+.nova-skeleton-line {
+  height: 13px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+}
+
+.nova-skeleton-line.is-short  { width: 42%; }
+.nova-skeleton-line.is-medium { width: 68%; }
+.nova-skeleton-line.is-full   { width: 100%; }
+
+.nova-skeleton-box {
+  height: 112px;
+  border-radius: var(--nova-ui-radius);
+}
+
+.nova-skeleton-avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+}
+
+/* Skeleton stat card — replica de rm-stat-card sin datos */
+.nova-skeleton-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid rgba(219, 228, 240, 0.9);
+  border-radius: var(--nova-ui-radius);
+  background: #fff;
+  box-shadow: var(--nova-ui-shadow);
+}
+
+/* --- Connecting / loading animation ------------------------- */
+@keyframes nova-dot-bounce {
+  0%, 100% { transform: translateY(0);    opacity: 0.5; }
+  50%       { transform: translateY(-5px); opacity: 1;   }
+}
+
+.nova-connecting {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--nova-color-muted, #526071);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.nova-connecting-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.nova-connecting-dots span {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nova-color-blue, #2563eb);
+  animation: nova-dot-bounce 1.2s ease-in-out infinite;
+}
+
+.nova-connecting-dots span:nth-child(2) { animation-delay: 0.18s; }
+.nova-connecting-dots span:nth-child(3) { animation-delay: 0.36s; }
+
+/* Variant for inside a dark hero */
+.nova-connecting.is-light {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.nova-connecting.is-light .nova-connecting-dots span {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* --- Card loading progress bar ------------------------------ */
+.nova-card-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.nova-card-loading::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1;
+  background: linear-gradient(90deg, var(--nova-color-blue, #2563eb), var(--nova-color-sky, #0ea5e9), var(--nova-color-teal, #14b8a6), var(--nova-color-blue, #2563eb));
+  background-size: 200% 100%;
+  animation: nova-card-loading-bar 1.8s linear infinite;
+}
+
+@keyframes nova-card-loading-bar {
+  0%   { background-position:  200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ================================================================
+   NOVA Global Responsive Layer
+   Last-mile responsive rules for all views that load nova-ui.css.
+   ================================================================ */
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: clip;
+}
+
+img,
+svg,
+canvas,
+video,
+iframe {
+  max-width: 100%;
+}
+
+.nova-shell,
+.rm-shell,
+.rm-layout,
+.shell,
+.telegram-page,
+.emach-page,
+.container-fluid,
+.container {
+  min-width: 0;
+}
+
+.rm-layout,
+.telegram-page main,
+.emach-page main,
+.container-fluid.py-4,
+.shell {
+  width: 100%;
+}
+
+.nova-topbar,
+.rm-navbar,
+.telegram-navbar,
+.emach-navbar,
+.sb-navbar,
+nav.sb-navbar {
+  min-width: 0;
+}
+
+.nova-topbar .container-fluid,
+.rm-navbar .container-fluid,
+.telegram-navbar .container-fluid,
+.emach-navbar .container-fluid,
+.sb-navbar .container-fluid,
+nav.sb-navbar .container-fluid {
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.nova-session,
+.rm-top-actions,
+.sb-nav-actions,
+.telegram-nav-actions,
+.emach-nav-actions {
+  min-width: 0;
+  flex-wrap: wrap !important;
+}
+
+.nova-brand,
+.navbar-brand,
+.sb-navbar-brand,
+.telegram-brand {
+  min-width: 0;
+}
+
+.navbar-brand span:not(.rm-brand-mark):not(.sb-brand-mark):not(.telegram-brand-mark):not(.emach-brand-mark),
+.nova-brand-title,
+.telegram-brand > div {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-section-nav,
+.rm-section-nav,
+.telegram-nav-list,
+.emach-nav-list,
+.sb-nav-list {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-section-nav::-webkit-scrollbar,
+.rm-section-nav::-webkit-scrollbar,
+.telegram-nav-list::-webkit-scrollbar,
+.emach-nav-list::-webkit-scrollbar,
+.sb-nav-list::-webkit-scrollbar {
+  display: none;
+}
+
+.nova-summary,
+.rm-hero,
+.telegram-hero,
+.emach-hero,
+.card.card-hero {
+  min-width: 0;
+}
+
+.nova-summary .card-body,
+.rm-hero .card-body,
+.telegram-hero .card-body,
+.emach-hero .card-body,
+.card.card-hero .card-body {
+  min-width: 0;
+}
+
+.rm-page-title,
+.nova-summary h1,
+.telegram-hero h1,
+.emach-hero h1,
+.card.card-hero h1,
+.card.card-hero h2 {
+  overflow-wrap: anywhere;
+}
+
+.control-grid,
+.platform-grid,
+.config-grid,
+.access-module-grid,
+.telegram-admin-grid,
+.telegram-message-grid,
+.telegram-message-editor-layout,
+.telegram-listener-grid,
+.emach-time-grid,
+.rm-grid,
+.rm-stats-charts,
+.rm-stats-ranks,
+.rm-api-summary-grid,
+.rm-api-quick-grid,
+.nova-grid {
+  min-width: 0;
+}
+
+.table-responsive,
+.rm-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  min-width: max-content;
+}
+
+.table td,
+.table th {
+  overflow-wrap: anywhere;
+}
+
+.modal-dialog {
+  max-width: min(var(--bs-modal-width, 500px), calc(100vw - 24px));
+  margin-inline: auto;
+}
+
+.modal-xl {
+  max-width: min(1140px, calc(100vw - 24px));
+}
+
+.modal-content {
+  max-height: calc(100vh - 24px);
+}
+
+.modal-body {
+  min-width: 0;
+}
+
+.form-control,
+.form-select,
+.btn,
+.nova-btn {
+  max-width: 100%;
+}
+
+@media (max-width: 1199.98px) {
+  .control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .rm-stats-charts,
+  .telegram-admin-grid,
+  .telegram-message-editor-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .rm-api-hero-card,
+  .rm-api-card,
+  .rm-api-card-wide,
+  .rm-api-top-card {
+    grid-column: span 6 !important;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .nova-topbar,
+  .rm-navbar,
+  .telegram-navbar,
+  .emach-navbar {
+    border-radius: 0 0 18px 18px !important;
+  }
+
+  .nova-topbar,
+  .telegram-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nova-session,
+  .rm-top-actions,
+  .telegram-nav-actions,
+  .emach-nav-actions,
+  .sb-nav-actions {
+    justify-content: flex-start !important;
+    width: 100%;
+  }
+
+  .rm-layout,
+  .telegram-page,
+  .telegram-page main,
+  .emach-page main,
+  .shell,
+  .container-fluid.py-4 {
+    padding-inline: 14px !important;
+  }
+
+  .admin-section-nav,
+  .rm-section-nav,
+  .telegram-nav-list,
+  .emach-nav-list,
+  .sb-nav-list {
+    flex-wrap: nowrap !important;
+  }
+
+  .nova-summary,
+  .rm-hero .card-body,
+  .telegram-hero .card-body,
+  .emach-hero .card-body,
+  .card.card-hero .card-body {
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+  }
+
+  .rm-hero-retention,
+  .telegram-status-pill,
+  .emach-status-pill {
+    margin-left: 0 !important;
+  }
+
+  .config-grid,
+  .platform-grid,
+  .access-module-grid,
+  .telegram-message-grid,
+  .emach-time-grid,
+  .rm-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-panel-head,
+  .access-panel-head,
+  .rm-section-head,
+  .form-title {
+    align-items: stretch !important;
+    grid-template-columns: 1fr !important;
+    flex-direction: column;
+  }
+
+  .user-filters,
+  .access-tools,
+  .rm-toolbar-actions,
+  .rm-filter-summary,
+  .rm-form-actions,
+  .control-actions {
+    justify-content: flex-start !important;
+    width: 100%;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .nova-grid,
+  .control-grid,
+  .rm-stats-ranks,
+  .rm-api-summary-grid,
+  .rm-api-quick-grid,
+  .telegram-listener-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .rm-api-hero-card,
+  .rm-api-card,
+  .rm-api-card-wide,
+  .rm-api-top-card,
+  .rm-interactive-chart {
+    grid-column: auto !important;
+  }
+
+  .nova-summary,
+  .rm-hero,
+  .telegram-hero,
+  .emach-hero,
+  .card.card-hero {
+    border-radius: 12px !important;
+  }
+
+  .nova-summary::after,
+  .rm-hero::after,
+  .telegram-hero::after,
+  .emach-hero::after,
+  .card.card-hero::after {
+    right: -7rem;
+    top: -7rem;
+    width: 15rem;
+    height: 15rem;
+  }
+
+  .rm-page-title,
+  .nova-summary h1,
+  .telegram-hero h1,
+  .emach-hero h1 {
+    font-size: 1.35rem !important;
+    line-height: 1.12 !important;
+  }
+
+  .table {
+    font-size: 0.86rem;
+  }
+
+  .modal-dialog,
+  .modal-xl {
+    max-width: calc(100vw - 18px);
+    margin: 9px auto;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 18px);
+  }
+}
+
+@media (max-width: 575.98px) {
+  .nova-topbar,
+  .rm-navbar,
+  .telegram-navbar,
+  .emach-navbar {
+    border-radius: 0 0 16px 16px !important;
+  }
+
+  .rm-navbar .container-fluid,
+  .telegram-navbar .container-fluid,
+  .emach-navbar .container-fluid,
+  .sb-navbar .container-fluid,
+  nav.sb-navbar .container-fluid {
+    padding-inline: 12px !important;
+  }
+
+  .rm-layout,
+  .telegram-page,
+  .telegram-page main,
+  .emach-page main,
+  .shell,
+  .container-fluid.py-4 {
+    padding-inline: 10px !important;
+  }
+
+  .navbar-brand {
+    max-width: 100%;
+    font-size: 1rem;
+  }
+
+  .nova-brand-mark,
+  .rm-brand-mark,
+  .sb-brand-mark,
+  .telegram-brand-mark,
+  .emach-brand-mark,
+  .rm-hero-icon,
+  .telegram-hero-icon,
+  .emach-hero-icon,
+  .login-mark {
+    width: 40px !important;
+    height: 40px !important;
+    flex-basis: 40px !important;
+  }
+
+  .nova-session-badge,
+  .telegram-session-badge,
+  .emach-session-badge,
+  .sb-session-badge {
+    min-height: 30px !important;
+    padding: 5px 8px !important;
+    font-size: 0.78rem !important;
+  }
+
+  .nova-user,
+  .sb-user-pill,
+  .telegram-nav-actions .text-white-50,
+  .emach-nav-actions .text-white-50,
+  .rm-top-actions .text-white-50 {
+    max-width: 100%;
+    font-size: 0.82rem !important;
+  }
+
+  .btn,
+  .nova-btn {
+    min-height: 38px !important;
+    padding-inline: 0.65rem !important;
+    font-size: 0.86rem !important;
+  }
+
+  .nova-icon-btn,
+  .btn.nova-btn-icon {
+    width: 38px;
+    min-width: 38px;
+    padding-inline: 0 !important;
+  }
+
+  .card-body,
+  .rm-panel,
+  .nova-card-pad,
+  .login-body,
+  .nova-user-form__body,
+  .nova-confirm__body {
+    padding: 14px !important;
+  }
+
+  .table > :not(caption) > * > *,
+  .rm-api-top-table td,
+  .rm-api-top-table th {
+    padding: 0.62rem !important;
+  }
+
+  .user-search,
+  .column-filter,
+  .user-filters,
+  .form-control,
+  .form-select,
+  .actions,
+  .row-actions,
+  .nova-user-form__footer,
+  .nova-confirm__actions {
+    width: 100% !important;
+  }
+
+  .row-actions,
+  .nova-user-form__footer,
+  .nova-confirm__actions {
+    justify-content: stretch !important;
+  }
+
+  .row-actions .btn,
+  .nova-user-form__footer .btn,
+  .nova-confirm__actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .navbar-brand span:not(.rm-brand-mark):not(.sb-brand-mark):not(.telegram-brand-mark):not(.emach-brand-mark) {
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rm-page-title,
+  .nova-summary h1,
+  .telegram-hero h1,
+  .emach-hero h1,
+  .login h1 {
+    font-size: 1.18rem !important;
+  }
+
+  .rm-hero-retention,
+  .telegram-status-pill,
+  .emach-status-pill {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Redmine dashboards dense responsive tables */
+.rm-table-wrap,
+.dashboard-table-wrap {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.rm-dashboard-table,
+.dashboard-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.73rem;
+}
+
+.rm-dashboard-table th,
+.rm-dashboard-table td,
+.dashboard-table th,
+.dashboard-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle !important;
+  border-color: #d7e2ef !important;
+  color: #030712;
+  white-space: nowrap;
+}
+
+.rm-dashboard-table thead th,
+.dashboard-table thead th {
+  padding: 0.4rem 0.46rem !important;
+  background: linear-gradient(180deg, #edf5ff, #e8f1fb) !important;
+  color: #0f2f65 !important;
+  font-size: 0.6rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  border-bottom: 1px solid #cbd8e8 !important;
+}
+
+.rm-dashboard-table tbody td,
+.dashboard-table tbody td {
+  padding: 0.48rem 0.46rem !important;
+  background: #f8fbff;
+  font-weight: 650;
+}
+
+.rm-dashboard-table tbody tr:nth-child(even) td,
+.dashboard-table tbody tr:nth-child(even) td {
+  background: #f4f8fd;
+}
+
+.rm-dashboard-table tbody tr:hover td,
+.dashboard-table tbody tr:hover td {
+  background: #eef6ff;
+}
+
+.rm-dashboard-table th:first-child,
+.rm-dashboard-table td:first-child,
+.dashboard-table th:first-child,
+.dashboard-table td:first-child {
+  width: 2.1rem;
+  text-align: center;
+}
+
+.rm-dashboard-table th:nth-child(2),
+.rm-dashboard-table td:nth-child(2),
+.dashboard-table th:nth-child(2),
+.dashboard-table td:nth-child(2) {
+  width: 3.8rem;
+  text-align: center;
+  font-size: 0.63rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.rm-dashboard-table th:nth-child(3),
+.rm-dashboard-table td:nth-child(3),
+.dashboard-table th:nth-child(3),
+.dashboard-table td:nth-child(3) {
+  width: 27%;
+  white-space: normal;
+}
+
+.rm-dashboard-table th:nth-child(4),
+.rm-dashboard-table td:nth-child(4),
+.dashboard-table th:nth-child(4),
+.dashboard-table td:nth-child(4) {
+  width: 12%;
+}
+
+.rm-dashboard-table th:nth-child(5),
+.rm-dashboard-table td:nth-child(5),
+.dashboard-table th:nth-child(5),
+.dashboard-table td:nth-child(5) {
+  width: 6.8rem;
+}
+
+.rm-dashboard-table th:nth-child(6),
+.rm-dashboard-table td:nth-child(6),
+.dashboard-table th:nth-child(6),
+.dashboard-table td:nth-child(6) {
+  width: 7.2rem;
+}
+
+.rm-dashboard-table th:nth-child(7),
+.rm-dashboard-table td:nth-child(7),
+.dashboard-table th:nth-child(7),
+.dashboard-table td:nth-child(7),
+.rm-dashboard-table th:nth-child(8),
+.rm-dashboard-table td:nth-child(8),
+.dashboard-table th:nth-child(8),
+.dashboard-table td:nth-child(8) {
+  width: 14%;
+}
+
+.rm-dashboard-table th:nth-child(9),
+.rm-dashboard-table td:nth-child(9),
+.dashboard-table th:nth-child(9),
+.dashboard-table td:nth-child(9) {
+  width: 3.6rem;
+  text-align: center;
+}
+
+.rm-dashboard-table th:last-child,
+.rm-dashboard-table td:last-child,
+.dashboard-table th:last-child,
+.dashboard-table td:last-child {
+  width: 6rem;
+  text-align: center;
+}
+
+.rm-dashboard-table .rm-dashboard-subject,
+.dashboard-table .dashboard-table__subject {
+  display: -webkit-box;
+  color: #0f172a;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1.25;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rm-dashboard-status {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #f59e0b;
+  font-size: 0.68rem;
+  vertical-align: middle;
+}
+
+.rm-dashboard-status.is-hours {
+  margin-left: 0.2rem;
+  background: #2563eb;
+}
+
+.rm-dashboard-status .bi {
+  line-height: 1;
+}
+
+.rm-dashboard-table .nova-row-actions,
+.dashboard-table .dashboard-row-actions {
+  gap: 0.28rem;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.rm-dashboard-table .nova-btn-icon,
+.dashboard-table .dashboard-row-actions .btn {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px !important;
+  border-radius: 6px !important;
+  font-size: 0.68rem !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 1399px) {
+  .rm-dashboard-table,
+  .dashboard-table {
+    font-size: 0.69rem;
+  }
+
+  .rm-dashboard-table th:nth-child(3),
+  .rm-dashboard-table td:nth-child(3),
+  .dashboard-table th:nth-child(3),
+  .dashboard-table td:nth-child(3) {
+    width: 25%;
+  }
+
+  .rm-dashboard-table th:nth-child(7),
+  .rm-dashboard-table td:nth-child(7),
+  .dashboard-table th:nth-child(7),
+  .dashboard-table td:nth-child(7),
+  .rm-dashboard-table th:nth-child(8),
+  .rm-dashboard-table td:nth-child(8),
+  .dashboard-table th:nth-child(8),
+  .dashboard-table td:nth-child(8) {
+    width: 13%;
+  }
+}
+
+@media (max-width: 991px) {
+  .rm-dashboard-table,
+  .dashboard-table {
+    min-width: 900px;
+  }
+}
+
+/* ================================================================
+   .nova-badge — overrides para contexto tabla/card
+   La regla global en "NOVA Visual System" aplica color:#fff a
+   .nova-badge (via lista con .nova-metric). Estas reglas
+   la restablecen con texto oscuro fuera de heroes.
+   ================================================================ */
+
+.nova-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 24px !important;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  font-size: 0.8rem !important;
+  font-weight: 900 !important;
+  color: #334155 !important;
+  background: #f1f5f9 !important;
+  border: 1px solid rgba(219, 228, 240, 0.9) !important;
+}
+
+.nova-badge.is-success {
+  color: #14532d !important;
+  background: #dcfce7 !important;
+  border-color: rgba(22, 163, 74, 0.28) !important;
+}
+
+.nova-badge.is-danger {
+  color: #7f1d1d !important;
+  background: #fee2e2 !important;
+  border-color: rgba(220, 38, 38, 0.28) !important;
+}
+
+.nova-badge.is-warning {
+  color: #713f12 !important;
+  background: #fef9c3 !important;
+  border-color: rgba(217, 119, 6, 0.3) !important;
+}
+
+/* Dentro de hero oscuro — restaurar estilos blancos */
+.rm-hero .nova-badge,
+.telegram-hero .nova-badge,
+.emach-hero .nova-badge,
+.card.card-hero .nova-badge,
+.nova-summary .nova-badge {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.32) !important;
+}
+
+/* ================================================================
+   rm-work-panel + rm-section-nav — responsive
+   ================================================================ */
+
+/* Tablet: reducir padding del panel */
+@media (max-width: 767.98px) {
+  .rm-work-panel > .card-body {
+    padding: 1rem !important;
+  }
+
+  .rm-work-panel {
+    border-radius: 10px !important;
+  }
+}
+
+/* Móvil: panel compacto + nav en cuadrícula 2 columnas */
+@media (max-width: 575.98px) {
+  .rm-work-panel > .card-body {
+    padding: 0.75rem !important;
+  }
+
+  .rm-work-panel {
+    border-radius: 8px !important;
+  }
+
+  .rm-section-nav {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    overflow-x: visible !important;
+    padding-bottom: 0 !important;
+  }
+
+  .rm-section-nav .nav-link {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: normal !important;
+    font-size: 0.82rem !important;
+    min-height: 38px !important;
+    padding: 0.42rem 0.5rem !important;
+  }
+}
+
+/* ================================================================
+   rm-work-panel — contener tabla dentro del panel
+   overflow: hidden garantiza que la tabla no desborde la card;
+   el scroll horizontal queda en .rm-table-wrap (overflow-x: auto).
+   ================================================================ */
+.rm-work-panel {
+  overflow: hidden !important;
+}
+
+.rm-work-panel .rm-table-wrap,
+.rm-work-panel .table-responsive {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ================================================================
+   NOVA Unified TIC Reference System (S34)
+   Base visual compartida inspirada en Redmine TIC.
+   ================================================================ */
+
+:root {
+  --nova-tic-navy: #102033;
+  --nova-tic-navy-2: #163653;
+  --nova-tic-blue: #2563eb;
+  --nova-tic-sky: #0ea5e9;
+  --nova-tic-teal: #14b8a6;
+  --nova-tic-surface: #ffffff;
+  --nova-tic-soft: #f5f9ff;
+  --nova-tic-line: #d7e2ef;
+  --nova-tic-text: #0f172a;
+  --nova-tic-muted: #64748b;
+  --nova-tic-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.nova-system-shell {
+  width: min(100%, 1500px);
+  margin: 0 auto;
+  padding: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+.nova-topbar,
+.rm-navbar,
+.telegram-navbar,
+.emach-navbar,
+nav.sb-navbar {
+  background: linear-gradient(135deg, var(--nova-tic-navy), #0b1828) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 0 14px 14px !important;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18) !important;
+}
+
+.nova-system-hero,
+.rm-hero,
+.telegram-hero,
+.emach-hero,
+.card.card-hero,
+.nova-summary {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(20, 184, 166, 0.2), transparent 30%),
+    linear-gradient(135deg, #1f4f7e, #244a75) !important;
+  color: #fff !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  box-shadow: var(--nova-tic-shadow) !important;
+}
+
+.nova-system-head,
+.rm-module-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border: 1px solid var(--nova-tic-line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.nova-system-head small,
+.rm-module-head small {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--nova-tic-blue);
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.nova-system-head h2,
+.rm-module-head h2 {
+  margin: 0;
+  color: var(--nova-tic-text);
+  font-size: 1rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.nova-system-head p,
+.rm-module-head p {
+  margin: 0.18rem 0 0;
+  color: var(--nova-tic-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.nova-system-icon,
+.rm-module-head-icon {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--nova-tic-blue);
+  background: #eaf2ff;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  font-size: 1.2rem;
+}
+
+.nova-system-meter,
+.rm-module-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 36px;
+  padding: 0.45rem 0.65rem;
+  color: #0f2f65;
+  background: #edf5ff;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.nova-system-meter strong,
+.rm-module-meter strong {
+  color: var(--nova-tic-blue);
+  font-size: 0.92rem;
+  font-weight: 950;
+}
+
+.nova-system-grid,
+.rm-module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.9rem;
+}
+
+.nova-system-card,
+.rm-info-card,
+.rm-form-shell,
+.nova-card,
+.telegram-card,
+.emach-card,
+.rm-work-panel {
+  background: var(--nova-tic-surface) !important;
+  border: 1px solid var(--nova-tic-line) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06) !important;
+}
+
+.rm-info-card,
+.rm-form-shell {
+  padding: 1rem;
+}
+
+.nova-system-toolbar,
+.actions,
+.rm-actions,
+.telegram-actions,
+.emach-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.nova-system-toolbar.is-between {
+  justify-content: space-between;
+}
+
+.nova-filter-panel,
+.filter-card,
+.filters-card,
+.rm-filter-panel {
+  background: linear-gradient(180deg, #ffffff, #f8fbff) !important;
+  border: 1px solid var(--nova-tic-line) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+.table-responsive,
+.rm-table-wrap,
+.nova-table-wrap {
+  border-radius: 8px !important;
+  border-color: var(--nova-tic-line) !important;
+}
+
+.table thead th,
+.modules-table thead th,
+.nova-users-table thead th {
+  background: linear-gradient(180deg, #edf5ff, #e8f1fb) !important;
+  color: #0f2f65 !important;
+  border-bottom: 1px solid #cbd8e8 !important;
+  font-size: 0.72rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0 !important;
+  text-transform: uppercase;
+}
+
+.table tbody td {
+  border-color: #e4edf7 !important;
+}
+
+.btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 38px;
+  border-radius: 8px !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18) !important;
+}
+
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-light {
+  border-width: 1px !important;
+}
+
+.form-control,
+.form-select,
+textarea.form-control {
+  min-height: 42px;
+  border-color: #cbd8e8 !important;
+  border-radius: 8px !important;
+  color: var(--nova-tic-text);
+  font-weight: 700;
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea.form-control:focus {
+  border-color: rgba(37, 99, 235, 0.72) !important;
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.13) !important;
+}
+
+.form-label,
+label {
+  color: #1e293b;
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.alert,
+.nova-alert-success,
+.nova-alert-danger,
+.nova-alert-info,
+.nova-alert-warning {
+  border-radius: 8px !important;
+  border-width: 1px !important;
+  font-weight: 750;
+}
+
+.modal-content {
+  border: 1px solid var(--nova-tic-line) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.2) !important;
+}
+
+.modal-header {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border-bottom-color: var(--nova-tic-line) !important;
+}
+
+.modal-title {
+  color: var(--nova-tic-text);
+  font-weight: 950;
+}
+
+.nova-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 24px;
+  padding: 0.22rem 0.62rem;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid rgba(219, 228, 240, 0.9);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.nova-status-badge.is-success {
+  color: #14532d;
+  background: #dcfce7;
+  border-color: rgba(22, 163, 74, 0.28);
+}
+
+.nova-status-badge.is-warning {
+  color: #713f12;
+  background: #fef9c3;
+  border-color: rgba(217, 119, 6, 0.3);
+}
+
+.nova-status-badge.is-danger {
+  color: #7f1d1d;
+  background: #fee2e2;
+  border-color: rgba(220, 38, 38, 0.28);
+}
+
+.nova-status-badge.is-info {
+  color: #075985;
+  background: #e0f2fe;
+  border-color: rgba(14, 165, 233, 0.28);
+}
+
+.nova-log-panel,
+.security-console,
+.rm-log-output {
+  color: #dbeafe !important;
+  background: #07111f !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 8px !important;
+}
+
+/* NOVA Personal Integrations */
+.integration-page {
+  background: #eef3fb;
+}
+
+.integration-navbar .navbar-collapse {
+  flex-grow: 1;
+  justify-content: flex-end;
+}
+
+.integration-top-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-left: auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.integration-top-actions form {
+  margin: 0;
+}
+
+.integration-page .rm-layout {
+  padding: 20px 22px 38px;
+}
+
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.integration-grid--1 {
+  grid-template-columns: minmax(0, 760px);
+  justify-content: center;
+}
+
+.integration-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.integration-card {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+}
+
+.integration-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #e3edf8;
+}
+
+.integration-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.integration-title h2 {
+  color: #0f172a;
+  letter-spacing: 0;
+}
+
+.integration-title p {
+  max-width: 58ch;
+}
+
+.integration-icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #1d4ed8;
+  background: #eaf2ff;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 10px;
+  font-size: 1.15rem;
+}
+
+.integration-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.integration-status.is-ready {
+  color: #14532d;
+  background: #dcfce7;
+  border: 1px solid rgba(22, 163, 74, 0.24);
+}
+
+.integration-status.is-pending {
+  color: #475569;
+  background: #eef2f7;
+  border: 1px solid #d7e0ec;
+}
+
+.integration-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.integration-meta div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #f3f7fc;
+  border: 1px solid #e0e9f5;
+  border-radius: 8px;
+}
+
+.integration-meta span {
+  display: block;
+  margin-bottom: 3px;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.integration-meta strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.integration-form {
+  display: grid;
+  gap: 13px;
+}
+
+.integration-form .form-control {
+  background: #ffffff;
+}
+
+.integration-form .form-text {
+  color: #64748b;
+  font-weight: 750;
+}
+
+.integration-delete-form {
+  margin: 10px 0 0;
+}
+
+.integration-form .btn,
+.integration-delete-form .btn {
+  min-width: 118px;
+}
+
+.integration-summary {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+}
+
+.integration-summary .rm-section-head h2 {
+  font-size: 1.35rem;
+}
+
+.integration-summary .rm-section-head p {
+  margin-bottom: 0;
+}
+
+.integration-summary .table-responsive {
+  border: 1px solid #dbe7f5;
+}
+
+.integration-summary .table {
+  margin: 0;
+}
+
+@media (max-width: 991.98px) {
+  .integration-top-actions {
+    align-items: stretch;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .integration-top-actions .btn,
+  .integration-top-actions form,
+  .integration-top-actions form .btn {
+    width: 100%;
+  }
+
+  .integration-grid,
+  .integration-grid--1,
+  .integration-grid--2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .integration-page .rm-layout {
+    padding: 14px 12px 28px;
+  }
+
+  .integration-card {
+    padding: 14px;
+  }
+
+  .integration-card-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .integration-status {
+    align-self: flex-start;
+  }
+
+  .integration-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .integration-form .btn,
+  .integration-delete-form .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .nova-system-head,
+  .rm-module-head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .nova-system-meter,
+  .rm-module-meter {
+    grid-column: 1 / -1;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .nova-system-toolbar,
+  .actions,
+  .rm-actions,
+  .telegram-actions,
+  .emach-actions {
+    align-items: stretch;
+  }
+
+  .nova-system-toolbar .btn,
+  .actions .btn,
+  .rm-actions .btn,
+  .telegram-actions .btn,
+  .emach-actions .btn {
+    width: 100%;
+  }
+}

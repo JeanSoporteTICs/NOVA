@@ -5,9 +5,14 @@ require_once __DIR__ . '/procedimientos.php';
 require_once __DIR__ . '/storage.php';
 
 function onlyoffice_config(): array {
-    $file = __DIR__ . '/../data/configuracion.json';
-    $cfg = storage_read_json($file, []);
-    return is_array($cfg) ? $cfg : [];
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    if ($repo !== null) {
+        $data = $repo->loadAll();
+        if (is_array($data) && $data !== []) {
+            return $data;
+        }
+    }
+    return [];
 }
 
 function onlyoffice_base_url(): string {

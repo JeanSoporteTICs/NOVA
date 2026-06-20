@@ -5,7 +5,7 @@ $icon = $heroIcon ?? 'bi-broadcast-pin';
 $title = $heroTitle ?? '';
 $subtitle = $heroSubtitle ?? '';
 ?>
-<div class="card card-hero sb-page-hero mb-3">
+<div class="card card-hero sb-page-hero nova-system-hero mb-3">
   <div class="hero-content">
     <div class="hero-icon" aria-hidden="true">
       <i class="bi <?= $esc($icon) ?>"></i>

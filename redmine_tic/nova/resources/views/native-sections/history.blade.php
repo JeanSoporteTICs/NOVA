@@ -147,6 +147,19 @@
     $tableColspan = 12;
 @endphp
 
+<section class="rm-module-head">
+    <span class="rm-module-head-icon is-green"><i class="bi bi-archive"></i></span>
+    <div>
+        <small>Registro historico</small>
+        <h2>Historico</h2>
+        <p>Consulta reportes archivados y horas extra con filtros de fecha, fuente y categoria.</p>
+    </div>
+    <div class="rm-module-meter">
+        <strong>{{ $totalFiltered }}</strong>
+        <span>resultados</span>
+    </div>
+</section>
+
 <style>
     .historico-filter-card { border: 1px solid rgba(215,226,239,.95); background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,255,.92)); }
     .historico-filter-card .btn { min-height: 48px; white-space: nowrap; }
@@ -367,7 +380,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $tableColspan }}" class="text-center text-muted py-4">Sin registros para el criterio seleccionado.</td></tr>
+                        <tr><td colspan="{{ $tableColspan }}" class="nova-empty"><i class="bi bi-archive" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>Sin registros para el criterio seleccionado.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -25,6 +25,7 @@ return new class extends Migration
             $table->string('estado', 40)->default('activo')->index();
             $table->string('password');
             $table->string('usuario_core', 120)->nullable()->index();
+            $table->string('telegram_id_chat', 120)->nullable()->index();
             $table->dateTime('ultimo_login_at')->nullable();
             $table->timestamp('creado_at')->useCurrent();
             $table->timestamp('actualizado_at')->useCurrent()->useCurrentOnUpdate();

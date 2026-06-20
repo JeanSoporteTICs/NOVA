@@ -580,9 +580,47 @@ function emach_telegram_chat_ids_for_mark(array $mark, string $fallbackChatId): 
  */
 function emach_monitor_nova_users(): array
 {
-    $path = dirname(__DIR__, 2) . '/storage/app/nova/users.json';
-    $users = json_decode((string) @file_get_contents($path), true);
-    return is_array($users) ? array_values(array_filter($users, 'is_array')) : [];
+    try {
+        if (!function_exists('app')) {
+            return [];
+        }
+        $rows = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->leftJoin('integraciones_usuario', static function ($join): void {
+                $join->on('integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
+                     ->where('integraciones_usuario.tipo', '=', 'emach');
+            })
+            ->select([
+                'usuarios_nova.uuid',
+                'usuarios_nova.usuario',
+                'usuarios_nova.rut',
+                'usuarios_nova.redmine_id',
+                'usuarios_nova.usuario_core',
+                'usuarios_nova.telegram_id_chat',
+                'integraciones_usuario.usuario_externo as emach_user',
+                'integraciones_usuario.valor_secreto as emach_password',
+            ])
+            ->get();
+        $users = [];
+        foreach ($rows as $row) {
+            $users[] = [
+                'id'         => (string) ($row->uuid ?? ''),
+                'username'   => (string) ($row->usuario ?? ''),
+                'rut'        => (string) ($row->rut ?? ''),
+                'redmine_id' => (string) ($row->redmine_id ?? ''),
+                'core_user'  => (string) ($row->usuario_core ?? ''),
+                'emach_credentials' => [
+                    'user'     => (string) ($row->emach_user ?? ''),
+                    'password' => (string) ($row->emach_password ?? ''),
+                ],
+                'telegram_settings' => [
+                    'chat_id' => (string) ($row->telegram_id_chat ?? ''),
+                ],
+            ];
+        }
+        return $users;
+    } catch (\Throwable) {
+        return [];
+    }
 }
 
 function emach_normalize_identity(string $value): string
