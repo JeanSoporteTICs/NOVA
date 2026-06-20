@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n '->readList\\\\|->readJsonMap\\\\|$this->readList\\\\|$this->readJsonMap' /opt/lampp/htdocs/NOVA/redmine_tic/nova/app/Support/Redmine/RedmineDataRepository.php)",
+      "Bash(rm -rf /opt/lampp/htdocs/NOVA/redmine_tic/views)",
+      "Bash(echo \"views/ deleted: $?\")",
+      "Bash(/opt/lampp/bin/php artisan *)",
+      "Bash(/opt/lampp/bin/php -r ' *)",
+      "Bash(php artisan *)",
+      "Bash(git stash *)"
+    ]
+  }
+}
