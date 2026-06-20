@@ -4,8 +4,6 @@ require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/core_credentials.php';
 require_once __DIR__ . '/maintenance.php';
 
-$GLOBALS['NEXTCLOUD_CREATED_HISTORY_FILE'] = __DIR__ . '/../data/nextcloud_created_history.json';
-
 function nextcloud_set_flash(string $message): void {
     auth_start_session();
     $_SESSION['nextcloud_flash'] = $message;
@@ -652,27 +650,76 @@ function nextcloud_user_exists(array $cfg, string $userid): array {
 }
 
 function nextcloud_created_history_load(): array {
-    global $NEXTCLOUD_CREATED_HISTORY_FILE;
-    $items = storage_read_json($NEXTCLOUD_CREATED_HISTORY_FILE, []);
-    $items = is_array($items) ? $items : [];
-    $cutoff = time() - 86400;
-    $items = array_values(array_filter($items, static function ($item) use ($cutoff) {
-        $createdAt = strtotime((string)($item['created_at'] ?? ''));
-        return $createdAt !== false && $createdAt >= $cutoff;
-    }));
-    storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, $items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    return $items;
+    if (!nextcloud_history_table_ready()) {
+        return [];
+    }
+    $cutoff = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->modify('-24 hours')->format('Y-m-d H:i:s');
+    try {
+        \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')
+            ->where('created_at_cl', '<', $cutoff)
+            ->delete();
+
+        $batches = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')
+            ->where('created_at_cl', '>=', $cutoff)
+            ->orderByDesc('created_at_cl')
+            ->get();
+
+        $out = [];
+        foreach ($batches as $batch) {
+            $users = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_usuarios')
+                ->where('lote_id', $batch->id)
+                ->orderBy('id')
+                ->get();
+            $entry = [
+                'id' => (string)$batch->legacy_id,
+                'created_at' => (new DateTimeImmutable((string)$batch->created_at_cl))->format(DateTimeInterface::ATOM),
+                'expires_at' => (new DateTimeImmutable((string)$batch->expires_at))->format(DateTimeInterface::ATOM),
+                'users' => [],
+                'created_users' => [],
+                'existing_users' => [],
+                'failed_users' => [],
+                'result_users' => [],
+            ];
+            foreach ($users as $user) {
+                $snapshot = [
+                    'userid' => (string)($user->userid ?? ''),
+                    'displayName' => (string)($user->display_name ?? ''),
+                    'email' => (string)($user->email ?? ''),
+                    'group' => (string)($user->grupo ?? ''),
+                    'password' => (string)($user->password ?? ''),
+                    'status' => (string)($user->status ?? ''),
+                    'message' => (string)($user->message ?? ''),
+                ];
+                $type = (string)$user->tipo;
+                if (isset($entry[$type]) && is_array($entry[$type])) {
+                    $entry[$type][] = $snapshot;
+                }
+                if (in_array($type, ['created_users', 'result_users'], true)) {
+                    $entry['users'][] = $snapshot;
+                }
+            }
+            $out[] = $entry;
+        }
+        return $out;
+    } catch (Throwable) {
+        return [];
+    }
 }
 
 function nextcloud_created_history_clear(): bool {
-    global $NEXTCLOUD_CREATED_HISTORY_FILE;
-    return storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if (!nextcloud_history_table_ready()) {
+        return false;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')->delete();
+        return true;
+    } catch (Throwable) {
+        return false;
+    }
 }
 
 function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = [], array $failedUsers = [], array $resultUsers = []): ?array {
-    global $NEXTCLOUD_CREATED_HISTORY_FILE;
     if (!$createdUsers && !$existingUsers && !$failedUsers && !$resultUsers) return null;
-    $items = nextcloud_created_history_load();
     $batch = [
         'id' => bin2hex(random_bytes(6)),
         'created_at' => (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('c'),
@@ -683,9 +730,62 @@ function nextcloud_created_history_save_batch(array $createdUsers, array $existi
         'failed_users' => array_values($failedUsers),
         'result_users' => array_values($resultUsers),
     ];
-    array_unshift($items, $batch);
-    storage_write_json($NEXTCLOUD_CREATED_HISTORY_FILE, $items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if (!nextcloud_history_table_ready()) {
+        return null;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::transaction(static function () use ($batch): void {
+            $moduleId = nextcloud_history_module_id();
+            $batchId = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')->insertGetId([
+                'modulo_id' => $moduleId,
+                'legacy_id' => $batch['id'],
+                'created_at_cl' => date('Y-m-d H:i:s', strtotime((string)$batch['created_at'])),
+                'expires_at' => date('Y-m-d H:i:s', strtotime((string)$batch['expires_at'])),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            foreach (['created_users', 'existing_users', 'failed_users', 'result_users'] as $type) {
+                foreach (($batch[$type] ?? []) as $user) {
+                    if (!is_array($user)) {
+                        continue;
+                    }
+                    \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_usuarios')->insert([
+                        'lote_id' => $batchId,
+                        'tipo' => $type,
+                        'userid' => (string)($user['userid'] ?? ''),
+                        'display_name' => (string)($user['displayName'] ?? ''),
+                        'email' => (string)($user['email'] ?? ''),
+                        'grupo' => (string)($user['group'] ?? ''),
+                        'password' => (string)($user['password'] ?? ''),
+                        'status' => (string)($user['status'] ?? ''),
+                        'message' => (string)($user['message'] ?? ''),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+        });
+    } catch (Throwable) {
+        return null;
+    }
     return $batch;
+}
+
+function nextcloud_history_table_ready(): bool {
+    return class_exists(\Illuminate\Support\Facades\Schema::class)
+        && \Illuminate\Support\Facades\Schema::hasTable('redmine_mantencion_nextcloud_historial_lotes')
+        && \Illuminate\Support\Facades\Schema::hasTable('redmine_mantencion_nextcloud_historial_usuarios');
+}
+
+function nextcloud_history_module_id(): ?int {
+    try {
+        $id = \Illuminate\Support\Facades\DB::table('modulos_nova')
+            ->where('clave_modulo', 'redmine-mantencion')
+            ->value('id');
+        return $id !== null ? (int)$id : null;
+    } catch (Throwable) {
+        return null;
+    }
 }
 
 function nextcloud_prepare_users(array $file, array $options = []): array {

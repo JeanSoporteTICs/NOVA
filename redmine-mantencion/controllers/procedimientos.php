@@ -22,12 +22,9 @@ function procedures_documents_dir(): string {
     return procedures_storage_dir() . '/documentos';
 }
 
-function procedures_config_file(): string {
-    return __DIR__ . '/../data/configuracion.json';
-}
-
 function procedures_config(): array {
-    $cfg = storage_read_json(procedures_config_file(), []);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $cfg = $repo !== null ? $repo->loadAll() : [];
     return is_array($cfg) ? $cfg : [];
 }
 
@@ -67,7 +64,6 @@ function procedures_data_file(): string {
 }
 
 function procedures_ensure_storage(): void {
-    $file = procedures_data_file();
     $dir = procedures_storage_dir();
     $imagesDir = procedures_images_dir();
     $documentsDir = procedures_documents_dir();
@@ -80,46 +76,29 @@ function procedures_ensure_storage(): void {
     if (!is_dir($documentsDir)) {
         mkdir($documentsDir, 0777, true);
     }
-    if (storage_read_json($file, null) === null) {
-        storage_write_json($file, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES, false);
-    }
-    static $migrated = false;
-    if (!$migrated) {
-        $migrated = true;
-        procedures_migrate_embedded_images();
-    }
 }
 
 function procedures_read_all(): array {
     procedures_ensure_storage();
-    $data = storage_read_json(procedures_data_file(), []);
-    if (!is_array($data)) {
-        return [];
-    }
+    $repo = function_exists('mantencion_procedimiento_repository') ? mantencion_procedimiento_repository() : null;
+    $data = $repo !== null ? $repo->all() : [];
     $items = [];
-    $changed = false;
     foreach ($data as $row) {
         if (is_array($row)) {
-            $normalized = procedures_normalize_record($row);
-            if ($normalized != $row) {
-                $changed = true;
-            }
-            $items[] = $normalized;
+            $items[] = procedures_normalize_record($row);
         }
     }
     usort($items, static function (array $a, array $b): int {
         return strcmp((string)($b['updated_at'] ?? ''), (string)($a['updated_at'] ?? ''));
     });
-    if ($changed) {
-        storage_write_json(procedures_data_file(), array_values($items), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
     return $items;
 }
 
 function procedures_write_all(array $items): bool {
     procedures_ensure_storage();
     $payload = array_values(array_map('procedures_normalize_record', $items));
-    return storage_write_json(procedures_data_file(), $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $repo = function_exists('mantencion_procedimiento_repository') ? mantencion_procedimiento_repository() : null;
+    return $repo !== null && $repo->replaceAll($payload);
 }
 
 function procedures_normalize_record(array $row): array {
@@ -341,26 +320,7 @@ function procedures_sanitize_html(string $html): string {
 }
 
 function procedures_migrate_embedded_images(): void {
-    $file = procedures_data_file();
-    $data = storage_read_json($file, []);
-    if (!is_array($data)) {
-        return;
-    }
-    $changed = false;
-    $migrated = [];
-    foreach ($data as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $normalized = procedures_normalize_record($row);
-        if (($row['content_html'] ?? '') !== $normalized['content_html']) {
-            $changed = true;
-        }
-        $migrated[] = $normalized;
-    }
-    if ($changed) {
-        storage_write_json($file, $migrated, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
+    procedures_write_all(procedures_read_all());
 }
 
 function procedures_replace_embedded_images(string $html, string $recordId): string {
@@ -379,7 +339,7 @@ function procedures_replace_embedded_images(string $html, string $recordId): str
             $extension = procedures_image_extension_from_mime($mimeSubtype);
             $fileName = $recordId . '-' . bin2hex(random_bytes(8)) . '.' . $extension;
             $absolutePath = procedures_images_dir() . '/' . $fileName;
-            if (@file_put_contents($absolutePath, $binary) === false) {
+            if (!storage_write_file_locked($absolutePath, $binary, 0, false)) {
                 return $matches[0];
             }
             $relativeUrl = '/redmine-mantencion/data/procedimientos/imagenes/' . $fileName;
@@ -768,7 +728,7 @@ function procedures_create_blank_office_file(string $recordId, string $title, st
 
     $safeName = $recordId . '-' . bin2hex(random_bytes(4)) . '.' . $type;
     $target = procedures_documents_dir() . '/' . $safeName;
-    if (file_put_contents($target, $binary, LOCK_EX) === false) {
+    if (!storage_write_file_locked($target, $binary, 0, false)) {
         return ['ok' => false, 'error' => 'No se pudo crear el documento.'];
     }
     return [

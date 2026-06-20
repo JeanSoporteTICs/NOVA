@@ -5,56 +5,9 @@ require_once __DIR__ . '/../../controllers/dashboard.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
 $maintenanceMode = maintenance_mode_enabled();
 
-if (!defined('HOURS_EXTRA_DIR')) {
-    define('HOURS_EXTRA_DIR', __DIR__ . '/../../data/horasExtras');
-}
-
 function load_hours_extra_all(): array {
-    $out = [];
-    foreach (storage_json_by_prefix('horasExtras') as $groups) {
-        if (!is_array($groups)) {
-            continue;
-        }
-        $firstGroup = [];
-        if (!empty($groups)) {
-            $firstCandidate = reset($groups);
-            if (is_array($firstCandidate)) {
-                $firstGroup = $firstCandidate;
-            }
-        }
-        if (!empty($firstGroup) && !isset($firstGroup['reports'])) {
-            $tmp = [];
-            foreach ($groups as $msg) {
-                if (!is_array($msg)) {
-                    continue;
-                }
-                $dateKey = $msg['fecha'] ?? $msg['fecha_inicio'] ?? '';
-                if ($dateKey === '') {
-                    continue;
-                }
-                if (!isset($tmp[$dateKey])) {
-                    $tmp[$dateKey] = [
-                        'fecha' => $dateKey,
-                        'hora_inicio' => $msg['hora_inicio'] ?? $msg['hora'] ?? '',
-                        'hora_fin' => $msg['hora_fin'] ?? $msg['hora'] ?? '',
-                        'reports' => [],
-                    ];
-                }
-                $tmp[$dateKey]['reports'][] = $msg;
-            }
-            $groups = array_values($tmp);
-        }
-        foreach ($groups as $g) {
-            if (!is_array($g)) {
-                continue;
-            }
-            if (!isset($g['reports']) || !is_array($g['reports'])) {
-                continue;
-            }
-            $out[] = $g;
-        }
-    }
-    return $out;
+    $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+    return $repo !== null ? $repo->groups() : [];
 }
 
 $activeNav = 'horas';
@@ -170,46 +123,8 @@ function update_hours_by_date($fecha, $horaIni, $horaFin) {
     $fechaKey = normalize_date_key($fecha);
     $horaIni = sanitize_time_value($horaIni);
     $horaFin = sanitize_time_value($horaFin);
-    $updated = false;
-
-    foreach (storage_json_by_prefix('horasExtras') as $relPath => $data) {
-            if (!is_array($data)) continue;
-
-            if (!isset($data[0]['reports'])) {
-                $tmp = [];
-                foreach ($data as $row) {
-                    if (!is_array($row)) continue;
-                    $fb = $row['fecha_inicio'] ?? ($row['fecha'] ?? '');
-                    $fbKey = normalize_date_key($fb);
-                    if ($fbKey === '') continue;
-                    if (!isset($tmp[$fbKey])) {
-                        $tmp[$fbKey] = [
-                            'fecha' => $fbKey,
-                            'hora_inicio' => $row['hora'] ?? '',
-                            'hora_fin' => $row['fecha_fin'] ?? '',
-                            'reports' => [],
-                        ];
-                    }
-                    $tmp[$fbKey]['reports'][] = $row;
-                }
-                $data = array_values($tmp);
-            }
-
-            $changed = false;
-            foreach ($data as &$g) {
-                $gKey = normalize_date_key($g['fecha'] ?? '');
-                if (!is_array($g) || $gKey !== $fechaKey) continue;
-                if ($horaIni !== '') { $g['hora_inicio'] = $horaIni; $changed = true; }
-                if ($horaFin !== '') { $g['hora_fin'] = $horaFin; $changed = true; }
-            }
-            unset($g);
-
-            if ($changed) {
-                storage_write_json(storage_data_path($relPath), $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                $updated = true;
-            }
-    }
-    return $updated;
+    $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+    return $repo !== null && $repo->updateGroupHours($fechaKey, $horaIni, $horaFin);
 }
 
 $grupos = load_hours_extra_all();
@@ -650,4 +565,3 @@ if (copyBtn) {
 </div> <!-- #page-content -->
 </body>
 </html>
-

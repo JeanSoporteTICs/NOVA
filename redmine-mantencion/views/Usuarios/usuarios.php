@@ -240,6 +240,9 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
 </div>
 
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
+<button id="users-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);" class="btn btn-primary">
+    <i class="bi bi-arrow-up"></i>
+</button>
 <script>
 const userFilterInput = document.getElementById('user-search');
 if (userFilterInput) {
@@ -302,6 +305,21 @@ if (newIdInput) {
 }
 
 setupEditModal();
+
+(() => {
+  const scrollTopBtn = document.getElementById('users-scroll-top');
+  if (!scrollTopBtn) return;
+  if (scrollTopBtn.parentElement !== document.body) {
+    document.body.appendChild(scrollTopBtn);
+  }
+  const update = () => {
+    scrollTopBtn.style.display = (window.scrollY || document.documentElement.scrollTop || 0) > 220 ? 'flex' : 'none';
+  };
+  scrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})();
 </script>
 </div>
 </body>

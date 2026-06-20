@@ -6,12 +6,6 @@ class SystemHealthModel
 {
     public function status(): array
     {
-        $paths = [
-            APP_BASE_PATH . '/data/mensaje.json',
-            APP_BASE_PATH . '/data/usuarios.json',
-            APP_BASE_PATH . '/data/configuracion.json',
-        ];
-
         $status = [
             'ok' => true,
             'checks' => [],
@@ -22,18 +16,7 @@ class SystemHealthModel
             ],
         ];
 
-        foreach ($paths as $path) {
-            $name = basename($path);
-            $decoded = \storage_read_json($path, null);
-            $status['checks'][$name] = is_array($decoded) ? 'ok' : 'invalid_json';
-            if (!is_array($decoded)) {
-                $status['ok'] = false;
-            }
-        }
-
         $dirs = [
-            APP_BASE_PATH . '/data/horasExtras',
-            APP_BASE_PATH . '/data/reportes',
             APP_BASE_PATH . '/data/logs',
         ];
 
@@ -86,8 +69,8 @@ class SystemHealthModel
             }
         }
 
-        $cfgPath = APP_BASE_PATH . '/data/configuracion.json';
-        $cfg = \storage_read_json($cfgPath, []);
+        $repo = function_exists('\config_mantencion_repository') ? \config_mantencion_repository() : null;
+        $cfg = $repo !== null ? $repo->loadAll() : [];
         if (is_array($cfg)) {
             foreach (['platform_url', 'project_id', 'tracker_id', 'priority_id', 'status_id'] as $key) {
                 if (($cfg[$key] ?? '') === '' || $cfg[$key] === null) {

@@ -1,11 +1,9 @@
 <?php
-// Sincroniza categorías usando data/categorias.json y la API de Redmine
+// Sincroniza categorías usando BD y la API de Redmine.
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
 
 $GLOBALS['DATA_FILE'] = 'categorias';
-$GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
-$GLOBALS['USERS_FILE'] = __DIR__ . '/../data/usuarios.json';
 
 function ensure_cat_file($path) {
     // Legacy no-op: categorias.json is deprecated and no longer used at runtime.
@@ -87,23 +85,16 @@ function user_api_token_fallback($usersFile) {
             return $central;
         }
     }
-    $users = storage_read_json($usersFile, []);
-    if (!is_array($users)) return '';
-    foreach ($users as $u) {
-        if (!is_array($u)) continue;
-        if ((string)($u['id'] ?? '') === (string)$uid && !empty($u['api'])) {
-            return $u['api'];
-        }
-    }
     return '';
 }
 
 
 function sync_categorias_desde_api($configPath, $dataPath = null) {
-    $cfg = storage_read_json($configPath, []);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $cfg = $repo !== null ? $repo->loadAll() : [];
     $platformUrl = $cfg['platform_url'] ?? '';
     $apiKey = $cfg['platform_token'] ?? '';
-    $userToken = user_api_token_fallback($GLOBALS['USERS_FILE']);
+    $userToken = user_api_token_fallback('');
     if (!$apiKey && $userToken) $apiKey = $userToken;
     $url = !empty($cfg['categories_url']) ? $cfg['categories_url'] : categorias_api_url($platformUrl);
     $url = categorias_request_url($url);

@@ -1,19 +1,21 @@
 <?php
-// CRUD para trackers usando solo data/configuracion.json
+// CRUD para trackers usando configuraciones_modulo + modulo_opciones.
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
 
-$GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
-
 function trk_load_cfg() {
-    $data = storage_read_json($GLOBALS['CONFIG_FILE'], []);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $data = $repo !== null ? $repo->loadAll() : [];
     if (!is_array($data)) $data = [];
     if (!isset($data['trackers']) || !is_array($data['trackers'])) $data['trackers'] = [];
     return $data;
 }
 
 function trk_save_cfg($cfg) {
-    storage_write_json($GLOBALS['CONFIG_FILE'], $cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    if ($repo !== null) {
+        $repo->saveAll($cfg);
+    }
 }
 
 function handle_trackers() {

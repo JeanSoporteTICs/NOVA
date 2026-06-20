@@ -50,11 +50,10 @@ $units = [];
 $users = [];
 $selectedUserId = $_POST['usuario'] ?? $_GET['usuario'] ?? '';
 $selectedUserLabel = '';
-$userPath = __DIR__ . '/../../data/usuarios.json';
 $catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
 $cats = $catalogRepo !== null ? $catalogRepo->categoriaNames() : [];
 $units = $catalogRepo !== null ? $catalogRepo->unidadNames() : [];
-$parsed = storage_read_json($userPath, []);
+$parsed = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
   if (is_array($parsed)) {
     foreach ($parsed as $u) {
       if (!is_array($u)) continue;

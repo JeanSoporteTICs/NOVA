@@ -908,6 +908,12 @@
         </div>
     </div>
 
+    @if (in_array($section, ['dashboard', 'historico', 'usuarios'], true))
+        <button id="redmine-tic-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);" class="btn btn-primary">
+            <i class="bi bi-arrow-up"></i>
+        </button>
+    @endif
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const cleanupNovaModalState = () => {
@@ -1051,6 +1057,20 @@
                 redmineToast.classList.add('is-hiding');
                 window.setTimeout(() => redmineToast.remove(), 220);
             }, 3000);
+        }
+
+        const redmineTicScrollTopBtn = document.getElementById('redmine-tic-scroll-top');
+        if (redmineTicScrollTopBtn) {
+            if (redmineTicScrollTopBtn.parentElement !== document.body) {
+                document.body.appendChild(redmineTicScrollTopBtn);
+            }
+            const updateRedmineTicScrollTop = () => {
+                redmineTicScrollTopBtn.style.display = (window.scrollY || document.documentElement.scrollTop || 0) > 220 ? 'flex' : 'none';
+            };
+            redmineTicScrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+            window.addEventListener('scroll', updateRedmineTicScrollTop, { passive: true });
+            window.addEventListener('resize', updateRedmineTicScrollTop);
+            updateRedmineTicScrollTop();
         }
 
         // Page loader for navigation

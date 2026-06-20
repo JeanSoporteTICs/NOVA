@@ -6,9 +6,7 @@ class UserModel
 {
     public function all(): array
     {
-        $path = APP_BASE_PATH . '/data/usuarios.json';
-        $data = \storage_read_json($path, []);
-        return is_array($data) ? $data : [];
+        return function_exists('\auth_central_users_for_mantencion') ? \auth_central_users_for_mantencion() : [];
     }
 
     public function count(): int

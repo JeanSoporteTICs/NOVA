@@ -5,47 +5,35 @@ require_once __DIR__ . '/storage.php';
 
 function maintenance_sections(): array {
     return [
-        'archivados' => [
-            'label' => 'Archivados',
-            'paths' => ['reportes'],
-        ],
-        'pendientes' => [
-            'label' => 'Mensajes pendientes',
-            'paths' => ['mensaje.json'],
-        ],
-        'horas_extras' => [
-            'label' => 'Horas extra',
-            'paths' => ['horasExtras'],
-        ],
-        'configuraciones' => [
-            'label' => 'Configuraciones',
-            'paths' => [
-                'configuracion.json',
-                'roles.json',
-                'categorias.json',
-                'usuarios.json',
-                'unidades.json',
-            ],
-        ],
         'procedimientos' => [
-            'label' => 'Procedimientos',
-            'paths' => ['procedimientos'],
+            'label' => 'Archivos de procedimientos',
+            'paths' => ['procedimientos/documentos', 'procedimientos/imagenes'],
+        ],
+        'logs' => [
+            'label' => 'Logs locales',
+            'paths' => ['logs'],
         ],
     ];
 }
 
-function maintenance_config_file(): string {
-    return __DIR__ . '/../data/configuracion.json';
-}
-
 function maintenance_load_config(): array {
-    $file = maintenance_config_file();
-    $cfg = storage_read_json($file, []);
-    return is_array($cfg) ? $cfg : [];
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    if ($repo !== null) {
+        $cfg = $repo->loadAll();
+        return is_array($cfg) ? $cfg : [];
+    }
+
+    return [];
 }
 
 function maintenance_save_config(array $cfg): bool {
-    return storage_write_json(maintenance_config_file(), $cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    if ($repo !== null) {
+        $repo->saveAll($cfg);
+        return true;
+    }
+
+    return false;
 }
 
 function maintenance_mode_settings(): array {
@@ -110,44 +98,7 @@ function maintenance_data_file(string $relative): string {
 }
 
 function maintenance_read_path(string $relative): array {
-    $absolute = maintenance_data_file($relative);
-    $files = [];
-    if (strtolower(pathinfo($relative, PATHINFO_EXTENSION)) === 'json') {
-        $decoded = storage_read_json($absolute, null);
-        return is_array($decoded) ? [$relative => $decoded] : [];
-    }
-    foreach (storage_json_by_prefix($relative) as $rel => $decoded) {
-        if (is_array($decoded)) {
-            $files[$rel] = $decoded;
-        }
-    }
-    if ($files !== []) {
-        ksort($files);
-        return $files;
-    }
-    if (is_file($absolute)) {
-        $decoded = json_decode((string)file_get_contents($absolute), true);
-        $files[$relative] = is_array($decoded) ? $decoded : [];
-        return $files;
-    }
-    if (!is_dir($absolute)) {
-        return [];
-    }
-    $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($absolute, FilesystemIterator::SKIP_DOTS)
-    );
-    foreach ($iterator as $item) {
-        if (!$item->isFile() || strtolower($item->getExtension()) !== 'json') {
-            continue;
-        }
-        $full = str_replace('\\', '/', $item->getPathname());
-        $root = str_replace('\\', '/', __DIR__ . '/../data/');
-        $rel = substr($full, strlen($root));
-        $decoded = json_decode((string)file_get_contents($item->getPathname()), true);
-        $files[$rel] = is_array($decoded) ? $decoded : [];
-    }
-    ksort($files);
-    return $files;
+    return [];
 }
 
 function maintenance_read_binary_path(string $relative): array {
@@ -320,31 +271,11 @@ function maintenance_merge_hours_groups(array $existing, array $incoming): array
 }
 
 function maintenance_should_merge_json(string $relative): bool {
-    $relative = ltrim(str_replace('\\', '/', $relative), '/');
-    if (strtolower(pathinfo($relative, PATHINFO_EXTENSION)) !== 'json') {
-        return false;
-    }
-    return str_starts_with($relative, 'reportes/')
-        || $relative === 'mensaje.json'
-        || str_starts_with($relative, 'horasExtras/')
-        || $relative === 'procedimientos/index.json';
+    return false;
 }
 
 function maintenance_write_import_json(string $relative, array $incoming): bool {
-    $target = maintenance_data_file($relative);
-    if (!maintenance_should_merge_json($relative)) {
-        return storage_write_json($target, $incoming, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    }
-    $existing = storage_read_json($target, []);
-    if (!is_array($existing)) {
-        $existing = [];
-    }
-    if (str_starts_with(ltrim(str_replace('\\', '/', $relative), '/'), 'horasExtras/')) {
-        $merged = maintenance_merge_hours_groups($existing, $incoming);
-    } else {
-        $merged = maintenance_merge_list_by_id($existing, $incoming);
-    }
-    return storage_write_json($target, $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    return false;
 }
 
 function maintenance_import_bundle(array $bundle, array $selected): int {
@@ -428,15 +359,6 @@ function maintenance_export_package(array $selected): array {
             'files' => [],
         ];
         foreach ($available[$sectionKey]['paths'] as $path) {
-            foreach (maintenance_read_path($path) as $relative => $data) {
-                $relative = ltrim(str_replace('\\', '/', (string)$relative), '/');
-                if ($relative === '' || str_contains($relative, '..')) {
-                    continue;
-                }
-                $target = $dataRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
-                storage_write_json($target, is_array($data) ? $data : [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                $manifest['sections'][$sectionKey]['files'][] = $relative;
-            }
             foreach (maintenance_read_binary_path($path) as $relative => $encoded) {
                 $relative = ltrim(str_replace('\\', '/', (string)$relative), '/');
                 if ($relative === '' || str_contains($relative, '..') || strtolower(pathinfo($relative, PATHINFO_EXTENSION)) === 'json') {
@@ -448,7 +370,12 @@ function maintenance_export_package(array $selected): array {
             }
         }
     }
-    storage_write_json($root . DIRECTORY_SEPARATOR . 'manifest.json', $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    storage_write_file_locked(
+        $root . DIRECTORY_SEPARATOR . 'manifest.json',
+        json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        0,
+        false
+    );
 
     $stamp = date('Ymd-His');
     if (class_exists('ZipArchive')) {

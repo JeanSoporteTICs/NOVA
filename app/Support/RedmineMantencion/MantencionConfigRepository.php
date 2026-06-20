@@ -10,6 +10,12 @@ final class MantencionConfigRepository
     private const MODULE_KEY    = 'redmine-mantencion';
     private const CONFIG_TABLE  = 'configuraciones_modulo';
     private const MODULES_TABLE = 'modulos_nova';
+    private const OPTIONS_TABLE = 'modulo_opciones';
+    private const OPTION_KEYS = [
+        'trackers' => 'tracker',
+        'prioridades' => 'prioridad',
+        'estados' => 'estado',
+    ];
 
     private ?int $moduleId = null;
     private bool $moduleIdResolved = false;
@@ -52,6 +58,15 @@ final class MantencionConfigRepository
                     : $this->cast((string) $valor, (string) ($row->tipo ?? 'string'));
             }
 
+            foreach (self::OPTION_KEYS as $key => $type) {
+                $options = $this->optionsFromDatabase($type);
+                if ($options === [] && isset($out[$key]) && is_array($out[$key])) {
+                    $this->saveOptionsToDatabase($type, $out[$key]);
+                    $options = $this->optionsFromDatabase($type);
+                }
+                $out[$key] = $options;
+            }
+
             return $out;
         } catch (\Throwable) {
             return null;
@@ -64,6 +79,13 @@ final class MantencionConfigRepository
         $moduleId = $this->resolveModuleId();
         if ($moduleId === null) {
             return;
+        }
+
+        foreach (self::OPTION_KEYS as $key => $type) {
+            if (isset($config[$key]) && is_array($config[$key])) {
+                $this->saveOptionsToDatabase($type, $config[$key]);
+            }
+            unset($config[$key]);
         }
 
         foreach ($config as $key => $value) {
@@ -84,6 +106,35 @@ final class MantencionConfigRepository
                 continue;
             }
         }
+    }
+
+    /**
+     * @param 'tracker'|'prioridad'|'estado' $type
+     * @return array<int,array<string,mixed>>
+     */
+    public function options(string $type): array
+    {
+        return $this->optionsFromDatabase($type);
+    }
+
+    /**
+     * @param 'tracker'|'prioridad'|'estado' $type
+     * @param array<int,array<string,mixed>> $items
+     */
+    public function saveOptions(string $type, array $items): void
+    {
+        $this->saveOptionsToDatabase($type, $items);
+    }
+
+    public function defaultOptionId(string $type): string
+    {
+        foreach ($this->optionsFromDatabase($type) as $option) {
+            if (!empty($option['default'])) {
+                return (string)($option['id'] ?? '');
+            }
+        }
+
+        return '';
     }
 
     private function resolveModuleId(): ?int
@@ -141,5 +192,111 @@ final class MantencionConfigRepository
             'bool'  => $value ? '1' : '0',
             default => (string) $value,
         };
+    }
+
+    private function optionsTableReady(): bool
+    {
+        try {
+            return Schema::hasTable(self::OPTIONS_TABLE);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param 'tracker'|'prioridad'|'estado' $type
+     * @return array<int,array<string,mixed>>
+     */
+    private function optionsFromDatabase(string $type): array
+    {
+        if (!$this->optionsTableReady()) {
+            return [];
+        }
+
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null) {
+            return [];
+        }
+
+        try {
+            return DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('activo', 1)
+                ->orderBy('orden')
+                ->get(['id_externo', 'nombre', 'predeterminado'])
+                ->map(static function (object $row): array {
+                    $id = (string)($row->id_externo ?? '');
+
+                    return [
+                        'id' => is_numeric($id) ? (int)$id : $id,
+                        'nombre' => (string)($row->nombre ?? ''),
+                        'default' => (bool)($row->predeterminado ?? false),
+                    ];
+                })
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param 'tracker'|'prioridad'|'estado' $type
+     * @param array<int,array<string,mixed>> $items
+     */
+    private function saveOptionsToDatabase(string $type, array $items): void
+    {
+        if (!$this->optionsTableReady()) {
+            return;
+        }
+
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null) {
+            return;
+        }
+
+        $savedExternalIds = [];
+
+        foreach (array_values($items) as $order => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $externalId = isset($item['id']) ? (string)$item['id'] : null;
+            $name = trim((string)($item['nombre'] ?? $item['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            try {
+                DB::table(self::OPTIONS_TABLE)->updateOrInsert(
+                    ['modulo_id' => $moduleId, 'tipo' => $type, 'id_externo' => $externalId],
+                    [
+                        'nombre' => $name,
+                        'predeterminado' => !empty($item['default']) ? 1 : 0,
+                        'activo' => 1,
+                        'orden' => $order + 1,
+                        'actualizado_at' => now(),
+                    ]
+                );
+                if ($externalId !== null) {
+                    $savedExternalIds[] = $externalId;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        try {
+            $deleteQuery = DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type);
+            if ($savedExternalIds !== []) {
+                $deleteQuery->whereNotIn('id_externo', $savedExternalIds);
+            }
+            $deleteQuery->delete();
+        } catch (\Throwable) {
+        }
     }
 }

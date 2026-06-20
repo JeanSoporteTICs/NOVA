@@ -80,10 +80,6 @@ function dashboard_log_action(string $tag, string $details): void {
     log_security_event($tag, dashboard_security_actor() . ' | ' . $details . $suffix);
 }
 
-function dashboard_messages_file(): string {
-    return __DIR__ . '/../data/mensaje.json';
-}
-
 function dashboard_core_compact_keys(): array {
     return [
         'id',
@@ -602,21 +598,18 @@ function dashboard_compact_message(array $message): array {
 }
 
 function load_messages(): array {
-    $file = dashboard_messages_file();
-    $data = storage_read_json($file, []);
-    if (!is_array($data)) {
-        return [];
+    $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    if ($repo !== null && $repo->tableReady()) {
+        return $repo->activeMessages();
     }
-    return array_values(array_map(fn($message) => is_array($message) ? dashboard_expand_message($message) : [], $data));
+    return [];
 }
 
 function save_messages(array $messages): void {
-    $file = dashboard_messages_file();
-    $compact = array_values(array_map(fn($message) => is_array($message) ? dashboard_compact_message($message) : [], $messages));
-    storage_write_json($file, $compact, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
-    if ($repo !== null) {
+    if ($repo !== null && $repo->tableReady()) {
         $repo->syncMessages($messages, load_platform_config());
+        return;
     }
 }
 
@@ -628,9 +621,7 @@ function load_platform_config(): array {
             return $data;
         }
     }
-    $path = __DIR__ . '/../data/configuracion.json';
-    $data = storage_read_json($path, []);
-    return is_array($data) ? $data : [];
+    return [];
 }
 
 function save_platform_config(array $cfg): void {
@@ -638,8 +629,6 @@ function save_platform_config(array $cfg): void {
     if ($repo !== null) {
         $repo->saveAll($cfg);
     }
-    $path = __DIR__ . '/../data/configuracion.json';
-    storage_write_json($path, $cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function dashboard_normalize_text(string $value): string {
@@ -826,9 +815,8 @@ function dashboard_core_resolve_category(string $tipoSolicitud, array $catalog):
 }
 
 function dashboard_load_user_maps(): array {
-    $path = __DIR__ . '/../data/usuarios.json';
     $result = ['phone' => [], 'name' => []];
-    $users = storage_read_json($path, []);
+    $users = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
     if (!is_array($users)) {
         return $result;
     }
@@ -859,8 +847,7 @@ function dashboard_user_is_active(array $user): bool {
 }
 
 function dashboard_active_mantencion_users(): array {
-    $path = __DIR__ . '/../data/usuarios.json';
-    $users = storage_read_json($path, []);
+    $users = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
     if (!is_array($users)) {
         return [];
     }
@@ -1010,7 +997,8 @@ function dashboard_current_user(): array {
 
     if (!is_array($user)) {
         $needles = array_filter(array_map('dashboard_normalize_text', $identityNeedles));
-        foreach (storage_read_json(__DIR__ . '/../data/usuarios.json', []) as $candidate) {
+        $candidates = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
+        foreach ($candidates as $candidate) {
             if (!is_array($candidate)) {
                 continue;
             }
@@ -1065,7 +1053,12 @@ function dashboard_enforced_assigned_name(string $submitted = ''): string {
     if (!dashboard_can_assign_other_users()) {
         return $current !== '' ? $current : trim($submitted);
     }
-    return trim($submitted);
+    $submitted = trim($submitted);
+    if ($submitted !== '' && dashboard_find_active_user_by_name($submitted) !== null) {
+        return $submitted;
+    }
+
+    return $current;
 }
 
 function dashboard_find_active_user_by_name(string $name): ?array {
@@ -2130,20 +2123,15 @@ function dashboard_core_base_admin_url(string $url): string {
 
 function dashboard_archived_source_ids(string $baseDir): array {
     $sourceIds = [];
-    $prefix = trim((string)storage_relative_data_path($baseDir . '/placeholder.json'), '/');
-    $prefix = preg_replace('#/placeholder\.json$#', '', $prefix) ?: 'reportes';
-    foreach (storage_json_by_prefix($prefix) as $rows) {
-        if (!is_array($rows)) {
+    $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    $rows = ($repo !== null && $repo->tableReady()) ? $repo->archivedMessages() : [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
             continue;
         }
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $sourceId = trim((string)($row['fuente_id'] ?? ''));
-            if ($sourceId !== '') {
-                $sourceIds[$sourceId] = true;
-            }
+        $sourceId = trim((string)($row['fuente_id'] ?? ''));
+        if ($sourceId !== '') {
+            $sourceIds[$sourceId] = true;
         }
     }
     return $sourceIds;
@@ -2414,7 +2402,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     }
     // DB-based duplicate guard: query redmine_mantencion_reportes for existing fuente_ids.
     // This is the authoritative source for "does this record exist?".
-    // Archive blobs under reportes/* in redmine_mantencion_storage are historical only
+    // Archive rows in redmine_mantencion_reportes are historical only.
     // and must not block re-import of physically-deleted records.
     $dbImportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
     $dbFuenteIds = ($dbImportRepo !== null) ? $dbImportRepo->getExistingFuenteIds('core') : [];
@@ -2433,7 +2421,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         if ($sourceId === '') {
             continue;
         }
-        // Record is active in mensaje.json (dashboard view) — UPDATE, preserving local edits.
+        // Record is active in dashboard view — UPDATE, preserving local edits.
         if (isset($existingBySource[$sourceId])) {
             $idx = $existingBySource[$sourceId];
             $currentState = strtolower((string)($messages[$idx]['estado'] ?? 'pendiente'));
@@ -2702,110 +2690,20 @@ function message_has_hora_extra(array $message): bool {
     return normalize_hour_extra_value($message['hora_extra'] ?? '') === '1';
 }
 
-function horas_extra_base_path(): string {
-    return __DIR__ . '/../data/horasExtras';
-}
-
-function horas_extra_month_name(DateTimeInterface $dt): string {
-    static $meses = [
-        1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
-        5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
-        9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre',
-    ];
-    return $meses[(int)$dt->format('n')] ?? $dt->format('m');
-}
-
 function append_hours_extra_record(array $message): void {
-    if (!message_has_hora_extra($message)) return;
-    $dt = parse_message_timestamp($message) ?? new DateTimeImmutable();
-    $year = $dt->format('Y');
-    $baseDir = horas_extra_base_path();
-    $yearDir = $baseDir . '/' . $year;
-    ensure_dir($yearDir);
-    $monthName = horas_extra_month_name($dt);
-    $filePath = $yearDir . '/' . $monthName . '.json';
-    $parsed = storage_read_json($filePath, []);
-    $groups = is_array($parsed) ? array_values($parsed) : [];
-    foreach ($groups as $idx => $group) {
-        if (!is_array($group)) {
-            $groups[$idx] = ['fecha' => '', 'hora_inicio' => '', 'hora_fin' => '', 'reports' => []];
-        } else {
-            if (!isset($group['reports']) || !is_array($group['reports'])) {
-                $group['reports'] = [];
-            }
-            $groups[$idx] = $group;
-        }
+    if (!message_has_hora_extra($message)) {
+        return;
     }
-    $targetDate = $dt->format('Y-m-d');
-    $horaIni = trim((string)($message['hora_inicio'] ?? $message['hora'] ?? ''));
-    $horaFin = trim((string)($message['hora_fin'] ?? $message['hora'] ?? ''));
-    $groupIndex = null;
-    foreach ($groups as $idx => $group) {
-        if (($group['fecha'] ?? '') === $targetDate) {
-            $groupIndex = $idx;
-            break;
-        }
+    $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+    if ($repo !== null) {
+        $repo->syncMessage($message);
     }
-    if ($groupIndex === null) {
-        $groups[] = [
-            'fecha' => $targetDate,
-            'hora_inicio' => $horaIni,
-            'hora_fin' => $horaFin,
-            'reports' => [],
-        ];
-        $groupIndex = array_key_last($groups);
-    } else {
-        if ($horaIni !== '') {
-            $groups[$groupIndex]['hora_inicio'] = $horaIni;
-        }
-        if ($horaFin !== '') {
-            $groups[$groupIndex]['hora_fin'] = $horaFin;
-        }
-    }
-    $reports = $groups[$groupIndex]['reports'] ?? [];
-    if (!is_array($reports)) {
-        $reports = [];
-    }
-    $messageId = $message['id'] ?? '';
-    $reports = array_values(array_filter($reports, fn($row) => !is_array($row) || ($row['id'] ?? '') !== $messageId));
-    $message['hora_extra'] = 'SI';
-    $reports[] = $message;
-    $groups[$groupIndex]['reports'] = $reports;
-    storage_write_json($filePath, $groups, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function remove_hours_extra_record_by_id(string $messageId): void {
-    $messageId = trim($messageId);
-    if ($messageId === '') {
-        return;
-    }
-    foreach (storage_json_by_prefix('horasExtras') as $relPath => $groups) {
-        $path = storage_data_path($relPath);
-        if (!is_array($groups)) {
-            continue;
-        }
-        $changed = false;
-        foreach ($groups as &$group) {
-            if (!is_array($group) || !isset($group['reports']) || !is_array($group['reports'])) {
-                continue;
-            }
-            $before = count($group['reports']);
-            $group['reports'] = array_values(array_filter(
-                $group['reports'],
-                static fn($row) => !is_array($row) || (string)($row['id'] ?? '') !== $messageId
-            ));
-            if ($before !== count($group['reports'])) {
-                $changed = true;
-            }
-        }
-        unset($group);
-        if ($changed) {
-            $groups = array_values(array_filter(
-                $groups,
-                static fn($group) => is_array($group) && !empty($group['reports'])
-            ));
-            storage_write_json($path, $groups, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        }
+    $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+    if ($repo !== null) {
+        $repo->detachMessageId($messageId);
     }
 }
 
@@ -2907,7 +2805,6 @@ function remove_redmine_logs_for_messages(array $ids): void {
 }
 
 function load_user_api_token(?string $userId): string {
-    $path = __DIR__ . '/../data/usuarios.json';
     if (!$userId) {
         return '';
     }
@@ -2915,16 +2812,6 @@ function load_user_api_token(?string $userId): string {
         $central = auth_central_redmine_api_token($userId, 'redmine_mantencion');
         if ($central !== '') {
             return $central;
-        }
-    }
-    $users = storage_read_json($path, []);
-    if (!is_array($users)) {
-        return '';
-    }
-    foreach ($users as $user) {
-        if (!is_array($user)) continue;
-        if ((string)($user['id'] ?? '') === (string)$userId) {
-            return trim($user['api'] ?? '');
         }
     }
     return '';
@@ -3065,19 +2952,6 @@ function send_selected_messages(array &$messages, array $ids, array $cfg, string
     ];
 }
 
-function retention_archive_base(): string {
-    return __DIR__ . '/../data/reportes';
-}
-
-function retention_archive_month_name(DateTimeInterface $dt): string {
-    static $meses = [
-        1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
-        5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
-        9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre',
-    ];
-    return $meses[(int)$dt->format('n')] ?? $dt->format('m');
-}
-
 function parse_message_timestamp(array $message): ?DateTimeImmutable {
     $processed = trim((string)($message['procesado_ts'] ?? ''));
     if ($processed !== '') {
@@ -3117,19 +2991,12 @@ function ensure_dir(string $path): void {
     }
 }
 
-function archive_message_record(array $message): void {
-    $dt = parse_message_timestamp($message) ?? new DateTimeImmutable();
-    $yearDir = retention_archive_base() . '/' . $dt->format('Y');
-    ensure_dir($yearDir);
-    $destFile = $yearDir . '/' . retention_archive_month_name($dt) . '.json';
-    $payload = storage_read_json($destFile, []);
-    if (!is_array($payload)) {
-        $payload = [];
+function archive_message_record(array $message, string $archivedBy = 'retencion'): void {
+    $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    if ($repo !== null && $repo->tableReady()) {
+        $message['estado'] = 'archivado';
+        $repo->markArchived($message);
     }
-    $message['_archivado_por'] = 'retencion';
-    $message['_archivado_en'] = $dt->format('c');
-    $payload[] = $message;
-    storage_write_json($destFile, array_values($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function apply_retention_archive(array &$messages): bool {
@@ -3137,7 +3004,7 @@ function apply_retention_archive(array &$messages): bool {
     $removed = [];
     foreach ($messages as $key => $message) {
         $estado = strtolower($message['estado'] ?? '');
-        if ($estado === 'pendiente' || $estado === '' || $estado === 'error') {
+        if ($estado !== 'procesado') {
             continue;
         }
         $ts = parse_message_timestamp($message);
@@ -3167,7 +3034,10 @@ function archive_selected_messages(array &$messages, array $ids): int {
         if (!in_array(($message['id'] ?? ''), $ids, true)) {
             continue;
         }
-        archive_message_record($message);
+        if (strtolower(trim((string)($message['estado'] ?? ''))) !== 'procesado') {
+            continue;
+        }
+        archive_message_record($message, 'manual');
         unset($messages[$key]);
         $archived++;
     }

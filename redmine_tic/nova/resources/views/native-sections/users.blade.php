@@ -224,16 +224,6 @@
     </div>
 </div>
 
-{{-- Botón flotante volver arriba --}}
-<button id="users-scroll-top"
-    type="button"
-    title="Volver arriba"
-    aria-label="Volver arriba"
-    style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);"
-    class="btn btn-primary">
-    <i class="bi bi-arrow-up"></i>
-</button>
-
 <script>
     (() => {
         const form = document.getElementById('user-form');
@@ -312,21 +302,6 @@
                 sessionStorage.setItem(SCROLL_KEY, String(Math.round(window.scrollY)));
             });
         });
-
-        // ── Botón flotante volver arriba ────────────────────────────────
-        const scrollTopBtn = document.getElementById('users-scroll-top');
-        const summarySection = document.querySelector('[aria-label="Resumen usuarios"]');
-
-        if (scrollTopBtn && summarySection) {
-            const observer = new IntersectionObserver(([entry]) => {
-                scrollTopBtn.style.display = entry.isIntersecting ? 'none' : 'flex';
-            }, { threshold: 0 });
-            observer.observe(summarySection);
-
-            scrollTopBtn.addEventListener('click', () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        }
 
     })();
 </script>

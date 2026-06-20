@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
     $action = $_POST['action'] ?? '';
     if ($action === 'sync_remote') {
-        $res = sync_categorias_desde_api(__DIR__ . '/../../data/configuracion.json');
+        $res = sync_categorias_desde_api('');
         if (isset($res['error'])) {
             $msg = $res['error'];
         } else {

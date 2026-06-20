@@ -10,8 +10,6 @@ if (!auth_can('configuracion')) {
 
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
-$cfgPath = __DIR__ . '/../../data/configuracion.json';
-
 function build_cf_url($platformUrl) {
   if (!$platformUrl) return '';
   $parts = parse_url($platformUrl);
@@ -40,24 +38,17 @@ function save_unidades_local($arr) {
   }
 }
 
-$cfg = storage_read_json($cfgPath, []);
+$configRepo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+$cfg = $configRepo !== null ? $configRepo->loadAll() : [];
 $platformUrl = $cfg['platform_url'] ?? '';
 $cfOverride = $cfg['unidades_url'] ?? '';
 $apiKey = $cfg['platform_token'] ?? '';
 
 $currentUserId = auth_get_user_id();
 $userToken = '';
-$userPath = __DIR__ . '/../../data/usuarios.json';
 if ($currentUserId) {
-  $users = storage_read_json($userPath, []);
-  if (is_array($users)) {
-    foreach ($users as $u) {
-      if (!is_array($u)) continue;
-      if ((string)($u['id'] ?? '') === (string)$currentUserId && !empty($u['api'])) {
-        $userToken = $u['api'];
-        break;
-      }
-    }
+  if (function_exists('auth_central_redmine_api_token')) {
+    $userToken = auth_central_redmine_api_token($currentUserId, 'redmine_mantencion');
   }
 }
 $apiKey = $userToken ?: $apiKey;

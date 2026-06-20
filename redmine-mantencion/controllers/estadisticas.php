@@ -29,11 +29,6 @@ function normalize_date($str) {
     return '';
 }
 
-function estadisticas_read_json_file($file) {
-    $data = storage_read_json((string)$file, null);
-    return is_array($data) ? $data : null;
-}
-
 function estadisticas_normalize_message(array $row): array {
     if (($row['fuente'] ?? '') === 'core') {
         $row = dashboard_expand_message($row);
@@ -51,17 +46,14 @@ function estadisticas_normalize_message(array $row): array {
 }
 
 function load_report_messages($baseDir) {
-    $messages = [];
-    foreach (storage_json_by_prefix('reportes') as $data) {
-        if (is_array($data)) {
-            foreach ($data as $row) {
-                if (!is_array($row)) continue;
-                $row['_fuente'] = 'reportes';
-                $messages[] = estadisticas_normalize_message($row);
-            }
-        }
+    $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    if ($repo === null || !$repo->tableReady()) {
+        return [];
     }
-    return $messages;
+    return array_map(static function (array $row): array {
+        $row['_fuente'] = 'reportes';
+        return estadisticas_normalize_message($row);
+    }, $repo->archivedMessages());
 }
 
 function load_live_messages($file) {
@@ -77,31 +69,14 @@ function load_live_messages($file) {
 }
 
 function load_extra_messages($baseDir) {
-    $messages = [];
-    foreach (storage_json_by_prefix('horasExtras') as $groups) {
-            if (!is_array($groups)) continue;
-            foreach ($groups as $group) {
-                if (!is_array($group)) continue;
-                $fechaGrupo = $group['fecha'] ?? '';
-                $reports = [];
-                if (isset($group['reports']) && is_array($group['reports'])) {
-                    $reports = $group['reports'];
-                }
-                foreach ($group as $key => $value) {
-                    if ($key === 'reports' || !is_array($value)) continue;
-                    if (isset($value['id']) || isset($value['fecha']) || isset($value['fecha_inicio'])) {
-                        $reports[] = $value;
-                    }
-                }
-                foreach ($reports as $rep) {
-                    if (!is_array($rep)) continue;
-                    $rep['fecha'] = $rep['fecha'] ?? $fechaGrupo;
-                    $rep['_fuente'] = 'horas_extra';
-                    $messages[] = estadisticas_normalize_message($rep);
-                }
-            }
+    $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+    if ($repo === null) {
+        return [];
     }
-    return $messages;
+    return array_map(static function (array $row): array {
+        $row['_fuente'] = 'horas_extra';
+        return estadisticas_normalize_message($row);
+    }, $repo->messages());
 }
 
 function filter_messages($messages, $filters) {
@@ -216,8 +191,8 @@ function handle_estadisticas() {
 
     $messages = [];
     $messages = array_merge($messages, load_report_messages(__DIR__ . '/../data/reportes'));
-    $messages = array_merge($messages, load_live_messages(__DIR__ . '/../data/mensaje.json'));
-    $messages = array_merge($messages, load_extra_messages(__DIR__ . '/../data/horasExtras'));
+    $messages = array_merge($messages, load_live_messages(''));
+    $messages = array_merge($messages, load_extra_messages(''));
 
     $filtered = filter_messages($messages, $filters);
     return compute_stats_from_messages($filtered);

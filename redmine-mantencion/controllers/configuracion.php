@@ -3,7 +3,6 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
 // Mantenedor de configuración de envío a Redmine (incluye opciones de tracker/prioridad/estado)
-$GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
 
 function config_normalize_document_path(string $path): string {
     $parts = array_values(array_filter(explode('/', str_replace('\\', '/', $path)), static function (string $part): bool {
@@ -14,77 +13,13 @@ function config_normalize_document_path(string $path): string {
 }
 
 function ensure_config_file($path) {
-    if (storage_read_json($path, null) === null) {
-        $default = [
-            'platform_url' => 'https://coresalud.cl/gp/projects/backlog-mantencion-ti/issues.json',
-            'platform_token' => '',
-            'source_mode' => 'core',
-            'core_enabled' => true,
-            'core_admin_url' => 'https://www.hbvaldivia.cl/core/solicitudes/administrador',
-            'core_historico_url' => 'https://www.hbvaldivia.cl/core/solicitudes/administrador/obtener_solicitudes_historicas',
-            'core_sync_minutes' => 2,
-            'core_last_sync' => '',
-            'core_last_error' => '',
-            'onlyoffice_url' => '',
-            'onlyoffice_app_url' => '',
-            'onlyoffice_jwt_secret' => '',
-            'procedures_storage' => 'local',
-            'procedures_nextcloud_root' => '/NOVA/Procedimientos',
-            'project_id' => 48,
-            'project_name' => 'Backlog Mantención TI',
-            'tracker_id' => 1,
-            'priority_id' => 2,
-            'cf_solicitante' => 3,
-            'cf_unidad' => 5,
-            'cf_unidad_solicitante' => 11,
-            'cf_hora_extra' => 12,
-            'hora_extra_tiempo_estimado' => '1',
-            'categories_url' => 'https://coresalud.cl/gp/projects/backlog-mantencion-ti/settings/categories',
-            'unidades_url' => null,
-            'status_id' => 1,
-            'retencion_horas' => 24,
-            'session_timeout' => 300,
-            'trackers' => [
-                ['id' => 1, 'nombre' => 'Errores', 'default' => true],
-                ['id' => 3, 'nombre' => 'Soporte', 'default' => false],
-                ['id' => 10, 'nombre' => 'Servidores', 'default' => false],
-                ['id' => 14, 'nombre' => 'Estadisticas', 'default' => false],
-            ],
-            'prioridades' => [
-                ['id' => 1, 'nombre' => 'Baja', 'default' => false],
-                ['id' => 2, 'nombre' => 'Normal', 'default' => true],
-                ['id' => 3, 'nombre' => 'Alta', 'default' => false],
-                ['id' => 4, 'nombre' => 'Urgente', 'default' => false],
-                ['id' => 5, 'nombre' => 'Inmediata', 'default' => false],
-            ],
-            'estados' => [
-                ['id' => 1, 'nombre' => 'Nueva', 'default' => true],
-                ['id' => 2, 'nombre' => 'En curso', 'default' => false],
-                ['id' => 5, 'nombre' => 'Cerrada', 'default' => false],
-                ['id' => 6, 'nombre' => 'Rechazada', 'default' => false],
-            ],
-        ];
-        storage_write_json($path, $default, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
-    }
+    // DB-only runtime: configuraciones_modulo is the source of truth.
 }
 
 function load_config($path) {
     $repo = config_mantencion_repository();
-    if ($repo !== null) {
-        $data = $repo->loadAll();
-        if ($data === null) {
-            ensure_config_file($path);
-            $migrated = storage_read_json($path, []);
-            $data = is_array($migrated) ? $migrated : [];
-            if (!empty($data)) {
-                $repo->saveAll($data);
-            }
-        }
-    } else {
-        ensure_config_file($path);
-        $data = storage_read_json($path, []);
-        if (!is_array($data)) $data = [];
-    }
+    $data = $repo !== null ? $repo->loadAll() : [];
+    if (!is_array($data)) $data = [];
     if (!array_key_exists('categories_url', $data)) $data['categories_url'] = '';
     if (!array_key_exists('unidades_url', $data)) $data['unidades_url'] = '';
     if (!array_key_exists('cf_solicitante', $data) || $data['cf_solicitante'] === null || $data['cf_solicitante'] === '') {

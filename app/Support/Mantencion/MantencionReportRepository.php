@@ -102,6 +102,51 @@ final class MantencionReportRepository
         }
     }
 
+    /** @return array<int,array<string,mixed>> */
+    public function activeMessages(): array
+    {
+        return $this->messagesByStatuses(['pendiente', 'procesado', 'error']);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function archivedMessages(): array
+    {
+        return $this->messagesByStatuses(['archivado']);
+    }
+
+    /**
+     * @param array<int,string> $statuses
+     * @return array<int,array<string,mixed>>
+     */
+    private function messagesByStatuses(array $statuses): array
+    {
+        if (! $this->tableReady() || $statuses === []) {
+            return [];
+        }
+
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null) {
+            return [];
+        }
+
+        try {
+            $rows = DB::table('redmine_mantencion_reportes as r')
+                ->leftJoin('categorias as c', 'c.id', '=', 'r.categoria_id')
+                ->where('r.modulo_id', $moduleId)
+                ->whereIn('r.estado', $statuses)
+                ->orderByDesc('r.fecha_reporte')
+                ->orderByDesc('r.id')
+                ->get([
+                    'r.*',
+                    'c.nombre as categoria_nombre',
+                ]);
+
+            return $rows->map(fn (object $row): array => $this->rowToMessage($row))->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** @param array<string,mixed> $message */
     public function upsertMessage(array $message, array $config = []): void
     {
@@ -137,6 +182,110 @@ final class MantencionReportRepository
             DB::table('redmine_mantencion_reportes')->insert($values);
         } catch (\Throwable) {
         }
+    }
+
+    /** @param array<string,mixed> $message */
+    public function markArchived(array $message): void
+    {
+        if (! $this->tableReady()) {
+            return;
+        }
+
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null) {
+            return;
+        }
+
+        $fuente = trim((string) ($message['fuente'] ?? ''));
+        $fuenteId = trim((string) ($message['fuente_id'] ?? $message['id'] ?? ''));
+        if ($fuenteId === '') {
+            return;
+        }
+
+        $values = $this->filterColumns([
+            'estado' => 'archivado',
+            'actualizado_at' => now(),
+        ]);
+
+        if ($values === []) {
+            return;
+        }
+
+        try {
+            $query = DB::table('redmine_mantencion_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('fuente_id', $fuenteId);
+
+            if ($fuente !== '') {
+                $query->where('fuente', $fuente);
+            }
+
+            $query->update($values);
+        } catch (\Throwable) {
+        }
+    }
+
+    /** @return array<string,mixed> */
+    public function rowToMessage(object $row): array
+    {
+        $fuenteId = trim((string) ($row->fuente_id ?? ''));
+        $id = $fuenteId !== '' ? $fuenteId : (string) ($row->id ?? '');
+        $fecha = $this->formatDateForLegacy($row->fecha_reporte ?? $row->fecha_inicio ?? null);
+        $fechaInicio = $this->formatDateForLegacy($row->fecha_inicio ?? null);
+        $fechaFin = $this->formatDateForLegacy($row->fecha_fin ?? null);
+        $hora = $this->formatTimeForLegacy($row->hora_reporte ?? null);
+        $redmineId = trim((string) ($row->numero_ticket_redmine ?? ''));
+        $categoria = trim((string) ($row->categoria_nombre ?? ''));
+        $unidad = trim((string) ($row->unidad_texto ?? ''));
+        $estadoRedmine = trim((string) ($row->estado_redmine ?? ''));
+        $asignadoNombre = trim((string) ($row->asignado_nombre ?? ''));
+        $idCore = trim((string) ($row->id_core ?? ''));
+
+        return [
+            'id' => $id,
+            'fuente' => trim((string) ($row->fuente ?? '')),
+            'fuente_id' => $fuenteId,
+            'id_core' => $idCore,
+            'core_id' => $idCore,
+            'core_solicitud_id' => $idCore,
+            'proyecto' => trim((string) ($row->proyecto ?? '')),
+            'project_id' => trim((string) ($row->project_id ?? '')),
+            'tipo' => trim((string) ($row->tipo ?? '')),
+            'tipo_id' => trim((string) ($row->tipo_id ?? '')),
+            'tracker_id' => trim((string) ($row->tipo_id ?? '')),
+            'asunto' => trim((string) ($row->asunto ?? '')),
+            'mensaje' => trim((string) ($row->asunto ?? '')),
+            'descripcion' => trim((string) ($row->descripcion ?? '')),
+            'estado' => trim((string) ($row->estado ?? 'pendiente')) ?: 'pendiente',
+            'estado_redmine' => $estadoRedmine,
+            'core_estado' => $estadoRedmine,
+            'status_id' => trim((string) ($row->estado_id ?? '')),
+            'prioridad' => trim((string) ($row->prioridad ?? '')),
+            'priority_id' => trim((string) ($row->priority_id ?? '')),
+            'asignado_a' => trim((string) ($row->id_redmine_asignado ?? '')),
+            'id_redmine_asignado' => trim((string) ($row->id_redmine_asignado ?? '')),
+            'asignado_nombre' => $asignadoNombre,
+            'core_usuario_asignado' => $asignadoNombre,
+            'categoria' => $categoria,
+            'solicitante' => trim((string) ($row->solicitante ?? '')),
+            'anexo' => trim((string) ($row->anexo ?? '')),
+            'numero' => trim((string) ($row->anexo ?? '')),
+            'unidad' => $unidad,
+            'unidad_texto' => $unidad,
+            'core_departamento' => $unidad,
+            'unidad_solicitante' => $unidad,
+            'fecha' => $fecha,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'hora' => $hora,
+            'core_fecha_creacion' => trim($fecha . ' ' . $hora),
+            'tiempo_estimado' => $row->tiempo_estimado !== null ? (string) $row->tiempo_estimado : '',
+            'correo' => trim((string) ($row->correo ?? '')),
+            'core_email' => trim((string) ($row->correo ?? '')),
+            'hora_extra' => ((int) ($row->hora_extra ?? 0)) === 1 ? '1' : '0',
+            'redmine_id' => $redmineId,
+            'numero_ticket_redmine' => $redmineId,
+        ];
     }
 
     /** @return array<string,mixed> */
@@ -280,6 +429,32 @@ final class MantencionReportRepository
     private function truthy(string $value): bool
     {
         return in_array(strtolower(trim($value)), ['1', 'si', 's', 'true', 'yes'], true);
+    }
+
+    private function formatDateForLegacy(mixed $value): string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return '';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->toDateString();
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
+    }
+
+    private function formatTimeForLegacy(mixed $value): string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return '';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('H:i');
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
     }
 
     private function resolveModuleId(): ?int

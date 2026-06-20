@@ -16,10 +16,6 @@ if (!function_exists('storage_base_path')) {
         }
     }
 
-    function storage_json_flags(): int {
-        return JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
-    }
-
     function storage_db_repository() {
         if (!function_exists('app') || !class_exists(\App\Support\RedmineMantencion\RedmineMantencionStorageRepository::class)) {
             return null;
@@ -76,42 +72,6 @@ if (!function_exists('storage_base_path')) {
         return $rel === '' ? null : $rel;
     }
 
-    function storage_read_json(string $path, $default = []) {
-        if (strtolower(basename($path)) === 'usuarios.json' && function_exists('auth_central_users_for_mantencion')) {
-            $centralUsers = auth_central_users_for_mantencion();
-            return $centralUsers !== [] ? $centralUsers : $default;
-        }
-
-        $rel = storage_relative_data_path($path);
-        $repo = $rel !== null ? storage_db_repository() : null;
-        if ($repo !== null) {
-            try {
-                $data = $repo->readJson($rel);
-                if ($data !== null) {
-                    return $data;
-                }
-            } catch (Throwable) {
-            }
-        }
-
-        if (getenv('REDMINE_MANTENCION_JSON_FALLBACK') !== '1') {
-            return $default;
-        }
-
-        if (!is_file($path)) {
-            return $default;
-        }
-        $raw = @file_get_contents($path);
-        if (!is_string($raw) || trim($raw) === '') {
-            return $default;
-        }
-        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
-            $raw = substr($raw, 3);
-        }
-        $data = json_decode($raw, true);
-        return is_array($data) ? $data : $default;
-    }
-
     function storage_backup_file(string $path): void {
         static $done = [];
         if (!is_file($path) || filesize($path) === 0) {
@@ -156,68 +116,6 @@ if (!function_exists('storage_base_path')) {
         fclose($handle);
         @chmod($path, 0666);
         return $ok;
-    }
-
-    function storage_write_json(string $path, $data, ?int $flags = null, bool $backup = true): bool {
-        $json = json_encode($data, $flags ?? storage_json_flags());
-        if ($json === false) {
-            return false;
-        }
-        $rel = storage_relative_data_path($path);
-        $repo = $rel !== null ? storage_db_repository() : null;
-        if ($repo !== null) {
-            try {
-                $repo->writeJson($rel, $data);
-                return true;
-            } catch (Throwable) {
-                return false;
-            }
-        }
-
-        return getenv('REDMINE_MANTENCION_JSON_FALLBACK') === '1'
-            ? storage_write_file_locked($path, $json, 0, $backup)
-            : false;
-    }
-
-    function storage_json_by_prefix(string $prefix): array {
-        $repo = storage_db_repository();
-        if ($repo !== null) {
-            try {
-                return $repo->jsonByPrefix($prefix);
-            } catch (Throwable) {
-                return [];
-            }
-        }
-
-        if (getenv('REDMINE_MANTENCION_JSON_FALLBACK') !== '1') {
-            return [];
-        }
-
-        $root = storage_data_path($prefix);
-        if (!is_dir($root)) {
-            return [];
-        }
-
-        $items = [];
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
-        );
-        foreach ($iterator as $file) {
-            if (!$file instanceof SplFileInfo || !$file->isFile() || strtolower($file->getExtension()) !== 'json') {
-                continue;
-            }
-            $rel = storage_relative_data_path($file->getPathname());
-            if ($rel === null) {
-                continue;
-            }
-            $decoded = storage_read_json($file->getPathname(), null);
-            if (is_array($decoded)) {
-                $items[$rel] = $decoded;
-            }
-        }
-
-        ksort($items);
-        return $items;
     }
 
     function storage_read_text(string $path, string $default = ''): string {
@@ -353,6 +251,30 @@ if (!function_exists('storage_base_path')) {
         }
     }
 
+    function mantencion_hours_extra_repository() {
+        if (!function_exists('app') || !class_exists(\App\Support\Mantencion\MantencionHoursExtraRepository::class)) {
+            return null;
+        }
+        try {
+            $repo = app(\App\Support\Mantencion\MantencionHoursExtraRepository::class);
+            return $repo->tableReady() ? $repo : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    function mantencion_procedimiento_repository() {
+        if (!function_exists('app') || !class_exists(\App\Support\Mantencion\MantencionProcedimientoRepository::class)) {
+            return null;
+        }
+        try {
+            $repo = app(\App\Support\Mantencion\MantencionProcedimientoRepository::class);
+            return $repo->tableReady() ? $repo : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     function storage_run_auto_backup(?array $paths = null): void {
         if (getenv('APP_BACKUP_ENABLED') === '0') {
             return;
@@ -376,14 +298,9 @@ if (!function_exists('storage_base_path')) {
         }
 
         $paths = $paths ?? [
-            'mensaje.json',
-            'usuarios.json',
-            'roles.json',
-            'configuracion.json',
-            'categorias.json',
-            'procedimientos',
-            'reportes',
-            'horasExtras',
+            'procedimientos/documentos',
+            'procedimientos/imagenes',
+            'logs',
         ];
         $destRoot = storage_data_path('backups/auto/' . $today);
         foreach ($paths as $rel) {

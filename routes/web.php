@@ -78,7 +78,6 @@ Route::post('/telegram/admin/listener', [TelegramController::class, 'listener'])
 Route::post('/telegram/test', [TelegramController::class, 'test'])->name('telegram.test');
 Route::get('/emach/configuracion', [UserIntegrationController::class, 'show'])->defaults('module', 'emach')->name('integrations.emach');
 Route::post('/emach/configuracion', [UserIntegrationController::class, 'update'])->defaults('module', 'emach')->name('integrations.emach.update');
-Route::get('/emach/views/Mantenedor/mantenedor.php', fn () => redirect()->route('integrations.emach'));
 
 Route::get('/redmine_tic/health.php', fn () => response()->json([
     'ok' => true,

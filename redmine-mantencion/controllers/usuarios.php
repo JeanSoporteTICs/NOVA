@@ -22,8 +22,7 @@ function usuarios_redirect_back(): void {
     exit;
 }
 
-$GLOBALS['DATA_FILE'] = __DIR__ . '/../data/usuarios.json';
-$GLOBALS['CONFIG_FILE'] = __DIR__ . '/../data/configuracion.json';
+$GLOBALS['DATA_FILE'] = '';
 
 function rut_base($rut) {
     $clean = preg_replace('/[^0-9kK]/', '', $rut ?? '');
@@ -33,9 +32,7 @@ function rut_base($rut) {
 }
 
 function ensure_usr_file($path) {
-    if (storage_read_json($path, null) === null) {
-        storage_write_json($path, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE, false);
-    }
+    // DB-only runtime: usuarios_nova/permisos_usuario_modulo are the source of truth.
 }
 
 function usuarios_text_key(string $value): string {
@@ -179,7 +176,7 @@ function ensure_user_fields(array &$item) {
 }
 
 function load_usuarios($path) {
-    $data = storage_read_json($path, []);
+    $data = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
     if (!is_array($data)) $data = [];
     foreach ($data as &$item) {
         ensure_user_fields($item);
@@ -207,12 +204,12 @@ function usuarios_normalize_status(string $status): string {
 }
 
 function usuarios_migrate_global_nextcloud_credentials(array &$rows): bool {
-    global $CONFIG_FILE;
     $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
     if ($userId === '') {
         return false;
     }
-    $cfg = storage_read_json($CONFIG_FILE, []);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $cfg = $repo !== null ? $repo->loadAll() : [];
     if (!is_array($cfg)) {
         return false;
     }
@@ -237,7 +234,9 @@ function usuarios_migrate_global_nextcloud_credentials(array &$rows): bool {
     unset($row);
     $cfg['nextcloud_admin_user'] = '';
     $cfg['nextcloud_admin_pass_enc'] = '';
-    storage_write_json($CONFIG_FILE, $cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if ($repo !== null) {
+        $repo->saveAll($cfg);
+    }
     return $changed;
 }
 
@@ -296,19 +295,6 @@ function usuarios_user_api_token(): string {
         $central = auth_central_redmine_api_token($userId, 'redmine_mantencion');
         if ($central !== '') {
             return $central;
-        }
-    }
-    global $DATA_FILE;
-    $users = storage_read_json($DATA_FILE, []);
-    if (!is_array($users)) {
-        return '';
-    }
-    foreach ($users as $user) {
-        if (!is_array($user)) {
-            continue;
-        }
-        if ((string)($user['id'] ?? '') === (string)$userId) {
-            return trim((string)($user['api'] ?? ''));
         }
     }
     return '';
@@ -503,6 +489,7 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
             ->join('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
             ->where('permisos_usuario_modulo.modulo_id', $moduleId)
             ->where('permisos_usuario_modulo.permitido', 1)
+            ->where('usuarios_nova.estado', 'activo')
             ->select('usuarios_nova.*')
             ->get();
     } catch (\Throwable) {
@@ -545,8 +532,8 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
 }
 
 function usuarios_members_url_from_config(): string {
-    global $CONFIG_FILE;
-    $cfg = storage_read_json($CONFIG_FILE, []);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $cfg = $repo !== null ? $repo->loadAll() : [];
     if (is_array($cfg)) {
         $custom = trim((string)($cfg['users_members_url'] ?? ''));
         if ($custom !== '') {
@@ -761,8 +748,8 @@ function usuarios_redmine_person_name(array $user, string $apiKey = '', string $
 }
 
 function usuarios_sync_remote(array &$rows): array {
-    global $CONFIG_FILE, $DATA_FILE;
-    $cfg = storage_read_json($CONFIG_FILE, []);
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $cfg = $repo !== null ? $repo->loadAll() : [];
     $apiKey = is_array($cfg) ? trim((string)($cfg['platform_token'] ?? '')) : '';
     if ($apiKey === '') {
         $apiKey = usuarios_user_api_token();

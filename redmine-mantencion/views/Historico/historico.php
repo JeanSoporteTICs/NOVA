@@ -12,49 +12,19 @@ if (!auth_can('historico')) {
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $maintenanceMode = maintenance_mode_enabled();
 
-function historico_read_json_file(string $file): array {
-  $data = storage_read_json($file, []);
-  return is_array($data) ? $data : [];
-}
-
-function historico_prefix_from_base(string $base, string $fallback): string {
-  $rel = storage_relative_data_path(rtrim($base, '/\\') . '/placeholder.json');
-  $prefix = is_string($rel) ? preg_replace('#/placeholder\.json$#', '', $rel) : '';
-  return trim((string)($prefix ?: $fallback), '/');
-}
-
 // --- Helpers para eliminar registros ---
 function delete_reporte(string $base, string $id): bool {
-  $changed = false;
-  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'reportes')) as $rel => $data) {
-    if (!$data) continue;
-    $new = array_values(array_filter($data, fn($r) => !is_array($r) || ($r['id'] ?? '') !== $id));
-    if (count($new) !== count($data)) {
-      storage_write_json(storage_data_path($rel), $new, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-      $changed = true;
-    }
+  $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+  if ($repo !== null && $repo->tableReady()) {
+    $repo->deleteByFuenteIds([$id]);
+    return true;
   }
-  return $changed;
+  return false;
 }
 
 function delete_horas_extra(string $base, string $id): bool {
-  $changed = false;
-  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'horasExtras')) as $rel => $groups) {
-    if (!$groups) continue;
-    $newGroups = [];
-    foreach ($groups as $g) {
-      if (!isset($g['reports']) || !is_array($g['reports'])) continue;
-      $reports = array_values(array_filter($g['reports'], fn($r) => !is_array($r) || ($r['id'] ?? '') !== $id));
-      if (empty($reports)) continue;
-      $g['reports'] = $reports;
-      $newGroups[] = $g;
-    }
-    if ($newGroups !== $groups) {
-      storage_write_json(storage_data_path($rel), $newGroups, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-      $changed = true;
-    }
-  }
-  return $changed;
+  $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+  return $repo !== null && $repo->detachMessageId($id);
 }
 
 // --- Eliminar si se solicito ---
@@ -78,8 +48,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'], $_P
     trim((string)((auth_find_user_by_id($deleteUserId)['nombre'] ?? ''))),
   ], fn($value) => $value !== ''));
   $sourceRows = $src === 'reportes'
-    ? load_reportes(__DIR__ . '/../../data/reportes')
-    : ($src === 'horas_extra' ? load_horas_extras(__DIR__ . '/../../data/horasExtras') : []);
+    ? load_reportes('')
+    : ($src === 'horas_extra' ? load_horas_extras('') : []);
   $target = null;
   foreach ($sourceRows as $row) {
     if (is_array($row) && (string)($row['id'] ?? '') === $id) {
@@ -93,9 +63,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'], $_P
 
   if ($canDeleteTarget) {
     if ($src === 'reportes') {
-      $ok = delete_reporte(__DIR__ . '/../../data/reportes', $id);
+      $ok = delete_reporte('', $id);
     } elseif ($src === 'horas_extra') {
-      $ok = delete_horas_extra(__DIR__ . '/../../data/horasExtras', $id);
+      $ok = delete_horas_extra('', $id);
     }
   }
   $alert = $ok ? 'Reporte eliminado.' : 'No se pudo eliminar el registro.';
@@ -266,36 +236,19 @@ function historico_matches_search(array $row, string $needle): bool {
 }
 
 function load_reportes(string $base): array {
-  $out = [];
-  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'reportes')) as $data) {
-    if (!$data) continue;
-    foreach ($data as $row) {
-      if (!is_array($row)) continue;
-      $row = dashboard_expand_message($row);
+  $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+  if ($repo !== null && $repo->tableReady()) {
+    return array_map(static function (array $row): array {
       $row['_fuente'] = 'reportes';
-      $out[] = $row;
-    }
+      return $row;
+    }, $repo->archivedMessages());
   }
-  return $out;
+  return [];
 }
 
 function load_horas_extras(string $base): array {
-  $out = [];
-  foreach (storage_json_by_prefix(historico_prefix_from_base($base, 'horasExtras')) as $groups) {
-    if (!$groups) continue;
-    foreach ($groups as $g) {
-      if (!isset($g['reports']) || !is_array($g['reports'])) continue;
-      $fechaGrupo = $g['fecha'] ?? '';
-      foreach ($g['reports'] as $rep) {
-        if (!is_array($rep)) continue;
-        $rep['fecha'] = $rep['fecha'] ?? $fechaGrupo;
-        $rep['_fuente'] = 'horas_extra';
-        $rep['hora_extra'] = 'SI';
-        $out[] = $rep;
-      }
-    }
-  }
-  return $out;
+  $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+  return $repo !== null ? $repo->messages() : [];
 }
 
 function historico_record_matches_current_user(array $row, string $userId, array $userNames): bool {
@@ -379,12 +332,12 @@ if (($_GET['ajax'] ?? '') === 'redmine_statuses') {
 
 $items  = [];
 $items  = array_merge($items, load_reportes(__DIR__ . '/../../data/reportes'));
-$items  = array_merge($items, load_horas_extras(__DIR__ . '/../../data/horasExtras'));
+$items  = array_merge($items, load_horas_extras(''));
 
 $filtered = [];
 foreach ($items as $row) {
   if (!is_array($row)) continue;
-  if (strtolower(trim((string)($row['estado'] ?? ''))) !== 'procesado') continue;
+  if (!in_array(strtolower(trim((string)($row['estado'] ?? ''))), ['procesado', 'archivado'], true)) continue;
   $fecha = norm_date($row['fecha'] ?? ($row['fecha_inicio'] ?? ''));
   if ($fecha === '') continue;
   if ($f_desde && $fecha < $f_desde) continue;
@@ -1090,8 +1043,26 @@ ksort($catsSel);
         });
       }
     });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const historicoScrollTopBtn = document.getElementById('historico-scroll-top');
+      if (!historicoScrollTopBtn) return;
+      if (historicoScrollTopBtn.parentElement !== document.body) {
+        document.body.appendChild(historicoScrollTopBtn);
+      }
+      const updateHistoricoScrollTop = () => {
+        historicoScrollTopBtn.style.display = (window.scrollY || document.documentElement.scrollTop || 0) > 220 ? 'flex' : 'none';
+      };
+      historicoScrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      window.addEventListener('scroll', updateHistoricoScrollTop, { passive: true });
+      window.addEventListener('resize', updateHistoricoScrollTop);
+      updateHistoricoScrollTop();
+    });
   </script>
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
+<button id="historico-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);" class="btn btn-primary">
+    <i class="bi bi-arrow-up"></i>
+</button>
 </div> <!-- #page-content -->
 </body>
 </html>

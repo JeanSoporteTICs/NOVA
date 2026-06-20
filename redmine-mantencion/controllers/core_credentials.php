@@ -58,20 +58,6 @@ function core_credentials_decrypt(string $payload): string {
     return $plain === false ? '' : trim($plain);
 }
 
-function core_credentials_users_file(): string {
-    return __DIR__ . '/../data/usuarios.json';
-}
-
-function core_credentials_load_users(): array {
-    $file = core_credentials_users_file();
-    $rows = storage_read_json($file, []);
-    return is_array($rows) ? $rows : [];
-}
-
-function core_credentials_save_users(array $rows): bool {
-    return storage_write_json(core_credentials_users_file(), array_values($rows), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-}
-
 function core_credentials_central_user_id(string $userId): ?int {
     $userId = trim($userId);
     if ($userId === '' || !class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
@@ -165,15 +151,6 @@ function core_credentials_for_user(string $userId): array {
     if ($central['user'] !== '' || $central['pass'] !== '') {
         return $central;
     }
-    foreach (core_credentials_load_users() as $row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
-            continue;
-        }
-        return [
-            'user' => trim((string)($row['core_user'] ?? '')),
-            'pass' => core_credentials_decrypt((string)($row['core_pass_enc'] ?? '')),
-        ];
-    }
     return ['user' => '', 'pass' => ''];
 }
 
@@ -184,15 +161,6 @@ function nextcloud_credentials_for_user(string $userId): array {
     $central = core_credentials_central_for_user($userId, 'nextcloud');
     if ($central['user'] !== '' || $central['pass'] !== '') {
         return $central;
-    }
-    foreach (core_credentials_load_users() as $row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
-            continue;
-        }
-        return [
-            'user' => trim((string)($row['nextcloud_user'] ?? '')),
-            'pass' => core_credentials_decrypt((string)($row['nextcloud_pass_enc'] ?? '')),
-        ];
     }
     return ['user' => '', 'pass' => ''];
 }
@@ -217,17 +185,6 @@ function core_credentials_save_for_user(string $userId, string $coreUser, string
     if (core_credentials_central_save_for_user($userId, 'core', $coreUser, $corePass)) {
         return true;
     }
-    $rows = core_credentials_load_users();
-    foreach ($rows as &$row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
-            continue;
-        }
-        $row['core_user'] = $coreUser;
-        $row['core_pass_enc'] = core_credentials_encrypt($corePass);
-        unset($row['core_pass']);
-        return core_credentials_save_users($rows);
-    }
-    unset($row);
     return false;
 }
 
@@ -241,36 +198,9 @@ function nextcloud_credentials_save_for_user(string $userId, string $nextcloudUs
     if (core_credentials_central_save_for_user($userId, 'nextcloud', $nextcloudUser, $nextcloudPass)) {
         return true;
     }
-    $rows = core_credentials_load_users();
-    foreach ($rows as &$row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
-            continue;
-        }
-        $row['nextcloud_user'] = $nextcloudUser;
-        $row['nextcloud_pass_enc'] = core_credentials_encrypt($nextcloudPass);
-        unset($row['nextcloud_pass']);
-        return core_credentials_save_users($rows);
-    }
-    unset($row);
     return false;
 }
 
 function core_credentials_clear_for_user(string $userId): bool {
-    if (core_credentials_central_clear_for_user($userId, 'core')) {
-        return true;
-    }
-    $rows = core_credentials_load_users();
-    $changed = false;
-    foreach ($rows as &$row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $userId) {
-            continue;
-        }
-        $row['core_user'] = '';
-        $row['core_pass_enc'] = '';
-        unset($row['core_pass']);
-        $changed = true;
-        break;
-    }
-    unset($row);
-    return $changed ? core_credentials_save_users($rows) : true;
+    return core_credentials_central_clear_for_user($userId, 'core');
 }

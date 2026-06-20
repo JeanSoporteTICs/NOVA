@@ -1,5 +1,5 @@
 <?php
-// Autenticación simple usando data/usuarios.json
+// Autenticación Mantención usando usuarios_nova/integraciones_usuario.
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/logger.php';
 
@@ -61,10 +61,6 @@ function auth_norm_key($v) {
     return strtolower(preg_replace('/[^0-9a-z]/i', '', (string)$v));
 }
 
-function auth_users_file() {
-    return __DIR__ . '/../data/usuarios.json';
-}
-
 function auth_central_users_for_mantencion(): array {
     if (!class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
         return [];
@@ -107,6 +103,7 @@ function auth_central_users_for_mantencion(): array {
                     });
                 }
             })
+            ->where('usuarios_nova.estado', 'activo')
             ->orderBy('usuarios_nova.nombre')
             ->orderBy('usuarios_nova.apellido')
             ->get();
@@ -161,8 +158,7 @@ function auth_central_users_for_mantencion(): array {
 }
 
 function auth_find_user($username) {
-    $file = auth_users_file();
-    $data = storage_read_json($file, []);
+    $data = auth_central_users_for_mantencion();
     if (!is_array($data)) return null;
     foreach ($data as $u) {
         if (!is_array($u)) continue;
@@ -189,8 +185,7 @@ function auth_find_user($username) {
 }
 
 function auth_find_user_by_id($id) {
-    $file = auth_users_file();
-    $data = storage_read_json($file, []);
+    $data = auth_central_users_for_mantencion();
     if (!is_array($data)) return null;
     foreach ($data as $u) {
         if (!is_array($u)) continue;
@@ -359,10 +354,7 @@ function auth_load_roles(): array {
         } catch (\Throwable) {}
     }
 
-    // Fallback: storage (only reached if table not ready yet)
-    $file = __DIR__ . '/../data/roles.json';
-    $data = storage_read_json($file, []);
-    return $cache = is_array($data) ? auth_apply_role_permission_defaults($data) : [];
+    return $cache = auth_apply_role_permission_defaults([]);
 }
 
 function auth_get_role_config(): array {

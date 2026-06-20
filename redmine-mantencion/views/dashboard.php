@@ -110,8 +110,7 @@ foreach (preg_split('/\R+/', trim(storage_read_text($logPath, ''))) ?: [] as $li
         if ($mid === '') continue;
         $logsByMessage[$mid][] = $line;
 }
-$cfgPath = __DIR__ . '/../../data/configuracion.json';
-$cfgData = storage_read_json($cfgPath, []);
+$cfgData = function_exists('load_platform_config') ? load_platform_config() : [];
     if (is_array($cfgData)) {
         foreach (($cfgData['trackers'] ?? []) as $t) {
             if (is_array($t) && isset($t['nombre'])) {
@@ -843,7 +842,6 @@ if (logModal) {
 </body>
 
 </html>
-
 
 
 

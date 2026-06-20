@@ -42,13 +42,9 @@ function ensure_path(string $path, bool $isDir = false): void
         }
         return;
     }
-
-    if (\storage_read_json($path, null) === null) {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
-        \storage_write_json($path, [], null, false);
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0777, true);
     }
 }
 
@@ -57,11 +53,6 @@ function bootstrap_app(): void
     \date_default_timezone_set('America/Santiago');
     ensure_path(app_base_path('data'), true);
     ensure_path(app_base_path('data/logs'), true);
-    ensure_path(app_base_path('data/mensaje.json'));
-    ensure_path(app_base_path('data/usuarios.json'));
-    ensure_path(app_base_path('data/configuracion.json'));
-    ensure_path(app_base_path('data/horasExtras'), true);
-    ensure_path(app_base_path('data/reportes'), true);
 
     $logFile = app_base_path('data/logs/php-error.log');
     ini_set('log_errors', '1');

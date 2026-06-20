@@ -38,6 +38,10 @@ class LegacyProjectController extends Controller
             $path = $config['entry'];
         }
 
+        if ($project === 'emach' && strtolower($path) === 'views/mantenedor/mantenedor.php') {
+            return redirect()->route('integrations.emach');
+        }
+
         if (in_array(strtolower($path), ['login.php', 'app/views/auth/login.php'], true)) {
             return redirect()->route('login');
         }

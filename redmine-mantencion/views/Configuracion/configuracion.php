@@ -23,11 +23,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos((string)($_SERVER['REQUEST_UR
   exit;
 }
 
-$rolesFile = __DIR__ . '/../../data/roles.json';
 $rolesData = auth_load_roles();
 $rolesData = is_array($rolesData) ? $rolesData : [];
-$usuariosFile = __DIR__ . '/../../data/usuarios.json';
-$usuariosData = storage_read_json($usuariosFile, []);
+$usuariosData = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
 if (!is_array($usuariosData)) $usuariosData = [];
 $usuariosSelectableData = array_values(array_filter($usuariosData, static function ($u): bool {
   if (!is_array($u)) return false;
@@ -40,6 +38,31 @@ foreach ($usuariosSelectableData as $u) {
     $usuariosIndex[(string)$u['id']] = $u;
   }
 }
+
+$saveRolePermissions = function (string $role, array $permissions): void {
+  if (!class_exists(\Illuminate\Support\Facades\DB::class)) return;
+  \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->where('rol', $role)->delete();
+  foreach ($permissions as $permission => $value) {
+    \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->insert([
+      'rol' => $role,
+      'permiso' => (string)$permission,
+      'valor' => is_bool($value) ? ($value ? '1' : '') : (string)$value,
+      'creado_at' => now(),
+      'actualizado_at' => now(),
+    ]);
+  }
+};
+
+$saveUserRole = function (string $userId, string $role): void {
+  if ($userId === '' || $role === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) return;
+  \Illuminate\Support\Facades\DB::table('usuarios_nova')
+    ->where(function ($query) use ($userId): void {
+      $query->where('redmine_id', $userId)
+        ->orWhere('uuid', $userId)
+        ->orWhere('usuario', $userId);
+    })
+    ->update(['rol' => $role, 'actualizado_at' => now()]);
+};
 
 $ensureRolePermission = function (string $role, string $key, $value) use (&$rolesData): void {
   if (!isset($rolesData[$role]) || !is_array($rolesData[$role])) return;
@@ -251,7 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'actividad' => isset($_POST['perm_actividad']),
         ];
       }
-      storage_write_json($rolesFile, $rolesData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+      $saveRolePermissions($selectedRole, $rolesData[$selectedRole] ?? []);
       $flashRoles = 'Permisos actualizados para el rol "' . $h($selectedRole) . '"';
       $openRolesModal = true;
     }
@@ -316,7 +339,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $selUserData = $usuariosIndex[$selectedUser];
       $selUserRole = $selUserData['rol'] ?? $selUserRole;
       $selUserPerms = $cfgUser;
-      storage_write_json($usuariosFile, $usuariosData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+      if ($newUserRole !== '') {
+        $saveUserRole($selectedUser, $newUserRole);
+      }
       $flashUsuarios = 'Permisos actualizados para el usuario ID ' . $h($selectedUser);
       $openUsersModal = true;
     }
@@ -325,7 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sync_remote') {
   if (function_exists('csrf_validate')) csrf_validate();
   if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
-  $res = sync_categorias_desde_api(__DIR__ . '/../../data/configuracion.json');
+  $res = sync_categorias_desde_api('');
   $msg = isset($res['error']) ? $res['error'] : ('Categorías sincronizadas (' . ($res['ok'] ?? 0) . ' registros).');
   $configRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
   header('Location: ' . $configRedirectUrl . '?panel=categorias&synccat=' . urlencode($msg));
@@ -2097,6 +2122,4 @@ document.addEventListener('DOMContentLoaded', () => {
 </div> <!-- #page-content -->
 </body>
 </html>
-
-
 

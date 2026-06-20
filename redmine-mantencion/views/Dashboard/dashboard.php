@@ -119,8 +119,7 @@ $estadoOptions = ['pendiente', 'procesado', 'error']; // estados locales (dashbo
 $estadoRedmineId = null;
 $estadoRedmineNombre = null;
 $logsByMessage = load_redmine_logs_by_message();
-$cfgPath = __DIR__ . '/../../data/configuracion.json';
-$cfgData = storage_read_json($cfgPath, []);
+$cfgData = function_exists('load_platform_config') ? load_platform_config() : [];
     if (is_array($cfgData)) {
         foreach (($cfgData['trackers'] ?? []) as $t) {
             if (is_array($t) && isset($t['nombre'])) {
@@ -311,25 +310,26 @@ $csrf = legacy_csrf_token();
     transform: translateY(10px);
   }
   .dashboard-scroll-top {
-    position: fixed;
-    right: 22px;
-    bottom: 22px;
-    width: 56px;
-    height: 56px;
+    position: fixed !important;
+    right: 28px !important;
+    bottom: 28px !important;
+    width: 44px;
+    height: 44px;
+    min-height: 44px !important;
     border: 0;
-    border-radius: 18px;
+    border-radius: 50% !important;
     display: none;
     align-items: center;
     justify-content: center;
+    padding: 0;
     font-size: 1.25rem;
     color: #fff;
-    background: linear-gradient(135deg, #2563eb, #7c3aed);
-    box-shadow: 0 18px 36px rgba(37, 99, 235, .28);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
     opacity: 0;
     visibility: hidden;
     transform: translateY(14px);
     transition: opacity .2s ease, transform .2s ease, visibility .2s ease;
-    z-index: 1040;
+    z-index: 1050;
   }
   .dashboard-scroll-top.is-visible {
     display: inline-flex;
@@ -686,7 +686,6 @@ $csrf = legacy_csrf_token();
         <label class="form-label">Asignado CORE</label>
         <?php if (dashboard_can_assign_other_users()): ?>
           <select name="core_assigned_name" class="form-select">
-            <option value="">Todos</option>
             <?php foreach ($userOptions as $userOption): ?>
               <?php $optionName = trim((string)($userOption['nombre'] ?? '')); ?>
               <?php if ($optionName === '') continue; ?>
@@ -1319,7 +1318,7 @@ $csrf = legacy_csrf_token();
   </div>
  </div>
 
-<button type="button" class="dashboard-scroll-top" id="dashboard-scroll-top" aria-label="Volver arriba" title="Volver arriba">
+<button type="button" class="btn btn-primary dashboard-scroll-top" id="dashboard-scroll-top" aria-label="Volver arriba" title="Volver arriba">
   <i class="bi bi-arrow-up"></i>
 </button>
 
@@ -1801,7 +1800,7 @@ function applyFilterButtons(filter) {
 
   const archiveBtn = document.getElementById('archive-btn');
   if (archiveBtn) {
-    const showArchive = (filter === 'procesado' || filter === 'pendiente');
+    const showArchive = (filter === 'procesado');
     archiveBtn.classList.toggle('d-none', !showArchive);
   }
   const resetErrorsBtn = document.getElementById('reset-errors-btn');
@@ -2222,16 +2221,25 @@ if (coreCredentialsModal) {
 
 const scrollTopBtn = document.getElementById('dashboard-scroll-top');
 if (scrollTopBtn) {
+  if (scrollTopBtn.parentElement !== document.body) {
+    document.body.appendChild(scrollTopBtn);
+  }
+  const tableScrollWrap = document.querySelector('.dashboard-table-wrap');
   scrollTopBtn.addEventListener('click', () => {
+    if (tableScrollWrap && tableScrollWrap.scrollTop > 0) {
+      tableScrollWrap.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
   const scrollTopTarget = filterNav || document.getElementById('status-filters');
   let statusFiltersVisible = true;
   const currentPageScrollTop = () => window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+  const currentTableScrollTop = () => tableScrollWrap ? tableScrollWrap.scrollTop || 0 : 0;
   const updateScrollTopVisibility = () => {
     const rect = scrollTopTarget?.getBoundingClientRect();
     const hiddenByGeometry = rect ? rect.bottom <= 0 : false;
-    const shouldShow = hiddenByGeometry || !statusFiltersVisible || currentPageScrollTop() > 220;
+    const shouldShow = hiddenByGeometry || !statusFiltersVisible || currentPageScrollTop() > 220 || currentTableScrollTop() > 80;
     scrollTopBtn.classList.toggle('is-visible', shouldShow);
     scrollTopBtn.style.display = shouldShow ? 'flex' : 'none';
   };
@@ -2252,6 +2260,9 @@ if (scrollTopBtn) {
     observer.observe(scrollTopTarget);
   }
   window.addEventListener('scroll', queueScrollTopVisibility, { passive: true });
+  if (tableScrollWrap) {
+    tableScrollWrap.addEventListener('scroll', queueScrollTopVisibility, { passive: true });
+  }
   window.addEventListener('resize', queueScrollTopVisibility);
   window.addEventListener('load', queueScrollTopVisibility);
   if (filterNav) {
