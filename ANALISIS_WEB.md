@@ -2,6 +2,67 @@
 
 Fecha de revision: 2026-06-13
 
+## Actualizacion S35 Arquitectura Step 3 — NovaUserService - 2026-06-20
+
+Estado: **COMPLETE**.
+
+### Objetivo
+
+Extraer la logica de dominio de usuarios de `NovaUserRepository` hacia un nuevo servicio de aplicacion, dejando el repositorio enfocado solo en acceso a datos.
+
+### Nuevo archivo
+
+`app/Services/NovaUserService.php` (namespace `App\Services`).
+
+Responsabilidades del servicio:
+
+| Metodo | Descripcion |
+|---|---|
+| `normalizeIdentity(string)` | Normaliza cadenas a minusculas alfanumericas para comparaciones |
+| `normalizeRutUsername(string)` | Extrae la parte numerica del RUT para usar como username de acceso |
+| `isValidRut(string)` | Valida RUT chileno con algoritmo de digito verificador |
+| `normalizeNovaRole(string)` | Colapsa variantes de admin a `admin`, resto a `usuario` |
+| `normalizeStatus(string)` | Colapsa variantes de bloqueo a `baneado`, resto a `activo` |
+| `isBlocked(array)` | Detecta si un usuario esta bloqueado/baneado/inactivo |
+| `loginCandidates(array)` | Retorna campos por los que un usuario puede identificarse en login |
+| `verifyCredentials(array, string, bool)` | Verifica hash Bcrypt, credencial simple o API token |
+| `hashPassword(string)` | Genera hash Bcrypt con `password_hash(PASSWORD_DEFAULT)` |
+| `toSessionUser(array)` | Proyecta usuario interno a sesion segura (con estado de integraciones) |
+| `fullName(array)` | Nombre completo para deduplicacion y display |
+| `identityKeys(array)` | Genera claves de identidad canonicas desde valores crudos |
+| `identityKeysForUser(array)` | Version tipada para usuario NOVA (rut/rut_sin_dv/core_user) |
+| `deduplicateUsers(array)` | Elimina duplicados por clave de identidad |
+| `dedupeKey(array)` | Calcula clave de deduplicacion para un usuario |
+| `mergeDuplicateUsers(array, array)` | Fusiona dos registros con reglas: admin gana, activo gana |
+| `mergeSources(string, string)` | Combina etiquetas de origen (csv) |
+| `splitSources(string)` | Divide etiquetas de origen |
+
+Dependencia interna: `UserIntegrationRepository` (para `hasEmach`/`hasTelegram` en `toSessionUser`).
+
+### Cambios en `NovaUserRepository`
+
+- Se agrego `NovaUserService` al constructor (auto-wired por el contenedor).
+- Se eliminaron 16 metodos privados de logica de dominio — ahora delegados al servicio.
+- Se elimino codigo muerto: `databaseIntegrationsForUser()` (nunca llamado), `databaseMergeIdentities()` (resultado descartado), mapa `$known` en `usersFromDatabase()`.
+- Metodos publicos sin cambio de firma: `all()`, `find()`, `attempt()`, `save()`, `delete()`, `changePassword()`, `activate()`.
+- Metodos privados que se mantienen en el repositorio: `write`, `usersFromDatabase`, `writeUsersToDatabase`, `databaseIntegrationsByUserId`, `writeDatabaseIntegrations`, `usersTableAvailable`, `integrationsTableAvailable`, `markLastLogin`, `setStatus`, `unsignedIntegerOrNull`.
+
+### Conteo de lineas
+
+| Archivo | Antes | Despues | Delta |
+|---|---|---|---|
+| `app/Support/Auth/NovaUserRepository.php` | 812 | ~320 | −492 |
+| `app/Services/NovaUserService.php` | — | ~290 (nuevo) | +290 |
+
+### Controladores
+
+Sin cambios. `NovaAdministrationController`, `NovaUserController`, `LegacyUserProvider`, `EnsureNovaAuthenticated` y `NovaAccessRepository` siguen usando `NovaUserRepository` con la misma interfaz publica.
+
+### Validacion
+
+- `php artisan test`: **47 passed, 1 skipped** (119 assertions) — sin regresiones.
+- `php artisan route:list`: **66 rutas** — sin cambios.
+
 ## Actualizacion S33 - 2026-06-18
 
 Estado final de BD: **READY WITH MINOR FIXES**.

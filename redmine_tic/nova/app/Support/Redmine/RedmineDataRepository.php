@@ -27,6 +27,8 @@ final class RedmineDataRepository
     private ?RedmineCatalogRepository     $catalogRepoInst     = null;
     private ?RedmineHoursExtraRepository  $hoursExtraRepoInst  = null;
     private ?RedminePermissionRepository  $permissionRepoInst  = null;
+    private ?RedmineReportRepository      $reportRepoInst      = null;
+    private ?RedmineUserRepository        $userRepoInst        = null;
 
     public function forProject(string $projectKey): self
     {
@@ -86,6 +88,16 @@ final class RedmineDataRepository
     private function permissionRepo(): RedminePermissionRepository
     {
         return $this->permissionRepoInst ??= new RedminePermissionRepository($this->projectKey, $this->projectName());
+    }
+
+    private function reportRepo(): RedmineReportRepository
+    {
+        return $this->reportRepoInst ??= new RedmineReportRepository($this->projectKey, $this->projectName());
+    }
+
+    private function userRepo(): RedmineUserRepository
+    {
+        return $this->userRepoInst ??= new RedmineUserRepository($this->projectKey, $this->projectName());
     }
 
     /**
@@ -340,7 +352,7 @@ final class RedmineDataRepository
      */
     public function users(): array
     {
-        return $this->projectUsersFromNova();
+        return $this->userRepo()->projectUsers();
     }
 
     /**
@@ -348,12 +360,7 @@ final class RedmineDataRepository
      */
     public function activeUsersWithPhone(): array
     {
-        return array_values(array_filter($this->users(), static function (array $user): bool {
-            $state = strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo')));
-            $chatId = trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', '')));
-
-            return $state === 'activo' && $chatId !== '';
-        }));
+        return $this->userRepo()->activeUsersWithPhone();
     }
 
     /**
@@ -361,123 +368,15 @@ final class RedmineDataRepository
      */
     public function saveUser(array $payload): array
     {
-        $users = $this->users();
-        $id = trim((string) ($payload['id'] ?? ''));
-        $isExplicitCreate = filter_var($payload['_creating'] ?? false, FILTER_VALIDATE_BOOL);
-        if ($id === '') {
-            $id = trim((string) ($payload['rut_sin_dv'] ?? '')) ?: (string) Str::uuid();
-        }
-        if ($isExplicitCreate) {
-            foreach ($users as $user) {
-                if ((string) ($user['id'] ?? '') === $id) {
-                    return [
-                        'ok' => false,
-                        'error' => 'El ID ya esta asociado a otro usuario.',
-                        'users' => $users,
-                    ];
-                }
-            }
-        }
-        $telegramChatId = trim((string) ($payload['telegram_chat_id'] ?? ''));
-        if ($telegramChatId !== '') {
-            foreach ($users as $user) {
-                if ((string) ($user['id'] ?? '') === $id) {
-                    continue;
-                }
-                $existingChatId = trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', '')));
-                if ($existingChatId !== '' && $existingChatId === $telegramChatId) {
-                    return [
-                        'ok' => false,
-                        'error' => 'El Chat ID Telegram ya esta asociado a otro usuario.',
-                        'users' => $users,
-                    ];
-                }
-            }
-        }
-
-        $row = [
-            'id' => $id,
-            'rut' => trim((string) ($payload['rut'] ?? '')),
-            'rut_sin_dv' => trim((string) ($payload['rut_sin_dv'] ?? $id)),
-            'nombre' => trim((string) ($payload['nombre'] ?? '')),
-            'apellido' => trim((string) ($payload['apellido'] ?? '')),
-            'numero_celular' => '',
-            'telegram_chat_id' => $telegramChatId,
-            'rol' => trim((string) ($payload['rol'] ?? 'usuario')) ?: 'usuario',
-            'api' => trim((string) ($payload['api'] ?? '')),
-            'estado_usuario' => (($payload['estado_usuario'] ?? 'activo') === 'baneado') ? 'baneado' : 'activo',
-        ];
-
-        $updated = false;
-        foreach ($users as $index => $user) {
-            if ((string) ($user['id'] ?? '') !== $id) {
-                continue;
-            }
-            $users[$index] = array_merge($user, $row);
-            $updated = true;
-            break;
-        }
-
-        if (!$updated) {
-            $users[] = $row;
-        }
-
-        $this->saveProjectUsers($users);
-
-        return ['ok' => true, 'error' => '', 'users' => $users];
+        return $this->userRepo()->saveUser($payload);
     }
 
     public function deleteUser(string $id): int
     {
-        $id = trim($id);
-        if ($id === '') {
-            return 0;
+        $changed = $this->userRepo()->deleteUser($id);
+        if ($changed > 0) {
+            $this->activeReportsCache = null;
         }
-
-        $users = $this->users();
-        $novaUuid = '';
-        foreach ($users as $user) {
-            if ((string) ($user['id'] ?? '') === $id) {
-                $novaUuid = trim((string) ($user['_nova_user_id'] ?? ''));
-                break;
-            }
-        }
-
-        if ($novaUuid === '') {
-            return 0;
-        }
-
-        try {
-            $novaUserId = (int) DB::table('usuarios_nova')->where('uuid', $novaUuid)->value('id');
-        } catch (\Throwable) {
-            return 0;
-        }
-
-        if ($novaUserId <= 0) {
-            return 0;
-        }
-
-        $moduleId = $this->databaseModuleId();
-        $changed = 0;
-
-        try {
-            if ($this->redmineTicProfilesTableAvailable()) {
-                DB::table('redmine_tic_perfiles_usuario')->where('usuario_id', $novaUserId)->delete();
-                $changed = 1;
-            }
-
-            if ($moduleId !== null && $this->projectAccessTableAvailable()) {
-                DB::table('permisos_usuario_modulo')
-                    ->where('usuario_id', $novaUserId)
-                    ->where('modulo_id', $moduleId)
-                    ->delete();
-                $changed = 1;
-            }
-        } catch (\Throwable) {
-            return 0;
-        }
-
-        $this->activeReportsCache = null;
 
         return $changed;
     }
@@ -487,56 +386,12 @@ final class RedmineDataRepository
      */
     public function toggleUserStatus(string $id): array
     {
-        $id = trim($id);
-        if ($id === '') {
-            return ['ok' => false, 'nuevo_estado' => ''];
-        }
-
-        $users = $this->users();
-        $foundUser = null;
-        foreach ($users as $user) {
-            if ((string) ($user['id'] ?? '') === $id) {
-                $foundUser = $user;
-                break;
-            }
-        }
-
-        if ($foundUser === null) {
-            return ['ok' => false, 'nuevo_estado' => ''];
-        }
-
-        $currentStatus = strtolower(trim((string) ($foundUser['estado_usuario'] ?? 'activo')));
-        $newStatus = $currentStatus === 'baneado' ? 'activo' : 'baneado';
-        $novaUuid = trim((string) ($foundUser['_nova_user_id'] ?? ''));
-
-        if ($novaUuid === '') {
-            return ['ok' => false, 'nuevo_estado' => ''];
-        }
-
-        try {
-            $novaUserId = (int) DB::table('usuarios_nova')->where('uuid', $novaUuid)->value('id');
-            if ($novaUserId <= 0) {
-                return ['ok' => false, 'nuevo_estado' => ''];
-            }
-
-            if ($this->redmineTicProfilesTableAvailable()) {
-                DB::table('redmine_tic_perfiles_usuario')
-                    ->where('usuario_id', $novaUserId)
-                    ->update(['estado_usuario' => $newStatus, 'actualizado_at' => now()]);
-            }
-
-            if ($this->novaUsersTableAvailable()) {
-                DB::table('usuarios_nova')
-                    ->where('id', $novaUserId)
-                    ->update(['estado' => $newStatus, 'actualizado_at' => now()]);
-            }
-
+        $result = $this->userRepo()->toggleUserStatus($id);
+        if ($result['ok']) {
             $this->activeReportsCache = null;
-
-            return ['ok' => true, 'nuevo_estado' => $newStatus];
-        } catch (\Throwable) {
-            return ['ok' => false, 'nuevo_estado' => ''];
         }
+
+        return $result;
     }
 
     /**
@@ -544,27 +399,7 @@ final class RedmineDataRepository
      */
     public function saveUserPermissions(string $id, string $role, array $permissions): bool
     {
-        $id = trim($id);
-        if ($id === '') {
-            return false;
-        }
-
-        $users = $this->users();
-        foreach ($users as $index => $user) {
-            if ((string) ($user['id'] ?? '') !== $id) {
-                continue;
-            }
-
-            if (trim($role) !== '') {
-                $users[$index]['rol'] = trim($role);
-            }
-            $users[$index]['permisos'] = $permissions;
-            $this->saveProjectUsers($users);
-
-            return true;
-        }
-
-        return false;
+        return $this->userRepo()->saveUserPermissions($id, $role, $permissions);
     }
 
     /**
@@ -655,7 +490,7 @@ final class RedmineDataRepository
             $created++;
         }
 
-        $this->saveProjectUsers($users, true, 'baneado');
+        $this->userRepo()->persistUsers($users, true, 'baneado');
 
         return ['ok' => true, 'created' => $created, 'updated' => $updated, 'error' => ''];
     }
@@ -1077,20 +912,7 @@ final class RedmineDataRepository
 
     public function deleteArchivedReport(string $id): int
     {
-        if (!$this->reportsTableAvailable()) {
-            return 0;
-        }
-
-        $moduleId = $this->databaseModuleId();
-        if ($moduleId === null || trim($id) === '') {
-            return 0;
-        }
-
-        return DB::table('redmine_tic_reportes')
-            ->where('modulo_id', $moduleId)
-            ->where('id', (int) $id)
-            ->where('estado', 'archivado')
-            ->delete();
+        return $this->reportRepo()->deleteArchived($id);
     }
 
     /**
@@ -1352,7 +1174,7 @@ final class RedmineDataRepository
         $summary['hours_extra_groups'] = count($hoursGroups);
 
         $users = $this->readList($this->dataPath('usuarios.json'));
-        $this->saveProjectUsers($users, true, 'baneado');
+        $this->userRepo()->persistUsers($users, true, 'baneado');
         $summary['users'] = count($users);
 
         $config = $this->readJsonMap($this->dataPath('configuracion.json'));
@@ -2581,21 +2403,6 @@ final class RedmineDataRepository
         $this->saveModuleConfigurationToDatabase(['roles' => $roles], ['roles' => 'json']);
     }
 
-    private function databaseConfigType($value): string
-    {
-        if (is_array($value)) {
-            return 'json';
-        }
-        if (is_bool($value)) {
-            return 'bool';
-        }
-        if (is_int($value)) {
-            return 'int';
-        }
-
-        return 'string';
-    }
-
     private function unsignedIntegerOrNull($value): ?int
     {
         $value = trim((string) $value);
@@ -2608,39 +2415,9 @@ final class RedmineDataRepository
         return $number > 0 ? $number : null;
     }
 
-    private function moduleCatalogTableAvailable(): bool
-    {
-        return $this->catalogRepo()->tableAvailable();
-    }
-
-    private function moduleConfigurationTableAvailable(): bool
-    {
-        return $this->configRepo()->configTableAvailable();
-    }
-
     // -------------------------------------------------------------------------
     // Permission helpers — delegated to RedminePermissionRepository
     // -------------------------------------------------------------------------
-
-    private function permissionsTableAvailable(): bool
-    {
-        return $this->permissionRepo()->userPermissionsTableAvailable();
-    }
-
-    private function rolPermissionsTableAvailable(): bool
-    {
-        return $this->permissionRepo()->rolPermissionsTableAvailable();
-    }
-
-    private function encodePermissionValue(string $clave, mixed $value): string
-    {
-        return $this->permissionRepo()->encodeValue($clave, $value);
-    }
-
-    private function decodePermissionValue(string $clave, string $valor): mixed
-    {
-        return $this->permissionRepo()->decodeValue($clave, $valor);
-    }
 
     /** @return array<int,array<string,mixed>>|null */
     private function allPermissionsFromRelational(): ?array
@@ -2699,11 +2476,6 @@ final class RedmineDataRepository
     private function saveOptionsToDatabase(string $tipo, array $items): void
     {
         $this->configRepo()->saveOptionsToDatabase($tipo, $items);
-    }
-
-    private function activityTableAvailable(): bool
-    {
-        return $this->activityRepo()->tableAvailable();
     }
 
     private function archiveReport(array $report): void
@@ -3036,716 +2808,6 @@ final class RedmineDataRepository
         return '';
     }
 
-    private function normalizePhoneForCompare(string $phone): string
-    {
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
-        if ($digits === '') {
-            return '';
-        }
-        if (str_starts_with($digits, '569') && strlen($digits) === 11) {
-            return $digits;
-        }
-        if (str_starts_with($digits, '9') && strlen($digits) === 9) {
-            return '56' . $digits;
-        }
-
-        return $digits;
-    }
-
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    private function projectUsersFromNova(): array
-    {
-        if (!$this->novaUsersTableAvailable()) {
-            return [];
-        }
-
-        $profiles = $this->redmineTicProfilesByUserId();
-        $central = [];
-        foreach ($this->novaUsersWithProjectAccess() as $nova) {
-            $central[(int) $nova->id] = $nova;
-        }
-
-        // Phase 3+: batch-load all relational permissions in one query
-        $allRelationalPerms = $this->allPermissionsFromRelational();
-
-        $users = [];
-        foreach ($central as $nova) {
-            $profile = $profiles[(int) $nova->id] ?? null;
-            $redmineId = trim((string) ($nova->redmine_id ?? ''));
-            $projectId = $redmineId !== '' ? $redmineId : trim((string) ($nova->uuid ?? $nova->usuario ?? ''));
-            if ($projectId === '') {
-                continue;
-            }
-            $telegramChatId = trim((string) ($nova->telegram_id_chat ?? ''));
-
-            // Resolve permissions: relational table first, JSON fallback
-            $perfilId    = (int) ($profile->id ?? 0);
-            $permissions = ($allRelationalPerms !== null && $perfilId > 0 && isset($allRelationalPerms[$perfilId]))
-                ? $allRelationalPerms[$perfilId]
-                : $this->jsonArray($profile->permisos ?? null);
-
-            $users[] = [
-                'id' => $projectId,
-                'redmine_id' => $redmineId,
-                'rut_sin_dv' => trim((string) ($nova->usuario ?? '')),
-                'nombre' => trim((string) ($nova->nombre ?? '')),
-                'apellido' => trim((string) ($nova->apellido ?? '')),
-                'rut' => trim((string) ($nova->rut ?? '')),
-                'numero_celular' => '',
-                'telegram_chat_id' => $telegramChatId,
-                'telegram_source' => $telegramChatId !== '' ? 'nova' : '',
-                'api' => $this->integrationSecret((int) ($nova->id ?? 0), 'redmine_tic'),
-                'rol' => trim((string) ($profile->rol ?? $nova->rol ?? 'usuario')) ?: 'usuario',
-                'password' => (string) ($nova->password ?? ''),
-                'permisos' => $permissions,
-                'estado_usuario' => trim((string) ($profile->estado_usuario ?? $nova->estado ?? 'activo')) ?: 'activo',
-                'redmine_membership_id' => $profile->redmine_membership_id ?? null,
-                '_nova_user_id' => (string) ($nova->uuid ?? ''),
-                '_central_only' => $redmineId === '',
-            ];
-        }
-
-        usort($users, static fn (array $a, array $b): int => strcasecmp(
-            trim((string) ($a['nombre'] ?? '') . ' ' . (string) ($a['apellido'] ?? '')),
-            trim((string) ($b['nombre'] ?? '') . ' ' . (string) ($b['apellido'] ?? ''))
-        ));
-
-        return array_values($users);
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $projectUsers
-     */
-    private function saveProjectUsers(array $projectUsers, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): void
-    {
-        if (!$this->novaUsersTableAvailable()) {
-            return;
-        }
-
-        foreach ($projectUsers as $projectUser) {
-            if (!is_array($projectUser)) {
-                continue;
-            }
-
-            $redmineId = trim((string) ($projectUser['id'] ?? ''));
-            if ($redmineId === '') {
-                continue;
-            }
-            $name = trim((string) ($projectUser['nombre'] ?? ''));
-            $lastName = trim((string) ($projectUser['apellido'] ?? ''));
-            if ($lastName === '' && str_contains($name, ' ')) {
-                [$first, $rest] = explode(' ', $name, 2);
-                $name = $first;
-                $lastName = $rest;
-            }
-
-            $nova = $this->upsertNovaUserFromProjectUser($projectUser, $name, $lastName, $preserveExistingStatus, $defaultStatus);
-            $apiToken = trim((string) ($projectUser['api'] ?? ''));
-            $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
-            if ($nova instanceof NovaUser) {
-                $this->saveUserIntegration((int) $nova->id, 'redmine_tic', $apiToken, (string) $redmineId);
-                $this->saveTelegramChatId((int) $nova->id, $telegramChatId);
-                $this->grantProjectAccess((int) $nova->id);
-            }
-
-            if (!$nova instanceof NovaUser || !$this->redmineTicProfilesTableAvailable()) {
-                continue;
-            }
-
-            $currentProfile = DB::table('redmine_tic_perfiles_usuario')
-                ->where('usuario_id', (int) $nova->id)
-                ->first();
-            $incomingStatus = array_key_exists('estado_usuario', $projectUser)
-                ? trim((string) $projectUser['estado_usuario'])
-                : '';
-            $status = $preserveExistingStatus && $currentProfile !== null
-                ? trim((string) ($currentProfile->estado_usuario ?? 'activo'))
-                : ($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
-
-            $permsToSave = is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [];
-
-            // Phase 3c: 'permisos' column was dropped — write only relational columns
-            DB::table('redmine_tic_perfiles_usuario')->updateOrInsert(
-                ['usuario_id' => (int) $nova->id],
-                [
-                    'rol' => trim((string) ($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
-                    'estado_usuario' => $this->normalizeProjectStatus($status),
-                    'redmine_membership_id' => $this->unsignedIntegerOrNull($projectUser['redmine_membership_id'] ?? null),
-                    'actualizado_at' => now(),
-                ]
-            );
-
-            // Phase 3+: write permissions to the relational table
-            if ($this->permissionsTableAvailable()) {
-                $perfilId = (int) DB::table('redmine_tic_perfiles_usuario')
-                    ->where('usuario_id', (int) $nova->id)
-                    ->value('id');
-                $this->savePermissionsToRelational($perfilId, $permsToSave);
-            }
-        }
-    }
-
-    /**
-     * @param array<string,mixed> $projectUser
-     */
-    private function upsertNovaUserFromProjectUser(array $projectUser, string $name, string $lastName, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): ?NovaUser
-    {
-        if (!$this->novaUsersTableAvailable()) {
-            return null;
-        }
-
-        $redmineId = trim((string) ($projectUser['id'] ?? ''));
-        if ($redmineId === '') {
-            return null;
-        }
-        $uuid = trim((string) ($projectUser['_nova_user_id'] ?? ''));
-        if (!ctype_digit($redmineId)) {
-            try {
-                $user = $uuid !== ''
-                    ? NovaUser::query()->where('uuid', $uuid)->first()
-                    : null;
-                if (!$user) {
-                    return null;
-                }
-                if ($name !== '') {
-                    $user->nombre = $name;
-                }
-                if ($lastName !== '') {
-                    $user->apellido = $lastName;
-                }
-                if (!$preserveExistingStatus) {
-                    $user->estado = $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? $user->estado ?? 'activo'));
-                }
-                $user->save();
-
-                return $user;
-            } catch (\Throwable) {
-                return null;
-            }
-        }
-
-        $username = trim((string) ($projectUser['rut_sin_dv'] ?? $projectUser['username'] ?? '')) ?: $redmineId;
-        $rut = trim((string) ($projectUser['rut'] ?? ''));
-        $name = $name !== '' ? $name : 'Redmine';
-        $lastName = $lastName !== '' ? $lastName : 'Usuario';
-        $role = $this->normalizeNovaRoleForProject((string) ($projectUser['rol'] ?? 'usuario'));
-        $incomingStatus = array_key_exists('estado_usuario', $projectUser)
-            ? trim((string) $projectUser['estado_usuario'])
-            : '';
-        $status = $this->normalizeProjectStatus($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
-
-        try {
-            $user = NovaUser::query()->where('redmine_id', $redmineId)->first();
-            if (!$user && $rut !== '') {
-                $user = NovaUser::query()->where('rut', $rut)->first();
-            }
-            if (!$user && $username !== '') {
-                $user = NovaUser::query()->where('usuario', $username)->first();
-            }
-
-            if (!$user) {
-                $user = new NovaUser();
-                $user->uuid = (string) Str::uuid();
-                $user->password = Hash::make(Str::random(40));
-            }
-
-            $user->usuario = $this->uniqueNovaUsername($username, $user->exists ? (int) $user->id : null);
-            $user->rut = $rut !== '' ? $rut : null;
-            $user->redmine_id = $redmineId;
-            $user->nombre = $name;
-            $user->apellido = $lastName;
-            $user->rol = $role;
-            if (!$user->exists || !$preserveExistingStatus) {
-                $user->estado = $status;
-            }
-            $user->save();
-
-            return $user;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function uniqueNovaUsername(string $username, ?int $currentId = null): string
-    {
-        $username = trim($username) !== '' ? trim($username) : (string) Str::uuid();
-        $candidate = $username;
-        $suffix = 2;
-
-        while (true) {
-            try {
-                $query = NovaUser::query()->where('usuario', $candidate);
-                if ($currentId !== null) {
-                    $query->where('id', '<>', $currentId);
-                }
-                if (!$query->exists()) {
-                    return $candidate;
-                }
-            } catch (\Throwable) {
-                return $candidate;
-            }
-
-            $candidate = $username . '-' . $suffix;
-            $suffix++;
-        }
-    }
-
-    private function saveUserIntegration(int $novaUserId, string $type, string $secret = '', string $externalUser = '', string $chatId = ''): void
-    {
-        if ($novaUserId <= 0 || !$this->userIntegrationsTableAvailable()) {
-            return;
-        }
-        if ($secret === '' && $externalUser === '' && $chatId === '') {
-            return;
-        }
-
-        $values = ['actualizado_at' => now()];
-        if (Schema::hasColumn('integraciones_usuario', 'usuario_externo')) {
-            $values['usuario_externo'] = $externalUser !== '' ? $externalUser : null;
-        }
-        if ($chatId !== '' && Schema::hasColumn('integraciones_usuario', 'chat_id')) {
-            $values['chat_id'] = $chatId;
-        }
-        if ($secret !== '') {
-            $values['valor_secreto'] = $this->encryptIntegrationSecret($secret);
-        }
-
-        try {
-            DB::table('integraciones_usuario')->updateOrInsert(
-                ['usuario_id' => $novaUserId, 'tipo' => $type],
-                $values
-            );
-        } catch (\Throwable) {
-        }
-    }
-
-    private function grantProjectAccess(int $novaUserId): void
-    {
-        $moduleId = $this->databaseModuleId();
-        if ($novaUserId <= 0 || $moduleId === null || !$this->projectAccessTableAvailable()) {
-            return;
-        }
-
-        try {
-            DB::table('permisos_usuario_modulo')->updateOrInsert(
-                ['usuario_id' => $novaUserId, 'modulo_id' => $moduleId],
-                ['permitido' => 1, 'actualizado_at' => now()]
-            );
-        } catch (\Throwable) {
-        }
-    }
-
-    /**
-     * @return array<int,object>
-     */
-    private function novaUsersWithProjectAccess(): array
-    {
-        $moduleId = $this->databaseModuleId();
-        if ($moduleId === null || !$this->projectAccessTableAvailable() || !$this->novaUsersTableAvailable()) {
-            return [];
-        }
-
-        try {
-            return DB::table('usuarios_nova')
-                ->join('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
-                ->where('permisos_usuario_modulo.modulo_id', $moduleId)
-                ->where('permisos_usuario_modulo.permitido', 1)
-                ->select('usuarios_nova.*')
-                ->get()
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    private function projectAccessTableAvailable(): bool
-    {
-        try {
-            return Schema::hasTable('permisos_usuario_modulo');
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    private function integrationSecret(int $novaUserId, string $type): string
-    {
-        if ($novaUserId <= 0 || !$this->userIntegrationsTableAvailable()) {
-            return '';
-        }
-
-        try {
-            $secret = (string) DB::table('integraciones_usuario')
-                ->where('usuario_id', $novaUserId)
-                ->where('tipo', $type)
-                ->value('valor_secreto');
-
-            return $this->decryptIntegrationSecret($secret);
-        } catch (\Throwable) {
-            return '';
-        }
-    }
-
-    private function saveTelegramChatId(int $novaUserId, string $chatId): void
-    {
-        $chatId = trim($chatId);
-        if ($novaUserId <= 0 || $chatId === '' || !$this->novaUsersTableAvailable()) {
-            return;
-        }
-
-        try {
-            DB::table('usuarios_nova')
-                ->where('id', $novaUserId)
-                ->update([
-                    'telegram_id_chat' => $chatId,
-                    'actualizado_at' => now(),
-                ]);
-        } catch (\Throwable) {
-        }
-    }
-
-    private function encryptIntegrationSecret(string $secret): string
-    {
-        if ($secret === '') {
-            return '';
-        }
-
-        try {
-            return encrypt($secret);
-        } catch (\Throwable) {
-            return $secret;
-        }
-    }
-
-    private function decryptIntegrationSecret(string $secret): string
-    {
-        if ($secret === '') {
-            return '';
-        }
-
-        try {
-            return (string) decrypt($secret);
-        } catch (\Throwable) {
-            return $secret;
-        }
-    }
-
-    private function userIntegrationsTableAvailable(): bool
-    {
-        try {
-            return Schema::hasTable('integraciones_usuario');
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    private function findNovaUserIndexForProjectUser(array $novaUsers, array $projectUser): ?int
-    {
-        $redmineId = $this->normalizeUnifiedIdentity((string) ($projectUser['id'] ?? ''));
-        $needles = array_filter(array_map([$this, 'normalizeUnifiedIdentity'], [
-            $projectUser['rut'] ?? '',
-            $projectUser['rut_sin_dv'] ?? '',
-        ]));
-
-        foreach ($novaUsers as $index => $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            $project = is_array(data_get($row, 'projects.' . $this->projectKey)) ? data_get($row, 'projects.' . $this->projectKey) : [];
-            $candidateRedmineId = $this->normalizeUnifiedIdentity((string) ($project['id'] ?? $row['redmine_id'] ?? ''));
-            if ($redmineId !== '' && $candidateRedmineId === $redmineId) {
-                return $index;
-            }
-
-            $candidates = array_filter(array_map([$this, 'normalizeUnifiedIdentity'], [
-                $row['rut'] ?? '',
-                $row['rut_sin_dv'] ?? '',
-                $row['username'] ?? '',
-            ]));
-            if ($needles !== [] && array_intersect($needles, $candidates) !== []) {
-                return $index;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    private function novaUsers(): array
-    {
-        if (!$this->novaUsersTableAvailable()) {
-            return [];
-        }
-
-        return $this->novaUsersFromDatabase([]);
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $users
-     */
-    private function writeNovaUsers(array $users): void
-    {
-        if ($this->novaUsersTableAvailable()) {
-            $this->writeNovaUsersToDatabase($users);
-        }
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $fileUsers
-     * @return array<int,array<string,mixed>>
-     */
-    private function novaUsersFromDatabase(array $fileUsers): array
-    {
-        $fileByIdentity = [];
-        foreach ($fileUsers as $fileUser) {
-            foreach ([
-                $fileUser['redmine_id'] ?? '',
-                data_get($fileUser, 'projects.' . $this->projectKey . '.id', ''),
-                $fileUser['rut'] ?? '',
-                $fileUser['rut_sin_dv'] ?? '',
-                $fileUser['username'] ?? '',
-            ] as $identity) {
-                $identity = $this->normalizeUnifiedIdentity((string) $identity);
-                if ($identity !== '' && !isset($fileByIdentity[$identity])) {
-                    $fileByIdentity[$identity] = $fileUser;
-                }
-            }
-        }
-
-        try {
-            return NovaUser::query()
-                ->orderBy('nombre')
-                ->orderBy('apellido')
-                ->get()
-                ->map(function (NovaUser $user) use ($fileByIdentity): array {
-                    $redmineId = trim((string) $user->redmine_id);
-                    $rut = trim((string) $user->rut);
-                    $username = trim((string) $user->usuario);
-                    $current = [];
-
-                    foreach ([$redmineId, $rut, $username] as $identity) {
-                        $identity = $this->normalizeUnifiedIdentity($identity);
-                        if ($identity !== '' && isset($fileByIdentity[$identity])) {
-                            $current = $fileByIdentity[$identity];
-                            break;
-                        }
-                    }
-
-                    $project = is_array(data_get($current, 'projects.' . $this->projectKey))
-                        ? data_get($current, 'projects.' . $this->projectKey)
-                        : [];
-                    $projectRedmineId = $redmineId !== '' ? $redmineId : trim((string) ($project['id'] ?? ''));
-
-                    return array_merge($current, [
-                        'id' => (string) ($current['id'] ?? $user->uuid),
-                        'redmine_id' => $projectRedmineId,
-                        'username' => $username,
-                        'name' => trim((string) $user->nombre),
-                        'apellido' => trim((string) $user->apellido),
-                        'rut' => $rut,
-                        'rut_sin_dv' => trim((string) ($current['rut_sin_dv'] ?? $username)),
-                        'core_user' => trim((string) ($user->usuario_core ?? '')),
-                        'role' => $this->normalizeNovaRoleForProject((string) $user->rol),
-                        'status' => $this->normalizeProjectStatus((string) $user->estado),
-                        'password' => (string) ($user->password ?? $current['password'] ?? ''),
-                        'projects' => array_merge(is_array($current['projects'] ?? null) ? $current['projects'] : [], [
-                            $this->projectKey => array_merge($project, [
-                                'id' => $projectRedmineId,
-                                'rol' => trim((string) ($project['rol'] ?? $user->rol ?? 'usuario')) ?: 'usuario',
-                                'estado_usuario' => $this->normalizeProjectStatus((string) ($user->estado ?? 'activo')),
-                                'api' => trim((string) ($project['api'] ?? $current['api'] ?? '')),
-                                'permisos' => is_array($project['permisos'] ?? null) ? $project['permisos'] : [],
-                                'redmine_membership_id' => $project['redmine_membership_id'] ?? null,
-                            ]),
-                        ]),
-                    ]);
-                })
-                ->values()
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $users
-     */
-    private function writeNovaUsersToDatabase(array $users): void
-    {
-        foreach ($users as $user) {
-            if (!is_array($user)) {
-                continue;
-            }
-
-            $project = is_array(data_get($user, 'projects.' . $this->projectKey)) ? data_get($user, 'projects.' . $this->projectKey) : [];
-            $redmineId = trim((string) ($project['id'] ?? $user['redmine_id'] ?? ''));
-            $username = trim((string) ($user['username'] ?? $user['rut_sin_dv'] ?? $user['rut'] ?? $redmineId));
-            $name = trim((string) ($user['name'] ?? $user['nombre'] ?? ''));
-            $lastName = trim((string) ($user['apellido'] ?? ''));
-
-            if ($username === '' || $name === '') {
-                continue;
-            }
-
-            if ($lastName === '' && str_contains($name, ' ')) {
-                [$first, $rest] = explode(' ', $name, 2);
-                $name = $first;
-                $lastName = $rest;
-            }
-
-            try {
-                NovaUser::query()->updateOrCreate(
-                    ['usuario' => $username],
-                    [
-                        'uuid' => (string) ($user['id'] ?? Str::uuid()),
-                        'rut' => trim((string) ($user['rut'] ?? '')) ?: null,
-                        'redmine_id' => $this->unsignedIntegerOrNull($redmineId),
-                        'nombre' => $name,
-                        'apellido' => $lastName,
-                        'email' => trim((string) ($user['email'] ?? '')) ?: null,
-                        'rol' => $this->normalizeNovaRoleForProject((string) ($user['role'] ?? $user['rol'] ?? 'usuario')),
-                        'estado' => $this->normalizeProjectStatus((string) ($user['status'] ?? $user['estado_usuario'] ?? 'activo')),
-                        'password' => (string) ($user['password'] ?? ''),
-                        'usuario_core' => trim((string) ($user['core_user'] ?? '')) ?: null,
-                    ]
-                );
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-    }
-
-    private function novaUsersTableAvailable(): bool
-    {
-        try {
-            return Schema::hasTable('usuarios_nova');
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    private function redmineTicProfilesTableAvailable(): bool
-    {
-        try {
-            return Schema::hasTable('redmine_tic_perfiles_usuario');
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    /**
-     * @return array<int,object>
-     */
-    private function redmineTicProfilesByUserId(): array
-    {
-        if (!$this->redmineTicProfilesTableAvailable()) {
-            return [];
-        }
-
-        try {
-            $profiles = [];
-            foreach (DB::table('redmine_tic_perfiles_usuario')->get() as $profile) {
-                $profiles[(int) ($profile->usuario_id ?? 0)] = $profile;
-            }
-
-            return array_filter($profiles, static fn (object $profile): bool => (int) ($profile->usuario_id ?? 0) > 0);
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @return array<int,mixed>
-     */
-    private function jsonArray(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        $decoded = json_decode((string) $value, true);
-
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function normalizeUnifiedIdentity(string $value): string
-    {
-        return strtolower((string) preg_replace('/[^0-9a-z]/i', '', $value));
-    }
-
-    private function normalizeProjectStatus(string $status): string
-    {
-        return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
-    }
-
-    private function normalizeNovaRoleForProject(string $role): string
-    {
-        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
-    }
-
-    /**
-     * @param array<int,array<string,mixed>> $users
-     * @return array<int,array<string,mixed>>
-     */
-    private function hydrateUsersWithNovaTelegram(array $users): array
-    {
-        $novaByRedmineId = $this->novaTelegramByRedmineId();
-        if ($novaByRedmineId === []) {
-            return $users;
-        }
-
-        foreach ($users as &$user) {
-            $chatId = trim((string) ($user['telegram_chat_id'] ?? data_get($user, 'telegram_settings.chat_id', '')));
-            if ($chatId !== '') {
-                continue;
-            }
-
-            $redmineId = trim((string) ($user['id'] ?? ''));
-            if ($redmineId === '' || !isset($novaByRedmineId[$redmineId])) {
-                continue;
-            }
-
-            $user['telegram_chat_id'] = $novaByRedmineId[$redmineId];
-            $user['telegram_source'] = 'nova';
-        }
-        unset($user);
-
-        return $users;
-    }
-
-    /**
-     * @return array<string,string>
-     */
-    private function novaTelegramByRedmineId(): array
-    {
-        if (!$this->novaUsersTableAvailable()) {
-            return [];
-        }
-
-        $mapped = [];
-        try {
-            $rows = DB::table('usuarios_nova')
-                ->whereNotNull('usuarios_nova.redmine_id')
-                ->whereNotNull('usuarios_nova.telegram_id_chat')
-                ->select('usuarios_nova.redmine_id', 'usuarios_nova.telegram_id_chat')
-                ->get();
-
-            foreach ($rows as $row) {
-                $redmineId = trim((string) ($row->redmine_id ?? ''));
-                $chatId = trim((string) ($row->telegram_id_chat ?? ''));
-                if ($redmineId !== '' && $chatId !== '') {
-                    $mapped[$redmineId] = $chatId;
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        return $mapped;
-    }
 
     /**
      * @param string[] $items
@@ -5049,7 +4111,7 @@ final class RedmineDataRepository
             'db/configuration' => $this->saveConfiguration($incoming),
             'db/roles' => $this->saveRolesToDatabase($incoming),
             'db/categories' => $this->saveCatalogRowsToDatabase('categoria', $incoming),
-            'db/users' => $this->saveProjectUsers($incoming, true, 'baneado'),
+            'db/users' => $this->userRepo()->persistUsers($incoming, true, 'baneado'),
             'db/units' => $this->saveCatalogRowsToDatabase('unidad', $incoming),
             default => null,
         };

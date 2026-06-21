@@ -49,6 +49,31 @@ class RedmineReportRepository
     }
 
     /**
+     * Hard-deletes the single archived report row identified by string $id.
+     */
+    public function deleteArchived(string $id): int
+    {
+        if (!$this->tableAvailable() || trim($id) === '') {
+            return 0;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return 0;
+        }
+
+        try {
+            return DB::table('redmine_tic_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('id', (int) $id)
+                ->where('estado', 'archivado')
+                ->delete();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
      * Hard-deletes all active (non-archived) report rows not in $keepIds.
      */
     public function deleteActiveExcept(int $moduleId, array $keepIds): void
