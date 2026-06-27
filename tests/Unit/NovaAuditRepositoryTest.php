@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Repositories\Nova\NovaAuditRepository;
+use App\Modulos\Nova\Repositories\NovaAuditRepository;
 use Tests\TestCase;
 
 class NovaAuditRepositoryTest extends TestCase

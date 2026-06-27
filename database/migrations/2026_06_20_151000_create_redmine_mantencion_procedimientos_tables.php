@@ -25,7 +25,7 @@ return new class extends Migration
                 $table->string('file_mime')->nullable();
                 $table->unsignedBigInteger('file_size')->default(0);
                 $table->string('file_url', 2048)->nullable();
-                $table->string('storage_driver', 40)->default('local');
+                $table->string('storage_driver', 40)->default('nextcloud');
                 $table->string('nextcloud_path', 2048)->nullable();
                 $table->string('nextcloud_share_id')->nullable();
                 $table->string('nextcloud_share_url', 2048)->nullable();
@@ -116,7 +116,7 @@ return new class extends Migration
             'file_mime' => trim((string) ($item['file_mime'] ?? '')) ?: null,
             'file_size' => max(0, (int) ($item['file_size'] ?? 0)),
             'file_url' => trim((string) ($item['file_url'] ?? '')) ?: null,
-            'storage_driver' => trim((string) ($item['storage_driver'] ?? 'local')) ?: 'local',
+            'storage_driver' => trim((string) ($item['storage_driver'] ?? 'nextcloud')) ?: 'nextcloud',
             'nextcloud_path' => trim((string) ($item['nextcloud_path'] ?? '')) ?: null,
             'nextcloud_share_id' => trim((string) ($item['nextcloud_share_id'] ?? '')) ?: null,
             'nextcloud_share_url' => trim((string) ($item['nextcloud_share_url'] ?? '')) ?: null,

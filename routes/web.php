@@ -1,17 +1,17 @@
 <?php
 
-use App\Http\Controllers\LegacyProjectController;
-use App\Http\Controllers\ModuleAdminController;
-use App\Http\Controllers\NovaAdministrationController;
-use App\Http\Controllers\NovaAuthController;
-use App\Http\Controllers\TelegramController;
-use App\Http\Controllers\UserIntegrationController;
-use App\Repositories\Modules\ModuleRegistry;
-use App\Repositories\Nova\NovaAccessRepository;
-use App\Services\Nova\ProjectAccessGuard;
+use App\Modulos\Nova\Controllers\LegacyProjectController;
+use App\Modulos\Nova\Controllers\ModuleAdminController;
+use App\Modulos\Nova\Controllers\NovaAdministrationController;
+use App\Modulos\Nova\Controllers\NovaAuthController;
+use App\Modulos\Telegram\Controllers\TelegramController;
+use App\Modulos\Nova\Controllers\UserIntegrationController;
+use App\Modulos\Nova\Repositories\ModuleRegistry;
+use App\Modulos\Nova\Repositories\NovaAccessRepository;
+use App\Modulos\Nova\Services\ProjectAccessGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use RedmineTic\Http\Controllers\RedmineDashboardController;
+use RedmineTic\Controllers\RedmineDashboardController;
 
 $modulePattern = implode('|', array_map(
     static fn (string $key): string => preg_quote($key, '/'),
@@ -41,6 +41,12 @@ Route::post('/session/extend', [NovaAuthController::class, 'extendSession'])->mi
 Route::get('/{project}/assets/{path}', [LegacyProjectController::class, 'asset'])
     ->where('project', $modulePattern)
     ->where('path', '.*');
+
+Route::match(['GET', 'HEAD'], '/redmine-mantencion/controllers/procedimientos_file.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'controllers/procedimientos_file.php'))
+    ->name('redmine.mantencion.procedimientos-file');
+
+Route::post('/redmine-mantencion/controllers/onlyoffice.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'controllers/onlyoffice.php'))
+    ->name('redmine.mantencion.onlyoffice-callback');
 
 Route::middleware('nova.auth')->group(function () use ($modulePattern, $legacyModulePattern) {
 Route::get('/', function (ModuleRegistry $modules, NovaAccessRepository $access) {

@@ -1,0 +1,162 @@
+{
+    "platform_url": "https:\/\/coresalud.cl\/gp\/projects\/backlog-mantencion-ti\/issues.json",
+    "platform_token": "",
+    "project_id": 48,
+    "tracker_id": 3,
+    "priority_id": 2,
+    "cf_solicitante": "3",
+    "cf_unidad": "5",
+    "cf_hora_extra": "12",
+    "status_id": 1,
+    "category_id": null,
+    "retencion_horas": 1,
+    "session_timeout": 600,
+    "trackers": [
+        {
+            "id": 1,
+            "nombre": "Errores",
+            "default": false
+        },
+        {
+            "id": 10,
+            "nombre": "Servidores",
+            "default": false
+        },
+        {
+            "id": 3,
+            "nombre": "Soporte",
+            "default": true
+        },
+        {
+            "id": 14,
+            "nombre": "Estadisticas",
+            "default": false
+        }
+    ],
+    "prioridades": [
+        {
+            "id": 1,
+            "nombre": "Baja",
+            "default": false
+        },
+        {
+            "id": 2,
+            "nombre": "Normal",
+            "default": true
+        },
+        {
+            "id": 3,
+            "nombre": "Alta",
+            "default": false
+        },
+        {
+            "id": 4,
+            "nombre": "Urgente",
+            "default": false
+        },
+        {
+            "id": 5,
+            "nombre": "Inmediata",
+            "default": false
+        }
+    ],
+    "estados": [
+        {
+            "id": 1,
+            "nombre": "Nueva",
+            "default": true
+        }
+    ],
+    "project_name": "Backlog Mantencion TI",
+    "cf_unidad_solicitante": null,
+    "categories_url": "https:\/\/coresalud.cl\/gp\/projects\/backlog-mantencion-ti\/settings\/categories",
+    "unidades_url": "https:\/\/coresalud.cl\/gp\/custom_fields.json",
+    "source_mode": "core",
+    "core_enabled": true,
+    "core_admin_url": "https:\/\/www.hbvaldivia.cl\/core\/solicitudes\/administrador",
+    "core_historico_url": "https:\/\/www.hbvaldivia.cl\/core\/solicitudes\/administrador\/obtener_solicitudes_historicas",
+    "core_sync_minutes": 2,
+    "core_last_sync": "2026-05-12T21:50:06+02:00",
+    "core_last_error": "",
+    "maintenance_mode": false,
+    "maintenance_until": "",
+    "onlyoffice_url": "http:\/\/10.63.123.249:8080",
+    "onlyoffice_app_url": "http:\/\/10.63.123.250\/redmine-mantencion",
+    "onlyoffice_jwt_secret": "Qwer8434",
+    "hora_extra_tiempo_estimado": "1",
+    "nextcloud_url": "https:\/\/www.coresalud.cl\/nextcloud",
+    "nextcloud_admin_user": "",
+    "nextcloud_default_group": "",
+    "nextcloud_default_quota": "",
+    "nextcloud_default_language": "es",
+    "nextcloud_admin_pass_enc": "",
+    "nextcloud_cached_groups": [
+        "Abastecimiento",
+        "admin",
+        "Anatomia Patologica",
+        "Auditoria Clinica",
+        "Banco de Sangre",
+        "Bodega Farmacia",
+        "Comite Acceso Vascular",
+        "Contabilidad",
+        "Dental",
+        "Depto. Desarrollo y Calidad de Vida",
+        "Depto de Operaciones",
+        "Dialisis",
+        "Dirección",
+        "Esterilizacion",
+        "Farmacia",
+        "Finanzas",
+        "Gestion de la Matroneria",
+        "Histicompatibilidad",
+        "Hospitalizacion Ginecologia Obstetricia",
+        "Imagenologia",
+        "Informática",
+        "Juridica",
+        "Laboratorio",
+        "Laboratorio Microbiologia",
+        "Lavanderia",
+        "Lista Espera Quirurgica LEQ",
+        "Medicina",
+        "Medicina \/ UGA",
+        "Medicina Física",
+        "Medicina Interna",
+        "Medico Quirurgico Indiferenciado",
+        "Movilización",
+        "Nefrologia",
+        "Neo",
+        "Nutrición clínica medicina 4 piso",
+        "Oficina de Partes",
+        "Pediatrico Quirurgico",
+        "Pediatría",
+        "Policlínico de Otorrino",
+        "Prevencion de Riesgos",
+        "Programa de Trasplante",
+        "Recaudacion",
+        "Recursos Humanos",
+        "Redes y Tecnovigilancia",
+        "Rehabilitacion HBV",
+        "Remuneraciones",
+        "SDA",
+        "SDM",
+        "Soporte TI",
+        "Subdepto. Atraccion",
+        "Subdepto. Ciclo de Vida Laboral",
+        "Subdepto de Inversion y Proyectos",
+        "Subdepto de Mantenimient",
+        "Subdepto de Mantenimiento",
+        "Subdepto Infraestructura",
+        "Subdepto Servicios y Logisitca",
+        "UCI 1",
+        "UCI 2",
+        "Uci Pediatrica",
+        "Unidad Archivo",
+        "Unidad Central de Produccion",
+        "Unidad de Calidad",
+        "Unidad Quimioterapia Ambulatoria",
+        "UPC",
+        "UTI 1",
+        "UTI 2"
+    ],
+    "nextcloud_cached_groups_at": "2026-05-13T18:20:54+02:00"
+}

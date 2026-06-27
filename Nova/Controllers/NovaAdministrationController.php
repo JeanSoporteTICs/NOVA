@@ -1,0 +1,265 @@
+<?php
+
+namespace App\Modulos\Nova\Controllers;
+
+use App\Http\Controllers\Controller;
+
+use App\Modulos\Telegram\Repositories\TelegramCommandCatalog;
+use App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository;
+use App\Modulos\Nova\Repositories\NovaAccessRepository;
+use App\Modulos\Nova\Repositories\NovaAuditRepository;
+use App\Modulos\Nova\Repositories\NovaBackupRepository;
+use App\Modulos\Nova\Repositories\NovaHealthRepository;
+use App\Modulos\Nova\Repositories\NovaUserRepository;
+use App\Modulos\Nova\Services\NovaNotificationService;
+use App\Modulos\Telegram\Services\TelegramService;
+use App\Modulos\Nova\Repositories\NovaSettingsRepository;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Throwable;
+
+class NovaAdministrationController extends Controller
+{
+    public function __construct(private TelegramService $telegram)
+    {
+    }
+
+    public function index(Request $request, NovaUserRepository $users, NovaSettingsRepository $settings, NovaAccessRepository $access, NovaAuditRepository $audit, NovaHealthRepository $health, NovaBackupRepository $backups, TelegramCommandCatalog $telegramCommands, TelegramCommandSettingsRepository $telegramSettings, string $section = 'centro'): View
+    {
+        $this->authorizeAdmin($request);
+        $section = in_array($section, ['centro', 'configuracion', 'plataforma', 'salud', 'auditoria', 'respaldos', 'telegram', 'telegram-mensajes', 'emach', 'usuarios', 'accesos'], true) ? $section : 'centro';
+        $this->telegram->load();
+        $needsHealth = in_array($section, ['centro', 'salud'], true);
+        $needsAudit = in_array($section, ['centro', 'auditoria'], true);
+        $needsBackups = in_array($section, ['centro', 'respaldos'], true);
+        $needsTelegram = in_array($section, ['centro', 'telegram', 'telegram-mensajes'], true);
+
+        return view('nova.admin.index', [
+            'section'                     => $section,
+            'users'                       => $users->all(),
+            'settings'                    => $settings->all(),
+            'accessMatrix'                => $access->matrix(),
+            'telegramConfig'              => $this->telegram->readConfig(),
+            'telegramConfigured'          => $this->telegram->isConfigured(),
+            'telegramListener'            => $needsTelegram ? $this->telegram->listenerStatus() : [],
+            'telegramCommands'            => $telegramCommands->commands(),
+            'telegramHelpText'            => $telegramCommands->helpText(),
+            'telegramCommandSettings'     => $telegramSettings->all(),
+            'telegramCommandSettingsPath' => $telegramSettings->path(),
+            'emachConfig'                 => $this->readEmachMonitorConfig(),
+            'emachConfigPath'             => 'nova_settings:emach_monitor_config',
+            'auditItems'                  => $needsAudit ? $audit->recent($section === 'centro' ? 8 : 120) : [],
+            'healthChecks'                => $needsHealth ? $health->checks() : [],
+            'backupTargets'               => $backups->targets(),
+            'backupItems'                 => $needsBackups ? $backups->recent() : [],
+        ]);
+    }
+
+    public function updateSettings(Request $request, NovaSettingsRepository $settings, NovaAuditRepository $audit, NovaNotificationService $notifications): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $action = (string) $request->input('action', 'settings');
+
+        if ($action === 'telegram') {
+            $current = $this->telegram->readConfig();
+            $token   = (string) $request->input('bot_token', '');
+            $config  = [
+                'bot_token'          => $token !== '' ? $token : (string) ($current['bot_token'] ?? ''),
+                'chat_id'            => (string) ($current['chat_id'] ?? ''),
+                'proxy_url'          => trim((string) $request->input('proxy_url', '')),
+                'default_parse_mode' => '',
+            ];
+
+            if (!$this->telegram->isConfigured($config)) {
+                return redirect()->route('administracion.section', 'telegram')->with('error', 'Completa TELEGRAM_BOT_TOKEN.');
+            }
+
+            if (!$this->telegram->saveConfig($config)) {
+                return redirect()->route('administracion.section', 'telegram')->with('error', 'No se pudo guardar Telegram global.');
+            }
+            $audit->record('settings_telegram', 'Telegram global actualizado.', ['proxy' => $config['proxy_url']], $request);
+
+            return redirect()->route('administracion.section', 'telegram')->with('status', 'Telegram global actualizado.');
+        }
+
+        if ($action === 'telegram_messages') {
+            $repository = app(TelegramCommandSettingsRepository::class);
+            if (!$repository->save($request->all())) {
+                return redirect()->route('administracion.section', 'telegram-mensajes')->with('error', 'No se pudo guardar mensajes Telegram.');
+            }
+            $audit->record('settings_telegram_messages', 'Mensajes Telegram actualizados.', ['path' => $repository->path()], $request);
+
+            return redirect()->route('administracion.section', 'telegram-mensajes')->with('status', 'Mensajes Telegram actualizados.');
+        }
+
+        if ($action === 'emach') {
+            $config = [
+                'schedule'      => trim((string) $request->input('schedule', '07:00-09:30=15,16:30-19:30=15')),
+                'slow_interval' => max(15, (int) $request->input('slow_interval', 300)),
+                'updated_at'    => date(DATE_ATOM),
+            ];
+
+            if (!$this->writeEmachMonitorConfig($config)) {
+                return redirect()->route('administracion.section', 'emach')->with('error', 'No se pudo guardar la configuracion EMACH.');
+            }
+            $audit->record('settings_emach', 'Configuracion EMACH actualizada.', $config, $request);
+
+            return redirect()->route('administracion.section', 'emach')->with('status', 'Configuracion EMACH actualizada.');
+        }
+
+        $payload = $request->validate([
+            'session_timeout'          => ['required', 'integer', 'min:60'],
+            'notification_enabled'     => ['nullable', 'boolean'],
+            'health_warning_threshold' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $payload['notification_enabled'] = $request->boolean('notification_enabled');
+        $settings->save($payload);
+        $audit->record('settings_global', 'Configuracion global actualizada.', $payload, $request);
+        if (!empty($payload['notification_enabled'])) {
+            $notifications->notify('Configuracion global actualizada.');
+        }
+
+        return redirect()->route('administracion.section', 'configuracion')->with('status', 'Configuracion actualizada.');
+    }
+
+    public function telegramListener(Request $request): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $this->telegram->load();
+
+        $action = (string) $request->input('action', '');
+
+        try {
+            if ($action === 'start') {
+                return redirect()->route('administracion.section', 'telegram')->with('error', 'El listener Telegram ahora se administra desde Docker.');
+            }
+            if ($action === 'stop') {
+                return redirect()->route('administracion.section', 'telegram')->with('error', 'El listener Telegram ahora se administra desde Docker.');
+            }
+            if ($action === 'delete_webhook') {
+                $config = $this->telegram->readConfig();
+                $this->telegram->deleteWebhook((string) ($config['bot_token'] ?? ''));
+                return redirect()->route('administracion.section', 'telegram')->with('status', 'Webhook Telegram eliminado.');
+            }
+            if ($action === 'clear_log') {
+                return redirect()->route('administracion.section', 'telegram')->with('error', 'El log del listener Telegram ahora se revisa desde Docker.');
+            }
+        } catch (Throwable $e) {
+            return redirect()->route('administracion.section', 'telegram')->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('administracion.section', 'telegram')->with('error', 'Accion de listener no reconocida.');
+    }
+
+    public function updateUsers(Request $request, NovaUserRepository $users, NovaAuditRepository $audit, NovaNotificationService $notifications): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $action = (string) $request->input('action', 'save');
+        if ($action === 'delete') {
+            $users->delete((string) $request->input('id'));
+            $audit->record('user_banned', 'Usuario marcado como baneado.', ['id' => (string) $request->input('id')], $request);
+            $notifications->notify('Usuario marcado como baneado: ' . (string) $request->input('id'));
+
+            return redirect()->route('administracion.section', 'usuarios')->with('status', 'Usuario marcado como baneado.');
+        }
+
+        if ($action === 'activate') {
+            $users->activate((string) $request->input('id'));
+            $audit->record('user_activated', 'Usuario activado.', ['id' => (string) $request->input('id')], $request);
+
+            return redirect()->route('administracion.section', 'usuarios')->with('status', 'Usuario activado.');
+        }
+
+        if ($action === 'password') {
+            $result = $users->changePassword(
+                (string) $request->input('id'),
+                (string) $request->input('password'),
+                (string) $request->input('password_confirmation')
+            );
+            $audit->record($result['ok'] ? 'user_password_changed' : 'user_password_error', $result['ok'] ? 'Contrasena de usuario actualizada.' : $result['error'], ['id' => (string) $request->input('id')], $request);
+
+            return redirect()
+                ->route('administracion.section', 'usuarios')
+                ->with($result['ok'] ? 'status' : 'error', $result['ok'] ? 'Contrasena actualizada.' : $result['error']);
+        }
+
+        $result = $users->save($request->all());
+        $audit->record($result['ok'] ? 'user_saved' : 'user_save_error', $result['ok'] ? 'Usuario guardado.' : $result['error'], ['username' => (string) $request->input('username')], $request);
+
+        return redirect()
+            ->route('administracion.section', 'usuarios')
+            ->with($result['ok'] ? 'status' : 'error', $result['ok'] ? 'Usuario guardado.' : $result['error']);
+    }
+
+    public function updateAccess(Request $request, NovaAccessRepository $access, NovaAuditRepository $audit): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $access->save($request->all());
+        $audit->record('access_updated', 'Accesos NOVA actualizados.', ['identity' => (string) $request->input('selected_identity')], $request);
+
+        return redirect()->route('administracion.section', 'accesos')->with('status', 'Accesos actualizados.');
+    }
+
+    public function createBackup(Request $request, NovaBackupRepository $backups, NovaAuditRepository $audit): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $target = (string) $request->input('target', 'all');
+        $count  = $backups->create($target);
+        $audit->record('backup_created', 'Respaldo manual creado.', ['target' => $target, 'files' => $count], $request);
+
+        return redirect()
+            ->route('administracion.section', 'respaldos')
+            ->with($count > 0 ? 'status' : 'error', $count > 0 ? "Respaldo creado: {$count} archivo(s)." : 'No se generaron respaldos.');
+    }
+
+    private function authorizeAdmin(Request $request): void
+    {
+        $role    = (string) data_get($request->session()->get('nova_user'), 'role', 'usuario');
+        $allowed = config('nova.module_admin_roles', []);
+
+        abort_unless(in_array($role, $allowed, true), 403);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function readEmachMonitorConfig(): array
+    {
+        try {
+            if (!Schema::hasTable('nova_settings')) {
+                return [];
+            }
+            $row = DB::table('nova_settings')->where('clave', 'emach_monitor_config')->first();
+            if (!$row) {
+                return [];
+            }
+            $decoded = json_decode((string) ($row->valor ?? ''), true);
+            return is_array($decoded) ? $decoded : [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function writeEmachMonitorConfig(array $config): bool
+    {
+        try {
+            if (!Schema::hasTable('nova_settings')) {
+                return false;
+            }
+            DB::table('nova_settings')->updateOrInsert(
+                ['clave' => 'emach_monitor_config'],
+                ['valor' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'tipo' => 'json']
+            );
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+}

@@ -2,7 +2,7 @@
 
 $h = $h ?? static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 $sessionTimeout = function_exists('app')
-    ? app(\App\Support\Nova\NovaSettingsRepository::class)->sessionTimeout()
+    ? app(\App\Modulos\Nova\Repositories\NovaSettingsRepository::class)->sessionTimeout()
     : 300;
 $lastActivity = function_exists('session')
     ? (int) session('nova_last_activity', time())

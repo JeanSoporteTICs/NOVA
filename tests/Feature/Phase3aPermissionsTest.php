@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RedmineTic\Support\Redmine\RedmineDataRepository;
+use RedmineTic\Repositories\RedmineDataRepository;
 use Tests\TestCase;
 
 /**

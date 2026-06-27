@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RedmineTic\Support\Redmine\RedmineDataRepository;
+use RedmineTic\Repositories\RedmineDataRepository;
 
 /**
  * Validates that Phase 3a (relational permissions) is correctly populated

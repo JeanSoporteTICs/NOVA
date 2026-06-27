@@ -1,0 +1,115 @@
+[02-06-2026 17:24:47] REDMINE_SEND - Ticket enviado a Redmine. Mensaje=manual-6a1f4503b6f177.28249420 Ticket=124667 Usuario=Jean Cortes Lorca
+[03-06-2026 10:33:56] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 10:34:28] REPORT_DELETE - Jean Cortes Lorca (ID 42) | Elimino reporte ID core-958a3c8de6b0f2039fdd | IP 10.63.123.250
+[03-06-2026 10:45:36] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 10:51:12] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 10:59:24] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 11:05:03] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 11:38:46] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 11:51:05] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 12:21:04] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 12:22:15] REDMINE_SEND - Ticket enviado a Redmine. Mensaje=manual-6a2054ad3a86e9.85252410 Ticket=124751 Usuario=Jean Cortes Lorca
+[03-06-2026 12:22:15] REDMINE_SEND - Jean Cortes Lorca (ID 42) | Envio datos a Redmine | seleccionados 1 | intentos 1 | exitos 1 | fallas 0 | IP 10.63.123.250
+[03-06-2026 12:22:36] REPORT_ARCHIVE - Jean Cortes Lorca (ID 42) | Archivo 1 reporte(s) | IP 10.63.123.250
+[03-06-2026 13:49:43] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 14:00:56] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 192.168.122.74
+[03-06-2026 14:01:15] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 14:16:04] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 192.168.122.74
+[03-06-2026 14:22:21] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 14:34:15] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 14:48:53] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 15:34:11] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 15:44:37] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[03-06-2026 16:36:16] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[03-06-2026 17:50:00] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 07:56:03] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 08:07:27] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 08:15:14] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 08:28:28] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 08:50:53] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 09:17:20] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 10:19:52] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 10:38:55] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 11:52:37] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 12:08:41] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 12:15:31] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 12:55:49] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 13:18:56] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 13:28:43] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 13:40:41] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 13:51:01] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 14:06:06] SESSION_EXTEND_FAIL - NOVA contraseña incorrecta para Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 14:06:08] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 14:13:20] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 14:27:46] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 14:36:02] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 14:49:17] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 15:01:29] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 15:33:59] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[04-06-2026 16:26:34] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[04-06-2026 16:45:06] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 07:57:34] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 08:25:53] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 08:49:00] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 09:02:48] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 09:54:55] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 12:08:18] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 12:15:16] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 12:27:28] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 12:47:54] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 14:08:44] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:09:04] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:21:54] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 14:22:56] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:22:59] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:23:04] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:24:19] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:25:14] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 14:27:18] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:27:21] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:29:03] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:29:15] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:29:35] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:29:39] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:30:02] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:30:19] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:30:22] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:35:58] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:36:19] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:36:23] LOGIN_FAILURE - Intento NOVA con "20315241" | IP 10.63.123.250
+[05-06-2026 14:37:33] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:46:04] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[05-06-2026 14:46:20] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[05-06-2026 14:46:24] LOGIN_SUCCESS - NOVA User Hernan (ID 4a9c9798-cc52-403b-a0f2-a82a591e3420) | IP 10.63.123.250
+[05-06-2026 15:00:26] SESSION_EXTEND - NOVA sesion extendida por Hernan (ID 4a9c9798-cc52-403b-a0f2-a82a591e3420) | timeout 360 | IP 10.63.123.250
+[05-06-2026 15:06:49] SESSION_EXTEND - NOVA sesion extendida por Hernan (ID 4a9c9798-cc52-403b-a0f2-a82a591e3420) | timeout 360 | IP 10.63.123.250
+[06-06-2026 08:08:05] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[06-06-2026 08:54:53] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 09:10:43] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 09:22:14] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 09:43:00] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 10:02:39] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 10:15:08] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 10:31:58] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 10:39:57] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 360 | IP 10.63.123.250
+[06-06-2026 10:51:35] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[06-06-2026 14:16:15] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[06-06-2026 14:43:25] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[06-06-2026 14:58:54] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[06-06-2026 15:14:28] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[06-06-2026 17:04:52] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[08-06-2026 14:05:11] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[09-06-2026 09:12:24] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[09-06-2026 14:16:15] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[09-06-2026 15:45:34] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[09-06-2026 15:56:06] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[09-06-2026 15:56:28] CORE_IMPORT - Jean Cortes Lorca (ID 42) | Obtuvo datos CORE desde 2026-06-09 hasta 2026-06-09 | asignado "Jean Cortes Lorca" | nuevos 6 | actualizados 0 | IP 10.63.123.250
+[11-06-2026 09:43:33] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[11-06-2026 09:51:41] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[11-06-2026 10:07:52] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[11-06-2026 10:37:20] SESSION_EXTEND - NOVA sesion extendida por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[11-06-2026 10:57:15] LOGOUT - NOVA sesion cerrada por Jean Cortes Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[11-06-2026 14:29:22] LOGIN_SUCCESS - NOVA User Jean Cortes Lorca Cortés Lorca Cortés Lorca Cortés Lorca Cortés Lorca Cortés Lorca Cortés Lorca Cortés Lorca (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[11-06-2026 14:49:28] LOGIN_SUCCESS - NOVA User Jean (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | IP 10.63.123.250
+[11-06-2026 15:00:56] SESSION_EXTEND - NOVA sesion extendida por Jean (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250
+[11-06-2026 15:16:18] SESSION_EXTEND - NOVA sesion extendida por Jean (ID a14ed052-f9fe-4a02-876a-56e252f539f4) | timeout 600 | IP 10.63.123.250

@@ -34,7 +34,7 @@ return [
         'description' => 'Gestiona reportes, pendientes, procedimientos e integraciones de mantencion.',
         'icon' => 'bi-tools',
         'type' => 'native',
-        'path' => $modulePath('NOVA_REDMINE_MANTENCION_PATH', 'redmine-mantencion'),
+        'path' => $modulePath('NOVA_REDMINE_MANTENCION_PATH', 'RedmineMantencion'),
         'entry' => 'laravel:redmine.mantencion.dashboard',
         'allowed_static_roots' => [
             'assets',
@@ -52,7 +52,7 @@ return [
         'description' => 'Nuevo proyecto integrado a NOVA.',
         'icon' => 'bi-heart-pulse',
         'type' => 'legacy',
-        'path' => $modulePath('NOVA_EMACH_PATH', 'emach'),
+        'path' => $modulePath('NOVA_EMACH_PATH', 'Emach'),
         'entry' => 'index.php',
         'allowed_static_roots' => [
             'assets',

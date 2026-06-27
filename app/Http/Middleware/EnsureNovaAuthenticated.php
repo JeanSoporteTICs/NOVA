@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Repositories\Nova\NovaUserRepository;
-use App\Support\Nova\NovaSettingsRepository;
+use App\Modulos\Nova\Repositories\NovaUserRepository;
+use App\Modulos\Nova\Repositories\NovaSettingsRepository;
 use Closure;
 use Illuminate\Http\Request;
 

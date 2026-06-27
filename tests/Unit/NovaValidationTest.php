@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Support\Nova\NovaValidation;
+use App\Modulos\Nova\Services\NovaValidation;
 use PHPUnit\Framework\TestCase;
 
 class NovaValidationTest extends TestCase

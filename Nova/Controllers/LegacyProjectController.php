@@ -1,0 +1,358 @@
+<?php
+
+namespace App\Modulos\Nova\Controllers;
+
+use App\Http\Controllers\Controller;
+
+use App\Modulos\Nova\Repositories\ModuleRegistry;
+use App\Modulos\Nova\Services\ProjectAccessGuard;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+
+class LegacyProjectController extends Controller
+{
+    private ModuleRegistry $modules;
+
+    public function __construct(ModuleRegistry $modules)
+    {
+        $this->modules = $modules;
+    }
+
+    public function index(string $project, ProjectAccessGuard $access)
+    {
+        $config = $this->projectConfig($project);
+        $this->abortIfDisabled($config);
+        if (!$this->userCanAccessProject($project, $config, $access)) {
+            return redirect()->route('home')->with('access_error', $access->deniedMessage((string) ($config['name'] ?? $project)));
+        }
+
+        return $this->dispatchPhp($project, $config, $config['entry']);
+    }
+
+    public function passthrough(Request $request, string $project, ?string $path = null)
+    {
+        $config = $this->projectConfig($project);
+        $this->abortIfDisabled($config);
+        $path = $this->normalizePath($path ?: $config['entry']);
+
+        if ($path === '') {
+            $path = $config['entry'];
+        }
+
+        if ($project === 'redmine-mantencion' && strtolower($path) === 'usuarios/usuarios.php') {
+            $path = 'views/Usuarios/usuarios.php';
+        }
+
+        if ($project === 'emach' && strtolower($path) === 'views/mantenedor/mantenedor.php') {
+            return redirect()->route('integrations.emach');
+        }
+
+        if (in_array(strtolower($path), ['login.php', 'app/views/auth/login.php'], true)) {
+            return redirect()->route('login');
+        }
+
+        if (strtolower($path) === 'logout.php') {
+            $url   = route('logout');
+            $token = csrf_token();
+            return response(
+                "<form id='_lf' method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'>" .
+                "<input type='hidden' name='_token' value='" . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . "'>" .
+                "</form><script>document.getElementById('_lf').submit();</script>"
+            );
+        }
+
+        $fullPath = $this->resolveInsideProject($config, $path);
+        if (!is_file($fullPath)) {
+            abort(404);
+        }
+
+        if (strtolower(pathinfo($fullPath, PATHINFO_EXTENSION)) === 'php') {
+            $isPublicEndpoint = $this->isPublicLegacyEndpoint($request, $project, $path);
+            $access = app(ProjectAccessGuard::class);
+            if (!$isPublicEndpoint && !$this->userCanAccessProject($project, $config, $access)) {
+                return redirect()->route('home')->with('access_error', $access->deniedMessage((string) ($config['name'] ?? $project)));
+            }
+            $this->assertAllowedRoot($path, $config['allowed_php_roots']);
+
+            return $this->dispatchPhp($project, $config, $path, !$isPublicEndpoint);
+        }
+
+        $this->assertAllowedRoot($path, $config['allowed_static_roots']);
+
+        $response = new BinaryFileResponse($fullPath);
+        $contentType = $this->staticContentType($fullPath);
+        if ($contentType !== null) {
+            $response->headers->set('Content-Type', $contentType);
+        }
+
+        return $response;
+    }
+
+    public function asset(Request $request, string $project, string $path)
+    {
+        return $this->passthrough($request, $project, 'assets/' . $path);
+    }
+
+    private function dispatchPhp(string $project, array $config, string $path, bool $rewriteOutput = true): Response
+    {
+        $fullPath = $this->resolveInsideProject($config, $path);
+        if (!is_file($fullPath)) {
+            abort(404);
+        }
+
+        $previousDirectory = getcwd();
+        chdir($config['path']);
+
+        ob_start();
+        try {
+            $this->prepareLegacyRuntime($project, $config);
+            require $fullPath;
+        } finally {
+            if ($previousDirectory !== false) {
+                chdir($previousDirectory);
+            }
+        }
+
+        $headers = headers_list();
+        header_remove();
+
+        $content = (string) ob_get_clean();
+        if ($rewriteOutput) {
+            $content = $this->rewriteLegacyOutput($content);
+        }
+        $status = http_response_code() ?: 200;
+        $response = response($content, $status);
+
+        foreach ($headers as $header) {
+            [$name, $value] = array_pad(explode(':', $header, 2), 2, '');
+            $name = trim($name);
+            $value = trim($value);
+            if ($name === '' || $value === '') {
+                continue;
+            }
+            if (strcasecmp($name, 'Location') === 0) {
+                $value = $this->rewriteLegacyUrl($value);
+            }
+            $response->headers->set($name, $value, strcasecmp($name, 'Set-Cookie') !== 0);
+        }
+
+        return $response;
+    }
+
+    private function prepareLegacyRuntime(string $project, array $config): void
+    {
+        $logDirectory = $config['path'] . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'logs';
+        if (!is_dir($logDirectory)) {
+            mkdir($logDirectory, 0777, true);
+        }
+
+        ini_set('log_errors', '1');
+        ini_set('error_log', $logDirectory . DIRECTORY_SEPARATOR . 'php-error.log');
+        $this->syncNovaUserToLegacySession($project);
+    }
+
+    private function rewriteLegacyOutput(string $content): string
+    {
+        $prefix = $this->publicBasePrefix();
+        if ($prefix === '') {
+            return $content;
+        }
+
+        foreach (array_keys(config('modules', [])) as $module) {
+            $content = str_replace('="/' . $module, '="' . $prefix . '/' . $module, $content);
+            $content = str_replace("='/" . $module, "='" . $prefix . '/' . $module, $content);
+            $content = str_replace('(/' . $module, '(' . $prefix . '/' . $module, $content);
+            $content = str_replace("'/". $module, "'" . $prefix . '/' . $module, $content);
+            $content = str_replace('"/' . $module, '"' . $prefix . '/' . $module, $content);
+        }
+
+        return $content;
+    }
+
+    private function rewriteLegacyUrl(string $url): string
+    {
+        $prefix = $this->publicBasePrefix();
+        if ($prefix === '' || !str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        foreach (array_keys(config('modules', [])) as $module) {
+            if ($url === '/' . $module || str_starts_with($url, '/' . $module . '/')) {
+                return $prefix . $url;
+            }
+        }
+
+        return $url;
+    }
+
+    private function publicBasePrefix(): string
+    {
+        return rtrim(request()->getBaseUrl(), '/');
+    }
+
+    private function staticContentType(string $path): ?string
+    {
+        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'css' => 'text/css; charset=UTF-8',
+            'js' => 'application/javascript; charset=UTF-8',
+            'svg' => 'image/svg+xml',
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'ico' => 'image/x-icon',
+            'webp' => 'image/webp',
+            'pdf' => 'application/pdf',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            default => null,
+        };
+    }
+
+    private function syncNovaUserToLegacySession(string $project): void
+    {
+        $novaUser = request()->session()->get('nova_user');
+        if (!is_array($novaUser)) {
+            return;
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $projectUser = app(ProjectAccessGuard::class)->projectUser($project, $novaUser);
+
+        $_SESSION['user'] = is_array($projectUser) ? $projectUser : ($novaUser['legacy'] ?? [
+            'id' => $novaUser['id'] ?? '',
+            'nombre' => $novaUser['name'] ?? '',
+            'rut' => $novaUser['rut'] ?? '',
+            'rol' => $novaUser['role'] ?? 'usuario',
+        ]);
+        $_SESSION['last_activity'] = time();
+    }
+
+    private function abortIfDisabled(array $config): void
+    {
+        abort_if(!($config['enabled'] ?? true), 404);
+    }
+
+    private function userCanAccessProject(string $project, array $config, ProjectAccessGuard $access): bool
+    {
+        $user = request()->session()->get('nova_user', []);
+        if (!is_array($user)) {
+            return false;
+        }
+
+        return $access->canAccess($project, $user);
+    }
+
+    private function isPublicLegacyEndpoint(Request $request, string $project, string $path): bool
+    {
+        if ($project !== 'redmine-mantencion') {
+            return false;
+        }
+
+        $path = strtolower($this->normalizePath($path));
+        if ($path === 'controllers/procedimientos_file.php') {
+            return ($request->isMethod('GET') || $request->isMethod('HEAD'))
+                && trim((string) $request->query('id', '')) !== ''
+                && trim((string) $request->query('token', '')) !== '';
+        }
+
+        if ($path === 'controllers/onlyoffice.php') {
+            $action = trim((string) $request->query('action', ''));
+            return $request->isMethod('POST')
+                && in_array($action, ['callback', 'client_log'], true)
+                && trim((string) $request->query('id', '')) !== '';
+        }
+
+        return false;
+    }
+
+    private function projectConfig(string $project): array
+    {
+        $config = $this->modules->get($project);
+        if (!is_array($config) || !is_dir($config['path'] ?? null)) {
+            abort(404);
+        }
+
+        return $config;
+    }
+
+    private function normalizePath(string $path): string
+    {
+        $path = str_replace('\\', '/', rawurldecode($path));
+        $path = ltrim($path, '/');
+        $parts = [];
+
+        foreach (explode('/', $path) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+
+            if ($part === '..') {
+                abort(404);
+            }
+
+            $parts[] = $part;
+        }
+
+        $normalized = implode('/', $parts);
+
+        return $this->normalizeLegacyViewShortcut($normalized);
+    }
+
+    private function normalizeLegacyViewShortcut(string $path): string
+    {
+        if (str_starts_with($path, 'views/') || !str_ends_with(strtolower($path), '.php')) {
+            return $path;
+        }
+
+        $section = strtolower(strtok($path, '/') ?: '');
+        $knownViewSections = [
+            'categorias',
+            'configuracion',
+            'dashboard',
+            'estadisticas',
+            'historico',
+            'horasextra',
+            'integraciones',
+            'pendientes',
+            'procedimientos',
+            'security',
+            'usuarios',
+        ];
+
+        return in_array($section, $knownViewSections, true) ? 'views/' . $path : $path;
+    }
+
+    private function resolveInsideProject(array $config, string $path): string
+    {
+        $base = realpath($config['path']);
+        $fullPath = realpath($config['path'] . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path));
+
+        if ($base === false || $fullPath === false || !str_starts_with($fullPath, $base . DIRECTORY_SEPARATOR)) {
+            abort(404);
+        }
+
+        return $fullPath;
+    }
+
+    private function assertAllowedRoot(string $path, array $allowedRoots): void
+    {
+        $path = trim($path, '/');
+
+        foreach ($allowedRoots as $root) {
+            $root = trim((string) $root, '/');
+            if ($root === '' && !str_contains($path, '/')) {
+                return;
+            }
+
+            if ($root !== '' && ($path === $root || str_starts_with($path, $root . '/'))) {
+                return;
+            }
+        }
+
+        abort(404);
+    }
+}

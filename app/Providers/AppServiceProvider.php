@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Contracts\ProjectUserProviderInterface;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -14,8 +15,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        if (class_exists(\RedmineTic\Services\Redmine\RedmineProjectUserProvider::class)) {
-            $this->app->bind(ProjectUserProviderInterface::class, \RedmineTic\Services\Redmine\RedmineProjectUserProvider::class);
+        if (class_exists(\RedmineTic\Services\RedmineProjectUserProvider::class)) {
+            $this->app->bind(ProjectUserProviderInterface::class, \RedmineTic\Services\RedmineProjectUserProvider::class);
         }
     }
 
@@ -26,7 +27,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        $redmineTicPath = rtrim((string) data_get(config('modules.redmine_tic', []), 'path', base_path('redmine_tic')), DIRECTORY_SEPARATOR);
-        $this->loadViewsFrom($redmineTicPath . DIRECTORY_SEPARATOR . 'nova' . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views', 'redmine_tic');
+        $this->loadViewsFrom(base_path('RedmineTic/views'), 'redmine_tic');
+        View::addLocation(base_path('Nova/views'));
     }
 }
