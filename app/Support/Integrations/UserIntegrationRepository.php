@@ -2,6 +2,7 @@
 
 namespace App\Support\Integrations;
 
+use App\Support\StringNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -323,7 +324,7 @@ final class UserIntegrationRepository
 
     private function normalize(mixed $value): string
     {
-        return strtolower((string) preg_replace('/[^0-9a-z]/i', '', (string) $value));
+        return StringNormalizer::normalize((string) $value);
     }
 
     private function tablesAvailable(): bool

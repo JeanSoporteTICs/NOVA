@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Modules\ModuleRegistry;
-use App\Support\Modules\ProjectAccessGuard;
+use App\Repositories\Modules\ModuleRegistry;
+use App\Services\Nova\ProjectAccessGuard;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -47,7 +47,13 @@ class LegacyProjectController extends Controller
         }
 
         if (strtolower($path) === 'logout.php') {
-            return redirect()->route('logout');
+            $url   = route('logout');
+            $token = csrf_token();
+            return response(
+                "<form id='_lf' method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'>" .
+                "<input type='hidden' name='_token' value='" . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . "'>" .
+                "</form><script>document.getElementById('_lf').submit();</script>"
+            );
         }
 
         $fullPath = $this->resolveInsideProject($config, $path);

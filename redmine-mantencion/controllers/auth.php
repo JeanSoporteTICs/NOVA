@@ -4,7 +4,6 @@ require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/logger.php';
 
 date_default_timezone_set('America/Santiago');
-storage_run_auto_backup();
 
 function legacy_app_url(string $path = ''): string {
     $path = '/' . ltrim($path, '/');

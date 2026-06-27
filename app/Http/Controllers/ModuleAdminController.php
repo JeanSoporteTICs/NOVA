@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Modules\ModuleRegistry;
+use App\Repositories\Modules\ModuleRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;

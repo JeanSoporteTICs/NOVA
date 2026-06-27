@@ -339,7 +339,7 @@ function procedures_replace_embedded_images(string $html, string $recordId): str
             $extension = procedures_image_extension_from_mime($mimeSubtype);
             $fileName = $recordId . '-' . bin2hex(random_bytes(8)) . '.' . $extension;
             $absolutePath = procedures_images_dir() . '/' . $fileName;
-            if (!storage_write_file_locked($absolutePath, $binary, 0, false)) {
+            if (!storage_write_file_locked($absolutePath, $binary)) {
                 return $matches[0];
             }
             $relativeUrl = '/redmine-mantencion/data/procedimientos/imagenes/' . $fileName;
@@ -665,32 +665,150 @@ function procedures_handle_uploaded_file(string $recordId, ?array $existing = nu
         return procedures_nextcloud_store_binary($recordId, $originalName, $binary, $mime, $items, $folderId, $existing);
     }
 
-    $safeName = $recordId . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
-    $target = procedures_documents_dir() . '/' . $safeName;
-    if (!move_uploaded_file($tmpName, $target)) {
-        return ['ok' => false, 'error' => 'No se pudo guardar el archivo.'];
-    }
+    // Local file storage is no longer the source of truth.
+    // Enable Nextcloud in the integration settings to upload files.
+    return ['ok' => false, 'error' => 'Configure Nextcloud como almacenamiento antes de subir archivos (Integraciones → Nextcloud).'];
+}
 
-    if ($existing && !empty($existing['file_name'])) {
-        procedures_delete_record_file($existing);
+function procedures_blank_pptx_binary(): string
+{
+    if (!class_exists('ZipArchive')) {
+        return '';
     }
+    $tmp = tempnam(sys_get_temp_dir(), 'nova_pptx_');
+    if ($tmp === false) {
+        return '';
+    }
+    try {
+        $z = new ZipArchive();
+        if ($z->open($tmp, ZipArchive::OVERWRITE) !== true) {
+            return '';
+        }
+        $ns  = 'http://schemas.openxmlformats.org/';
+        $nsp = $ns . 'package/2006/';
+        $nsd = $ns . 'officeDocument/2006/';
+        $nsr = $nsd . 'relationships/';
+        $nsP = $ns . 'presentationml/2006/main';
+        $nsA = $ns . 'drawingml/2006/main';
 
-    return [
-        'ok' => true,
-        'file' => [
-            'file_name' => $safeName,
-            'file_original_name' => $originalName,
-            'file_mime' => $mime,
-            'file_size' => (int)($upload['size'] ?? filesize($target)),
-            'file_url' => procedures_build_file_url($safeName),
-            'storage_driver' => 'local',
-            'nextcloud_path' => '',
-            'uploaded_at' => date('c'),
-        ],
-    ];
+        $z->addFromString('[Content_Types].xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Types xmlns="' . $nsp . 'content-types">' .
+            '<Default Extension="rels" ContentType="' . $nsp . 'relationships+xml"/>' .
+            '<Default Extension="xml" ContentType="application/xml"/>' .
+            '<Override PartName="/ppt/presentation.xml" ContentType="' . $nsd . 'presentationml.presentation.main+xml"/>' .
+            '<Override PartName="/ppt/slides/slide1.xml" ContentType="' . $nsd . 'presentationml.slide+xml"/>' .
+            '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="' . $nsd . 'presentationml.slideLayout+xml"/>' .
+            '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="' . $nsd . 'presentationml.slideMaster+xml"/>' .
+            '</Types>');
+
+        $z->addFromString('_rels/.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="' . $nsp . 'relationships">' .
+            '<Relationship Id="rId1" Type="' . $nsr . 'officeDocument" Target="ppt/presentation.xml"/>' .
+            '</Relationships>');
+
+        $z->addFromString('ppt/presentation.xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<p:presentation xmlns:p="' . $nsP . '" xmlns:a="' . $nsA . '" xmlns:r="' . $nsd . 'relationships" saveSubsetFonts="1">' .
+            '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' .
+            '<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>' .
+            '<p:sldSz cx="9144000" cy="6858000" type="screen4x3"/><p:notesSz cx="6858000" cy="9144000"/>' .
+            '</p:presentation>');
+
+        $z->addFromString('ppt/_rels/presentation.xml.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="' . $nsp . 'relationships">' .
+            '<Relationship Id="rId1" Type="' . $nsr . 'slideMaster" Target="slideMasters/slideMaster1.xml"/>' .
+            '<Relationship Id="rId2" Type="' . $nsr . 'slide" Target="slides/slide1.xml"/>' .
+            '</Relationships>');
+
+        $grpBody = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' .
+            '<p:grpSpPr><a:xfrm xmlns:a="' . $nsA . '"><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>' .
+            '<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
+
+        $z->addFromString('ppt/slides/slide1.xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<p:sld xmlns:p="' . $nsP . '" xmlns:a="' . $nsA . '" xmlns:r="' . $nsd . 'relationships">' .
+            '<p:cSld><p:spTree>' . $grpBody . '</p:spTree></p:cSld>' .
+            '<p:clrMapOvr><a:masterClrMapping xmlns:a="' . $nsA . '"/></p:clrMapOvr></p:sld>');
+
+        $z->addFromString('ppt/slides/_rels/slide1.xml.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="' . $nsp . 'relationships">' .
+            '<Relationship Id="rId1" Type="' . $nsr . 'slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' .
+            '</Relationships>');
+
+        $z->addFromString('ppt/slideLayouts/slideLayout1.xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<p:sldLayout xmlns:p="' . $nsP . '" xmlns:a="' . $nsA . '" xmlns:r="' . $nsd . 'relationships" type="blank" preserve="1">' .
+            '<p:cSld name="Blank"><p:spTree>' . $grpBody . '</p:spTree></p:cSld>' .
+            '<p:clrMapOvr><a:masterClrMapping xmlns:a="' . $nsA . '"/></p:clrMapOvr></p:sldLayout>');
+
+        $z->addFromString('ppt/slideLayouts/_rels/slideLayout1.xml.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="' . $nsp . 'relationships">' .
+            '<Relationship Id="rId1" Type="' . $nsr . 'slideMaster" Target="../slideMasters/slideMaster1.xml"/>' .
+            '</Relationships>');
+
+        $z->addFromString('ppt/slideMasters/slideMaster1.xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<p:sldMaster xmlns:p="' . $nsP . '" xmlns:a="' . $nsA . '" xmlns:r="' . $nsd . 'relationships">' .
+            '<p:cSld><p:spTree>' . $grpBody . '</p:spTree></p:cSld>' .
+            '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' .
+            '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>' .
+            '<p:txStyles><p:titleStyle><a:lstStyle xmlns:a="' . $nsA . '"/></p:titleStyle>' .
+            '<p:bodyStyle><a:lstStyle xmlns:a="' . $nsA . '"/></p:bodyStyle>' .
+            '<p:otherStyle><a:lstStyle xmlns:a="' . $nsA . '"/></p:otherStyle></p:txStyles>' .
+            '</p:sldMaster>');
+
+        $z->addFromString('ppt/slideMasters/_rels/slideMaster1.xml.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="' . $nsp . 'relationships">' .
+            '<Relationship Id="rId1" Type="' . $nsr . 'slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' .
+            '</Relationships>');
+
+        $z->close();
+        $bin = file_get_contents($tmp);
+        return is_string($bin) ? $bin : '';
+    } finally {
+        @unlink($tmp);
+    }
+}
+
+function procedures_check_onlyoffice(): array
+{
+    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
+    $cfg  = ($repo !== null) ? $repo->loadAll() : [];
+    $url  = rtrim(trim((string) ($cfg['onlyoffice_app_url'] ?? '')), '/');
+    if ($url === '') {
+        return ['available' => false, 'configured' => false, 'url' => ''];
+    }
+    if (!empty($cfg['onlyoffice_disabled'])) {
+        return ['available' => false, 'configured' => true, 'disabled' => true, 'url' => $url];
+    }
+    $parsedPath = (string) (parse_url($url, PHP_URL_PATH) ?? '');
+    if (preg_match('#/(redmine-mantencion|NOVA|nextcloud)(/|$)#i', $parsedPath)) {
+        return ['available' => false, 'configured' => true, 'invalid_url' => true, 'url' => $url];
+    }
+    $ch = curl_init($url . '/healthcheck');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 1,
+        CURLOPT_CONNECTTIMEOUT => 1,
+        CURLOPT_NOBODY         => true,
+    ]);
+    curl_exec($ch);
+    $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return ['available' => ($http >= 200 && $http < 400), 'configured' => true, 'url' => $url];
 }
 
 function procedures_blank_template_base64(string $type): string {
+    if ($type === 'pptx') {
+        $bin = procedures_blank_pptx_binary();
+        return $bin !== '' ? base64_encode($bin) : '';
+    }
     if ($type === 'docx') {
         return 'UEsDBBQAAAAIACVLq1wouJFP4QAAAFwBAAARAAAAd29yZC9kb2N1bWVudC54bWxFUMtuwyAQ/BXEvVnHSqvIsp1bbq0qtf0AYjY2kmERbELTry84snyZ3dmZfUB7+rWzuGOIhlwn97tKCnQDaePGTv58n1+OUkRWTquZHHbygVGe+jY1moabRcciD3CxSZ2cmH0DEIcJrYo78uiydqVgFWcaRkgUtA80YIx5vp2hrqo3sMo4WUZeSD9K9AVCAe4/bngnsTRpY01eSC0UoWBYcLF7KBhx4M+l049ffyKVs/Z1fcivSs2U89djzuFpeFchV5l8rh+elmDGiTd6IWayG5/xuqqwrF73wXo8bB/T/wNQSwMEFAAAAAgAJUurXHluM9foAAAArQEAABMAAABbQ29udGVudF9UeXBlc10ueG1sfVDJTsMwEP0Va64oceCAEIrTA8sROJQPGNmTxKo3edzS/j1OW3pAhePMW/X61d47saPMNgYFt20HgoKOxoZJwef6tXkAwQWDQRcDKTgQw2ro14dELKo2sIK5lPQoJeuZPHIbE4WKjDF7LPXMk0yoNziRvOu6e6ljKBRKUxYPGPpnGnHrinjZ1/epRybHIJ5OxCVLAabkrMZScbkL5ldKc05oq/LI4dkmvqkEkFcTFuTvgLPuvQ6TrSHxgbm8oa8s+RWzkSbqra/K9n+bKz3jOFpNF/3ilnLUxFwX9669IB5t+Okvj3MP31BLAwQUAAAACAAlS6tcm/036q0AAAApAQAACwAAAF9yZWxzLy5yZWxzjc87DsIwDAbgq0TeaVoGhFDTLgipKyoHsBI3rWgeSsKjtycDA0UMjLZ/f5br9mlmdqcQJ2cFVEUJjKx0arJawKU/bfbAYkKrcHaWBCwUoW3qM82Y8kocJx9ZNmwUMKbkD5xHOZLBWDhPNk8GFwymXAbNPcorauLbstzx8GnA2mSdEhA6VQHrF0//2G4YJklHJ2+GbPpx4iuRZQyakoCHC4qrd7vILPCm5qsXmxdQSwECFAAUAAAACAAlS6tcKLiRT+EAAABcAQAAEQAAAAAAAAAAAAAAAAAAAAAAd29yZC9kb2N1bWVudC54bWxQSwECFAAUAAAACAAlS6tceW4z1+gAAACtAQAAEwAAAAAAAAAAAAAAAAAQAQAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUABQAAAAIACVLq1yb/TfqrQAAACkBAAALAAAAAAAAAAAAAAAAACkCAABfcmVscy8ucmVsc1BLBQYAAAAAAwADALkAAAD/AgAAAAA=';
     }
@@ -702,13 +820,15 @@ function procedures_blank_template_base64(string $type): string {
 }
 
 function procedures_office_mime(string $type): string {
-    return $type === 'xlsx'
-        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    return match ($type) {
+        'xlsx'  => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'pptx'  => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        default => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
 }
 
 function procedures_create_blank_office_file(string $recordId, string $title, string $type): array {
-    if (!in_array($type, ['docx', 'xlsx'], true)) {
+    if (!in_array($type, ['docx', 'xlsx', 'pptx'], true)) {
         return ['ok' => false, 'error' => 'Tipo de documento no válido.'];
     }
     $binary = base64_decode(procedures_blank_template_base64($type), true);
@@ -726,24 +846,8 @@ function procedures_create_blank_office_file(string $recordId, string $title, st
         return procedures_nextcloud_store_binary($recordId, $originalName, $binary, procedures_office_mime($type), $items, $folderId);
     }
 
-    $safeName = $recordId . '-' . bin2hex(random_bytes(4)) . '.' . $type;
-    $target = procedures_documents_dir() . '/' . $safeName;
-    if (!storage_write_file_locked($target, $binary, 0, false)) {
-        return ['ok' => false, 'error' => 'No se pudo crear el documento.'];
-    }
-    return [
-        'ok' => true,
-        'file' => [
-            'file_name' => $safeName,
-            'file_original_name' => $originalName,
-            'file_mime' => procedures_office_mime($type),
-            'file_size' => filesize($target) ?: strlen($binary),
-            'file_url' => procedures_build_file_url($safeName),
-            'storage_driver' => 'local',
-            'nextcloud_path' => '',
-            'uploaded_at' => date('c'),
-        ],
-    ];
+    // Local file storage is no longer the source of truth.
+    return ['ok' => false, 'error' => 'Configure Nextcloud como almacenamiento para crear documentos Office (Integraciones → Nextcloud).'];
 }
 
 function procedures_format_file_size(int $bytes): string {
@@ -994,7 +1098,13 @@ function procedures_handle_request(): array {
                 ]);
                 $items[] = $record;
                 if (procedures_write_all($items)) {
-                    header('Location: ' . legacy_app_url('views/Procedimientos/onlyoffice.php?id=' . urlencode($record['id']) . '&mode=edit'));
+                    $ooStatus = procedures_check_onlyoffice();
+                    if ($ooStatus['available']) {
+                        header('Location: ' . legacy_app_url('views/Procedimientos/onlyoffice.php?id=' . urlencode($record['id']) . '&mode=edit'));
+                    } else {
+                        $_SESSION['procedures_flash'] = 'El documento fue creado correctamente en Nextcloud, pero no fue posible conectarse al servidor OnlyOffice. Puede abrirlo posteriormente cuando el servicio vuelva a estar disponible.';
+                        header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php'));
+                    }
                     exit;
                 }
                 procedures_delete_record_file($record);

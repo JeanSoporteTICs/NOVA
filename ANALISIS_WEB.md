@@ -2,6 +2,348 @@
 
 Fecha de revision: 2026-06-13
 
+## JSON Eradication — 2026-06-21
+
+Estado: **RUNTIME 100% DATABASE**
+
+### Objetivo
+
+Eliminar toda dependencia runtime en archivos JSON. La base de datos es la unica fuente de verdad.
+
+### Resultado
+
+| Dimension | Antes | Despues |
+|---|---|---|
+| Archivos JSON data redmine_tic | 18 | 0 |
+| Archivos JSON data mantencion (datos) | 21 | 0 |
+| Archivos JSON backups auto | 135 | 0 |
+| Archivos JSON conservados | — | 0 (solo documentos/images/logs) |
+| Comandos artisan JSON | 2 | 0 |
+| Metodos JSON-file en RedmineDataRepository | 6 | 0 |
+| Fallback filesystem en TelegramCommandSettingsRepository | 3 | 0 |
+| Funciones backup filesystem en storage.php | 4 | 0 |
+| Config EMACH (archivo) | `storage/app/emach/monitor_config.json` | `nova_settings:emach_monitor_config` |
+
+### Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `redmine-mantencion/controllers/storage.php` | Eliminados: `storage_backup_file()`, `storage_run_auto_backup()`, `storage_prune_backups()`, `storage_copy_recursive()`. Removida logica `REDMINE_MANTENCION_JSON_FALLBACK` de `storage_read_text()` y `storage_write_text()`. Removido parametro `$backup` de `storage_write_file_locked()`. |
+| `redmine-mantencion/controllers/auth.php` | Removida llamada `storage_run_auto_backup()` en bootstrap. |
+| `redmine-mantencion/app/Support/helpers.php` | Removida llamada `storage_run_auto_backup()` en `bootstrap_app()`. |
+| `app/Repositories/Integrations/TelegramCommandSettingsRepository.php` | Eliminados `loadFromFileSystem()`, `filesystemPath()`. Removidos 3 fallbacks a archivo en `loadFromDb()`. `path()` retorna siempre `configuraciones_modulo:telegram`. |
+| `app/Http/Controllers/NovaAdministrationController.php` | `readEmachMonitorConfig()` / `writeEmachMonitorConfig()` / `emachMonitorConfigPath()` reemplazados por lectura/escritura en `nova_settings` (clave `emach_monitor_config`). Vista recibe `emachConfigPath = 'nova_settings:emach_monitor_config'`. |
+| `routes/console.php` | Eliminados: comando `redmine:tic-import-json`, comando `redmine:mantencion-import-json`, flag `--write-json`, bloque de escritura `usuarios.json`, bloque `storage/app/nova/users.json`, referencia `git show HEAD:...usuarios.json`. Import `RedmineMantencionStorageRepository` eliminado. |
+| `redmine_tic/nova/app/Support/Redmine/RedmineDataRepository.php` | Eliminados: `importJsonDataToDatabase()`, `archivedReportsFromFiles()`, `dataPath()`, `readList()`, `readJsonMap()`, `readJsonTree()`, `assertInsideDataRoot()`. Import `Illuminate\Support\Facades\File` eliminado. |
+| `emach/bin/monitor.php` | `emach_monitor_read_config()` reemplazada: lee desde `nova_settings` (clave `emach_monitor_config`) via `DB::table()`. |
+
+### Archivos/directorios eliminados
+
+| Ruta | Contenido | Motivo |
+|---|---|---|
+| `redmine_tic/data/` | 18 archivos JSON (categorias, configuracion, horasExtras, mensaje, reportes, roles, unidades, usuarios) | Datos migrados a BD. Solo usados por comando de importacion (eliminado). |
+| `redmine-mantencion/data/*.json` | categorias, configuracion, horasExtras, mensaje, nextcloud_created_history, procedimientos/index, reportes, roles, unidades, usuarios (21 archivos) | Datos en `redmine_mantencion_storage` BD. |
+| `redmine-mantencion/data/backups/auto/` | 135 archivos backup auto (2026-06-11 a 2026-06-18) | Backups de datos JSON ahora en BD. |
+
+### Conservados (no JSON de negocio)
+
+- `redmine-mantencion/data/procedimientos/documentos/` — 13 documentos binarios (docx, pdf, xlsx)
+- `redmine-mantencion/data/procedimientos/imagenes/` — 4 imagenes PNG
+- `redmine-mantencion/data/logs/php-error.log` — log de errores PHP
+- `redmine-mantencion/data/security.log` — log de seguridad
+
+### Tests
+
+- 47 passed, 1 skipped, 118 assertions
+- 66 rutas
+- 32 migraciones ran, 0 pending
+
+## Actualizacion Production Hardening - 2026-06-21
+
+Estado: **READY WITH MINOR FIXES**.
+
+### Objetivo
+
+Resolver todos los bloqueantes de produccion identificados en la auditoria de readiness.
+
+### Cambios aplicados
+
+#### Phase 1 — Environment
+
+| Archivo | Cambio |
+|---|---|
+| `.env.example` | `APP_NAME=NOVA`, `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` con placeholder real, `LOG_LEVEL=error`, `DB_DATABASE=nova`, `DB_USERNAME=nova_app`, `SESSION_SECURE_COOKIE=false` con comentario, `APP_TIMEZONE=America/Santiago` |
+| `config/app.php` | `'timezone' => env('APP_TIMEZONE', 'America/Santiago')` — configurable via `.env` |
+
+#### Phase 2 — Logout Hardening
+
+| Archivo | Cambio |
+|---|---|
+| `routes/web.php` | `Route::match(['GET', 'POST'], '/logout')` → `Route::post('/logout')` |
+| `app/Http/Controllers/LegacyProjectController.php` | `passthrough()` maneja `logout.php`: en vez de `redirect()->route('logout')` (GET), devuelve form auto-submitting POST con CSRF |
+| `tests/Feature/AuthTest.php` | `test_logout_requires_post` actualizado: `assertStatus(405)` en vez de `assertRedirect(route('login'))` |
+
+#### Phase 3 — SecurityHeaders
+
+| Archivo | Cambio |
+|---|---|
+| `app/Http/Middleware/SecurityHeaders.php` | Agregado `X-Frame-Options: SAMEORIGIN` |
+
+#### Phase 4 — DB User (documentacion)
+
+Ver seccion "Despliegue en Produccion" de `AGENTS.md`. No se requiere cambio de codigo.
+
+#### Phase 5 — Backup
+
+`NovaBackupRepository::backupDbTable()` ya usa `mkdir($dir, 0777, true)` recursivo — crea `storage/app/nova/backups/YYYY-MM-DD/` automaticamente en primer uso. No se requiere cambio de codigo.
+
+**Gap documentado:** La copia de seguridad automatica de la aplicacion solo exporta `nova_settings` (3 filas). El dump completo de las tablas operacionales (`usuarios_nova`, `redmine_tic_reportes`, `redmine_tic_perfiles_usuario`, `configuraciones_modulo`, `redmine_tic_permisos_*`, `mantencion_permisos_rol`) debe hacerse con `mysqldump` externo via cron. Comando y restauracion documentados en `AGENTS.md`.
+
+#### Phase 6 — Telegram Security
+
+Auditoria verifico que `telegram/data/config.json` (cuando existe) NO es accesible publicamente:
+- El directorio `telegram/` no esta dentro de `public/`
+- La ruta `/telegram/assets/{path}` pasa por `assertAllowedRoot($path, [])` con `allowed_static_roots=[]` → abort(404)
+- No existe ruta wildcard `GET /telegram/{path}`
+- Sin cambio de codigo requerido ✓
+
+### CSP Recommendation Report (Phase 3)
+
+No se implemento CSP todavia porque los modulos legacy (Mantención, EMACH, TIC) usan scripts y estilos inline extensos. Una CSP restrictiva romperia la UI. Punto de partida recomendado cuando se decida implementar:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'self';
+```
+
+Para CSP estricta sin `unsafe-inline` se requiere: (1) auditar todos los `<script>` y `<style>` inline en modulos legacy, (2) extraer a archivos externos o agregar nonces, (3) auditar los `eval()` en librerias JS legacy. Estimacion: 2-3 dias de trabajo.
+
+### Validacion Production Hardening
+
+- `php artisan test`: **47 passed, 1 skipped** (118 assertions).
+- `php artisan route:list`: **66 rutas** (logout POST-only, sin cambio de conteo).
+- `php artisan migrate:status`: **0 pending**, 44 migraciones en 32 batches.
+- `composer dump-autoload`: OK.
+
+---
+
+## Actualizacion Step 6 — Core/TIC Decoupling - 2026-06-21
+
+Estado: **COMPLETE**.
+
+### Objetivo
+
+Eliminar todas las importaciones directas de clases `RedmineTic\` desde `app/` (Core). Crear una capa de contratos que permita al Core funcionar aunque el modulo TIC no este instalado.
+
+### Hallazgo Phase 1 — Dependencias Core→TIC antes de Step 6
+
+| Archivo | Dependencia TIC | Tipo |
+|---|---|---|
+| `app/Services/Nova/ProjectAccessGuard.php` | `RedmineTic\Support\Redmine\RedmineDataRepository` | `use` import directo |
+| `app/Models/NovaUser.php` | `RedmineTic\Models\RedmineTicPerfil` | `HasOne` relation (nunca usada) |
+| `app/Console/Commands/ValidatePhase3aPermisos.php` | `RedmineDataRepository` via reflection | Comando one-time, riesgo bajo |
+| `routes/console.php` | `RedmineDataRepository` en closures | Capa de integracion, aceptable |
+| `routes/web.php` | `RedmineDashboardController` | Requerido, sin riesgo |
+
+### Archivos creados
+
+| Archivo | Descripcion |
+|---|---|
+| `app/Contracts/ProjectUserProviderInterface.php` | Interfaz `projectUsers(string $projectKey): array`; contrato Core puro sin TIC |
+| `redmine_tic/nova/app/Services/Redmine/RedmineProjectUserProvider.php` | Implementacion TIC; solo responde a `projectKey='redmine_tic'`; delega a `RedmineDataRepository` |
+
+### Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `app/Providers/AppServiceProvider.php` | `register()` enlaza `ProjectUserProviderInterface` → `RedmineProjectUserProvider` con guard `class_exists` |
+| `app/Services/Nova/ProjectAccessGuard.php` | `use RedmineTic\...` eliminado; `findProjectUser()` usa `app()->bound(Interface::class)` con null-object fallback |
+| `app/Models/NovaUser.php` | `perfilTic()` HasOne eliminada; import `HasOne` eliminado |
+
+### Validacion Step 6
+
+- `composer dump-autoload`: 6576 clases (2 nuevas: interfaz + provider).
+- `php artisan test`: **47 passed, 1 skipped** (119 assertions) — sin regresiones.
+- `php artisan route:list`: **66 rutas** — sin cambios.
+- `php artisan migrate:status`: **32 batches aplicados**, ninguno pendiente (44 migration files).
+
+### Deuda restante aceptada
+
+| Componente | Razon para mantener |
+|---|---|
+| `ValidatePhase3aPermisos` usa `RedmineDataRepository` via reflection | Comando one-time de validacion de migracion, no runtime |
+| `routes/console.php` — `redmine:archive-processed`, `redmine:tic-import-json` | Capa de integracion TIC, aceptable |
+| `routes/web.php` — `RedmineDashboardController` | Punto de entrada requerido del modulo TIC |
+| `RedmineDataRepository` (>4000 lineas) | Cleanup de metodos individuales diferido; alto riesgo de regresion sin tests de integracion |
+
+---
+
+## Nextcloud Browser Personal — Procedimientos - 2026-06-21
+
+Estado: **COMPLETE**.
+
+### Objetivo
+
+Convertir el modulo Procedimientos de Redmine Mantencion en un navegador personal de Nextcloud. La fuente de verdad de archivos pasa a ser 100% la API Nextcloud por usuario. No se crea almacenamiento local ni JSON nuevo.
+
+### Antes / Despues
+
+| Dimension | Antes | Despues |
+|---|---|---|
+| Fuente de archivos | Archivos locales en `data/procedimientos/documentos/` | API Nextcloud WebDAV / OCS por usuario |
+| Credenciales | Config global admin de Nextcloud | `integraciones_usuario` (tipo=nextcloud) por usuario |
+| Upload | `move_uploaded_file()` → disco local | PUT WebDAV directo a Nextcloud; tmp de PHP descartado |
+| Crear doc Office | Binario local en disco | PUT WebDAV en Nextcloud |
+| Fallback sin Nextcloud | Storage local | Error guiado: configurar credenciales |
+| Tablas nuevas | — | Ninguna (reusar `integraciones_usuario`) |
+
+### Archivos creados
+
+| Archivo | Descripcion |
+|---|---|
+| `redmine-mantencion/controllers/nc_browser.php` | Dispatcher AJAX: `nc_browser_user_cfg()`, `nc_browser_safe_name()`, `nc_browser_json()`, `nc_browser_handle()` |
+| `redmine-mantencion/views/Procedimientos/nc_browser_ajax.php` | Entry point PHP: `require nc_browser.php; nc_browser_handle();` |
+| `redmine-mantencion/views/Procedimientos/_nc_browser.php` | UI parcial: puerta de credenciales o browser completo con tabs Mis archivos / Compartidos conmigo, toolbar, modales, JS IIFE |
+
+### Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `redmine-mantencion/controllers/nextcloud.php` | Agregadas al final: `nextcloud_path_safe()`, `nextcloud_propfind_parse()`, `nextcloud_list_directory()`, `nextcloud_shares_with_me()` |
+| `redmine-mantencion/controllers/procedimientos.php` | Bug fix: `storage_write_file_locked($absolutePath, $binary, 0, false)` → 2 args (parametro `$backup` eliminado en JSON Eradication). Rama local de upload y de creacion de doc Office reemplazadas por mensajes de error guiados. |
+| `redmine-mantencion/views/Procedimientos/procedimientos.php` | Agrega `require_once nc_browser.php` al tope; incluye `_nc_browser.php` en la vista lista (solo `!$isPublicShare && !$showEditor && !$showDetail`). |
+
+### Acciones AJAX (nc_browser_ajax.php)
+
+| Metodo | Accion | Backend |
+|---|---|---|
+| GET | `list` | PROPFIND WebDAV Depth:1 → `nextcloud_list_directory()` |
+| GET | `shares_with_me` | OCS GET /shares?shared_with_me=true → `nextcloud_shares_with_me()` |
+| GET | `download` | GET WebDAV → streaming (inline para PDF/imagen, attachment el resto) |
+| POST | `mkdir` | MKCOL via `nextcloud_ensure_directory()` |
+| POST | `rename` | MOVE WebDAV con header Destination |
+| POST | `delete` | DELETE WebDAV |
+| POST | `upload` | PUT WebDAV; tmp PHP descartado tras PUT |
+| POST | `share_link` | OCS POST /shares (shareType=3, link publico) |
+| POST | `share_user` | OCS POST /shares (shareType=0, usuario) |
+| POST | `share_delete` | OCS DELETE /shares/{id} |
+
+### Seguridad aplicada
+
+- Auth requerida antes de cualquier accion (`auth_require_login`).
+- Permiso `procedimientos` verificado (`auth_can`).
+- CSRF validado en todos los POST (`csrf_validate()` — acepta `$_POST['csrf_token']` o header `X-CSRF-Token`).
+- Toda ruta pasa por `nextcloud_path_safe()` (elimina `..`, `.`, segmentos vacios).
+- Nombres de archivo/carpeta pasan por `nc_browser_safe_name()` (elimina `..`, `\0`, `<>:"|?*`).
+- Sin almacenamiento persistente de credenciales en el request — leidas desde BD encriptada en cada request.
+- Sin copias locales de archivos salvo tmp PHP durante upload (eliminado automaticamente por PHP al terminar el request).
+
+### Tablas usadas (sin cambios de schema)
+
+| Tabla | Uso |
+|---|---|
+| `integraciones_usuario` | Credenciales Nextcloud por usuario (tipo=nextcloud, `valor_secreto` encriptado con `encrypt()`) |
+| `configuraciones_modulo` | URL Nextcloud global y config del modulo (modulo_id=2) |
+| `redmine_mantencion_procedimientos` | Sin cambio de uso — columnas `nextcloud_path`, `storage_driver`, `nextcloud_share_id`, `nextcloud_share_url` ya existian |
+
+### Validacion
+
+- `php -l` en 4 archivos modificados/creados: **OK (sin errores de sintaxis)**.
+- `php artisan test`: **47 passed, 1 skipped** (118 assertions) — sin regresiones.
+- `php artisan migrate:status`: **0 pending**, 32 batches aplicados.
+
+---
+
+## Actualizacion Step 5A — Namespace Normalizacion - 2026-06-20
+
+Estado: **COMPLETE**.
+
+### Objetivo
+
+Eliminar namespaces no-canonicos (`App\Support\Auth\*`, `App\Support\Modules\*`, `App\Support\Nova\*`, `App\Support\Integrations\*`) moviendo 11 clases a paths estandar Laravel y extrayendo servicios nuevos (`TelegramService`, `LegacyLoggerService`, `StringNormalizer`).
+
+### Clases que deben PERMANECER en App\Support\*
+
+Las siguientes 8 clases NO se pueden mover porque `redmine-mantencion/controllers/storage.php` y `emach/index.php` las referencian por FQN string en llamadas `app()` en runtime legacy:
+
+`RedmineMantencionStorageRepository`, `MantencionConfigRepository`, `MantencionCatalogRepository`, `MantencionReportRepository`, `NovaSettingsRepository`, `UserIntegrationRepository`, `NovaHealthRepository`, `TelegramLibrary`.
+
+### Nuevos archivos (11 clases en namespaces canonicos)
+
+| Nuevo path | Namespace | Origen |
+|---|---|---|
+| `app/Support/StringNormalizer.php` | `App\Support` | Nuevo; `static normalize(string): string` — elimina 4 metodos `normalize()` duplicados |
+| `app/Services/Nova/LegacyLoggerService.php` | `App\Services\Nova` | Nuevo; wraps `require_once logger.php` + `log_security_event()` |
+| `app/Services/Telegram/TelegramService.php` | `App\Services\Telegram` | Nuevo; unico punto de entrada Telegram (`load`, `readConfig`, `isConfigured`, `saveConfig`, `deleteWebhook`, `listenerStatus`, `sendConfiguredMessage`, `notify`, `healthCheck`) |
+| `app/Services/Auth/LegacyUserProvider.php` | `App\Services\Auth` | Movido desde `App\Support\Auth\LegacyUserProvider` |
+| `app/Repositories/Modules/ModuleRegistry.php` | `App\Repositories\Modules` | Movido desde `App\Support\Modules\ModuleRegistry` |
+| `app/Services/Nova/ProjectAccessGuard.php` | `App\Services\Nova` | Movido desde `App\Support\Modules\ProjectAccessGuard` |
+| `app/Repositories/Nova/NovaUserRepository.php` | `App\Repositories\Nova` | Movido desde `App\Support\Auth\NovaUserRepository` |
+| `app/Repositories/Nova/NovaAccessRepository.php` | `App\Repositories\Nova` | Movido desde `App\Support\Nova\NovaAccessRepository` |
+| `app/Repositories/Nova/NovaAuditRepository.php` | `App\Repositories\Nova` | Movido desde `App\Support\Nova\NovaAuditRepository` |
+| `app/Repositories/Nova/NovaBackupRepository.php` | `App\Repositories\Nova` | Movido desde `App\Support\Nova\NovaBackupRepository` |
+| `app/Repositories/Nova/NovaHealthRepository.php` | `App\Repositories\Nova` | Movido; inyecta `TelegramService` en vez de llamar `TelegramLibrary` directamente |
+| `app/Services/Nova/NovaNotificationService.php` | `App\Services\Nova` | Movido desde `App\Support\Nova\NovaNotificationService`; usa `TelegramService::notify()` |
+| `app/Repositories/Integrations/TelegramCommandSettingsRepository.php` | `App\Repositories\Integrations` | Movido desde `App\Support\Integrations\*` |
+| `app/Repositories/Integrations/TelegramCommandCatalog.php` | `App\Repositories\Integrations` | Movido desde `App\Support\Integrations\*` |
+
+### Archivos con imports actualizados (9 + 2 auxiliares)
+
+`NovaAuthController`, `NovaAdministrationController`, `TelegramController`, `LegacyProjectController`, `ModuleAdminController`, `UserIntegrationController`, `EnsureNovaAuthenticated`, `routes/web.php`, `RedmineDashboardController` (TIC), `telegram/bin/listen.php` (FQN strings), `tests/Unit/NovaAuditRepositoryTest.php`.
+
+### Validacion Step 5A (Phase 4)
+
+- `composer dump-autoload`: 6574 clases.
+- `php artisan test`: **47 passed, 1 skipped** (119 assertions).
+- `php artisan route:list`: **66 rutas** — sin cambios.
+- `php artisan migrate:status`: 32 batches, 0 pendientes.
+
+---
+
+## Actualizacion S36 Arquitectura Step 4 — Dead Code Removal - 2026-06-20
+
+Estado: **COMPLETE**.
+
+### Archivos eliminados
+
+| Archivo | Razon |
+|---|---|
+| `app/Models/User.php` | Modelo sin tabla `users`. Nunca instanciado en runtime. La referencia en `config/auth.php` actualizada a `App\Models\NovaUser`. |
+| `database/factories/UserFactory.php` | Solo creaba instancias de `User`. Seeder tiene el codigo comentado. Nunca usada en tests. |
+| `app/Http/Controllers/NovaUserController.php` | Cero rutas activas. El import en `routes/web.php` era muerto. |
+| `resources/views/nova/users/index.blade.php` | Unica vista del directorio; solo renderizable desde el controlador eliminado. |
+
+### Cambios en archivos existentes
+
+| Archivo | Cambio |
+|---|---|
+| `routes/web.php` | Eliminado import muerto `use App\Http\Controllers\NovaUserController`. |
+| `config/auth.php` | Provider `users` cambiado de `App\Models\User::class` a `App\Models\NovaUser::class`. |
+| `app/Http/Controllers/NovaAdministrationController.php` | `$this->loadTelegramLibrary()` reemplazado por `TelegramLibrary::load()`. Metodo privado eliminado. |
+| `app/Http/Controllers/TelegramController.php` | Igual: delegacion a `TelegramLibrary::load()`. Metodo privado eliminado. |
+
+### Archivo nuevo
+
+`app/Support/Telegram/TelegramLibrary.php` — helper estatico con metodo `load()` que consolida la logica de `require_once` de la libreria Telegram (extraido de dos controladores que tenian la misma implementacion privada).
+
+### Candidatos auditados y NO eliminados
+
+| Candidato | Razon para conservar |
+|---|---|
+| `redmine-mantencion/login.php` | Usado como URL de redirect por `auth_require_login()` en 14+ vistas legacy |
+| `redmine-mantencion/logout.php` | Usado como fallback en `navbar.php` cuando `route()` no esta disponible |
+| `redmine-mantencion/app/` | Bootstrapped por `login.php` y `logout.php`; contiene `AuthController` activo |
+| `NovaAccessRepository::projectUserExists()` | Stub activo — llamado por `defaultAccess()`; retorna `false` por diseno (acceso controlado por overrides) |
+| `emach/lib/client.php` | CLI activo; documentado en `emach/README.md` |
+| `emach/bin/monitor.php` | CLI activo; documentado en `emach/README.md` |
+| `emach/views/partials/navbar.php` | Vista activa del modulo EMACH |
+
+### Validacion
+
+- `composer dump-autoload`: OK, 6571 clases generadas.
+- `php artisan test`: **47 passed, 1 skipped** (119 assertions) — sin regresiones.
+- `php artisan route:list`: **66 rutas** — sin cambios.
+- `php artisan migrate:status`: 32 migraciones aplicadas, ninguna pendiente.
+
 ## Actualizacion S35 Arquitectura Step 3 — NovaUserService - 2026-06-20
 
 Estado: **COMPLETE**.
@@ -478,6 +820,9 @@ Riesgos pendientes:
 46. UI/UX TIC (S23): fix CSS `.nova-badge` — overrides al final de `nova-ui.css` con texto oscuro y variantes semanticas; dentro de heroes oscuros se restaura blanco via selector padre.
 47. UI/UX TIC (S23): scroll preservado en vista usuarios via `sessionStorage`; boton flotante volver arriba con `IntersectionObserver` sobre el resumen de usuarios.
 48. UI/UX TIC (S23): columna `Estado local` del dashboard simplificada — solo el indicador `.rm-dashboard-status` principal; eliminado el indicador `.is-hours` de hora extra de esa columna.
+49. Arquitectura (Step5A): 11 clases movidas a namespaces canonicos `App\Repositories\*` / `App\Services\*`; `TelegramService` creado como unico punto de entrada Telegram; `StringNormalizer` centraliza 4 implementaciones duplicadas de `normalize()`; `LegacyLoggerService` encapsula `require_once` de logger legacy.
+50. Arquitectura (Step6): desacoplamiento Core→TIC via `ProjectUserProviderInterface`; `ProjectAccessGuard` ya no importa ninguna clase `RedmineTic\`; `NovaUser::perfilTic()` (HasOne sin uso) eliminada; binding condicional en `AppServiceProvider`; 6576 clases en autoload.
+51. Seguridad (Production Hardening): `.env.example` actualizado con defaults seguros para produccion; `config/app.php` timezone configurable via `APP_TIMEZONE`; `GET /logout` eliminado, solo POST; `LegacyProjectController` resuelve fallback `logout.php` con form POST auto-submitting; `X-Frame-Options: SAMEORIGIN` agregado a `SecurityHeaders`; comandos de despliegue, backup, restauracion y usuario BD documentados en `AGENTS.md`.
 49. BD/TIC (S25 Phase 3a): 3 tablas relacionales de permisos creadas y pobladas (`redmine_tic_permisos_catalogo`, `redmine_tic_permisos_rol`, `redmine_tic_permisos_usuario`); dual-write activo en `saveProjectUsers()` y `saveRolesToDatabase()`; lectura primaria relacional con fallback al JSON original; columna `permisos` JSON y fila `roles` en `configuraciones_modulo` preservadas sin cambios destructivos.
 50. BD/TIC (S26 Validación Phase 3a): detectado y corregido bug de backfill (41/43 perfiles omitidos por `permisos="[]"`); migración backfill aplicada; 1591 filas correctas; comando `nova:validate-phase3a` (17/17 checks) y 16 tests PHPUnit (48/48 suite) pasados; Phase 3c aprobada para planificar.
 51. BD/Normalización (S27 Phase 3c): DROP COLUMN `permisos` de `redmine_tic_perfiles_usuario` y DELETE clave=`roles` de `configuraciones_modulo`; Phase 3 completa — 100% de permisos en tablas relacionales sin fallback JSON.
@@ -629,15 +974,49 @@ Objetivo: parchar los 3 bloqueantes críticos identificados en auditoría S32 y 
 
 Resultado S32-FINAL: 3 bugs críticos corregidos, 6 schema fixes, 1 índice creado, 1 índice duplicado eliminado, `nova_settings` seedeada. `php artisan test` 47/47 + 1 skipped. Sin regresiones.
 
+### Sesion Step5A — Namespace Normalizacion
+
+- `app/Support/StringNormalizer.php` — NUEVO, `static normalize(string): string`; centraliza `strtolower(preg_replace(...))`.
+- `app/Services/Nova/LegacyLoggerService.php` — NUEVO, wraps `require_once logger.php` + `log_security_event()`.
+- `app/Services/Telegram/TelegramService.php` — NUEVO, unico punto de entrada Telegram.
+- 11 clases movidas a `app/Repositories/` y `app/Services/` (ver tabla de Step 5A arriba).
+- 11 archivos origen eliminados despues de la migracion.
+- 9 archivos de controladores/rutas/middleware actualizados con nuevos imports.
+- `telegram/bin/listen.php` — FQN strings actualizados a nuevos paths canonicos.
+- `tests/Unit/NovaAuditRepositoryTest.php` — import actualizado.
+- `app/Http/Controllers/NovaAuthController.php` — inyecta `LegacyLoggerService`; usa `NovaAuditRepository` para `extendSession()`.
+- `app/Http/Controllers/TelegramController.php` — reescrito; inyecta `TelegramService`; todos los `TelegramLibrary::load()` y `telegram_*()` reemplazados.
+- `app/Http/Controllers/NovaAdministrationController.php` — inyecta `TelegramService`; 3 `TelegramLibrary::load()` reemplazados.
+
+Resultado Step5A: 6574 clases, **47 passed + 1 skipped**, 66 rutas, 32 batches. Sin regresiones.
+
+### Sesion Step6 — Core/TIC Decoupling
+
+- `app/Contracts/ProjectUserProviderInterface.php` — NUEVO, interfaz Core `projectUsers(string $projectKey): array`.
+- `redmine_tic/nova/app/Services/Redmine/RedmineProjectUserProvider.php` — NUEVO, implementacion TIC condicionada a `projectKey='redmine_tic'`.
+- `app/Providers/AppServiceProvider.php` — `register()` vincula interfaz a implementacion TIC con `class_exists` guard.
+- `app/Services/Nova/ProjectAccessGuard.php` — `use RedmineTic\...` removido; `findProjectUser()` usa `app()->bound()` pattern.
+- `app/Models/NovaUser.php` — `perfilTic()` HasOne eliminada; import `Illuminate\...\HasOne` eliminado.
+- `composer dump-autoload` — 6576 clases (2 nuevas vs Step5A).
+
+Resultado Step6: **47 passed + 1 skipped** (119 assertions), 66 rutas, 32 batches. Cero imports `RedmineTic\` en archivos `app/` de runtime.
+
 ## Backlog priorizado
 
 ### P0 Seguridad
 
 - Auditar todas las rutas POST legacy excluidas de CSRF Laravel y cerrar excepciones con una capa central compatible con `legacy_csrf_token`. *(pendiente)*
 - [COMPLETADO] Migrar logout a POST y reemplazar enlaces `<a href=logout>` por formularios/botones con CSRF, incluyendo NOVA, TIC, Mantencion y EMACH.
+- [COMPLETADO Production Hardening] `GET /logout` eliminado — ruta es ahora solo `POST /logout`. `LegacyProjectController` maneja el fallback `logout.php` con form auto-submitting POST+CSRF.
 - [COMPLETADO] Eliminar autenticacion por token API como password interactiva; mantener tokens solo para integraciones.
+- [COMPLETADO Production Hardening] `X-Frame-Options: SAMEORIGIN` agregado a `SecurityHeaders` middleware.
 - Revisar permisos de escritura en `storage`, `redmine-mantencion/data`, `telegram/data` y logs. *(pendiente)*
 - Revisar `npm audit` del frontend: `npm install` reporto 3 vulnerabilidades (1 baja, 2 altas). No se aplico `npm audit fix --force` porque puede introducir cambios incompatibles. *(pendiente)*
+- [COMPLETADO Production Hardening] `.env.example` actualizado con valores correctos para produccion: `APP_ENV=production`, `APP_DEBUG=false`, `APP_NAME=NOVA`, `LOG_LEVEL=error`, `DB_DATABASE=nova`, timezone. Agregar manualmente los valores reales antes de desplegar.
+- [COMPLETADO Production Hardening] `config/app.php` timezone → `env('APP_TIMEZONE', 'America/Santiago')`.
+- Configurar backup externo via cron (`mysqldump`). Comando documentado en `AGENTS.md`. *(pendiente — accion DBA/admin)*
+- Implementar Content-Security-Policy. Requiere auditoria de scripts/estilos inline en modulos legacy. *(pendiente — ver CSP Recommendation Report en seccion Production Hardening)*
+- Configurar usuario de BD no-root (`nova_app`). Sentencias SQL documentadas en `AGENTS.md`. *(pendiente — accion DBA)*
 
 ### P1 Errores criticos
 
@@ -665,8 +1044,8 @@ Resultado S32-FINAL: 3 bugs críticos corregidos, 6 schema fixes, 1 índice crea
 
 ### P3 Arquitectura
 
-- Extraer servicios desde controladores legacy hacia `app/Support`. *(pendiente)*
-- Reducir responsabilidad de `RedmineDataRepository` dividiendolo en repositorios de reportes, usuarios, catalogos e integraciones. *(pendiente)*
+- [PARCIAL Step5A] Extraer servicios desde controladores hacia `app/Services/*` y `app/Repositories/*`; 11 clases normalizadas a namespaces canonicos. Pendiente: clases legacy en `App\Support\*` con FQN strings en runtime legacy.
+- [PARCIAL Step6] Reducir responsabilidad de `RedmineDataRepository`: desacoplado de `ProjectAccessGuard` via `ProjectUserProviderInterface`. Cleanup de metodos individuales (nativeSectionData, estadisticas, reportes webhook) diferido — alto riesgo sin tests de integracion. *(pendiente)*
 - Mover configuraciones globales restantes desde JSON local a tablas dedicadas. *(pendiente)*
 - Revisar nombres fisicos de tablas contra el contrato objetivo: `modulos_nova` equivale a `modulos`, `permisos_usuario_modulo` equivale a `modulos_usuarios`, `integraciones_usuario` equivale a `usuario_integracion`. Mantener nombres actuales mientras el codigo los use, o renombrar solo con migracion compatible. *(pendiente)*
 - Migrar `RedmineDataRepository` y Mantencion legacy a repositorios que lean/escriban `categorias`, `unidades`, `redmine_mantencion_reportes` y `horas_extras`; despues retirar `catalogos_modulo`, `redmine_tic_horas_extra_grupos` y `redmine_mantencion_storage` si ya no tienen consumidores. *(pendiente)*

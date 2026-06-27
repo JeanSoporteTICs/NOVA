@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../controllers/auth.php';
 require_once __DIR__ . '/../../controllers/procedimientos.php';
+require_once __DIR__ . '/../../controllers/nc_browser.php';
 
 $h = fn($v) => htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
 $shareToken = trim((string)($_GET['share'] ?? ''));
@@ -29,6 +30,10 @@ if ($isPublicShare) {
 $isPdfExport = (string)($_GET['export'] ?? '') === 'pdf';
 $activeNav = 'procedimientos';
 $isEditingProcedure = $canEditProcedures && isset($_GET['new']);
+if ($isEditingProcedure && !$isPublicShare) {
+  header('Location: ' . legacy_app_url('views/Procedimientos/procedimientos.php'));
+  exit;
+}
 $showDetail = $selectedId !== '' && !$isEditingProcedure;
 $showEditor = $isEditingProcedure;
 $pageSizeCssMap = [
@@ -1493,6 +1498,21 @@ if ($isPdfExport) {
       }
     }
     body.proc-public-share { padding-top: 0; }
+    .proc-oo-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: .78rem;
+      font-weight: 600;
+      padding: .2rem .65rem;
+      border-radius: 999px;
+      white-space: nowrap;
+      transition: background .2s;
+    }
+    .badge-oo-on       { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge-oo-off      { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .badge-oo-disabled { background: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db; }
+    .proc-upload-status-ok  { color: #15803d; }
+    .proc-upload-status-err { color: #b91c1c; }
   </style>
 </head>
 <body class="bg-light<?= $isPublicShare ? ' proc-public-share' : '' ?>" data-proc-page-size="<?= $h($selectedPageSize) ?>">
@@ -1515,11 +1535,15 @@ if ($isPdfExport) {
     ?>
     <?php endif; ?>
 
+    <?php if (!$isPublicShare && !$showEditor && !$showDetail): ?>
+    <?php include __DIR__ . '/_nc_browser.php'; ?>
+    <?php endif; ?>
+
     <?php if ($isPublicShare && !$selectedProcedure): ?>
       <section class="proc-board card shadow-sm mb-4">
         <div class="proc-empty-state"><?= $h($error ?? 'El enlace compartido no está disponible.') ?></div>
       </section>
-    <?php elseif (!$showEditor && !$showDetail): ?>
+    <?php elseif ($isPublicShare && !$showEditor && !$showDetail): ?>
       <section class="proc-board card shadow-sm mb-4">
         <div class="proc-board-head">
           <div class="proc-board-title">
@@ -1535,6 +1559,7 @@ if ($isPdfExport) {
               <input type="search" id="procedure-search" class="form-control" placeholder="Buscar por título">
             </label>
             <?php if ($canEditProcedures): ?>
+              <span id="proc-oo-badge" class="proc-oo-badge" aria-live="polite" style="display:none;"></span>
               <?php if (!$currentFolder): ?>
                 <button class="proc-new-btn btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#createFolderModal">
                   <i class="bi bi-folder-plus"></i> Nueva carpeta
@@ -1543,11 +1568,22 @@ if ($isPdfExport) {
               <button class="proc-new-btn btn btn-success" type="button" data-bs-toggle="modal" data-bs-target="#createOfficeModal">
                 <i class="bi bi-file-earmark-plus"></i> Crear documento
               </button>
-              <a class="proc-new-btn btn btn-primary" href="/redmine-mantencion/views/Procedimientos/procedimientos.php?new=1<?= $currentFolderId !== '' ? '&folder=' . urlencode($currentFolderId) : '' ?>">
+              <?php if ($ncHasCredentials): ?>
+              <label class="proc-new-btn btn btn-primary mb-0" role="button">
                 <i class="bi bi-upload"></i> Subir documento
+                <input type="file" id="proc-nc-upload" class="visually-hidden" multiple
+                  accept=".pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.odt,.ods,.txt,.zip,.jpg,.jpeg,.png,.gif,.webp,.svg">
+              </label>
+              <?php else: ?>
+              <a class="proc-new-btn btn btn-outline-primary" href="<?= $h($ncIntegracionesUrl) ?>">
+                <i class="bi bi-cloud-slash"></i> Configurar Nextcloud
               </a>
+              <?php endif; ?>
             <?php endif; ?>
           </div>
+          <?php if ($canEditProcedures && $ncHasCredentials): ?>
+          <div id="proc-upload-status" class="px-3 pb-2 small" style="display:none;"></div>
+          <?php endif; ?>
         </div>
           <?php if ($currentFolder): ?>
             <div class="proc-folder-crumb">
@@ -1790,7 +1826,7 @@ if ($isPdfExport) {
           </form>
         <?php endif; ?>
       </section>
-    <?php else: ?>
+    <?php elseif ($showEditor): ?>
       <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
         <a class="btn btn-outline-secondary" href="/redmine-mantencion/views/Procedimientos/procedimientos.php<?= $targetFolderId !== '' ? '?folder=' . urlencode($targetFolderId) : '' ?>">
           <i class="bi bi-arrow-left"></i> Volver
@@ -1923,7 +1959,7 @@ if ($isPdfExport) {
     <?php endif; ?>
   </div>
 </div>
-<?php if (!$isPublicShare && $canEditProcedures): ?>
+<?php if (!$isPublicShare && $canEditProcedures && $showDetail): ?>
   <div class="modal fade" id="createFolderModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <form method="post" class="modal-content">
@@ -1984,30 +2020,37 @@ if ($isPdfExport) {
         <input type="hidden" name="folder_id" value="<?= $h($currentFolderId) ?>">
         <div class="modal-header" data-app-modal-tone="info">
           <div>
-            <h5 class="modal-title">Crear documento</h5>
-            <div class="text-muted small">Se abrir&aacute; en OnlyOffice para editarlo.</div>
+            <h5 class="modal-title">Crear documento en Nextcloud</h5>
+            <div class="text-muted small">Se crear&aacute; en Nextcloud y se abrir&aacute; en OnlyOffice.</div>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <div class="d-flex flex-column gap-3">
+            <div id="proc-modal-oo-status" style="display:none;"></div>
             <div>
               <label class="form-label fw-semibold">Título</label>
-              <input type="text" name="title" class="form-control form-control-lg" placeholder="Nombre del procedimiento">
+              <input type="text" name="title" class="form-control form-control-lg" placeholder="Nombre del documento">
             </div>
             <div>
               <label class="form-label fw-semibold">Tipo de archivo</label>
               <div class="row g-2">
-                <div class="col-12 col-sm-6">
+                <div class="col-12 col-sm-4">
                   <input class="btn-check" type="radio" name="document_type" id="create-docx" value="docx" checked>
                   <label class="btn btn-outline-primary w-100 text-start p-3" for="create-docx">
                     <i class="bi bi-file-earmark-word me-2"></i> Documento Word
                   </label>
                 </div>
-                <div class="col-12 col-sm-6">
+                <div class="col-12 col-sm-4">
                   <input class="btn-check" type="radio" name="document_type" id="create-xlsx" value="xlsx">
                   <label class="btn btn-outline-success w-100 text-start p-3" for="create-xlsx">
                     <i class="bi bi-file-earmark-spreadsheet me-2"></i> Planilla Excel
+                  </label>
+                </div>
+                <div class="col-12 col-sm-4">
+                  <input class="btn-check" type="radio" name="document_type" id="create-pptx" value="pptx">
+                  <label class="btn btn-outline-warning w-100 text-start p-3" for="create-pptx">
+                    <i class="bi bi-file-earmark-slides me-2"></i> Presentaci&oacute;n
                   </label>
                 </div>
               </div>
@@ -6148,5 +6191,146 @@ if ($isPdfExport) {
 
 })();
 </script>
+<?php if ($canEditProcedures ?? false): ?>
+<script>
+(() => {
+  const AJAX_URL = <?= json_encode(function_exists('legacy_app_url') ? legacy_app_url('views/Procedimientos/nc_browser_ajax.php') : '/redmine-mantencion/views/Procedimientos/nc_browser_ajax.php') ?>;
+  const CSRF     = <?= json_encode($csrf ?? '') ?>;
+
+  // ── OnlyOffice status badge ──────────────────────────────────────────────
+  const ooBadge        = document.getElementById('proc-oo-badge');
+  const ooModalStatus  = document.getElementById('proc-modal-oo-status');
+  let   ooAvailable    = false;
+
+  const setOoBadge = (available, configured, disabled, invalidUrl) => {
+    ooAvailable = !!available;
+    window.__ncOoAvailable = !!available;
+    if (!ooBadge) return;
+    ooBadge.style.display = '';
+    if (!configured) {
+      ooBadge.className = 'proc-oo-badge badge-oo-off';
+      ooBadge.textContent = '● OnlyOffice no configurado';
+      ooBadge.title = 'No hay URL de OnlyOffice configurada.';
+    } else if (disabled) {
+      ooBadge.className = 'proc-oo-badge badge-oo-disabled';
+      ooBadge.textContent = '● OnlyOffice deshabilitado';
+      ooBadge.title = 'OnlyOffice está deshabilitado temporalmente en la configuración.';
+    } else if (invalidUrl) {
+      ooBadge.className = 'proc-oo-badge badge-oo-off';
+      ooBadge.textContent = '● URL OnlyOffice inválida';
+      ooBadge.title = 'URL de OnlyOffice inválida. Debe apuntar al servidor Document Server.';
+    } else if (available) {
+      ooBadge.className = 'proc-oo-badge badge-oo-on';
+      ooBadge.textContent = '● OnlyOffice disponible';
+      ooBadge.title = 'El servidor OnlyOffice está activo.';
+    } else {
+      ooBadge.className = 'proc-oo-badge badge-oo-off';
+      ooBadge.textContent = '● OnlyOffice no disponible';
+      ooBadge.title = 'No fue posible conectar con el servidor OnlyOffice.';
+    }
+    if (ooModalStatus) {
+      if (!configured) {
+        ooModalStatus.style.display = 'none';
+      } else if (disabled) {
+        ooModalStatus.className = 'alert alert-secondary py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-dash-circle me-1"></i> OnlyOffice deshabilitado temporalmente — el documento se guardará en Nextcloud.';
+        ooModalStatus.style.display = '';
+      } else if (invalidUrl) {
+        ooModalStatus.className = 'alert alert-warning py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> URL de OnlyOffice inválida. Debe apuntar al servidor Document Server.';
+        ooModalStatus.style.display = '';
+      } else if (available) {
+        ooModalStatus.className = 'alert alert-success py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-check-circle me-1"></i> OnlyOffice disponible — el documento se abrirá para edición inmediatamente.';
+        ooModalStatus.style.display = '';
+      } else {
+        ooModalStatus.className = 'alert alert-warning py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> OnlyOffice no disponible — el documento se guardará en Nextcloud y podrá abrirse cuando el servicio vuelva a estar disponible.';
+        ooModalStatus.style.display = '';
+      }
+    }
+  };
+
+  const checkOoStatus = () => {
+    console.time('nc-onlyoffice-ping');
+    fetch(AJAX_URL + '?action=onlyoffice_status', {
+      method: 'GET',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((data) => {
+        console.timeEnd('nc-onlyoffice-ping');
+        console.log('[NC_PERF] onlyoffice', { available: data.available, configured: data.configured, disabled: data.disabled, invalid_url: data.invalid_url, server_ms: data._perf_ms });
+        setOoBadge(!!data.available, !!data.configured, !!data.disabled, !!data.invalid_url);
+      })
+      .catch(() => { console.timeEnd('nc-onlyoffice-ping'); console.log('[NC_PERF] onlyoffice FAILED'); setOoBadge(false, false, false, false); });
+  };
+
+  checkOoStatus();
+
+  // ── File upload to Nextcloud ─────────────────────────────────────────────
+  const uploadInput  = document.getElementById('proc-nc-upload');
+  const uploadStatus = document.getElementById('proc-upload-status');
+
+  if (uploadInput && uploadStatus) {
+    uploadInput.addEventListener('change', async () => {
+      const files = Array.from(uploadInput.files || []);
+      if (files.length === 0) return;
+      uploadInput.value = '';
+
+      uploadStatus.style.display = '';
+      uploadStatus.className = 'px-3 pb-2 small';
+      uploadStatus.textContent = `Subiendo ${files.length} archivo${files.length > 1 ? 's' : ''}…`;
+
+      const uploadPath = document.getElementById('nc-browser')?.getAttribute('data-nc-current-path') || '/';
+
+      let ok = 0, fail = 0;
+      const errors = [];
+
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('action', 'upload');
+        fd.append('csrf_token', CSRF);
+        fd.append('path', uploadPath);
+        fd.append('file', file);
+
+        try {
+          const res = await fetch(AJAX_URL, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF },
+            body: fd,
+          });
+          const data = await res.json();
+          if (data.ok) {
+            ok++;
+          } else {
+            fail++;
+            errors.push(`${file.name}: ${data.error || 'Error desconocido'}`);
+          }
+        } catch {
+          fail++;
+          errors.push(`${file.name}: Error de red`);
+        }
+      }
+
+      if (fail === 0) {
+        uploadStatus.className = 'px-3 pb-2 small proc-upload-status-ok';
+        uploadStatus.textContent = `${ok} archivo${ok > 1 ? 's' : ''} subido${ok > 1 ? 's' : ''} correctamente a Nextcloud.`;
+        window.dispatchEvent(new CustomEvent('nc-browser-refresh'));
+      } else if (ok === 0) {
+        uploadStatus.className = 'px-3 pb-2 small proc-upload-status-err';
+        uploadStatus.textContent = 'No se pudo subir ningún archivo: ' + errors.join('; ');
+      } else {
+        uploadStatus.className = 'px-3 pb-2 small proc-upload-status-err';
+        uploadStatus.textContent = `${ok} subido${ok > 1 ? 's' : ''}, ${fail} con error: ` + errors.join('; ');
+        window.dispatchEvent(new CustomEvent('nc-browser-refresh'));
+      }
+
+      setTimeout(() => { uploadStatus.style.display = 'none'; }, 7000);
+    });
+  }
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>

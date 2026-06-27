@@ -126,19 +126,19 @@ function telegram_command_reply(string $text, array $user): string
     };
 }
 
-function telegram_command_settings(): \App\Support\Integrations\TelegramCommandSettingsRepository
+function telegram_command_settings(): \App\Repositories\Integrations\TelegramCommandSettingsRepository
 {
     static $settings = null;
-    if ($settings instanceof \App\Support\Integrations\TelegramCommandSettingsRepository) {
+    if ($settings instanceof \App\Repositories\Integrations\TelegramCommandSettingsRepository) {
         return $settings;
     }
 
-    return $settings = new \App\Support\Integrations\TelegramCommandSettingsRepository();
+    return $settings = new \App\Repositories\Integrations\TelegramCommandSettingsRepository();
 }
 
 function telegram_help_reply(): string
 {
-    return (new \App\Support\Integrations\TelegramCommandCatalog(telegram_command_settings()))->helpText();
+    return (new \App\Repositories\Integrations\TelegramCommandCatalog(telegram_command_settings()))->helpText();
 }
 
 function telegram_command_key(string $command): string

@@ -6,7 +6,6 @@ use App\Models\NovaUser;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -133,30 +132,6 @@ final class RedmineDataRepository
         return $this->archivedReportsCache;
     }
 
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    private function archivedReportsFromFiles(): array
-    {
-        $reports = [];
-        $root = $this->dataPath('reportes');
-
-        if (!is_dir($root)) {
-            return [];
-        }
-
-        foreach (File::allFiles($root) as $file) {
-            if (strtolower($file->getExtension()) !== 'json') {
-                continue;
-            }
-
-            foreach ($this->readList($file->getPathname()) as $report) {
-                $reports[] = $report;
-            }
-        }
-
-        return $reports;
-    }
 
     /**
      * @return array<string,mixed>
@@ -1130,65 +1105,6 @@ final class RedmineDataRepository
         };
     }
 
-    /**
-     * @return array<string,int>
-     */
-    public function importJsonDataToDatabase(): array
-    {
-        $summary = [
-            'active_reports' => 0,
-            'archived_reports' => 0,
-            'hours_extra_groups' => 0,
-            'users' => 0,
-            'categories' => 0,
-            'units' => 0,
-            'configuration' => 0,
-            'roles' => 0,
-        ];
-
-        $categories = $this->readList($this->dataPath('categorias.json'));
-        $this->saveCatalogRowsToDatabase('categoria', $categories);
-        $summary['categories'] = count($categories);
-
-        $units = $this->readList($this->dataPath('unidades.json'));
-        $this->saveCatalogRowsToDatabase('unidad', $units);
-        $summary['units'] = count($units);
-
-        $this->catalogIdsByTypeValue = null;
-        $this->catalogNamesById = null;
-
-        if ($this->reportsTableAvailable()) {
-            $active = $this->readList($this->dataPath('mensaje.json'));
-            $this->saveActiveReportsToDatabase($active);
-            $summary['active_reports'] = count($active);
-
-            $archived = $this->archivedReportsFromFiles();
-            foreach ($archived as $report) {
-                $this->saveArchivedReportToDatabase($report);
-            }
-            $summary['archived_reports'] = count($archived);
-        }
-
-        $hoursGroups = $this->readJsonTree('horasExtras');
-        $this->saveHoursGroupsToDatabase($hoursGroups);
-        $summary['hours_extra_groups'] = count($hoursGroups);
-
-        $users = $this->readList($this->dataPath('usuarios.json'));
-        $this->userRepo()->persistUsers($users, true, 'baneado');
-        $summary['users'] = count($users);
-
-        $config = $this->readJsonMap($this->dataPath('configuracion.json'));
-        $this->saveModuleConfigurationToDatabase($config);
-        $summary['configuration'] = count($config);
-
-        $roles = $this->readJsonMap($this->dataPath('roles.json'));
-        if ($roles !== []) {
-            $this->saveModuleConfigurationToDatabase(['roles' => $roles], ['roles' => 'json']);
-        }
-        $summary['roles'] = count($roles);
-
-        return $summary;
-    }
 
     /**
      * @return array<string,array{label:string,paths:array<int,string>}>
@@ -1294,40 +1210,6 @@ final class RedmineDataRepository
         return $written;
     }
 
-    public function dataPath(string $path): string
-    {
-        return $this->basePath() . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
-    }
-
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    private function readList(string $path): array
-    {
-        if (!is_file($path)) {
-            return [];
-        }
-
-        $data = json_decode((string) file_get_contents($path), true);
-
-        return is_array($data)
-            ? array_values(array_filter($data, static fn ($item): bool => is_array($item)))
-            : [];
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function readJsonMap(string $path): array
-    {
-        if (!is_file($path)) {
-            return [];
-        }
-
-        $data = json_decode((string) file_get_contents($path), true);
-
-        return is_array($data) ? $data : [];
-    }
 
     public function updateReport(array $payload): bool
     {
@@ -1870,31 +1752,6 @@ final class RedmineDataRepository
         $this->hoursExtraRepo()->remove($id);
     }
 
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    private function readJsonTree(string $directory): array
-    {
-        $rows = [];
-        $root = $this->dataPath($directory);
-
-        if (!is_dir($root)) {
-            return [];
-        }
-
-        foreach (File::allFiles($root) as $file) {
-            if (strtolower($file->getExtension()) !== 'json') {
-                continue;
-            }
-
-            foreach ($this->readList($file->getPathname()) as $row) {
-                $row['_source_file'] = str_replace('\\', '/', $file->getRelativePathname());
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
-    }
 
     /**
      * @return array<int,array<string,mixed>>
@@ -3440,14 +3297,6 @@ final class RedmineDataRepository
         return $time !== null ? substr($time, 0, 5) : '';
     }
 
-    private function assertInsideDataRoot(string $path): void
-    {
-        $root = realpath($this->dataPath('')) ?: $this->dataPath('');
-        $targetDir = realpath(dirname($path)) ?: dirname($path);
-        if (!str_starts_with(strtolower($targetDir), strtolower(rtrim($root, DIRECTORY_SEPARATOR)))) {
-            throw new \RuntimeException('Ruta Redmine fuera del directorio de datos NOVA.');
-        }
-    }
 
     private function monthName(int $month): string
     {

@@ -47,6 +47,7 @@ function load_config($path) {
     if (!array_key_exists('onlyoffice_url', $data)) $data['onlyoffice_url'] = '';
     if (!array_key_exists('onlyoffice_app_url', $data)) $data['onlyoffice_app_url'] = '';
     if (!array_key_exists('onlyoffice_jwt_secret', $data)) $data['onlyoffice_jwt_secret'] = '';
+    if (!array_key_exists('onlyoffice_disabled', $data)) $data['onlyoffice_disabled'] = false;
     if (!array_key_exists('procedures_storage', $data)) $data['procedures_storage'] = 'local';
     $data['procedures_storage'] = in_array(strtolower((string)$data['procedures_storage']), ['local', 'nextcloud'], true)
         ? strtolower((string)$data['procedures_storage'])
@@ -110,6 +111,7 @@ function handle_configuracion() {
         if ($postedOnlyOfficeSecret !== '') {
             $cfg['onlyoffice_jwt_secret'] = $postedOnlyOfficeSecret;
         }
+        $cfg['onlyoffice_disabled'] = !empty($_POST['onlyoffice_disabled']);
         unset($cfg['core_login_user'], $cfg['core_login_pass']);
         $cfg['categories_url'] = trim($_POST['categories_url'] ?? ($cfg['categories_url'] ?? ''));
         $cfg['unidades_url'] = trim($_POST['unidades_url'] ?? ($cfg['unidades_url'] ?? ''));

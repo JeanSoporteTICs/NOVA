@@ -28,7 +28,7 @@ $navItems = [
     ['key' => 'horas', 'label' => 'Horas extra', 'href' => '../HorasExtra/horas_extra.php', 'icon' => 'bi-clock-history', 'can' => auth_can('horas_extra')],
     ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => '../Historico/historico.php', 'icon' => 'bi-archive', 'can' => auth_can('historico')],
     ['key' => 'procedimientos', 'label' => 'Procedimientos', 'href' => '../Procedimientos/procedimientos.php', 'icon' => 'bi-journal-richtext', 'can' => auth_can('procedimientos')],
-    ['key' => 'mis_integraciones', 'label' => 'Mis integraciones', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => true],
+    ['key' => 'mis_integraciones', 'label' => 'Cuentas conectadas', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => true],
     ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => '../Usuarios/usuarios.php', 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
     [
         'key' => 'integraciones',
@@ -37,8 +37,17 @@ $navItems = [
         'icon' => 'bi-diagram-3',
         'can' => in_array($role, ['root', 'gestor'], true),
         'children' => [
-            ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Crear usuarios Nextcloud', 'href' => '../Integraciones/NextcloudUsuarios.php', 'icon' => 'bi-cloud-plus', 'can' => in_array($role, ['root', 'gestor'], true)],
-            ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial Nextcloud', 'href' => '../Integraciones/NextcloudHistorial.php', 'icon' => 'bi-clock-history', 'can' => in_array($role, ['root', 'gestor'], true)],
+            [
+                'key' => 'integraciones_nextcloud',
+                'label' => 'Nextcloud',
+                'href' => '#',
+                'icon' => 'bi-cloud',
+                'can' => in_array($role, ['root', 'gestor'], true),
+                'children' => [
+                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Nextcloud', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-usuarios', 'icon' => 'bi-cloud-plus', 'can' => in_array($role, ['root', 'gestor'], true)],
+                    ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-historial', 'icon' => 'bi-clock-history', 'can' => in_array($role, ['root', 'gestor'], true)],
+                ],
+            ],
         ],
     ],
     ['key' => 'configuracion', 'label' => 'Configuraci&oacute;n', 'href' => '../Configuracion/configuracion.php', 'icon' => 'bi-sliders', 'can' => auth_can('configuracion') || auth_can('categorias')],
@@ -112,10 +121,10 @@ $navItems = [
                 ?>
                 <?php if ($grandChildren): ?>
                   <li class="dropend">
-                    <a class="dropdown-item dropdown-toggle <?= $childActive ? 'active' : '' ?>" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="dropdown-item dropdown-toggle js-submenu-toggle <?= $childActive ? 'active' : '' ?>" href="#" aria-expanded="false">
                       <i class="bi <?= $h($child['icon']) ?> me-2"></i><?= $child['label'] ?>
                     </a>
-                    <ul class="dropdown-menu shadow border-0">
+                    <ul class="dropdown-menu js-submenu-menu shadow border-0">
                       <?php foreach ($grandChildren as $grandChild): ?>
                         <?php $grandActive = $activeNav === ($grandChild['key'] ?? ''); ?>
                         <li>
@@ -217,6 +226,43 @@ $navItems = [
     if (!selector || selector.charAt(0) !== '#') return;
     promoteModalToBody(document.querySelector(selector));
   }, true);
+  document.addEventListener('click', function (e) {
+    const toggle = e.target.closest('.sb-native-menu-wrap .js-submenu-toggle');
+    if (toggle) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const li = toggle.closest('li');
+      const menu = li ? li.querySelector('.js-submenu-menu') : null;
+      if (!menu) return;
+      document.querySelectorAll('.sb-native-menu-wrap .js-submenu-menu.show').forEach(function (m) {
+        if (m !== menu) m.classList.remove('show');
+      });
+      const open = menu.classList.toggle('show');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return;
+    }
+    const subLink = e.target.closest('.sb-native-menu-wrap .js-submenu-menu a[href]');
+    if (subLink) {
+      const href = subLink.getAttribute('href');
+      if (href && href !== '#') {
+        e.stopImmediatePropagation();
+      }
+    }
+  }, true);
+  function cleanDropendState() {
+    document.querySelectorAll('.sb-native-menu-wrap .js-submenu-menu.show').forEach(function (m) { m.classList.remove('show'); });
+    document.querySelectorAll('.sb-native-menu-wrap .js-submenu-toggle[aria-expanded="true"]').forEach(function (t) { t.setAttribute('aria-expanded', 'false'); });
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.sb-native-menu-wrap .dropdown')) return;
+    document.querySelectorAll('.sb-native-menu-wrap .dropdown-menu.show').forEach(function (menu) { menu.classList.remove('show'); });
+    document.querySelectorAll('.sb-native-menu-wrap [data-bs-toggle="dropdown"].show').forEach(function (toggle) {
+      toggle.classList.remove('show');
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+    cleanDropendState();
+  });
+  document.addEventListener('hide.bs.dropdown', function () { cleanDropendState(); });
   window.appUi.setIntegrationLoading = function (state, options) {
     if (!integrationOverlay) return;
     options = options || {};
@@ -292,8 +338,8 @@ $navItems = [
     window.appUi.setLoading(true);
   });
   // Hide loader when page finishes loading
-  window.addEventListener('pageshow', function () { window.appUi.setLoading(false); window.appUi.setIntegrationLoading(false); });
-  window.addEventListener('load', function () { window.appUi.setLoading(false); window.appUi.setIntegrationLoading(false); });
+  window.addEventListener('pageshow', function () { window.appUi?.setLoading?.(false); window.appUi?.setIntegrationLoading?.(false); });
+  window.addEventListener('load', function () { window.appUi?.setLoading?.(false); window.appUi?.setIntegrationLoading?.(false); });
 }());
 window.addEventListener('load', () => {
   // Navegaci&oacute;n parcial: carga vistas sin recargar navbar/footer si existe #page-content en destino.
@@ -316,21 +362,23 @@ window.addEventListener('load', () => {
       });
     };
     const executeScripts = (doc) => {
-      const scripts = doc.querySelectorAll('script');
-      scripts.forEach(old => {
-        const s = document.createElement('script');
-        if (old.src) {
-          s.src = old.src;
-        } else {
-          s.textContent = old.textContent;
-        }
-        document.body.appendChild(s);
-      });
+      const pageEl = doc.getElementById('page-content');
+      if (pageEl) {
+        pageEl.querySelectorAll('script').forEach(old => {
+          const s = document.createElement('script');
+          if (old.src) s.src = old.src;
+          else s.textContent = old.textContent;
+          document.body.appendChild(s);
+        });
+      }
       // Re-disparar eventos para vistas cargadas din&aacute;micamente.
       document.dispatchEvent(new Event('DOMContentLoaded'));
       document.dispatchEvent(new Event('partial:loaded'));
     };
+    let _loadPageBusy = false;
     const loadPage = async (url, push) => {
+      if (_loadPageBusy) return;
+      _loadPageBusy = true;
       const targetPath = (new URL(url, window.location.href)).pathname.toLowerCase();
       if (forceFullPaths.some(p => targetPath.endsWith(p))) {
         window.location.href = url;
@@ -373,6 +421,7 @@ window.addEventListener('load', () => {
         window.location.href = url;
       } finally {
         window.appUi?.setLoading?.(false);
+        _loadPageBusy = false;
       }
     };
     const handleClick = (e) => {

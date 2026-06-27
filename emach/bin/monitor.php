@@ -22,7 +22,7 @@ emach_monitor_bootstrap_laravel();
 
 $options = emach_monitor_options($argv);
 $defaultStoragePath = dirname(__DIR__, 2) . '/storage/app/emach';
-$config = emach_monitor_read_config((string) ($options['config'] ?? $defaultStoragePath . '/monitor_config.json'));
+$config = emach_monitor_read_config();
 $telegramConfig = telegram_read_config();
 $credentials = emach_monitor_user_credentials();
 $telegramToken = trim((string) ($telegramConfig['bot_token'] ?? ''));
@@ -112,14 +112,26 @@ function emach_monitor_options(array $argv): array
     return $options;
 }
 
-function emach_monitor_read_config(string $configFile): array
+function emach_monitor_read_config(): array
 {
-    if (!is_file($configFile)) {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
         return [];
     }
-
-    $config = json_decode((string) file_get_contents($configFile), true);
-    return is_array($config) ? $config : [];
+    try {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('nova_settings')) {
+            return [];
+        }
+        $row = \Illuminate\Support\Facades\DB::table('nova_settings')
+            ->where('clave', 'emach_monitor_config')
+            ->first();
+        if (!$row) {
+            return [];
+        }
+        $decoded = json_decode((string) ($row->valor ?? ''), true);
+        return is_array($decoded) ? $decoded : [];
+    } catch (\Throwable) {
+        return [];
+    }
 }
 
 function emach_monitor_bootstrap_laravel(): void

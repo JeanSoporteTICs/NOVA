@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\ProjectUserProviderInterface;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -13,7 +14,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        if (class_exists(\RedmineTic\Services\Redmine\RedmineProjectUserProvider::class)) {
+            $this->app->bind(ProjectUserProviderInterface::class, \RedmineTic\Services\Redmine\RedmineProjectUserProvider::class);
+        }
     }
 
     /**

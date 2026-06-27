@@ -1031,7 +1031,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <input name="nextcloud_url" class="form-control" value="<?= $h($nextcloudCfg['url'] ?? 'https://www.coresalud.cl/nextcloud') ?>" placeholder="https://www.coresalud.cl/nextcloud" required>
               </div>
               <div class="alert alert-info py-2 small">
-                Las credenciales de Nextcloud se administran desde <strong>Mis integraciones</strong>, junto a las credenciales CORE de cada usuario.
+                Las credenciales de Nextcloud se administran desde <strong>Cuentas conectadas</strong>, junto a las credenciales CORE de cada usuario.
               </div>
               <div class="mb-3">
                 <label class="form-label">Grupo por defecto</label>
@@ -1363,6 +1363,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           <div class="col-12">
             <label class="form-label">JWT secret OnlyOffice</label>
             <input name="onlyoffice_jwt_secret" class="form-control" value="" autocomplete="off" placeholder="<?= !empty($cfg['onlyoffice_jwt_secret']) ? 'JWT configurado. Escribe uno nuevo para reemplazarlo.' : 'Opcional si tu Document Server no usa JWT' ?>">
+          </div>
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" name="onlyoffice_disabled" id="oo-disabled-toggle" value="1" <?= !empty($cfg['onlyoffice_disabled']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="oo-disabled-toggle">Deshabilitar temporalmente OnlyOffice</label>
+            </div>
+            <div class="form-text">Si está marcado, no se realizará ninguna conexión a OnlyOffice y se mostrará como "deshabilitado".</div>
           </div>
           <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">Redmine</h6></div>
           <div class="col-12">

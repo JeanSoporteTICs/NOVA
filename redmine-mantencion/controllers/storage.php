@@ -72,32 +72,9 @@ if (!function_exists('storage_base_path')) {
         return $rel === '' ? null : $rel;
     }
 
-    function storage_backup_file(string $path): void {
-        static $done = [];
-        if (!is_file($path) || filesize($path) === 0) {
-            return;
-        }
-        $rel = storage_relative_data_path($path);
-        if ($rel === null || strpos($rel, 'backups/') === 0 || strpos($rel, 'logs/') === 0) {
-            return;
-        }
-        $real = realpath($path);
-        if ($real === false || isset($done[$real])) {
-            return;
-        }
-        $done[$real] = true;
-
-        $dest = storage_data_path('backups/on-write/' . date('Y-m-d') . '/' . $rel . '.' . date('His') . '.bak');
-        storage_ensure_dir(dirname($dest));
-        @copy($path, $dest);
-    }
-
-    function storage_write_file_locked(string $path, string $contents, int $flags = 0, bool $backup = true): bool {
+    function storage_write_file_locked(string $path, string $contents, int $flags = 0): bool {
         storage_ensure_dir(dirname($path));
         $append = (bool)($flags & FILE_APPEND);
-        if (!$append && $backup) {
-            storage_backup_file($path);
-        }
         $handle = @fopen($path, $append ? 'ab' : 'c+b');
         if (!$handle) {
             return false;
@@ -131,11 +108,7 @@ if (!function_exists('storage_base_path')) {
             }
         }
 
-        if (getenv('REDMINE_MANTENCION_JSON_FALLBACK') !== '1') {
-            return $default;
-        }
-
-        return is_file($path) ? (string)@file_get_contents($path) : $default;
+        return $default;
     }
 
     function storage_write_text(string $path, string $contents): bool {
@@ -150,9 +123,7 @@ if (!function_exists('storage_base_path')) {
             }
         }
 
-        return getenv('REDMINE_MANTENCION_JSON_FALLBACK') === '1'
-            ? storage_write_file_locked($path, $contents, 0, true)
-            : false;
+        return false;
     }
 
     function storage_append_line(string $path, string $line): bool {
@@ -161,7 +132,7 @@ if (!function_exists('storage_base_path')) {
             return storage_write_text($path, rtrim($current, "\r\n") . ($current !== '' ? PHP_EOL : '') . rtrim($line, "\r\n") . PHP_EOL);
         }
 
-        return storage_write_file_locked($path, rtrim($line, "\r\n") . PHP_EOL, FILE_APPEND, false);
+        return storage_write_file_locked($path, rtrim($line, "\r\n") . PHP_EOL, FILE_APPEND);
     }
 
     function storage_truncate_file(string $path): bool {
@@ -169,50 +140,7 @@ if (!function_exists('storage_base_path')) {
             return storage_write_text($path, '');
         }
 
-        return storage_write_file_locked($path, '', 0, true);
-    }
-
-    function storage_copy_recursive(string $source, string $dest): void {
-        if (is_file($source)) {
-            storage_ensure_dir(dirname($dest));
-            @copy($source, $dest);
-            return;
-        }
-        if (!is_dir($source)) {
-            return;
-        }
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
-        foreach ($iterator as $item) {
-            $target = $dest . DIRECTORY_SEPARATOR . $iterator->getSubPathName();
-            if ($item->isDir()) {
-                storage_ensure_dir($target);
-            } elseif ($item->isFile()) {
-                storage_ensure_dir(dirname($target));
-                @copy($item->getPathname(), $target);
-            }
-        }
-    }
-
-    function storage_prune_backups(int $retentionDays = 30): void {
-        $root = storage_data_path('backups');
-        if (!is_dir($root)) {
-            return;
-        }
-        $limit = time() - max(1, $retentionDays) * 86400;
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $item) {
-            if ($item->isFile() && $item->getMTime() < $limit) {
-                @unlink($item->getPathname());
-            } elseif ($item->isDir()) {
-                @rmdir($item->getPathname());
-            }
-        }
+        return storage_write_file_locked($path, '');
     }
 
     function config_mantencion_repository() {
@@ -273,49 +201,5 @@ if (!function_exists('storage_base_path')) {
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    function storage_run_auto_backup(?array $paths = null): void {
-        if (getenv('APP_BACKUP_ENABLED') === '0') {
-            return;
-        }
-        $today = date('Y-m-d');
-        $marker = storage_data_path('backups/.last_auto_backup');
-        storage_ensure_dir(dirname($marker));
-        $handle = @fopen($marker, 'c+b');
-        if (!$handle) {
-            return;
-        }
-        if (!flock($handle, LOCK_EX)) {
-            fclose($handle);
-            return;
-        }
-        $current = trim(stream_get_contents($handle));
-        if ($current === $today) {
-            flock($handle, LOCK_UN);
-            fclose($handle);
-            return;
-        }
-
-        $paths = $paths ?? [
-            'procedimientos/documentos',
-            'procedimientos/imagenes',
-            'logs',
-        ];
-        $destRoot = storage_data_path('backups/auto/' . $today);
-        foreach ($paths as $rel) {
-            $source = storage_data_path($rel);
-            if (file_exists($source)) {
-                storage_copy_recursive($source, $destRoot . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel));
-            }
-        }
-
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $today);
-        fflush($handle);
-        flock($handle, LOCK_UN);
-        fclose($handle);
-        storage_prune_backups((int)(getenv('APP_BACKUP_RETENTION_DAYS') ?: 30));
     }
 }

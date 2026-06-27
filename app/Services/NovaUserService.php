@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\Integrations\UserIntegrationRepository;
+use App\Support\StringNormalizer;
 
 /**
  * Domain logic for NOVA user identity, deduplication, credentials, and session projection.
@@ -22,7 +23,7 @@ final class NovaUserService
 
     public function normalizeIdentity(string $value): string
     {
-        return strtolower((string) preg_replace('/[^0-9a-z]/i', '', $value));
+        return StringNormalizer::normalize($value);
     }
 
     // -------------------------------------------------------------------------

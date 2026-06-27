@@ -91,11 +91,10 @@ class AuthTest extends TestCase
 
     public function test_logout_requires_post()
     {
-        // GET logout should still work for backward compat but not create issues
         $response = $this->withSession(['nova_user' => $this->fakeSessionUser()])
             ->get('/logout');
 
-        $response->assertRedirect(route('login'));
+        $response->assertStatus(405);
     }
 
     public function test_logout_via_post_clears_session_and_redirects()

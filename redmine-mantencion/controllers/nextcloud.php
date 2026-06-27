@@ -456,13 +456,16 @@ function nextcloud_request(array $cfg, string $method, string $path, array $payl
         CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_USERPWD => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
         CURLOPT_HTTPHEADER => ['OCS-APIRequest: true', 'Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
-        CURLOPT_TIMEOUT => 30,
+        CURLOPT_TIMEOUT => 10,
     ]);
     if ($pairs) curl_setopt($ch, CURLOPT_POSTFIELDS, implode('&', $pairs));
+    $_ncT0 = microtime(true);
     $resp = curl_exec($ch);
+    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
     if ($resp === false) {
         $err = curl_error($ch);
         curl_close($ch);
+        error_log('[NC_PERF] OCS ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' CURL_ERROR=' . $err);
         return ['ok' => false, 'statuscode' => 0, 'message' => $err];
     }
     $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -471,6 +474,58 @@ function nextcloud_request(array $cfg, string $method, string $path, array $payl
     $meta = is_array($json) ? ($json['ocs']['meta'] ?? []) : [];
     $statusCode = (int)($meta['statuscode'] ?? 0);
     $message = trim((string)($meta['message'] ?? ''));
+    error_log('[NC_PERF] OCS ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' http=' . $http . ' statuscode=' . $statusCode);
+    return [
+        'ok' => $http < 400 && $statusCode === 100,
+        'http' => $http,
+        'statuscode' => $statusCode,
+        'message' => $message,
+        'data' => is_array($json) ? ($json['ocs']['data'] ?? null) : null,
+    ];
+}
+
+function nextcloud_sharing_request(array $cfg, string $method, string $path, array $payload = []): array {
+    $base = rtrim((string)$cfg['url'], '/');
+    $path = '/' . ltrim($path, '/');
+    $url = $base . '/ocs/v2.php/apps/files_sharing/api/v1' . $path . (str_contains($path, '?') ? '&' : '?') . 'format=json';
+    $pairs = [];
+    foreach ($payload as $key => $value) {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                $pairs[] = rawurlencode($key . '[]') . '=' . rawurlencode((string)$item);
+            }
+        } elseif ($value !== '') {
+            $pairs[] = rawurlencode($key) . '=' . rawurlencode((string)$value);
+        }
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_USERPWD => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
+        CURLOPT_HTTPHEADER => ['OCS-APIRequest: true', 'Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    if ($pairs) curl_setopt($ch, CURLOPT_POSTFIELDS, implode('&', $pairs));
+    $_ncT0 = microtime(true);
+    $resp = curl_exec($ch);
+    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
+    if ($resp === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        error_log('[NC_PERF] OCS-SHARING ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' CURL_ERROR=' . $err);
+        return ['ok' => false, 'http' => 0, 'statuscode' => 0, 'message' => $err, 'data' => null];
+    }
+    $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $json = json_decode((string)$resp, true);
+    $meta = is_array($json) ? ($json['ocs']['meta'] ?? []) : [];
+    $statusCode = (int)($meta['statuscode'] ?? 0);
+    $message = trim((string)($meta['message'] ?? ''));
+    if ($message === '' && $http >= 400) {
+        $message = 'HTTP ' . $http;
+    }
+    error_log('[NC_PERF] OCS-SHARING ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' http=' . $http . ' statuscode=' . $statusCode);
     return [
         'ok' => $http < 400 && $statusCode === 100,
         'http' => $http,
@@ -502,16 +557,19 @@ function nextcloud_webdav_request(array $cfg, string $method, string $path, $bod
     if ($body !== null) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
     }
+    $_ncT0 = microtime(true);
     $response = curl_exec($ch);
+    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
     if ($response === false) {
         $err = curl_error($ch);
         curl_close($ch);
+        error_log('[NC_PERF] WEBDAV ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' CURL_ERROR=' . $err);
         return ['ok' => false, 'http' => 0, 'body' => '', 'headers' => '', 'message' => $err];
     }
     $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     curl_close($ch);
-
+    error_log('[NC_PERF] WEBDAV ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' http=' . $http);
     return [
         'ok' => $http >= 200 && $http < 300,
         'http' => $http,
@@ -539,7 +597,7 @@ function nextcloud_ensure_directory(array $cfg, string $path): array {
 }
 
 function nextcloud_share_create(array $cfg, string $path, bool $publicUpload = false): array {
-    $res = nextcloud_request($cfg, 'POST', '/shares', [
+    $res = nextcloud_sharing_request($cfg, 'POST', '/shares', [
         'path' => '/' . ltrim($path, '/'),
         'shareType' => 3,
         'permissions' => $publicUpload ? 15 : 1,
@@ -561,7 +619,7 @@ function nextcloud_share_delete(array $cfg, string $shareId): array {
     if ($shareId === '') {
         return ['ok' => true];
     }
-    $res = nextcloud_request($cfg, 'DELETE', '/shares/' . rawurlencode($shareId));
+    $res = nextcloud_sharing_request($cfg, 'DELETE', '/shares/' . rawurlencode($shareId));
     return $res['ok'] ? ['ok' => true] : ['ok' => false, 'error' => (($res['message'] ?? '') ?: 'No se pudo eliminar enlace compartido.')];
 }
 
@@ -1022,4 +1080,180 @@ function handle_nextcloud(): array {
         }
     }
     return [$flash, nextcloud_config(), nextcloud_cached_groups(), $lastImport, $preview];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Personal Nextcloud file-browser helpers (per-user credentials)
+// ──────────────────────────────────────────────────────────────────────────────
+
+function nextcloud_path_safe(string $path): string
+{
+    $path = str_replace('\\', '/', $path);
+    $parts = array_values(array_filter(
+        explode('/', $path),
+        static fn (string $p): bool => $p !== '' && $p !== '.' && $p !== '..'
+    ));
+    return '/' . implode('/', $parts);
+}
+
+function nextcloud_propfind_parse(string $xml): array
+{
+    if (trim($xml) === '') {
+        return [];
+    }
+    $prev = libxml_use_internal_errors(true);
+    $doc  = new DOMDocument();
+    $doc->loadXML($xml);
+    libxml_use_internal_errors($prev);
+
+    $xpath = new DOMXPath($doc);
+    $xpath->registerNamespace('d',  'DAV:');
+    $xpath->registerNamespace('oc', 'http://owncloud.org/ns');
+
+    $responses = $xpath->query('//d:response');
+    if (!$responses || $responses->length === 0) {
+        return [];
+    }
+
+    $items       = [];
+    $skippedRoot = false;
+
+    foreach ($responses as $response) {
+        if (!$skippedRoot) {
+            $skippedRoot = true;
+            continue;
+        }
+
+        $href = urldecode(trim((string) ($xpath->evaluate('string(d:href)', $response))));
+
+        // Extract the user-relative path from the DAV href.
+        // href looks like: /[basepath]/remote.php/dav/files/USER/actual/path
+        $pathPart = '';
+        if (preg_match('#/remote\.php/dav/files/[^/]+(/.*)?$#', $href, $m)) {
+            $pathPart = rtrim((string) ($m[1] ?? ''), '/');
+        }
+        if ($pathPart === '') {
+            $pathPart = '/' . ltrim($href, '/');
+        }
+        if ($pathPart === '') {
+            $pathPart = '/';
+        }
+
+        $isDir       = $xpath->evaluate('count(d:propstat/d:prop/d:resourcetype/d:collection)', $response) > 0;
+        $displayName = trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:displayname)', $response)));
+        if ($displayName === '') {
+            $displayName = basename($pathPart);
+        }
+
+        $items[] = [
+            'name'          => $displayName,
+            'path'          => $pathPart,
+            'type'          => $isDir ? 'dir' : 'file',
+            'mime'          => $isDir ? 'httpd/unix-directory' : trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:getcontenttype)', $response))),
+            'size'          => (int) ($xpath->evaluate('number(d:propstat/d:prop/d:getcontentlength)', $response)),
+            'last_modified' => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:getlastmodified)', $response))),
+            'etag'          => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:getetag)', $response))),
+            'file_id'       => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/oc:fileid)', $response))),
+            'permissions'   => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/oc:permissions)', $response))),
+        ];
+    }
+
+    usort($items, static function (array $a, array $b): int {
+        if ($a['type'] !== $b['type']) {
+            return $a['type'] === 'dir' ? -1 : 1;
+        }
+        return strnatcasecmp((string) $a['name'], (string) $b['name']);
+    });
+
+    return $items;
+}
+
+function nextcloud_list_directory(array $cfg, string $path): array
+{
+    $path = nextcloud_path_safe($path);
+
+    $propfindBody = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><d:displayname/><d:getcontenttype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><d:resourcetype/><oc:fileid/><oc:permissions/></d:prop></d:propfind>';
+
+    $pathSegments = '/' . ltrim($path, '/');
+    $url = nextcloud_webdav_base_url($cfg)
+        . implode('/', array_map('rawurlencode', explode('/', $pathSegments)));
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST  => 'PROPFIND',
+        CURLOPT_USERPWD        => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/xml; charset=utf-8',
+            'Depth: 1',
+            'Accept: application/xml',
+        ],
+        CURLOPT_POSTFIELDS => $propfindBody,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 5,
+    ]);
+
+    $_ncT0 = microtime(true);
+    $resp = curl_exec($ch);
+    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
+    if ($resp === false) {
+        $errno = curl_errno($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+        error_log('[NC_PERF] PROPFIND depth=1 path=' . $path . ' url=' . $url . ' ms=' . $_ncMs . ' CURL_ERRNO=' . $errno . ' ' . $err);
+        if ($errno === 28) {
+            return [
+                'ok' => false,
+                'error' => 'Nextcloud no respondio a tiempo. Intente nuevamente o revise la conexion del servidor.',
+                'timeout' => true,
+            ];
+        }
+        return ['ok' => false, 'error' => $err];
+    }
+    $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http !== 207) {
+        error_log('[NC_PERF] PROPFIND depth=1 path=' . $path . ' url=' . $url . ' ms=' . $_ncMs . ' http=' . $http);
+        $hint = match ($http) {
+            401 => ' — credenciales inválidas',
+            403 => ' — sin permiso',
+            404 => ' — ruta no encontrada',
+            default => '',
+        };
+        return ['ok' => false, 'error' => 'HTTP ' . $http . $hint, 'http' => $http];
+    }
+
+    $_ncItems = nextcloud_propfind_parse((string) $resp);
+    error_log('[NC_PERF] PROPFIND depth=1 path=' . $path . ' url=' . $url . ' ms=' . $_ncMs . ' http=' . $http . ' items=' . count($_ncItems));
+    return ['ok' => true, 'path' => $path, 'items' => $_ncItems];
+}
+
+function nextcloud_shares_with_me(array $cfg): array
+{
+    $res = nextcloud_sharing_request($cfg, 'GET', '/shares?shared_with_me=true');
+    if (!$res['ok']) {
+        return ['ok' => false, 'error' => (($res['message'] ?? '') ?: 'HTTP ' . ($res['http'] ?? 0))];
+    }
+    $data   = is_array($res['data'] ?? null) ? $res['data'] : [];
+    $shares = [];
+    foreach ($data as $share) {
+        if (!is_array($share)) {
+            continue;
+        }
+        $shares[] = [
+            'id'                  => (string) ($share['id'] ?? ''),
+            'path'                => (string) ($share['path'] ?? ''),
+            'name'                => basename((string) ($share['file_target'] ?? $share['path'] ?? '')),
+            'share_type'          => (int) ($share['share_type'] ?? 0),
+            'uid_owner'           => (string) ($share['uid_owner'] ?? ''),
+            'displayname_owner'   => (string) ($share['displayname_owner'] ?? ''),
+            'permissions'         => (int) ($share['permissions'] ?? 0),
+            'stime'               => (int) ($share['stime'] ?? 0),
+            'item_type'           => (string) ($share['item_type'] ?? 'file'),
+            'mimetype'            => (string) ($share['mimetype'] ?? ''),
+            'size'                => (int) ($share['size'] ?? 0),
+        ];
+    }
+    return ['ok' => true, 'shares' => $shares];
 }

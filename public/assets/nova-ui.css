@@ -1804,6 +1804,50 @@ select:focus {
   color: #1d4ed8 !important;
 }
 
+/* ---- 8b. Navbar nested submenu (.dropend dentro de .dropdown-menu) ---- */
+
+/* El .dropdown-menu padre debe permitir que el submenú se extienda fuera */
+.sb-native-menu-wrap .dropdown-menu {
+  overflow: visible !important;
+}
+
+/* Desktop (≥ lg): submenú aparece a la derecha del trigger */
+@media (min-width: 992px) {
+  .sb-native-menu-wrap .dropend {
+    position: relative;
+  }
+  .sb-native-menu-wrap .js-submenu-menu {
+    display: none;
+    position: absolute !important;
+    top: 0 !important;
+    left: 100% !important;
+    margin: 0 0 0 4px !important;
+    min-width: 190px;
+    z-index: 1025;
+  }
+  .sb-native-menu-wrap .js-submenu-menu.show {
+    display: block !important;
+  }
+}
+
+/* Mobile (< lg): submenú se expande en línea, con indentación */
+@media (max-width: 991.98px) {
+  .sb-native-menu-wrap .js-submenu-menu {
+    position: static !important;
+    float: none !important;
+    display: none;
+    margin: 2px 0 4px 1rem !important;
+    padding: 4px 0 !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+    border: 1px solid rgba(37, 99, 235, 0.18) !important;
+    background: rgba(239, 246, 255, 0.7) !important;
+  }
+  .sb-native-menu-wrap .js-submenu-menu.show {
+    display: block !important;
+  }
+}
+
 /* ---- 9. Scrollbar Refinements (WebKit) ---- */
 
 ::-webkit-scrollbar {
@@ -4505,14 +4549,55 @@ label {
 }
 
 .integration-page .rm-layout {
-  padding: 20px 22px 38px;
+  padding: 18px 22px 36px;
+}
+
+.integration-hero.card.card-hero,
+.integration-hero.rm-hero {
+  min-height: 0;
+  margin-bottom: 16px !important;
+}
+
+.integration-hero.card.card-hero .card-body,
+.integration-hero.rm-hero .card-body {
+  min-height: 118px;
+  padding: 18px 22px !important;
+}
+
+.integration-hero .rm-page-title {
+  margin-bottom: 4px;
+}
+
+.integration-hero-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: rgba(255, 255, 255, .9);
+  font-weight: 800;
+}
+
+.integration-hero-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.integration-hero-list li::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #93c5fd;
 }
 
 .integration-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .integration-grid--1 {
@@ -4527,58 +4612,93 @@ label {
 .integration-card {
   display: flex;
   flex-direction: column;
-  padding: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  min-width: 0;
+  padding: 16px;
+  background: #ffffff !important;
+}
+
+.integration-card-summary {
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.integration-card-summary:hover,
+.integration-card-summary:focus-visible {
+  border-color: rgba(37, 99, 235, .34);
+  box-shadow: 0 18px 42px rgba(37, 99, 235, .14);
+  transform: translateY(-1px);
+  outline: none;
 }
 
 .integration-card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding-bottom: 14px;
-  margin-bottom: 14px;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
   border-bottom: 1px solid #e3edf8;
 }
 
 .integration-title {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
 .integration-title h2 {
+  margin: 0;
   color: #0f172a;
+  font-size: 1.05rem;
+  font-weight: 900;
   letter-spacing: 0;
-}
-
-.integration-title p {
-  max-width: 58ch;
 }
 
 .integration-icon {
   display: inline-grid;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   place-items: center;
   flex: 0 0 auto;
   color: #1d4ed8;
   background: #eaf2ff;
   border: 1px solid rgba(37, 99, 235, 0.18);
-  border-radius: 10px;
-  font-size: 1.15rem;
+  border-radius: 8px;
+  font-size: 1.05rem;
+}
+
+.integration-card-open {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #2563eb;
+  background: #f1f6ff;
+  border: 1px solid #dbe7f5;
+  border-radius: 8px;
+}
+
+.integration-card-status {
+  margin-bottom: 12px;
 }
 
 .integration-status {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
+  gap: 6px;
   min-height: 26px;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 950;
+  font-size: 0.75rem;
+  font-weight: 900;
   white-space: nowrap;
+}
+
+.integration-status .bi {
+  font-size: .7rem;
 }
 
 .integration-status.is-ready {
@@ -4587,48 +4707,70 @@ label {
   border: 1px solid rgba(22, 163, 74, 0.24);
 }
 
-.integration-status.is-pending {
+.integration-status.is-ready .bi {
+  color: #16a34a;
+}
+
+.integration-status.is-empty {
   color: #475569;
   background: #eef2f7;
   border: 1px solid #d7e0ec;
 }
 
+.integration-status.is-empty .bi {
+  color: #94a3b8;
+}
+
+.integration-status.is-warning {
+  color: #713f12;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.integration-status.is-warning .bi {
+  color: #d97706;
+}
+
 .integration-meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0 0 14px;
 }
 
 .integration-meta div {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
   min-width: 0;
-  padding: 10px 12px;
-  background: #f3f7fc;
-  border: 1px solid #e0e9f5;
-  border-radius: 8px;
 }
 
-.integration-meta span {
-  display: block;
-  margin-bottom: 3px;
+.integration-meta dt {
   color: #64748b;
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 900;
-  text-transform: uppercase;
 }
 
-.integration-meta strong {
-  display: block;
+.integration-meta dd {
+  min-width: 0;
+  margin: 0;
   overflow: hidden;
   color: #0f172a;
-  font-weight: 900;
+  font-weight: 850;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .integration-form {
   display: grid;
-  gap: 13px;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.integration-form .form-label {
+  font-size: .86rem;
 }
 
 .integration-form .form-control {
@@ -4637,24 +4779,116 @@ label {
 
 .integration-form .form-text {
   color: #64748b;
-  font-weight: 750;
+  font-weight: 700;
 }
 
+.integration-secret-group .btn {
+  min-height: 42px;
+  border-color: var(--nova-line);
+}
+
+.integration-card-actions,
 .integration-delete-form {
-  margin: 10px 0 0;
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 0;
 }
 
-.integration-form .btn,
+.integration-card-actions .btn,
 .integration-delete-form .btn {
-  min-width: 118px;
+  width: 100%;
+}
+
+.integration-card .nova-spinner {
+  display: none;
+}
+
+.integration-drawer .nova-spinner {
+  display: none;
+}
+
+.integration-card .btn.is-submitting .nova-spinner {
+  display: inline-block;
+  border-color: rgba(255, 255, 255, .45);
+  border-top-color: #ffffff;
+}
+
+.integration-drawer .btn.is-submitting .nova-spinner {
+  display: inline-block;
+  border-color: rgba(255, 255, 255, .45);
+  border-top-color: #ffffff;
+}
+
+.integration-card .btn.is-submitting i:not(.nova-spinner) {
+  display: none;
+}
+
+.integration-drawer .btn.is-submitting i:not(.nova-spinner) {
+  display: none;
+}
+
+.integration-drawer {
+  width: min(460px, 100vw) !important;
+  background: #f6f9fd;
+}
+
+.integration-drawer .offcanvas-header {
+  align-items: flex-start;
+  padding: 18px;
+  border-bottom: 1px solid #dbe7f5;
+  background: #ffffff;
+}
+
+.integration-drawer-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.integration-drawer-title .offcanvas-title {
+  margin-bottom: 8px;
+  color: #0f172a;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.integration-drawer .offcanvas-body {
+  padding: 18px;
+}
+
+.integration-drawer-meta {
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #dbe7f5;
+  border-radius: 8px;
+}
+
+.integration-drawer-footer {
+  display: grid;
+  gap: 10px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid #dbe7f5;
+  background: #ffffff;
+}
+
+.integration-drawer-footer .btn,
+.integration-drawer-footer form {
+  width: 100%;
+  margin: 0;
+}
+
+.integration-drawer-footer form .btn {
+  width: 100%;
 }
 
 .integration-summary {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  padding: 16px;
+  background: #ffffff !important;
 }
 
 .integration-summary .rm-section-head h2 {
-  font-size: 1.35rem;
+  font-size: 1.15rem;
 }
 
 .integration-summary .rm-section-head p {
@@ -4663,10 +4897,21 @@ label {
 
 .integration-summary .table-responsive {
   border: 1px solid #dbe7f5;
+  border-radius: 8px;
 }
 
 .integration-summary .table {
   margin: 0;
+}
+
+.integration-toast {
+  animation: toastIn .2s ease-out;
+}
+
+@media (max-width: 1199.98px) {
+  .integration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 991.98px) {
@@ -4681,12 +4926,6 @@ label {
   .integration-top-actions form .btn {
     width: 100%;
   }
-
-  .integration-grid,
-  .integration-grid--1,
-  .integration-grid--2 {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 767.98px) {
@@ -4694,26 +4933,39 @@ label {
     padding: 14px 12px 28px;
   }
 
+  .integration-hero.card.card-hero .card-body,
+  .integration-hero.rm-hero .card-body {
+    min-height: 0;
+    padding: 16px !important;
+  }
+
+  .integration-grid,
+  .integration-grid--1,
+  .integration-grid--2 {
+    grid-template-columns: 1fr;
+  }
+
   .integration-card {
     padding: 14px;
   }
 
-  .integration-card-head {
-    align-items: stretch;
-    flex-direction: column;
+  .integration-meta div {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 
-  .integration-status {
-    align-self: flex-start;
+  .integration-meta dd {
+    text-align: left;
   }
 
-  .integration-meta {
+  .integration-secret-group {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
-  .integration-form .btn,
-  .integration-delete-form .btn {
+  .integration-secret-group .btn {
     width: 100%;
+    border-radius: var(--nova-radius) !important;
   }
 }
 

@@ -4,12 +4,11 @@ use App\Http\Controllers\LegacyProjectController;
 use App\Http\Controllers\ModuleAdminController;
 use App\Http\Controllers\NovaAdministrationController;
 use App\Http\Controllers\NovaAuthController;
-use App\Http\Controllers\NovaUserController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\UserIntegrationController;
-use App\Support\Modules\ModuleRegistry;
-use App\Support\Modules\ProjectAccessGuard;
-use App\Support\Nova\NovaAccessRepository;
+use App\Repositories\Modules\ModuleRegistry;
+use App\Repositories\Nova\NovaAccessRepository;
+use App\Services\Nova\ProjectAccessGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use RedmineTic\Http\Controllers\RedmineDashboardController;
@@ -36,7 +35,7 @@ $legacyModulePattern = implode('|', array_map(
 
 Route::get('/login', [NovaAuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [NovaAuthController::class, 'login'])->middleware('throttle:5,1')->name('login.store');
-Route::match(['GET', 'POST'], '/logout', [NovaAuthController::class, 'logout'])->name('logout');
+Route::post('/logout', [NovaAuthController::class, 'logout'])->name('logout');
 Route::post('/session/extend', [NovaAuthController::class, 'extendSession'])->middleware('throttle:5,1')->name('session.extend');
 
 Route::get('/{project}/assets/{path}', [LegacyProjectController::class, 'asset'])
@@ -120,6 +119,8 @@ Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, L
     ->name('redmine.mantencion.dashboard');
 Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');
 Route::post('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion.update');
+Route::match(['GET', 'POST'], '/nc_browser_ajax.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Procedimientos/nc_browser_ajax.php'))
+    ->name('redmine.mantencion.nc-browser-legacy');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
     $path = match ($section) {
         'dashboard', 'reportes' => 'index.php',
@@ -128,6 +129,8 @@ Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Req
         'historico' => 'views/Historico/historico.php',
         'procedimientos' => 'views/Procedimientos/procedimientos.php',
         'usuarios' => 'views/Usuarios/usuarios.php',
+        'integraciones-nextcloud-usuarios' => 'views/Integraciones/NextcloudUsuarios.php',
+        'integraciones-nextcloud-historial' => 'views/Integraciones/NextcloudHistorial.php',
         'configuracion' => 'views/Configuracion/configuracion.php',
         'estadisticas' => 'views/Estadisticas/estadisticas.php',
         'actividad' => 'views/Security/activity.php',

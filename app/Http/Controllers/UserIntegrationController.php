@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Support\Integrations\UserIntegrationRepository;
-use App\Support\Modules\ProjectAccessGuard;
+use App\Support\Nova\NovaSettingsRepository;
+use App\Services\Nova\ProjectAccessGuard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -33,13 +34,13 @@ class UserIntegrationController extends Controller
         ],
         'redmine-mantencion' => [
             'title' => 'Redmine Mantencion',
-            'subtitle' => 'Credenciales personales para Redmine, CORE y Nextcloud.',
+            'subtitle' => 'Configure las cuentas personales utilizadas por Redmine Mantencion para conectarse con Redmine, CORE y Nextcloud.',
             'icon' => 'bi-tools',
             'home_route' => 'redmine.mantencion.dashboard',
             'theme' => 'mantencion',
             'types' => [
                 'redmine_mantencion' => [
-                    'label' => 'Redmine API Key',
+                    'label' => 'Redmine',
                     'description' => 'Token personal usado al enviar o sincronizar datos con Redmine Mantencion.',
                     'icon' => 'bi-key',
                     'external_label' => '',
@@ -101,21 +102,33 @@ class UserIntegrationController extends Controller
         ],
     ];
 
-    public function show(Request $request, UserIntegrationRepository $integrations, string $module): View
+    public function show(Request $request, UserIntegrationRepository $integrations, NovaSettingsRepository $settings, string $module): View
     {
         $config = $this->moduleConfig($module);
         $this->authorizeModule($request, $module);
+        if ($module === 'redmine-mantencion') {
+            $this->syncMantencionLegacySession($request);
+        }
 
         $sessionUser = $this->sessionUser($request);
         $types = array_keys($config['types']);
+        $sessionTimeout = $settings->sessionTimeout();
+        $lastActivity = (int) $request->session()->get('nova_last_activity', time());
+        $sessionRemaining = max(0, $sessionTimeout - (time() - $lastActivity));
 
-        return view('nova.integrations.user-config', [
+        $template = $module === 'redmine-mantencion'
+            ? 'nova.integrations.user-config-mantencion'
+            : 'nova.integrations.user-config';
+
+        return view($template, [
             'moduleKey' => $module,
             'moduleConfig' => $config,
             'integrationDefinitions' => $config['types'],
             'integrations' => $integrations->integrationsForSession($sessionUser, $types),
             'homeUrl' => $this->homeUrl($config),
             'postUrl' => url()->current(),
+            'sessionTimeout' => $sessionTimeout,
+            'sessionRemaining' => $sessionRemaining,
         ]);
     }
 
@@ -141,7 +154,7 @@ class UserIntegrationController extends Controller
         $current = $integrations->integrationForSession($sessionUser, $type);
         $externalUser = trim((string) $request->input('external_user', ''));
         $secret = (string) $request->input('secret', '');
-        if (!empty($definition['external_required']) && $externalUser === '') {
+        if (!empty($definition['external_required']) && $externalUser === '' && empty($current['has_external_user'])) {
             return back()->withInput()->with('integration_error', 'Completa ' . $definition['external_label'] . '.');
         }
         if (!empty($definition['secret_required']) && $secret === '' && empty($current['has_secret'])) {
@@ -150,7 +163,7 @@ class UserIntegrationController extends Controller
 
         $ok = $integrations->saveCredentialForSession($sessionUser, $type, $externalUser, $secret);
 
-        return back()->with($ok ? 'integration_status' : 'integration_error', $ok ? 'Credencial guardada.' : 'No se pudo guardar la credencial.');
+        return back()->with($ok ? 'integration_status' : 'integration_error', $ok ? 'Cuentas actualizadas correctamente.' : 'No se pudo guardar la credencial.');
     }
 
     /**
@@ -194,5 +207,43 @@ class UserIntegrationController extends Controller
         }
 
         return url('/emach');
+    }
+
+    private function syncMantencionLegacySession(Request $request): void
+    {
+        $novaUser = $this->sessionUser($request);
+        if ($novaUser === []) {
+            return;
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $projectUser = app(ProjectAccessGuard::class)->projectUser('redmine-mantencion', $novaUser);
+
+        if (is_array($projectUser)) {
+            $projectUser['id'] = trim((string) ($projectUser['id'] ?? '')) !== ''
+                ? $projectUser['id']
+                : ($novaUser['redmine_id'] ?? $novaUser['username'] ?? $novaUser['id'] ?? '');
+            $projectUser['nombre'] = trim((string) ($projectUser['nombre'] ?? '')) !== ''
+                ? $projectUser['nombre']
+                : ($novaUser['name'] ?? '');
+            $projectUser['apellido'] = trim((string) ($projectUser['apellido'] ?? '')) !== ''
+                ? $projectUser['apellido']
+                : ($novaUser['apellido'] ?? '');
+            $projectUser['rol'] = trim((string) ($projectUser['rol'] ?? '')) !== ''
+                ? $projectUser['rol']
+                : ($novaUser['role'] ?? 'usuario');
+        }
+
+        $_SESSION['user'] = is_array($projectUser) ? $projectUser : ($novaUser['legacy'] ?? [
+            'id' => $novaUser['id'] ?? '',
+            'nombre' => $novaUser['name'] ?? '',
+            'apellido' => $novaUser['apellido'] ?? '',
+            'rut' => $novaUser['rut'] ?? '',
+            'rol' => $novaUser['role'] ?? 'usuario',
+        ]);
+        $_SESSION['last_activity'] = time();
     }
 }

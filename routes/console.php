@@ -3,7 +3,6 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use App\Support\RedmineMantencion\RedmineMantencionStorageRepository;
 use RedmineTic\Support\Redmine\RedmineDataRepository;
 
 /*
@@ -26,23 +25,6 @@ Artisan::command('redmine:archive-processed', function (RedmineDataRepository $r
     $this->info($archived . ' reporte(s) procesado(s) archivado(s) por retencion.');
 })->purpose('Archive processed Redmine reports after configured retention hours');
 
-Artisan::command('redmine:tic-import-json', function (RedmineDataRepository $redmine) {
-    $summary = $redmine->forProject('redmine_tic')->importJsonDataToDatabase();
-
-    $this->info('Migracion Redmine TIC JSON -> MariaDB completada.');
-    foreach ($summary as $key => $count) {
-        $this->line(str_replace('_', ' ', $key) . ': ' . $count);
-    }
-})->purpose('Import Redmine TIC JSON data into NOVA database tables');
-
-Artisan::command('redmine:mantencion-import-json', function (RedmineMantencionStorageRepository $storage) {
-    $summary = $storage->importDataDirectory(base_path('redmine-mantencion/data'));
-
-    $this->info('Migracion Redmine Mantencion JSON -> MariaDB completada.');
-    foreach ($summary as $key => $count) {
-        $this->line(str_replace('_', ' ', $key) . ': ' . $count);
-    }
-})->purpose('Import Redmine Mantencion JSON/text data into NOVA database tables');
 
 Artisan::command('nova:consolidate-users', function () {
     $normalizeStatus = static function (string $status): string {
@@ -228,7 +210,7 @@ Artisan::command('nova:consolidate-users', function () {
     return 0;
 })->purpose('Consolidate NOVA, Redmine TIC and Redmine Mantencion users into central tables');
 
-Artisan::command('redmine:mantencion-repair-user-names {--write-json : Escribe tambien en usuarios.json legacy (solo modo migracion)}', function () {
+Artisan::command('redmine:mantencion-repair-user-names', function () {
     $fixMojibake = static function (string $value): string {
         $value = strtr($value, [
             'ÃƒÆ’Ã‚Â¡' => 'á', 'ÃƒÆ’Ã‚Â©' => 'é', 'ÃƒÆ’Ã‚Â­' => 'í', 'ÃƒÆ’Ã‚Â³' => 'ó', 'ÃƒÆ’Ã‚Âº' => 'ú',
@@ -338,21 +320,6 @@ Artisan::command('redmine:mantencion-repair-user-names {--write-json : Escribe t
     };
 
     $historicalByRedmineId = [];
-    $historicalJson = shell_exec('git -C ' . escapeshellarg(base_path()) . ' show HEAD:redmine-mantencion/data/usuarios.json 2>/dev/null');
-    $historicalUsers = is_string($historicalJson) ? json_decode($historicalJson, true) : [];
-    if (is_array($historicalUsers)) {
-        foreach ($historicalUsers as $historicalUser) {
-            if (!is_array($historicalUser)) {
-                continue;
-            }
-            $id = trim((string) ($historicalUser['id'] ?? ''));
-            $fullName = trim((string) ($historicalUser['nombre'] ?? ''));
-            if ($id !== '' && $fullName !== '') {
-                $historicalByRedmineId[$id] = $fullName;
-            }
-        }
-    }
-
     $lastNameByRedmineId = [];
     $personByRedmineId = [];
     $novaUpdated = 0;
@@ -408,44 +375,9 @@ Artisan::command('redmine:mantencion-repair-user-names {--write-json : Escribe t
                 'checksum' => hash('sha256', (string) $payload),
                 'updated_at' => now(),
             ]);
-            if ($this->option('write-json')) {
-                file_put_contents(base_path('redmine-mantencion/data/usuarios.json'), json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
-                $this->line('Archivo redmine-mantencion/data/usuarios.json actualizado (modo migracion).');
-            }
-        }
-    }
-
-    $novaFileUpdated = 0;
-    $novaFile = storage_path('app/nova/users.json');
-    if ($this->option('write-json') && is_file($novaFile)) {
-        $users = json_decode((string) file_get_contents($novaFile), true);
-        if (is_array($users)) {
-            foreach ($users as &$user) {
-                if (!is_array($user)) {
-                    continue;
-                }
-                $redmineId = trim((string) ($user['redmine_id'] ?? data_get($user, 'projects.redmine-mantencion.id') ?? data_get($user, 'projects.redmine_tic.id') ?? ''));
-                if ($redmineId !== '' && isset($personByRedmineId[$redmineId])) {
-                    [$name, $lastName] = $personByRedmineId[$redmineId];
-                } else {
-                    [$name, $lastName] = $repairPerson((string) ($user['name'] ?? $user['nombre'] ?? ''), (string) ($user['apellido'] ?? ''));
-                }
-                if (($user['name'] ?? '') !== $name || ($user['apellido'] ?? '') !== $lastName) {
-                    $user['name'] = $name;
-                    $user['apellido'] = $lastName;
-                    $novaFileUpdated++;
-                }
-            }
-            unset($user);
-            file_put_contents($novaFile, json_encode(array_values($users), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
         }
     }
 
     $this->info('usuarios_nova reparados: ' . $novaUpdated);
     $this->info('usuarios Mantencion reparados: ' . $mantUpdated);
-    if ($this->option('write-json')) {
-        $this->info('storage/app/nova/users.json reparados: ' . $novaFileUpdated);
-    } else {
-        $this->line('Nota: escritura JSON desactivada. Use --write-json para modo migracion.');
-    }
 })->purpose('Repair duplicated first/last names after Redmine Mantencion migration');

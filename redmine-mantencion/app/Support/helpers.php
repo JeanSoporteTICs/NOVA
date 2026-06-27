@@ -58,7 +58,6 @@ function bootstrap_app(): void
     ini_set('log_errors', '1');
     ini_set('error_log', $logFile);
     if (!file_exists($logFile)) {
-        @\storage_write_file_locked($logFile, '', 0, false);
+        @\storage_write_file_locked($logFile, '');
     }
-    \storage_run_auto_backup();
 }
