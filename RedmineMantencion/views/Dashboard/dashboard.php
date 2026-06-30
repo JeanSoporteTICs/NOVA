@@ -285,30 +285,6 @@ $csrf = legacy_csrf_token();
     padding-bottom: .45rem;
   }
   .dashboard-table-card.is-compact .dashboard-table__subject { min-width: 0; }
-  .dashboard-toast {
-    position: fixed;
-    right: 22px;
-    bottom: 22px;
-    z-index: 1080;
-    min-width: 260px;
-    max-width: min(360px, calc(100vw - 32px));
-    padding: .9rem 1rem;
-    border-radius: 16px;
-    color: #fff;
-    background: linear-gradient(135deg, #0f172a, #2563eb);
-    box-shadow: 0 18px 45px rgba(15, 23, 42, .28);
-    display: flex;
-    align-items: center;
-    gap: .65rem;
-    font-weight: 700;
-    opacity: 1;
-    transform: translateY(0);
-    transition: opacity .22s ease, transform .22s ease;
-  }
-  .dashboard-toast.is-hiding {
-    opacity: 0;
-    transform: translateY(10px);
-  }
   .dashboard-scroll-top {
     position: fixed !important;
     right: 28px !important;
@@ -651,13 +627,10 @@ $csrf = legacy_csrf_token();
   ?>
 
   <?php if ($flash): ?>
-    <div class="alert alert-success" id="flash-msg"><?= $h($flash) ?></div>
+    <div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div>
   <?php endif; ?>
   <?php if ($toastSession): ?>
-    <div class="dashboard-toast" id="dashboard-toast" role="status" aria-live="polite">
-      <i class="bi bi-check2-circle"></i>
-      <span><?= $h($toastSession) ?></span>
-    </div>
+    <div data-nova-flash="success" data-nova-flash-message="<?= $h($toastSession) ?>" hidden></div>
   <?php endif; ?>
 
   <form method="post" class="dashboard-panel" id="core-import-form">
@@ -700,7 +673,7 @@ $csrf = legacy_csrf_token();
         <?php endif; ?>
       </div>
       </div>
-      <button type="<?= $hasSavedCoreCredentials ? 'submit' : 'button' ?>" class="btn btn-primary dashboard-import-button" <?= $hasSavedCoreCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"' ?> <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+      <button type="<?= $hasSavedCoreCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-primary dashboard-import-button" <?= $hasSavedCoreCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"' ?> <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
         <i class="bi bi-cloud-download"></i> Importar desde CORE
       </button>
     </div>
@@ -760,16 +733,16 @@ $csrf = legacy_csrf_token();
       <div class="dashboard-toolbar px-3 pt-3">
         <div class="dashboard-toolbar__actions">
           <span class="dashboard-selection"><i class="bi bi-check2-square"></i> Seleccionados: <strong id="selection-count">0</strong></span>
-          <button type="button" id="process-btn" class="btn btn-success btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+          <button type="button" id="process-btn" class="btn-nova btn-nova-success btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
             <i class="bi bi-check2-circle"></i> Enviar reportes a Redmine
           </button>
-          <button type="button" id="archive-btn" class="btn btn-warning btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+          <button type="button" id="archive-btn" class="btn-nova btn-nova-warning btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
             <i class="bi bi-archive"></i> Archivar
           </button>
-          <button type="button" id="delete-selected-btn" class="btn btn-danger btn-icon" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+          <button type="button" id="delete-selected-btn" class="btn-nova btn-nova-danger btn-icon" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
             <i class="bi bi-trash3"></i> Eliminar seleccionados
           </button>
-          <button type="button" id="reset-errors-btn" class="btn btn-secondary btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+          <button type="button" id="reset-errors-btn" class="btn-nova btn-nova-secondary btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
             <i class="bi bi-arrow-counterclockwise"></i> Reintentar errores (marcar pendientes)
           </button>
         </div>
@@ -868,7 +841,7 @@ $csrf = legacy_csrf_token();
                   $previewRowsJson = $h((string)json_encode(array_values($previewRows), JSON_UNESCAPED_UNICODE));
                   $previewColumnsJson = $h((string)json_encode(dashboard_core_detail_table_schema($m), JSON_UNESCAPED_UNICODE));
                 ?>
-                <button type="button" class="btn btn-sm btn-outline-primary action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="Detalle"
+                <button type="button" class="btn-action btn-action-view action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="Detalle"
 
                   data-id="<?= $h($m['id'] ?? '') ?>"
 
@@ -928,7 +901,7 @@ $csrf = legacy_csrf_token();
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="toggle_hora_extra">
                   <button
-                    class="btn btn-sm action-tooltip <?= $hasHoraExtra ? 'btn-hora-extra--on' : 'btn-hora-extra--off' ?>"
+                    class="btn-action btn-action-sync action-tooltip <?= $hasHoraExtra ? 'btn-hora-extra--on' : 'btn-hora-extra--off' ?>"
                     type="submit"
                     data-bs-placement="top"
                     title="<?= $maintenanceMode ? 'Plataforma en mantención' : ($hasHoraExtra ? 'Hora extra: Sí. Cambiar a No' : 'Hora extra: No. Cambiar a Sí') ?>"
@@ -944,14 +917,14 @@ $csrf = legacy_csrf_token();
                         $logText = (string)$logsByMessage[$m['id']];
                     }
                   ?>
-                  <button type="button" class="btn btn-sm btn-outline-danger log-btn action-tooltip" data-log="<?= $h($logText) ?>" data-bs-toggle="modal" data-bs-target="#logModal" data-bs-placement="top" title="Log"><i class="bi bi-journal-text"></i></button>
+                  <button type="button" class="btn-action btn-action-view log-btn action-tooltip" data-log="<?= $h($logText) ?>" data-bs-toggle="modal" data-bs-target="#logModal" data-bs-placement="top" title="Log"><i class="bi bi-journal-text"></i></button>
                 <?php endif; ?>
 
                 <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-confirm="¿Eliminar este mensaje?" data-dashboard-ajax="row" data-app-no-loading="1">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="delete">
-                  <button class="btn btn-sm btn-danger action-tooltip" type="submit" data-bs-placement="top" title="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-trash3"></i></button>
+                  <button class="btn-action btn-action-delete action-tooltip" type="submit" data-bs-placement="top" title="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-trash3"></i></button>
                 </form>
                 </div>
               </td>
@@ -1062,8 +1035,8 @@ $csrf = legacy_csrf_token();
 
 
 
-<div class="modal fade" id="coreCredentialsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+<div class="modal fade detail-drawer-modal" id="coreCredentialsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog detail-drawer-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Credenciales CORE</h5>
@@ -1090,13 +1063,13 @@ $csrf = legacy_csrf_token();
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-primary" form="core-import-form">Consultar CORE</button>
+        <button type="submit" class="btn-nova btn-nova-primary" form="core-import-form">Consultar CORE</button>
       </div>
     </div>
   </div>
 </div>
 
-<div class="modal fade" id="detalleModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade detail-drawer-modal" id="detalleModal" tabindex="-1" aria-hidden="true">
 
   <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
 
@@ -1248,7 +1221,7 @@ $csrf = legacy_csrf_token();
             <i class="bi bi-x-lg"></i> Cerrar
           </button>
 
-          <button type="submit" class="btn btn-success" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+          <button type="submit" class="btn-nova btn-nova-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
             <i class="bi bi-check2-circle"></i> Guardar cambios
           </button>
 
@@ -1275,7 +1248,7 @@ $csrf = legacy_csrf_token();
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-        <button type="button" class="btn btn-success" id="save-descripcion-btn" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>Guardar descripción</button>
+        <button type="button" class="btn-nova btn-nova-primary" id="save-descripcion-btn" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>Guardar descripción</button>
       </div>
     </div>
   </div>
@@ -1310,7 +1283,7 @@ $csrf = legacy_csrf_token();
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-danger" id="confirm-delete-selected-btn">
+        <button type="button" class="btn-nova btn-nova-danger" id="confirm-delete-selected-btn">
           <i class="bi bi-trash3"></i> Eliminar seleccionados
         </button>
       </div>
@@ -1834,18 +1807,7 @@ function escapeDashboardId(value) {
 
 function showDashboardToast(message, tone = 'success') {
   if (!message) return;
-  document.querySelectorAll('.dashboard-toast').forEach(toast => toast.remove());
-  const toast = document.createElement('div');
-  toast.className = 'dashboard-toast';
-  toast.setAttribute('role', 'status');
-  toast.setAttribute('aria-live', 'polite');
-  toast.innerHTML = `<i class="bi ${tone === 'danger' ? 'bi-exclamation-triangle' : 'bi-check2-circle'}"></i><span></span>`;
-  toast.querySelector('span').textContent = message;
-  document.body.appendChild(toast);
-  window.setTimeout(() => {
-    toast.classList.add('is-hiding');
-    window.setTimeout(() => toast.remove(), 260);
-  }, 2000);
+  window.NovaToast?.show({ type: tone === 'danger' ? 'error' : tone, message });
 }
 
 function updateDashboardStatusCards(counts) {
@@ -2071,22 +2033,6 @@ if (resetErrorsBtn && processForm && processAction) {
   });
 }
 
-  const flash = document.getElementById('flash-msg');
-if (flash) {
-  setTimeout(() => {
-    flash.classList.add('fade');
-    flash.style.transition = 'opacity .5s';
-    flash.style.opacity = '0';
-    setTimeout(() => flash.remove(), 500);
-  }, 5000);
-}
-
-const dashboardToast = document.getElementById('dashboard-toast');
-if (dashboardToast) {
-  setTimeout(() => {
-    dashboardToast.classList.add('is-hiding');
-    setTimeout(() => dashboardToast.remove(), 260);
-  }, 2000);
 }
 
 const logModal = document.getElementById('logModal');

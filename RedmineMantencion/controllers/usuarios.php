@@ -437,7 +437,7 @@ function usuarios_central_revoke_access(int $userId, string $moduleKey = 'redmin
 }
 
 function usuarios_central_id_for_project_user(array $user): ?int {
-    if (!class_exists(\App\Models\NovaUser::class)) {
+    if (!class_exists(\App\Modulos\Nova\Models\NovaUser::class)) {
         return null;
     }
     $redmineId = trim((string)($user['redmine_id'] ?? ''));
@@ -453,13 +453,13 @@ function usuarios_central_id_for_project_user(array $user): ?int {
     try {
         $model = null;
         if ($redmineId !== '') {
-            $model = \App\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
         }
         if (!$model && $uuid !== '') {
-            $model = \App\Models\NovaUser::query()->where('uuid', $uuid)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('uuid', $uuid)->first();
         }
         if (!$model && $username !== '') {
-            $model = \App\Models\NovaUser::query()->where('usuario', $username)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('usuario', $username)->first();
         }
         return $model ? (int)$model->id : null;
     } catch (\Throwable) {
@@ -468,7 +468,7 @@ function usuarios_central_id_for_project_user(array $user): ?int {
 }
 
 function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mantencion'): ?int {
-    if (!class_exists(\App\Models\NovaUser::class)) {
+    if (!class_exists(\App\Modulos\Nova\Models\NovaUser::class)) {
         return null;
     }
     $redmineId = trim((string)($user['redmine_id'] ?? ''));
@@ -503,16 +503,16 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
     try {
         $model = null;
         if ($redmineId !== '') {
-            $model = \App\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
         }
         if (!$model && $uuid !== '') {
-            $model = \App\Models\NovaUser::query()->where('uuid', $uuid)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('uuid', $uuid)->first();
         }
         if (!$model && $rut !== '') {
-            $model = \App\Models\NovaUser::query()->where('rut', $rut)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('rut', $rut)->first();
         }
         if (!$model && $username !== '') {
-            $model = \App\Models\NovaUser::query()->where('usuario', $username)->first();
+            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('usuario', $username)->first();
         }
         if ($model && !empty($user['_preserve_existing_status'])) {
             $status = '';
@@ -521,7 +521,7 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
             $username = trim((string)$model->usuario) ?: $username;
         }
         if (!$model) {
-            $model = new \App\Models\NovaUser();
+            $model = new \App\Modulos\Nova\Models\NovaUser();
             $model->uuid = (string)\Illuminate\Support\Str::uuid();
             $model->password = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
             if ($status === '') {
@@ -856,9 +856,7 @@ function usuarios_redmine_person_name(array $user, string $apiKey = '', string $
     ];
 }
 
-function usuarios_sync_remote(array &$rows): array {
-    global $DATA_FILE;
-
+function usuarios_remote_connection(): array {
     $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
     $cfg = $repo !== null ? $repo->loadAll() : [];
     $apiKey = is_array($cfg) ? trim((string)($cfg['platform_token'] ?? '')) : '';
@@ -872,6 +870,18 @@ function usuarios_sync_remote(array &$rows): array {
     if ($url === '') {
         return ['error' => 'Falta URL de miembros para importar usuarios.'];
     }
+
+    return ['apiKey' => $apiKey, 'url' => $url];
+}
+
+function usuarios_fetch_remote_memberships(): array {
+    $connection = usuarios_remote_connection();
+    if (isset($connection['error'])) {
+        return $connection;
+    }
+
+    $apiKey = (string)$connection['apiKey'];
+    $url = (string)$connection['url'];
     $memberships = [];
     $offset = 0;
     $limit = 100;
@@ -907,6 +917,102 @@ function usuarios_sync_remote(array &$rows): array {
     if (empty($memberships)) {
         return ['error' => 'La respuesta no contiene memberships validos.'];
     }
+
+    return ['ok' => true, 'memberships' => $memberships, 'apiKey' => $apiKey, 'url' => $url];
+}
+
+function usuarios_central_access_status_by_redmine_id(string $redmineId, string $moduleKey = 'redmine-mantencion'): array {
+    if ($redmineId === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return ['exists' => false, 'has_access' => false];
+    }
+    $moduleId = usuarios_central_module_id($moduleKey);
+    try {
+        $user = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            ->where('redmine_id', $redmineId)
+            ->first(['id']);
+        if (!$user) {
+            return ['exists' => false, 'has_access' => false];
+        }
+        $hasAccess = false;
+        if ($moduleId !== null) {
+            $hasAccess = \Illuminate\Support\Facades\DB::table('permisos_usuario_modulo')
+                ->where('usuario_id', (int)$user->id)
+                ->where('modulo_id', $moduleId)
+                ->where('permitido', 1)
+                ->exists();
+        }
+
+        return ['exists' => true, 'has_access' => $hasAccess];
+    } catch (\Throwable) {
+        return ['exists' => false, 'has_access' => false];
+    }
+}
+
+function usuarios_remote_import_preview(array $rows): array {
+    $remote = usuarios_fetch_remote_memberships();
+    if (isset($remote['error'])) {
+        return $remote;
+    }
+
+    $currentAccess = [];
+    foreach ($rows as $row) {
+        if (is_array($row) && trim((string)($row['id'] ?? '')) !== '') {
+            $currentAccess[trim((string)$row['id'])] = true;
+        }
+    }
+
+    $items = [];
+    foreach (($remote['memberships'] ?? []) as $membership) {
+        if (!is_array($membership)) {
+            continue;
+        }
+        $user = $membership['user'] ?? null;
+        if (!is_array($user)) {
+            continue;
+        }
+        $id = trim((string)($user['id'] ?? ''));
+        [$nombre, $apellido] = usuarios_redmine_person_name($user, (string)$remote['apiKey'], (string)$remote['url']);
+        if ($id === '' || ($nombre === '' && $apellido === '')) {
+            continue;
+        }
+        $central = usuarios_central_access_status_by_redmine_id($id);
+        $items[] = [
+            'id' => $id,
+            'nombre' => $nombre !== '' ? $nombre : trim((string)($user['name'] ?? 'Redmine')),
+            'apellido' => $apellido,
+            'status' => isset($currentAccess[$id]) || $central['has_access'] ? 'current' : ($central['exists'] ? 'revoked' : 'new'),
+        ];
+    }
+
+    usort($items, static fn (array $a, array $b): int => strcasecmp(trim($a['nombre'] . ' ' . $a['apellido']), trim($b['nombre'] . ' ' . $b['apellido'])));
+
+    return ['ok' => true, 'items' => $items];
+}
+
+function usuarios_sync_remote(array &$rows, ?array $selectedIds = null): array {
+    global $DATA_FILE;
+
+    $remote = usuarios_fetch_remote_memberships();
+    if (isset($remote['error'])) {
+        return $remote;
+    }
+    $memberships = $remote['memberships'] ?? [];
+    $apiKey = (string)($remote['apiKey'] ?? '');
+    $url = (string)($remote['url'] ?? '');
+    $selected = null;
+    if (is_array($selectedIds)) {
+        $selected = [];
+        foreach ($selectedIds as $id) {
+            $id = trim((string)$id);
+            if ($id !== '') {
+                $selected[$id] = true;
+            }
+        }
+        if ($selected === []) {
+            return ['error' => 'Selecciona al menos un usuario para importar.'];
+        }
+    }
+
     $indexed = [];
     foreach ($rows as $idx => $row) {
         if (is_array($row) && isset($row['id'])) {
@@ -924,6 +1030,9 @@ function usuarios_sync_remote(array &$rows): array {
             continue;
         }
         $id = trim((string)($user['id'] ?? ''));
+        if ($selected !== null && !isset($selected[$id])) {
+            continue;
+        }
         [$nombre, $apellido] = usuarios_redmine_person_name($user, $apiKey, $url);
         if ($id === '' || ($nombre === '' && $apellido === '')) {
             continue;
@@ -980,6 +1089,7 @@ function handle_usuarios() {
         save_usuarios($DATA_FILE, $rows);
     }
     $flash = usuarios_consume_flash();
+    $importPreview = null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (function_exists('csrf_validate')) csrf_validate();
         $action = $_POST['action'] ?? '';
@@ -990,7 +1100,7 @@ function handle_usuarios() {
 
         if ($action === 'create') {
             if ($id_input !== '' && has_duplicate_id($rows, $id_input)) {
-                return [$rows, 'Error: el ID ya existe'];
+                return [$rows, 'Error: el ID ya existe', $importPreview];
             }
             $assignedRole = sanitize_input($_POST['rol'] ?? 'usuario');
             $rolePerms = [];
@@ -1004,13 +1114,13 @@ function handle_usuarios() {
             $requiredName = sanitize_input($_POST['nombre'] ?? '');
             $requiredLast = sanitize_input($_POST['apellido'] ?? '');
             if ($requiredName === '') {
-                return [$rows, 'Error: el nombre es obligatorio'];
+                return [$rows, 'Error: el nombre es obligatorio', $importPreview];
             }
             [$newNombre, $newApellido] = $requiredLast !== ''
                 ? [$requiredName, $requiredLast]
                 : usuarios_split_name($requiredName);
             if ($newApellido === '') {
-                return [$rows, 'Error: el apellido es obligatorio'];
+                return [$rows, 'Error: el apellido es obligatorio', $importPreview];
             }
             $newRow = [
                 'id' => $id_input !== '' ? $id_input : uniqid('', true),
@@ -1037,7 +1147,7 @@ function handle_usuarios() {
         } elseif ($action === 'update') {
             $id = $_POST['id'] ?? '';
             $index = find_user_index($rows, $id);
-            if ($index === null) return [$rows, 'Error: usuario no encontrado'];
+            if ($index === null) return [$rows, 'Error: usuario no encontrado', $importPreview];
             $current = &$rows[$index];
             $current['rol'] = sanitize_input($_POST['rol'] ?? ($current['rol'] ?? 'usuario'));
             $current['_preserve_existing_status'] = true;
@@ -1049,21 +1159,29 @@ function handle_usuarios() {
         } elseif ($action === 'delete') {
             $id = $_POST['id'] ?? '';
             $index = find_user_index($rows, $id);
-            if ($index === null) return [$rows, 'Error: usuario no encontrado'];
+            if ($index === null) return [$rows, 'Error: usuario no encontrado', $importPreview];
             $centralId = usuarios_central_id_for_project_user($rows[$index]);
             if ($centralId === null || !usuarios_central_revoke_access($centralId)) {
-                return [$rows, 'No se pudo quitar el acceso al proyecto'];
+                return [$rows, 'No se pudo quitar el acceso al proyecto', $importPreview];
             }
             usuarios_set_flash('Acceso al proyecto eliminado');
             usuarios_redirect_back();
-        } elseif ($action === 'sync_remote') {
-            $res = usuarios_sync_remote($rows);
+        } elseif ($action === 'preview_remote') {
+            $res = usuarios_remote_import_preview($rows);
             if (isset($res['error'])) {
-                return [$rows, $res['error']];
+                return [$rows, $res['error'], $importPreview];
+            }
+            $importPreview = $res['items'] ?? [];
+            $flash = 'Selecciona los usuarios que quieres importar desde Redmine.';
+        } elseif ($action === 'sync_remote') {
+            $selectedIds = is_array($_POST['remote_user_ids'] ?? null) ? $_POST['remote_user_ids'] : [];
+            $res = usuarios_sync_remote($rows, $selectedIds);
+            if (isset($res['error'])) {
+                return [$rows, $res['error'], $importPreview];
             }
             usuarios_set_flash('Usuarios importados. Nuevos: ' . (int)($res['created'] ?? 0) . ' | actualizados: ' . (int)($res['updated'] ?? 0));
             usuarios_redirect_back();
         }
     }
-    return [$rows, $flash];
+    return [$rows, $flash, $importPreview];
 }

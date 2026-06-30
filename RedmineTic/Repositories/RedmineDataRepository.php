@@ -378,45 +378,82 @@ final class RedmineDataRepository
     }
 
     /**
+     * @return array{ok:bool,items:array<int,array<string,mixed>>,error:string}
+     */
+    public function previewUsersFromRedmine(?string $userId = null): array
+    {
+        $remote = $this->fetchRedmineMemberships($userId);
+        if (!$remote['ok']) {
+            return ['ok' => false, 'items' => [], 'error' => $remote['error']];
+        }
+
+        $currentAccess = [];
+        foreach ($this->users() as $user) {
+            $id = trim((string) ($user['redmine_id'] ?? $user['id'] ?? ''));
+            if ($id !== '') {
+                $currentAccess[$id] = true;
+            }
+        }
+
+        $items = [];
+        foreach ($remote['memberships'] as $membership) {
+            if (!is_array($membership) || !is_array($membership['user'] ?? null)) {
+                continue;
+            }
+            $redmineUser = $membership['user'];
+            $id = trim((string) ($redmineUser['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            [$firstName, $lastName] = $this->redmineUserName($redmineUser, $remote['base_url'], $remote['token']);
+            if ($firstName === '' && $lastName === '') {
+                continue;
+            }
+            $access = $this->userRepo()->accessStatusByRedmineId($id);
+            $items[] = [
+                'id' => $id,
+                'nombre' => $firstName,
+                'apellido' => $lastName,
+                'redmine_membership_id' => $membership['id'] ?? null,
+                'status' => isset($currentAccess[$id]) || $access['has_access'] ? 'current' : ($access['exists'] ? 'revoked' : 'new'),
+            ];
+        }
+
+        usort($items, static fn (array $a, array $b): int => strcasecmp(
+            trim((string) ($a['nombre'] ?? '') . ' ' . (string) ($a['apellido'] ?? '')),
+            trim((string) ($b['nombre'] ?? '') . ' ' . (string) ($b['apellido'] ?? ''))
+        ));
+
+        return ['ok' => true, 'items' => $items, 'error' => ''];
+    }
+
+    /**
+     * @param string[]|null $selectedIds
      * @return array{ok:bool,created:int,updated:int,error:string}
      */
-    public function syncUsersFromRedmine(?string $userId = null): array
+    public function syncUsersFromRedmine(?string $userId = null, ?array $selectedIds = null): array
     {
-        $config = $this->configuration();
-        $token = $this->userApiToken($userId) ?: trim((string) ($config['platform_token'] ?? ''));
-        if ($token === '') {
-            return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => 'Token Redmine no configurado.'];
+        $remote = $this->fetchRedmineMemberships($userId);
+        if (!$remote['ok']) {
+            return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => $remote['error']];
         }
 
-        $projectId = trim((string) ($config['project_id'] ?? ''));
-        if ($projectId === '') {
-            return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => 'ID de proyecto no configurado.'];
-        }
-
-        $baseUrl = $this->redmineBaseUrl((string) ($config['platform_url'] ?? ''));
-        if ($baseUrl === '') {
-            return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => 'URL Redmine no configurada.'];
-        }
-
-        $memberships = [];
-        $offset = 0;
-        $limit = 100;
-        do {
-            $url = $baseUrl . '/projects/' . rawurlencode($projectId) . '/memberships.json?limit=' . $limit . '&offset=' . $offset;
-            $response = $this->getRedmineJson($url, $token);
-            if ($response['error'] !== '') {
-                return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => $response['error']];
+        $memberships = $remote['memberships'];
+        $baseUrl = $remote['base_url'];
+        $token = $remote['token'];
+        $selected = null;
+        if (is_array($selectedIds)) {
+            $selected = [];
+            foreach ($selectedIds as $id) {
+                $id = trim((string) $id);
+                if ($id !== '') {
+                    $selected[$id] = true;
+                }
             }
-            if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
-                return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => 'HTTP ' . $response['http_code'] . ' - ' . $response['body']];
+            if ($selected === []) {
+                return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => 'Selecciona al menos un usuario para importar.'];
             }
-
-            $data = json_decode($response['body'], true);
-            $page = is_array($data['memberships'] ?? null) ? $data['memberships'] : [];
-            $memberships = array_merge($memberships, $page);
-            $total = (int) ($data['total_count'] ?? count($memberships));
-            $offset += $limit;
-        } while ($offset < $total);
+        }
 
         $users = $this->users();
         $byId = [];
@@ -436,6 +473,9 @@ final class RedmineDataRepository
             $redmineUser = $membership['user'];
             $id = trim((string) ($redmineUser['id'] ?? ''));
             if ($id === '') {
+                continue;
+            }
+            if ($selected !== null && !isset($selected[$id])) {
                 continue;
             }
 
@@ -468,6 +508,50 @@ final class RedmineDataRepository
         $this->userRepo()->persistUsers($users, true, 'baneado');
 
         return ['ok' => true, 'created' => $created, 'updated' => $updated, 'error' => ''];
+    }
+
+    /**
+     * @return array{ok:bool,memberships:array<int,mixed>,base_url:string,token:string,error:string}
+     */
+    private function fetchRedmineMemberships(?string $userId = null): array
+    {
+        $config = $this->configuration();
+        $token = $this->userApiToken($userId) ?: trim((string) ($config['platform_token'] ?? ''));
+        if ($token === '') {
+            return ['ok' => false, 'memberships' => [], 'base_url' => '', 'token' => '', 'error' => 'Token Redmine no configurado.'];
+        }
+
+        $projectId = trim((string) ($config['project_id'] ?? ''));
+        if ($projectId === '') {
+            return ['ok' => false, 'memberships' => [], 'base_url' => '', 'token' => '', 'error' => 'ID de proyecto no configurado.'];
+        }
+
+        $baseUrl = $this->redmineBaseUrl((string) ($config['platform_url'] ?? ''));
+        if ($baseUrl === '') {
+            return ['ok' => false, 'memberships' => [], 'base_url' => '', 'token' => '', 'error' => 'URL Redmine no configurada.'];
+        }
+
+        $memberships = [];
+        $offset = 0;
+        $limit = 100;
+        do {
+            $url = $baseUrl . '/projects/' . rawurlencode($projectId) . '/memberships.json?limit=' . $limit . '&offset=' . $offset;
+            $response = $this->getRedmineJson($url, $token);
+            if ($response['error'] !== '') {
+                return ['ok' => false, 'memberships' => [], 'base_url' => $baseUrl, 'token' => $token, 'error' => $response['error']];
+            }
+            if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
+                return ['ok' => false, 'memberships' => [], 'base_url' => $baseUrl, 'token' => $token, 'error' => 'HTTP ' . $response['http_code'] . ' - ' . $response['body']];
+            }
+
+            $data = json_decode($response['body'], true);
+            $page = is_array($data['memberships'] ?? null) ? $data['memberships'] : [];
+            $memberships = array_merge($memberships, $page);
+            $total = (int) ($data['total_count'] ?? count($memberships));
+            $offset += $limit;
+        } while ($offset < $total);
+
+        return ['ok' => true, 'memberships' => $memberships, 'base_url' => $baseUrl, 'token' => $token, 'error' => ''];
     }
 
     /**

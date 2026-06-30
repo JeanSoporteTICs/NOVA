@@ -22,7 +22,10 @@
             <small class="text-muted">Usa tu ID o RUT y tu Contraseña</small>
           </div>
           <?php if (!empty($error)): ?>
-            <div class="alert alert-danger" id="alert-msg"><?= htmlspecialchars((string) $error, ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="nova-alert-card is-danger mb-1" role="alert">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <span><?= htmlspecialchars((string) $error, ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
           <?php endif; ?>
           <form method="post" class="needs-validation" novalidate>
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) $csrfToken, ENT_QUOTES, 'UTF-8') ?>">
@@ -57,9 +60,5 @@
   </div>
 </div>
 <?php include APP_BASE_PATH . '/views/partials/bootstrap-scripts.php'; ?>
-<script>
-const alertMsg = document.getElementById('alert-msg');
-if (alertMsg) setTimeout(() => alertMsg.classList.add('d-none'), 5000);
-</script>
 </body>
 </html>

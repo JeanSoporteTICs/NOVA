@@ -16,8 +16,6 @@ use App\Modulos\Telegram\Services\TelegramService;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Throwable;
 
@@ -27,10 +25,13 @@ class NovaAdministrationController extends Controller
     {
     }
 
-    public function index(Request $request, NovaUserRepository $users, NovaSettingsRepository $settings, NovaAccessRepository $access, NovaAuditRepository $audit, NovaHealthRepository $health, NovaBackupRepository $backups, TelegramCommandCatalog $telegramCommands, TelegramCommandSettingsRepository $telegramSettings, string $section = 'centro'): View
+    public function index(Request $request, NovaUserRepository $users, NovaSettingsRepository $settings, NovaAccessRepository $access, NovaAuditRepository $audit, NovaHealthRepository $health, NovaBackupRepository $backups, TelegramCommandCatalog $telegramCommands, TelegramCommandSettingsRepository $telegramSettings, string $section = 'centro'): View|RedirectResponse
     {
         $this->authorizeAdmin($request);
-        $section = in_array($section, ['centro', 'configuracion', 'plataforma', 'salud', 'auditoria', 'respaldos', 'telegram', 'telegram-mensajes', 'emach', 'usuarios', 'accesos'], true) ? $section : 'centro';
+        if ($section === 'emach') {
+            return redirect()->route('administracion.section', 'telegram-mensajes');
+        }
+        $section = in_array($section, ['centro', 'configuracion', 'plataforma', 'salud', 'auditoria', 'respaldos', 'telegram', 'telegram-mensajes', 'usuarios', 'accesos'], true) ? $section : 'centro';
         $this->telegram->load();
         $needsHealth = in_array($section, ['centro', 'salud'], true);
         $needsAudit = in_array($section, ['centro', 'auditoria'], true);
@@ -49,8 +50,6 @@ class NovaAdministrationController extends Controller
             'telegramHelpText'            => $telegramCommands->helpText(),
             'telegramCommandSettings'     => $telegramSettings->all(),
             'telegramCommandSettingsPath' => $telegramSettings->path(),
-            'emachConfig'                 => $this->readEmachMonitorConfig(),
-            'emachConfigPath'             => 'nova_settings:emach_monitor_config',
             'auditItems'                  => $needsAudit ? $audit->recent($section === 'centro' ? 8 : 120) : [],
             'healthChecks'                => $needsHealth ? $health->checks() : [],
             'backupTargets'               => $backups->targets(),
@@ -96,18 +95,7 @@ class NovaAdministrationController extends Controller
         }
 
         if ($action === 'emach') {
-            $config = [
-                'schedule'      => trim((string) $request->input('schedule', '07:00-09:30=15,16:30-19:30=15')),
-                'slow_interval' => max(15, (int) $request->input('slow_interval', 300)),
-                'updated_at'    => date(DATE_ATOM),
-            ];
-
-            if (!$this->writeEmachMonitorConfig($config)) {
-                return redirect()->route('administracion.section', 'emach')->with('error', 'No se pudo guardar la configuracion EMACH.');
-            }
-            $audit->record('settings_emach', 'Configuracion EMACH actualizada.', $config, $request);
-
-            return redirect()->route('administracion.section', 'emach')->with('status', 'Configuracion EMACH actualizada.');
+            return redirect()->route('administracion.section', 'telegram-mensajes')->with('status', 'La configuracion global EMACH fue retirada. Usa el comando /emach desde Telegram.');
         }
 
         $payload = $request->validate([
@@ -224,42 +212,4 @@ class NovaAdministrationController extends Controller
         abort_unless(in_array($role, $allowed, true), 403);
     }
 
-    /**
-     * @return array<string,mixed>
-     */
-    private function readEmachMonitorConfig(): array
-    {
-        try {
-            if (!Schema::hasTable('nova_settings')) {
-                return [];
-            }
-            $row = DB::table('nova_settings')->where('clave', 'emach_monitor_config')->first();
-            if (!$row) {
-                return [];
-            }
-            $decoded = json_decode((string) ($row->valor ?? ''), true);
-            return is_array($decoded) ? $decoded : [];
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @param array<string,mixed> $config
-     */
-    private function writeEmachMonitorConfig(array $config): bool
-    {
-        try {
-            if (!Schema::hasTable('nova_settings')) {
-                return false;
-            }
-            DB::table('nova_settings')->updateOrInsert(
-                ['clave' => 'emach_monitor_config'],
-                ['valor' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'tipo' => 'json']
-            );
-            return true;
-        } catch (Throwable) {
-            return false;
-        }
-    }
 }

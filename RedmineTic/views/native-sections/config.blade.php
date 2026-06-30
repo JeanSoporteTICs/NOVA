@@ -192,7 +192,7 @@
             @endforeach
         </div>
         <div class="rm-feature-actions">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar conexion</button>
+            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar conexion</button>
         </div>
     </form>
 @endif
@@ -235,7 +235,7 @@
             @endforeach
         </div>
         <div class="rm-feature-actions">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar proyecto</button>
+            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar proyecto</button>
         </div>
     </form>
 @endif
@@ -285,7 +285,7 @@
                                 </div>
                                 <div class="modal-body">
                                     <div class="detail-drawer-panel d-flex justify-content-end mb-3">
-                                        <button class="btn btn-success" type="button" data-bs-toggle="modal" data-bs-target="#rm-option-create-{{ $field }}">
+                                        <button class="btn-nova btn-nova-success" type="button" data-bs-toggle="modal" data-bs-target="#rm-option-create-{{ $field }}">
                                             <i class="bi bi-plus-lg"></i>Agregar
                                         </button>
                                     </div>
@@ -303,7 +303,7 @@
                                     </div>
                                 </div>
                                 <div class="rm-option-card-actions">
-                                    <button class="btn btn-primary nova-btn-icon" type="button" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}" title="Ver y editar" aria-label="Ver y editar">
+                                    <button class="btn-action btn-action-edit" type="button" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}" title="Ver y editar" aria-label="Ver y editar">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
                                     <button class="btn {{ !empty($option['default']) ? 'btn-warning' : 'btn-outline-secondary' }} nova-btn-icon rm-default-option" type="button" data-default-group="{{ $field }}" data-default-value="{{ $option['id'] ?? '' }}" data-default-target="rm-default-selected-{{ $field }}" title="Marcar default" aria-label="Marcar default">
@@ -313,7 +313,7 @@
                                         @csrf
                                         <input type="hidden" name="opt_type" value="{{ $field }}">
                                         <input type="hidden" name="opt_id" value="{{ $option['id'] ?? '' }}">
-                                        <button class="btn btn-danger nova-btn-icon" name="opt_action" value="delete" type="submit" title="Eliminar" aria-label="Eliminar" onclick="return confirm('Eliminar esta opcion?')"><i class="bi bi-trash"></i></button>
+                                        <button class="btn-action btn-action-delete" name="opt_action" value="delete" type="submit" title="Eliminar" aria-label="Eliminar" onclick="return confirm('Eliminar esta opcion?')"><i class="bi bi-trash"></i></button>
                                     </form>
                                 </div>
                             </article>
@@ -328,7 +328,7 @@
                                         <input type="hidden" name="opt_type" value="{{ $field }}">
                                         <input type="hidden" name="opt_action" value="set_default">
                                         <input id="rm-default-selected-{{ $field }}" type="hidden" name="opt_id" value="{{ data_get($config, $defaultKey, '') }}">
-                                        <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
+                                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
                                     </form>
                                 </div>
                             </div>
@@ -368,7 +368,7 @@
                                     </div>
                                     <div class="modal-footer">
                                         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-                                        <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
+                                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
                                     </div>
                                 </form>
                             </div>
@@ -404,7 +404,7 @@
                                 </div>
                                 <div class="modal-footer">
                                     <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-                                    <button class="btn btn-success" type="submit"><i class="bi bi-plus-lg"></i>Agregar</button>
+                                    <button class="btn-nova btn-nova-success" type="submit"><i class="bi bi-plus-lg"></i>Agregar</button>
                                 </div>
                             </form>
                         </div>
@@ -453,7 +453,7 @@
             @endforeach
         </div>
         <div class="rm-feature-actions">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar campos</button>
+            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar campos</button>
         </div>
     </form>
 @endif
@@ -495,7 +495,7 @@
             </aside>
         </div>
         <div class="rm-feature-actions">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar retencion</button>
+            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar retencion</button>
         </div>
     </form>
 @endif
@@ -548,7 +548,7 @@
             </aside>
         </div>
         <div class="rm-feature-actions">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar mantencion</button>
+            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar mantencion</button>
         </div>
     </form>
 @endif
@@ -601,7 +601,7 @@
                     @csrf
                     <input type="hidden" name="config_action" value="delete_role">
                     <input type="hidden" name="role_name" value="{{ $selectedRole }}">
-                    <button class="btn btn-danger nova-btn-icon" type="submit" title="Eliminar rol" aria-label="Eliminar rol" onclick="return confirm('Eliminar este rol?')">
+                    <button class="btn-action btn-action-delete" type="submit" title="Eliminar rol" aria-label="Eliminar rol" onclick="return confirm('Eliminar este rol?')">
                         <i class="bi bi-trash"></i>
                     </button>
                 </form>
@@ -612,7 +612,7 @@
                 <label class="form-label" for="rm-new-role">Crear rol</label>
                 <div class="input-group">
                     <input class="form-control" id="rm-new-role" name="role_name" placeholder="Nombre del rol">
-                    <button class="btn btn-success" type="submit"><i class="bi bi-plus-lg"></i>Crear</button>
+                    <button class="btn-nova btn-nova-success" type="submit"><i class="bi bi-plus-lg"></i>Crear</button>
                 </div>
             </form>
         </div>
@@ -623,7 +623,7 @@
             <input type="hidden" name="role_name" value="{{ $selectedRole }}">
             <div class="rm-section-head mt-3">
                 <div><h2>Roles y Permisos</h2><p>Activa vistas y define si el rol puede editar o eliminar datos.</p></div>
-                <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
+                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
             </div>
             <div class="rm-scope-panel">
                 <h3 class="rm-permission-title">Alcance</h3>
@@ -764,13 +764,13 @@
                                 @endforeach
                             </select>
                         </label>
-                        <button class="btn btn-outline-primary" type="button" data-load-role-permissions>
+                        <button class="btn-nova btn-nova-info" type="button" data-load-role-permissions>
                             <i class="bi bi-arrow-repeat"></i>Cargar permisos del rol
                         </button>
-                        <button class="btn btn-outline-secondary" type="button" data-reset-user-permissions>
+                        <button class="btn-nova btn-nova-secondary" type="button" data-reset-user-permissions>
                             <i class="bi bi-eraser"></i>Limpiar
                         </button>
-                        <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
+                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
                     </div>
                 </div>
                 <div class="rm-scope-panel">

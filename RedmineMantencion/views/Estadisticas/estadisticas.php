@@ -280,10 +280,10 @@ $userNameMap = $users;
         </datalist>
       </div>
       <div class="col-md-3">
-        <button class="btn btn-primary btn-icon"><i class="bi bi-funnel"></i> Aplicar filtros</button>
+        <button class="btn-nova btn-nova-primary btn-icon"><i class="bi bi-funnel"></i> Aplicar filtros</button>
       </div>
       <div class="col-md-3">
-        <a class="btn btn-outline-secondary w-100" href="estadisticas.php"><i class="bi bi-x-circle"></i> Limpiar</a>
+        <a class="btn-nova btn-nova-secondary w-100" href="estadisticas.php"><i class="bi bi-x-circle"></i> Limpiar</a>
       </div>
     </form>
   </div>

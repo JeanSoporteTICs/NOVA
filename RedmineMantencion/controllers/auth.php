@@ -76,23 +76,30 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
             ->where('clave_modulo', 'redmine-mantencion')
             ->value('id');
 
+        $selectColumns = [
+            'usuarios_nova.id as nova_id',
+            'usuarios_nova.uuid',
+            'usuarios_nova.usuario',
+            'usuarios_nova.rut',
+            'usuarios_nova.redmine_id',
+            'usuarios_nova.nombre',
+            'usuarios_nova.apellido',
+            'usuarios_nova.rol',
+            'usuarios_nova.estado',
+            'usuarios_nova.password',
+            'usuarios_nova.usuario_core',
+            'usuarios_nova.telegram_id_chat',
+            'usuarios_nova.ultimo_login_at',
+            'usuarios_nova.creado_at',
+        ];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('usuarios_nova', 'email')) {
+            $selectColumns[] = 'usuarios_nova.email';
+        }
+
         $rows = \Illuminate\Support\Facades\DB::table('usuarios_nova')
             ->leftJoin('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
             ->distinct()
-            ->select([
-                'usuarios_nova.id as nova_id',
-                'usuarios_nova.uuid',
-                'usuarios_nova.usuario',
-                'usuarios_nova.rut',
-                'usuarios_nova.redmine_id',
-                'usuarios_nova.nombre',
-                'usuarios_nova.apellido',
-                'usuarios_nova.rol',
-                'usuarios_nova.estado',
-                'usuarios_nova.password',
-                'usuarios_nova.usuario_core',
-                'usuarios_nova.telegram_id_chat',
-            ])
+            ->select($selectColumns)
             ->where(function ($where) use ($moduleId, $includeModuleAdmins): void {
                 if ($includeModuleAdmins) {
                     $where->whereIn('usuarios_nova.rol', ['admin', 'administrador', 'root']);
@@ -144,21 +151,27 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
             }
 
             return [
-                'id' => trim((string)($row->redmine_id ?? '')) ?: trim((string)($row->usuario ?? $row->uuid ?? '')),
-                'rut_sin_dv' => trim((string)($row->usuario ?? '')),
-                'nombre' => trim((string)($row->nombre ?? '')),
-                'apellido' => trim((string)($row->apellido ?? '')),
-                'rut' => trim((string)($row->rut ?? '')),
-                'api' => $api,
-                'password' => (string)($row->password ?? ''),
-                'rol' => $legacyRole !== '' ? $legacyRole : 'usuario',
-                'estado_usuario' => trim((string)($row->estado ?? 'activo')) ?: 'activo',
-                'estado' => trim((string)($row->estado ?? 'activo')) ?: 'activo',
-                'core_user' => trim((string)($row->usuario_core ?? '')) ?: trim((string)($core->usuario_externo ?? '')),
-                'nextcloud_user' => trim((string)($nextcloud->usuario_externo ?? '')),
-                'telegram_chat_id' => trim((string)($row->telegram_id_chat ?? '')),
-                'permisos' => $legacyRole === 'root' ? ['all' => true] : [],
-                '_nova_user_id' => trim((string)($row->uuid ?? '')),
+                'id'              => trim((string)($row->redmine_id ?? '')) ?: trim((string)($row->usuario ?? $row->uuid ?? '')),
+                'rut_sin_dv'      => trim((string)($row->usuario ?? '')),
+                'nombre'          => trim((string)($row->nombre ?? '')),
+                'apellido'        => trim((string)($row->apellido ?? '')),
+                'rut'             => trim((string)($row->rut ?? '')),
+                'email'           => trim((string)($row->email ?? '')),
+                'api'             => $api,
+                'password'        => (string)($row->password ?? ''),
+                'rol'             => $legacyRole !== '' ? $legacyRole : 'usuario',
+                'rol_nova'        => strtolower(trim((string)($row->rol ?? 'usuario'))),
+                'estado_usuario'  => trim((string)($row->estado ?? 'activo')) ?: 'activo',
+                'estado'          => trim((string)($row->estado ?? 'activo')) ?: 'activo',
+                'core_user'       => trim((string)($row->usuario_core ?? '')) ?: trim((string)($core->usuario_externo ?? '')),
+                'core_pass_enc'   => (string)($core->valor_secreto ?? ''),
+                'nextcloud_user'  => trim((string)($nextcloud->usuario_externo ?? '')),
+                'nextcloud_pass_enc' => (string)($nextcloud->valor_secreto ?? ''),
+                'telegram_chat_id'=> trim((string)($row->telegram_id_chat ?? '')),
+                'permisos'        => $legacyRole === 'root' ? ['all' => true] : [],
+                '_nova_user_id'   => trim((string)($row->uuid ?? '')),
+                'ultimo_login_at' => (string)($row->ultimo_login_at ?? ''),
+                'creado_at'       => (string)($row->creado_at ?? ''),
             ];
         })->values()->all();
     } catch (\Throwable) {

@@ -500,7 +500,7 @@ if ($isPdfExport) {
         </a>
         <?php if ($selectedProcedure): ?>
           <div class="pdf-toolbar-group">
-            <button type="button" class="btn btn-primary" onclick="window.print()">
+            <button type="button" class="btn-nova btn-nova-primary" onclick="window.print()">
               <i class="bi bi-file-earmark-pdf"></i> Imprimir / Guardar PDF
             </button>
             <button type="button" class="btn btn-outline-secondary" onclick="window.close()">Cerrar</button>
@@ -1759,21 +1759,21 @@ if ($isPdfExport) {
             ?>
             <?php if ($fileUrl !== ''): ?>
               <?php if ($canEditProcedures && $onlyOfficeAvailable && $isOfficeSupported): ?>
-                <a class="btn btn-success" href="<?= $h($officeEditorUrl) ?>">
+                <a class="btn-nova btn-nova-success" href="<?= $h($officeEditorUrl) ?>">
                   <i class="bi bi-pencil-square"></i> Editar Office
                 </a>
               <?php endif; ?>
-              <a class="btn btn-primary" href="<?= $h($fileKind === 'pdf' ? $fileUrl : $officeViewerUrl) ?>" <?= $fileKind === 'pdf' ? 'target="_blank" rel="noopener"' : '' ?>>
+              <a class="btn-nova btn-nova-primary" href="<?= $h($fileKind === 'pdf' ? $fileUrl : $officeViewerUrl) ?>" <?= $fileKind === 'pdf' ? 'target="_blank" rel="noopener"' : '' ?>>
                 <i class="bi bi-box-arrow-up-right"></i> Visualizar
               </a>
-              <a class="btn btn-outline-primary" href="<?= $h($fileUrl) ?>" download>
+              <a class="btn-nova btn-nova-secondary" href="<?= $h($fileUrl) ?>" download>
                 <i class="bi bi-download"></i> Descargar
               </a>
             <?php endif; ?>
             <?php if ($canEditProcedures): ?>
               <button
                 type="button"
-                class="btn btn-outline-secondary"
+                class="btn-nova btn-nova-secondary"
                 data-proc-move-id="<?= $h($selectedProcedure['id'] ?? '') ?>"
                 data-proc-move-title="<?= $h($selectedProcedure['title'] ?? '') ?>"
                 data-bs-toggle="modal"
@@ -1781,12 +1781,12 @@ if ($isPdfExport) {
               >
                 <i class="bi bi-folder-symlink"></i> Mover
               </button>
-              <button class="btn btn-outline-danger" type="submit" form="procedure-delete-form"><i class="bi bi-trash"></i> Eliminar</button>
+              <button class="btn-nova btn-nova-danger" type="submit" form="procedure-delete-form"><i class="bi bi-trash"></i> Eliminar</button>
             <?php endif; ?>
             <?php if (!$isPublicShare && $shareUrl !== ''): ?>
               <button
                 type="button"
-                class="btn btn-outline-primary"
+                class="btn-nova btn-nova-info"
                 data-share-url="<?= $h($shareUrl) ?>"
               >
                 <i class="bi bi-share"></i> Compartir
@@ -1794,21 +1794,21 @@ if ($isPdfExport) {
             <?php endif; ?>
             <?php if (!$isPublicShare && $canEditProcedures && (($selectedProcedure['storage_driver'] ?? 'nextcloud') === 'nextcloud')): ?>
               <?php if (!empty($selectedProcedure['nextcloud_share_url'])): ?>
-                <button type="button" class="btn btn-outline-info" data-share-url="<?= $h($selectedProcedure['nextcloud_share_url']) ?>">
+                <button type="button" class="btn-nova btn-nova-info" data-share-url="<?= $h($selectedProcedure['nextcloud_share_url']) ?>">
                   <i class="bi bi-cloud-check"></i> Copiar Nextcloud
                 </button>
                 <form method="post" class="d-inline" data-app-confirm="¿Quitar enlace compartido de Nextcloud?">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="action" value="unshare_nextcloud">
                   <input type="hidden" name="id" value="<?= $h($selectedProcedure['id'] ?? '') ?>">
-                  <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-link-45deg"></i> Quitar Nextcloud</button>
+                  <button class="btn-nova btn-nova-secondary" type="submit"><i class="bi bi-link-45deg"></i> Quitar Nextcloud</button>
                 </form>
               <?php else: ?>
                 <form method="post" class="d-inline">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="action" value="share_nextcloud">
                   <input type="hidden" name="id" value="<?= $h($selectedProcedure['id'] ?? '') ?>">
-                  <button class="btn btn-outline-info" type="submit"><i class="bi bi-cloud-arrow-up"></i> Compartir Nextcloud</button>
+                  <button class="btn-nova btn-nova-info" type="submit"><i class="bi bi-cloud-arrow-up"></i> Compartir Nextcloud</button>
                 </form>
               <?php endif; ?>
             <?php endif; ?>
@@ -1830,8 +1830,8 @@ if ($isPdfExport) {
                   ? 'Documento disponible para visualizar y descargar.'
                   : 'Los documentos ' . $officeLabel . ' se pueden editar en OnlyOffice o descargar desde las acciones superiores.' ?>
               </p>
-              <a class="btn btn-primary" href="<?= $h($officeViewerUrl ?? legacy_app_url('views/Procedimientos/onlyoffice.php?id=' . urlencode((string)($selectedProcedure['id'] ?? '')) . '&mode=view')) ?>"><i class="bi bi-box-arrow-up-right"></i> Visualizar</a>
-              <a class="btn btn-outline-primary" href="<?= $h($fileUrl) ?>" download><i class="bi bi-download"></i> Descargar</a>
+              <a class="btn-nova btn-nova-primary" href="<?= $h($officeViewerUrl ?? legacy_app_url('views/Procedimientos/onlyoffice.php?id=' . urlencode((string)($selectedProcedure['id'] ?? '')) . '&mode=view')) ?>"><i class="bi bi-box-arrow-up-right"></i> Visualizar</a>
+              <a class="btn-nova btn-nova-secondary" href="<?= $h($fileUrl) ?>" download><i class="bi bi-download"></i> Descargar</a>
             </div>
           <?php else: ?>
             <div class="proc-detail-content" id="procedureReadContent"><?= $selectedProcedure['content_html'] ?? '' ?></div>
@@ -1941,11 +1941,11 @@ if ($isPdfExport) {
             </div>
 
             <div class="d-flex flex-wrap gap-2">
-              <button class="btn btn-success" type="submit"><i class="bi bi-save"></i> Guardar documento</button>
+              <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i> Guardar documento</button>
               <?php if (!empty($form['id']) && $canEditProcedures): ?>
                 <button
                   type="button"
-                  class="btn btn-outline-primary"
+                  class="btn-nova btn-nova-secondary"
                   data-procedure-print
                   data-pdf-title="<?= $h($form['title'] ?? 'Procedimiento') ?>"
                   data-page-size="<?= $h($selectedPageSize) ?>"
@@ -1955,13 +1955,13 @@ if ($isPdfExport) {
                 <?php if ($shareUrl !== ''): ?>
                   <button
                     type="button"
-                    class="btn btn-outline-primary"
+                    class="btn-nova btn-nova-info"
                     data-share-url="<?= $h($shareUrl) ?>"
                   >
                     <i class="bi bi-share"></i> Compartir
                   </button>
                 <?php endif; ?>
-                <button class="btn btn-outline-danger" type="submit" form="procedure-delete-form"><i class="bi bi-trash"></i> Eliminar</button>
+                <button class="btn-nova btn-nova-danger" type="submit" form="procedure-delete-form"><i class="bi bi-trash"></i> Eliminar</button>
               <?php endif; ?>
             </div>
           </form>
@@ -1997,7 +1997,7 @@ if ($isPdfExport) {
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-folder-plus"></i> Crear carpeta</button>
+          <button type="submit" class="btn-nova btn-nova-primary"><i class="bi bi-folder-plus"></i> Crear carpeta</button>
         </div>
       </form>
     </div>
@@ -2026,7 +2026,7 @@ if ($isPdfExport) {
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-folder-symlink"></i> Mover</button>
+          <button type="submit" class="btn-nova btn-nova-primary"><i class="bi bi-folder-symlink"></i> Mover</button>
         </div>
       </form>
     </div>
@@ -2078,7 +2078,7 @@ if ($isPdfExport) {
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-success">
+          <button type="submit" class="btn-nova btn-nova-success">
             <i class="bi bi-file-earmark-plus"></i> Crear y editar
           </button>
         </div>
@@ -2087,24 +2087,8 @@ if ($isPdfExport) {
   </div>
 <?php endif; ?>
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
-<?php if ($flash || $error): ?>
-  <div class="modal fade" id="procedureMessageModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header" data-app-modal-tone="<?= $error ? 'danger' : 'success' ?>">
-          <h5 class="modal-title"><?= $error ? 'Error' : 'Mensaje' ?></h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-0"><?= $h($error ?: $flash) ?></p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-<?php endif; ?>
+<?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
+<?php if ($error): ?><div data-nova-flash="error" data-nova-flash-message="<?= $h($error) ?>" hidden></div><?php endif; ?>
 <div class="modal fade" id="procedureUiModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -2971,11 +2955,6 @@ if ($isPdfExport) {
     prepareStaticProcedureContent(readContent);
   }
 
-  const messageModalEl = document.getElementById('procedureMessageModal');
-  if (messageModalEl && window.bootstrap) {
-    const messageModal = new bootstrap.Modal(messageModalEl);
-    messageModal.show();
-  }
 
   const moveProcedureModalEl = document.getElementById('moveProcedureModal');
   moveProcedureModalEl?.addEventListener('show.bs.modal', (event) => {
@@ -6251,20 +6230,20 @@ if ($isPdfExport) {
       if (!configured) {
         ooModalStatus.style.display = 'none';
       } else if (disabled) {
-        ooModalStatus.className = 'alert alert-secondary py-2 small mb-0';
-        ooModalStatus.innerHTML = '<i class="bi bi-dash-circle me-1"></i> OnlyOffice deshabilitado temporalmente — el documento se guardará en Nextcloud.';
+        ooModalStatus.className = 'nova-alert-card is-neutral py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-dash-circle"></i><span>OnlyOffice deshabilitado temporalmente — el documento se guardara en Nextcloud.</span>';
         ooModalStatus.style.display = '';
       } else if (invalidUrl) {
-        ooModalStatus.className = 'alert alert-warning py-2 small mb-0';
-        ooModalStatus.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> URL de OnlyOffice inválida. Debe apuntar al servidor Document Server.';
+        ooModalStatus.className = 'nova-alert-card is-warning py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i><span>URL de OnlyOffice invalida. Debe apuntar al servidor Document Server.</span>';
         ooModalStatus.style.display = '';
       } else if (available) {
-        ooModalStatus.className = 'alert alert-success py-2 small mb-0';
-        ooModalStatus.innerHTML = '<i class="bi bi-check-circle me-1"></i> OnlyOffice disponible — el documento se abrirá para edición inmediatamente.';
+        ooModalStatus.className = 'nova-alert-card is-onlyoffice py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-check-circle-fill"></i><span>OnlyOffice disponible — el documento se abrira para edicion inmediatamente.</span>';
         ooModalStatus.style.display = '';
       } else {
-        ooModalStatus.className = 'alert alert-warning py-2 small mb-0';
-        ooModalStatus.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> OnlyOffice no disponible — el documento se guardará en Nextcloud y podrá abrirse cuando el servicio vuelva a estar disponible.';
+        ooModalStatus.className = 'nova-alert-card is-warning py-2 small mb-0';
+        ooModalStatus.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i><span>OnlyOffice no disponible — el documento se guardara en Nextcloud y podra abrirse cuando el servicio vuelva a estar disponible.</span>';
         ooModalStatus.style.display = '';
       }
     }

@@ -901,18 +901,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $heroTitle = 'Configuración de Redmine';
     $heroSubtitle = 'Administra conexión, proyecto, tiempos y listas maestras.';
     $heroExtras = '';
-    if ($flash) {
-      $heroExtras .= '<div class="alert alert-success py-2 px-3 mb-0" id="flash-msg">' . $h($flash) . '</div>';
-    }
-    if ($flashRoles) {
-      $heroExtras .= ($heroExtras ? '<div class="mt-2"></div>' : '') . '<div class="alert alert-success py-2 px-3 mb-0 mt-2" id="flash-roles">' . $h($flashRoles) . '</div>';
-    }
-    if ($maintenanceFlash) {
-      $heroExtras .= ($heroExtras ? '<div class="mt-2"></div>' : '') . '<div class="alert alert-info py-2 px-3 mb-0 mt-2" id="flash-maintenance">' . $h($maintenanceFlash) . '</div>';
-    }
-    if (!empty($nextcloudFlash)) {
-      $heroExtras .= ($heroExtras ? '<div class="mt-2"></div>' : '') . '<div class="alert alert-info py-2 px-3 mb-0 mt-2" id="flash-nextcloud">' . $h($nextcloudFlash) . '</div>';
-    }
     $configPanels = [
       'resumen' => ['label' => 'Resumen', 'icon' => 'bi-speedometer2'],
       'conexion' => ['label' => 'Conexion', 'icon' => 'bi-plug'],
@@ -940,15 +928,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (!isset($configPanels[$activeConfigPanel])) $activeConfigPanel = 'resumen';
     $configBaseUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
     $configPanelUrl = fn($panel) => $configBaseUrl . '?panel=' . rawurlencode((string)$panel);
-    include __DIR__ . '/../partials/hero.php';
+    include __DIR__ . '/../partials/hero.php'; ?>
+<?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
+<?php if ($flashRoles): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flashRoles) ?>" hidden></div><?php endif; ?>
+<?php if ($maintenanceFlash): ?><div data-nova-flash="info" data-nova-flash-message="<?= $h($maintenanceFlash) ?>" hidden></div><?php endif; ?>
+<?php if (!empty($nextcloudFlash)): ?><div data-nova-flash="nextcloud" data-nova-flash-message="<?= $h($nextcloudFlash) ?>" hidden></div><?php endif; ?>
+<?php
   ?>
-  <nav class="rm-config-nav" aria-label="Opciones de configuracion">
+  <div class="nova-config-tabs" role="navigation" aria-label="Opciones de configuracion">
     <?php foreach ($configPanels as $panelKey => $panelMeta): ?>
-      <a class="rm-config-nav-link <?= $activeConfigPanel === $panelKey ? 'active' : '' ?>" href="<?= $h($configPanelUrl($panelKey)) ?>">
+      <a class="nova-config-tab <?= $activeConfigPanel === $panelKey ? 'active' : '' ?>"
+         href="<?= $h($configPanelUrl($panelKey)) ?>"
+         <?= $activeConfigPanel === $panelKey ? 'aria-current="page"' : '' ?>>
         <i class="bi <?= $h($panelMeta['icon']) ?>"></i><?= $h($panelMeta['label']) ?>
       </a>
     <?php endforeach; ?>
-  </nav>
+  </div>
 
   <?php if ($activeConfigPanel === 'resumen'): ?>
   <section class="rm-config-summary">
@@ -1030,8 +1025,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <label class="form-label">URL Nextcloud</label>
                 <input name="nextcloud_url" class="form-control" value="<?= $h($nextcloudCfg['url'] ?? 'https://www.coresalud.cl/nextcloud') ?>" placeholder="https://www.coresalud.cl/nextcloud" required>
               </div>
-              <div class="alert alert-info py-2 small">
-                Las credenciales de Nextcloud se administran desde <strong>Cuentas conectadas</strong>, junto a las credenciales CORE de cada usuario.
+              <div class="nova-alert-card is-nextcloud py-2 small">
+                <i class="bi bi-cloud-fill"></i>
+                <span>Las credenciales de Nextcloud se administran desde <strong>Cuentas conectadas</strong>, junto a las credenciales CORE de cada usuario.</span>
               </div>
               <div class="mb-3">
                 <label class="form-label">Grupo por defecto</label>
@@ -1075,7 +1071,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <input name="procedures_nextcloud_root" class="form-control" value="<?= $h($nextcloudCfg['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos') ?>" placeholder="/NOVA/Procedimientos">
                 <div class="form-text">Se usa para documentos nuevos y carpetas creadas desde Procedimientos.</div>
               </div>
-              <button class="btn btn-primary w-100 mt-3" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+              <button class="btn-nova btn-nova-primary w-100 mt-3" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
                 <i class="bi bi-save"></i> Guardar configuración
               </button>
             </form>
@@ -1090,7 +1086,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <form method="post" class="m-0">
                   <input type="hidden" name="action" value="fetch_nextcloud_groups">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-                  <button class="btn btn-info text-white" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+                  <button class="btn-nova btn-nova-info" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
                     <i class="bi bi-arrow-repeat"></i> Consultar grupos
                   </button>
                 </form>
@@ -1146,13 +1142,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
               <input type="datetime-local" name="maintenance_until" class="form-control" value="<?= $h($maintenanceSettings['until'] ?? '') ?>">
             </div>
             <div class="col-md-2">
-              <button class="btn btn-primary w-100" type="submit">Guardar</button>
+              <button class="btn-nova btn-nova-primary w-100" type="submit">Guardar</button>
             </div>
           </div>
           <div class="form-text mt-2">Cuando est&aacute; activa, la plataforma queda en solo lectura y solo este modal permite cambiar la mantenci&oacute;n.</div>
         </form>
-        <div class="alert alert-warning small">
-          La importaci&oacute;n sobrescribe los archivos de las secciones seleccionadas. Antes de importar se genera backup autom&aacute;tico de los JSON reemplazados.
+        <div class="nova-alert-card is-warning small">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span>La importaci&oacute;n sobrescribe los archivos de las secciones seleccionadas. Antes de importar se genera backup autom&aacute;tico de los JSON reemplazados.</span>
         </div>
         <div class="row g-3">
           <div class="col-md-6">
@@ -1167,7 +1164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <label class="form-check-label" for="export-<?= $h($key) ?>"><?= $h($section['label']) ?></label>
                 </div>
               <?php endforeach; ?>
-              <button class="btn btn-primary w-100 mt-3" type="submit">
+              <button class="btn-nova btn-nova-primary w-100 mt-3" type="submit">
                 <i class="bi bi-file-earmark-arrow-down"></i> Exportar respaldo
               </button>
             </form>
@@ -1189,7 +1186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <label class="form-check-label" for="import-<?= $h($key) ?>"><?= $h($section['label']) ?></label>
                 </div>
               <?php endforeach; ?>
-              <button class="btn btn-success w-100 mt-3" type="submit">
+              <button class="btn-nova btn-nova-success w-100 mt-3" type="submit">
                 <i class="bi bi-file-earmark-arrow-up"></i> Importar respaldo
               </button>
             </form>
@@ -1223,7 +1220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
               <input class="form-check-input" type="checkbox" name="opt_default" id="optdef-<?= $h($type) ?>">
               <label class="form-check-label" for="optdef-<?= $h($type) ?>">Default</label>
             </div>
-            <button class="btn btn-primary btn-sm">Agregar</button>
+            <button class="btn-nova btn-nova-success">Agregar</button>
           </div>
         </form>
         <div class="table-responsive">
@@ -1249,14 +1246,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="update">
                       <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
-                      <button class="btn btn-success btn-sm" type="submit">Guardar</button>
+                      <button class="btn-action btn-action-edit" type="submit" title="Guardar"><i class="bi bi-check-lg"></i></button>
                     </form>
                     <form method="post" id="<?= $h($deleteFormId) ?>" data-app-confirm="Eliminar?" class="m-0">
                       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="delete">
                       <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
-                      <button class="btn btn-danger btn-sm" type="submit">Eliminar</button>
+                      <button class="btn-action btn-action-delete" type="submit" title="Eliminar"><i class="bi bi-trash"></i></button>
                     </form>
                   </td>
               </tr>
@@ -1287,7 +1284,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body rm-panel-body-tight">
-        <div id="cat-sync-msg" class="alert alert-success d-none"></div>
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
           <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:260px;">
             <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;"><i class="bi bi-search"></i></div>
@@ -1298,7 +1294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <form action="<?= $h($configPanelUrl('categorias')) ?>" method="post" class="m-0 d-inline" id="sync-cat-form">
               <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
               <input type="hidden" name="action" value="sync_remote">
-              <button class="btn btn-primary btn-icon" type="submit" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>><i class="bi bi-arrow-repeat"></i> Actualizar desde API</button>
+              <button class="btn-nova btn-nova-info btn-icon" type="submit" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>><i class="bi bi-arrow-repeat"></i> Actualizar desde API</button>
             </form>
           </div>
         </div>
@@ -1403,7 +1399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <input name="hora_extra_tiempo_estimado" class="form-control" value="<?= $h($cfg['hora_extra_tiempo_estimado'] ?? '1') ?>" placeholder="Ej: 1">
           </div>
           <div class="col-12 d-flex justify-content-end">
-            <button class="btn btn-primary">Guardar</button>
+            <button class="btn-nova btn-nova-primary">Guardar</button>
           </div>
         </form>
       </div>
@@ -1434,7 +1430,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <input name="project_name" class="form-control" value="<?= $h($cfg['project_name'] ?? '') ?>" placeholder="Solo referencia visual">
           </div>
           <div class="col-12 d-flex justify-content-end">
-            <button class="btn btn-primary">Guardar</button>
+            <button class="btn-nova btn-nova-primary">Guardar</button>
           </div>
         </form>
       </div>
@@ -1461,7 +1457,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <input type="number" min="1" name="retencion_horas" class="form-control" value="<?= $h($cfg['retencion_horas'] ?? 24) ?>">
           </div>
           <div class="col-12 d-flex justify-content-end">
-            <button class="btn btn-primary">Guardar</button>
+            <button class="btn-nova btn-nova-primary">Guardar</button>
           </div>
         </form>
       </div>
@@ -1708,7 +1704,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           </div>
 
           <div class="col-12 text-end">
-            <button class="btn btn-primary" type="submit" id="btn-save-user-perms">Guardar permisos</button>
+            <button class="btn-nova btn-nova-primary" type="submit" id="btn-save-user-perms">Guardar permisos</button>
           </div>
         </form>
       </div>
@@ -1903,7 +1899,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           </div>
 
           <div class="col-12 text-end">
-            <button class="btn btn-primary" type="submit" id="btn-save-roles">Guardar permisos</button>
+            <button class="btn-nova btn-nova-primary" type="submit" id="btn-save-roles">Guardar permisos</button>
          
           </div>
         </form>
@@ -1916,6 +1912,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <?php endif; ?>
 
 </div>
+</div><!-- #page-content -->
 
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 <script>
@@ -2040,13 +2037,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
   if (params.has('synccat')) {
     const msg = decodeURIComponent(params.get('synccat'));
-    const msgEl = document.getElementById('cat-sync-msg');
-    if (msgEl) {
-      msgEl.textContent = msg;
-      msgEl.classList.remove('d-none');
-    }
+    if (msg) window.NovaToast?.success(msg, 'Sincronización');
     params.set('panel', 'categorias');
-    // limpiar query para no repetir en siguientes navegaciones
     params.delete('synccat');
     const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
     window.history.replaceState({}, '', newUrl);
@@ -2123,6 +2115,5 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
-</div> <!-- #page-content -->
 </body>
 </html>

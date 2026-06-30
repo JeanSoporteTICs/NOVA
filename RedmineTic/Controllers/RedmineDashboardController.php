@@ -125,9 +125,23 @@ class RedmineDashboardController extends Controller
         }
 
         $action = (string) $request->input('action', 'save');
+        if ($action === 'preview_redmine') {
+            $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+            $result = $redmine->previewUsersFromRedmine(is_array($user) ? ($user['id'] ?? null) : null);
+            $message = $result['ok']
+                ? 'Selecciona los usuarios que quieres importar desde Redmine.'
+                : 'No se pudo consultar Redmine: ' . $result['error'];
+
+            return back()
+                ->with('redmine_status', $message)
+                ->with('redmine_status_type', $result['ok'] ? 'info' : 'danger')
+                ->with('redmine_import_preview', $result['ok'] ? $result['items'] : []);
+        }
+
         if ($action === 'sync_redmine') {
             $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
-            $result = $redmine->syncUsersFromRedmine(is_array($user) ? ($user['id'] ?? null) : null);
+            $selectedIds = array_values(array_filter(array_map('strval', (array) $request->input('remote_user_ids', []))));
+            $result = $redmine->syncUsersFromRedmine(is_array($user) ? ($user['id'] ?? null) : null, $selectedIds);
             $redmine->recordActivity($result['ok'] ? 'sincronizacion_usuarios_ok' : 'sincronizacion_usuarios_error', [
                 'created' => $result['created'],
                 'updated' => $result['updated'],
@@ -137,12 +151,14 @@ class RedmineDashboardController extends Controller
                 ? $result['created'] . ' usuario(s) creado(s), ' . $result['updated'] . ' actualizado(s) desde Redmine.'
                 : 'No se pudo sincronizar con Redmine: ' . $result['error'];
 
-            return back()->with('redmine_status', $message);
+            return back()
+                ->with('redmine_status', $message)
+                ->with('redmine_status_type', $result['ok'] ? 'success' : 'danger');
         }
 
         if ($action === 'delete') {
             $deleted = $redmine->deleteUser((string) $request->input('id'));
-            $message = $deleted > 0 ? 'Usuario eliminado del proyecto.' : 'No se encontro el usuario.';
+            $message = $deleted > 0 ? 'Acceso al proyecto quitado.' : 'No se encontro el usuario.';
         } elseif ($action === 'toggle_status') {
             $result = $redmine->toggleUserStatus((string) $request->input('id'));
             $message = $result['ok']

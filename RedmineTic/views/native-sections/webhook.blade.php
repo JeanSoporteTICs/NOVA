@@ -151,7 +151,7 @@
             </datalist>
 
             <div class="rm-manual-actions">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle"></i>Crear pendiente</button>
+                <button class="btn-nova btn-nova-success" type="submit"><i class="bi bi-plus-circle"></i>Crear pendiente</button>
                 <a class="btn btn-outline-secondary" href="{{ $redmineRoute('redmine.native.section', 'dashboard') }}"><i class="bi bi-inboxes"></i>Ver pendientes</a>
             </div>
         </form>

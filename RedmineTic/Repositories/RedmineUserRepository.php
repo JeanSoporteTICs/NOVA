@@ -67,17 +67,21 @@ class RedmineUserRepository
                 'nombre'                => trim((string) ($nova->nombre ?? '')),
                 'apellido'              => trim((string) ($nova->apellido ?? '')),
                 'rut'                   => trim((string) ($nova->rut ?? '')),
+                'email'                 => trim((string) ($nova->email ?? '')),
                 'numero_celular'        => '',
                 'telegram_chat_id'      => $telegramChatId,
                 'telegram_source'       => $telegramChatId !== '' ? 'nova' : '',
                 'api'                   => $this->integrationSecret((int) ($nova->id ?? 0), 'redmine_tic'),
                 'rol'                   => trim((string) ($profile->rol ?? $nova->rol ?? 'usuario')) ?: 'usuario',
+                'rol_nova'              => strtolower(trim((string) ($nova->rol ?? 'usuario'))),
                 'password'              => (string) ($nova->password ?? ''),
                 'permisos'              => $permissions,
                 'estado_usuario'        => trim((string) ($profile->estado_usuario ?? $nova->estado ?? 'activo')) ?: 'activo',
                 'redmine_membership_id' => $profile->redmine_membership_id ?? null,
                 '_nova_user_id'         => (string) ($nova->uuid ?? ''),
                 '_central_only'         => $redmineId === '',
+                'ultimo_login_at'       => (string) ($nova->ultimo_login_at ?? ''),
+                'creado_at'             => (string) ($nova->creado_at ?? ''),
             ];
         }
 
@@ -326,6 +330,40 @@ class RedmineUserRepository
         }
 
         return false;
+    }
+
+    /**
+     * @return array{exists:bool,has_access:bool}
+     */
+    public function accessStatusByRedmineId(string $redmineId): array
+    {
+        $redmineId = trim($redmineId);
+        if ($redmineId === '' || !$this->novaUsersTableAvailable()) {
+            return ['exists' => false, 'has_access' => false];
+        }
+
+        try {
+            $novaUserId = (int) DB::table('usuarios_nova')
+                ->where('redmine_id', $redmineId)
+                ->value('id');
+            if ($novaUserId <= 0) {
+                return ['exists' => false, 'has_access' => false];
+            }
+
+            $moduleId = $this->moduleId();
+            $hasAccess = false;
+            if ($moduleId !== null && $this->projectAccessTableAvailable()) {
+                $hasAccess = DB::table('permisos_usuario_modulo')
+                    ->where('usuario_id', $novaUserId)
+                    ->where('modulo_id', $moduleId)
+                    ->where('permitido', 1)
+                    ->exists();
+            }
+
+            return ['exists' => true, 'has_access' => $hasAccess];
+        } catch (\Throwable) {
+            return ['exists' => false, 'has_access' => false];
+        }
     }
 
     /**

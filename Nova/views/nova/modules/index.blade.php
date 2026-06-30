@@ -43,7 +43,7 @@
         </section>
 
         @if (session('status'))
-            <div class="nova-card nova-card-pad nova-alert-success nova-mb">{{ session('status') }}</div>
+            <div data-nova-flash="success" data-nova-flash-message="{{ session('status') }}" hidden></div>
         @endif
 
         <section class="nova-system-head" aria-label="Gestion de modulos">
@@ -93,7 +93,7 @@
                 </table>
             </div>
             <div class="actions nova-system-toolbar">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
+                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
             </div>
         </form>
     </main>

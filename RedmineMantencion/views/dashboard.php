@@ -185,9 +185,7 @@ $csrf = legacy_csrf_token();
     </div>
   </div>
 
-  <?php if ($flash): ?>
-    <div class="alert alert-success" id="flash-msg"><?= $h($flash) ?></div>
-  <?php endif; ?>
+  <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
 
 
 
@@ -804,15 +802,6 @@ if (resetErrorsBtn && processForm && processAction) {
   });
 }
 
-  const flash = document.getElementById('flash-msg');
-if (flash) {
-  setTimeout(() => {
-    flash.classList.add('fade');
-    flash.style.transition = 'opacity .5s';
-    flash.style.opacity = '0';
-    setTimeout(() => flash.remove(), 500);
-  }, 5000);
-}
 
 const logModal = document.getElementById('logModal');
 

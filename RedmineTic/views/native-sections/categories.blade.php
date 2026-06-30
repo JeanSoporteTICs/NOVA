@@ -13,7 +13,7 @@
     <form method="post" action="{{ $redmineRoute('redmine.native.categories.action') }}">
         @csrf
         <input type="hidden" name="action" value="sync_remote">
-        <button class="btn btn-outline-primary" type="submit"><i class="bi bi-cloud-download"></i>Sincronizar Redmine</button>
+        <button class="btn-nova btn-nova-info" type="submit"><i class="bi bi-cloud-download"></i>Sincronizar Redmine</button>
     </form>
 </div>
 <div class="rm-catalog-panel">

@@ -261,15 +261,6 @@
         .rm-rank-list-modal { gap: 13px; }
         .rm-rank-list-modal .rm-rank-row span { white-space: normal; }
         .rm-rank-list-modal .rm-rank-row i { height: 10px; }
-        .rm-toast { position: fixed; right: 22px; bottom: 22px; z-index: 2000; display: flex; align-items: flex-start; gap: 10px; max-width: min(420px, calc(100vw - 32px)); padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: #0f172a; box-shadow: 0 22px 48px rgba(15, 23, 42, .18); font-weight: 800; transition: opacity .18s ease, transform .18s ease; }
-        .rm-toast i { color: var(--nova-primary); font-size: 1.1rem; margin-top: 1px; }
-        .rm-toast.is-success { border-color: #86efac; background: #ecfdf5; color: #14532d; }
-        .rm-toast.is-success i { color: #16a34a; }
-        .rm-toast.is-info { border-color: #fde68a; background: #fffbeb; color: #713f12; }
-        .rm-toast.is-info i { color: #d97706; }
-        .rm-toast.is-danger { border-color: #fecaca; background: #fef2f2; color: #7f1d1d; }
-        .rm-toast.is-danger i { color: #dc2626; }
-        .rm-toast.is-hiding { opacity: 0; transform: translateY(8px); pointer-events: none; }
         @media (max-width: 991.98px) {
             .rm-layout { padding: 18px 12px 36px; }
             .rm-stats-hero,
@@ -813,6 +804,9 @@
                     <span class="rm-brand-mark"><i class="bi bi-layout-sidebar-inset"></i></span>
                     <span>{{ $redmineProjectName ?? 'Redmine TICS' }}</span>
                 </a>
+                <button class="nova-sidebar-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#novaSidebar" aria-controls="novaSidebar" aria-label="Abrir menú lateral">
+                    <i class="bi bi-list"></i>
+                </button>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#rmTopbar" aria-controls="rmTopbar" aria-expanded="false" aria-label="Alternar navegacion">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -827,21 +821,29 @@
             </div>
         </nav>
 
-        <div class="rm-layout">
-            <main class="rm-main">
-                <nav class="rm-section-nav" aria-label="Secciones Redmine">
+        <div class="nova-layout">
+            <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
+                <div class="offcanvas-header d-lg-none border-bottom py-3">
+                    <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">{{ $redmineProjectName ?? 'Redmine TICS' }}</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                </div>
+                <nav class="nova-sidebar-body" aria-label="Secciones Redmine">
                     @foreach ($sections as $key => $label)
-                        <a class="nav-link {{ $section === $key ? 'active' : '' }}" href="{{ $redmineRoute('redmine.native.section', $key) }}">
-                            <i class="bi {{ $sectionIcons[$key] ?? 'bi-window' }}"></i>
-                            {{ $label }}
+                        <a class="nova-sidebar-link {{ $section === $key ? 'active' : '' }}"
+                           href="{{ $redmineRoute('redmine.native.section', $key) }}"
+                           @if ($section === $key) aria-current="page" @endif>
+                            <i class="bi {{ $sectionIcons[$key] ?? 'bi-window' }} nova-sidebar-icon"></i>
+                            <span>{{ $label }}</span>
                         </a>
                     @endforeach
-                    <a class="nav-link" href="{{ route('integrations.redmine_tic') }}">
-                        <i class="bi bi-person-lock"></i>
-                        Mis integraciones
+                    <a class="nova-sidebar-link" href="{{ route('integrations.redmine_tic') }}">
+                        <i class="bi bi-person-lock nova-sidebar-icon"></i>
+                        <span>Mis integraciones</span>
                     </a>
                 </nav>
+            </aside>
 
+            <main class="nova-content rm-main">
                 <section class="card card-hero sb-page-hero rm-hero mb-3">
                     <div class="card-body p-3 p-lg-4 d-flex align-items-center gap-3 flex-wrap">
                         <div class="d-flex align-items-center gap-3">
@@ -855,9 +857,9 @@
                 </section>
 
                 @if (!empty($redmineMaintenance['enabled']))
-                    <div class="alert alert-warning fw-bold" role="status">
+                    <div class="nova-alert-card is-warning mb-3" role="status">
                         <i class="bi bi-tools"></i>
-                        Modulo en mantencion{{ !empty($redmineMaintenance['until_text']) ? ' hasta ' . $redmineMaintenance['until_text'] : '' }}. La edicion de datos esta desactivada.
+                        <span>Modulo en mantencion{{ !empty($redmineMaintenance['until_text']) ? ' hasta ' . $redmineMaintenance['until_text'] : '' }}. La edicion de datos esta desactivada.</span>
                     </div>
                 @endif
 
@@ -878,9 +880,9 @@
                 @else
                     @include('redmine_tic::native-sections.webhook')
                 @endif
-            </main>
-        </div>
-    </div>
+            </main><!-- /.nova-content -->
+        </div><!-- /.nova-layout -->
+    </div><!-- /.rm-shell -->
     @if (session('redmine_status'))
         @php
             $redmineStatusText = (string) session('redmine_status');
@@ -888,15 +890,11 @@
             if (!in_array($redmineStatusType, ['success', 'info', 'danger'], true)) {
                 $lowerStatus = Str::lower($redmineStatusText);
                 $redmineStatusType = Str::contains($lowerStatus, ['error', 'no se', 'no pudo', 'falta', 'http ', 'bloque', 'desactivada'])
-                    ? 'danger'
+                    ? 'error'
                     : (Str::contains($lowerStatus, ['sin cambios', 'solo se sincronizan', 'selecciona']) ? 'info' : 'success');
             }
-            $redmineStatusIcon = $redmineStatusType === 'danger' ? 'bi-x-circle-fill' : ($redmineStatusType === 'info' ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill');
         @endphp
-        <div class="rm-toast is-{{ $redmineStatusType }}" role="status" aria-live="polite" data-redmine-toast>
-            <i class="bi {{ $redmineStatusIcon }}"></i>
-            <span>{{ session('redmine_status') }}</span>
-        </div>
+        <div data-nova-flash="{{ $redmineStatusType }}" data-nova-flash-title="Redmine TIC" data-nova-flash-message="{{ $redmineStatusText }}" hidden></div>
     @endif
 
     <div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
@@ -915,6 +913,7 @@
     @endif
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}"></script>
     <script>
         const cleanupNovaModalState = () => {
             document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
@@ -1051,13 +1050,6 @@
             });
         }
 
-        const redmineToast = document.querySelector('[data-redmine-toast]');
-        if (redmineToast) {
-            window.setTimeout(() => {
-                redmineToast.classList.add('is-hiding');
-                window.setTimeout(() => redmineToast.remove(), 220);
-            }, 3000);
-        }
 
         const redmineTicScrollTopBtn = document.getElementById('redmine-tic-scroll-top');
         if (redmineTicScrollTopBtn) {

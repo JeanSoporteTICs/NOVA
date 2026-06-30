@@ -2061,6 +2061,14 @@ body.emach-page .card:not(.emach-hero) .text-muted,
   --nova-ui-radius-sm: 8px;
   --nova-ui-shadow: 0 18px 42px rgba(15, 23, 42, 0.09);
   --nova-ui-shadow-strong: 0 28px 68px rgba(12, 31, 58, 0.24);
+
+  /* Stacking hierarchy — keep navbar below dropdowns/backdrops/modals/drawers/toasts */
+  --nova-navbar-z: 1020;
+  --nova-dropdown-z: 1030;
+  --nova-backdrop-z: 1040;
+  --nova-modal-z: 1050;
+  --nova-drawer-z: 1060;
+  --nova-toast-z: 1070;
 }
 
 body.nova-page,
@@ -2162,15 +2170,21 @@ nav.sb-navbar {
   display: inline-flex !important;
   align-items: center !important;
   gap: 0.45rem !important;
+  padding: 0.3rem 1rem !important;
   min-height: 40px !important;
   border: 1px solid rgba(219, 228, 240, 0.96) !important;
-  border-radius: var(--nova-ui-radius-sm) !important;
+  border-radius: 999px !important;
   background: #fff !important;
   color: #334155 !important;
   font-size: 0.86rem !important;
   font-weight: 800 !important;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05) !important;
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, color 0.16s ease !important;
+  transition:
+    background-color .18s ease,
+    color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .18s ease !important;
   white-space: nowrap;
 }
 
@@ -2195,7 +2209,7 @@ nav.sb-navbar {
   color: #fff !important;
   border-color: rgba(37, 99, 235, 0.22) !important;
   background: var(--nova-color-blue) !important;
-  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22) !important;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.18) !important;
 }
 
 /* Global hero */
@@ -2523,6 +2537,12 @@ a.btn {
 .telegram-user-badge {
   background-color: #dcfce7 !important;
   color: #14532d !important;
+}
+
+.emach-credential-badge.is-missing,
+.telegram-user-badge.is-missing {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
 }
 
 .badge.text-bg-warning,
@@ -4998,3 +5018,1518 @@ label {
     width: 100%;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   NOVA — Pill buttons (.btn-nova) — aplica a todos los módulos
+   ══════════════════════════════════════════════════════════════ */
+
+.btn-nova {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 52px;
+  padding: 4px 22px 4px 4px;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--nova-font);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .16);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.btn-nova:hover {
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+  color: #fff;
+  text-decoration: none;
+}
+
+.btn-nova:active {
+  transform: translateY(0);
+  filter: brightness(.93);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
+}
+
+.btn-nova:focus-visible {
+  outline: none;
+  box-shadow: var(--nova-focus), 0 4px 14px rgba(0, 0, 0, .16);
+}
+
+.btn-nova:disabled,
+.btn-nova[disabled] {
+  opacity: .55;
+  pointer-events: none;
+}
+
+/* Icon circle inside pill button — targets first <i> or <span class="bni"> */
+.btn-nova > i:first-child,
+.btn-nova > .bni {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 14px;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+/* Color variants — maintain NOVA identity */
+.btn-nova-primary   { background: var(--nova-primary); }
+.btn-nova-success   { background: var(--nova-success); }
+.btn-nova-danger    { background: var(--nova-danger); }
+.btn-nova-warning   { background: var(--nova-warning); }
+.btn-nova-info      { background: var(--nova-info); }
+.btn-nova-secondary { background: #64748b; }
+.btn-nova-purple    { background: #7c3aed; }
+.btn-nova-dark      { background: #1e293b; }
+.btn-nova-teal      { background: #0e7490; }
+
+/* Hover brightness per color */
+.btn-nova-primary:hover   { background: var(--nova-primary-strong); }
+.btn-nova-success:hover   { background: #15803d; }
+.btn-nova-danger:hover    { background: #b91c1c; }
+.btn-nova-warning:hover   { background: #b45309; }
+.btn-nova-info:hover      { background: #0369a1; }
+.btn-nova-secondary:hover { background: #475569; }
+.btn-nova-purple:hover    { background: #6d28d9; }
+.btn-nova-dark:hover      { background: #0f172a; }
+.btn-nova-teal:hover      { background: #0e6680; }
+
+/* Mobile: narrower padding, smaller icon circle */
+@media (max-width: 575.98px) {
+  .btn-nova {
+    padding-right: 16px;
+    font-size: 0.73rem;
+    letter-spacing: 0.03em;
+    height: 46px;
+  }
+  .btn-nova > i:first-child,
+  .btn-nova > .bni {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    margin-right: 10px;
+    font-size: 1rem;
+  }
+}
+
+/* Icon-only variant (no text) — for tight toolbars */
+.btn-nova.btn-nova-icon-only {
+  padding: 4px;
+  width: 52px;
+}
+.btn-nova.btn-nova-icon-only > i:first-child,
+.btn-nova.btn-nova-icon-only > .bni {
+  margin-right: 0;
+}
+
+/* Stretch full-width on mobile inside action bars */
+@media (max-width: 575.98px) {
+  .nova-actions-bar .btn-nova,
+  .rm-actions .btn-nova,
+  .actions .btn-nova {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   NOVA — Table action buttons (.btn-action) — circular icon only
+   ══════════════════════════════════════════════════════════════ */
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border: none;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+  line-height: 1;
+  padding: 0;
+  background: #64748b;
+  flex-shrink: 0;
+}
+
+.btn-action:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .24);
+  color: #fff;
+  text-decoration: none;
+  filter: brightness(1.1);
+}
+
+.btn-action:active {
+  transform: scale(.96);
+  filter: brightness(.9);
+}
+
+.btn-action:focus-visible {
+  outline: none;
+  box-shadow: var(--nova-focus);
+}
+
+.btn-action:disabled,
+.btn-action[disabled] {
+  opacity: .45;
+  pointer-events: none;
+}
+
+/* Type variants */
+.btn-action-edit     { background: var(--nova-primary); }
+.btn-action-delete   { background: var(--nova-danger); }
+.btn-action-view     { background: var(--nova-info); }
+.btn-action-download { background: var(--nova-success); }
+.btn-action-share    { background: #7c3aed; }
+.btn-action-settings { background: #64748b; }
+.btn-action-enable   { background: var(--nova-success); }
+.btn-action-disable  { background: var(--nova-warning); }
+.btn-action-sync     { background: #0e7490; }
+.btn-action-info     { background: var(--nova-info); }
+.btn-action-copy     { background: #475569; }
+.btn-action-move     { background: #7c3aed; }
+.btn-action-approve  { background: var(--nova-success); }
+.btn-action-reject   { background: var(--nova-danger); }
+
+/* Smaller variant for dense tables */
+.btn-action.btn-action-sm {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  font-size: 0.8rem;
+}
+
+/* ── NovaDrawer — panel lateral independiente de Bootstrap Modal ── */
+/* Use .nova-drawer + .nova-drawer-dialog on elements managed by nova-ui.js */
+/* Bootstrap modals use .detail-drawer-modal + .detail-drawer-dialog instead */
+.nova-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nova-drawer-z, 1060);
+  display: none;
+  overflow: hidden;
+  --nova-drawer-width: min(680px, calc(100vw - 24px));
+}
+
+.nova-drawer.show {
+  display: block;
+  background: rgba(15, 23, 42, .50);
+}
+
+.nova-drawer-dialog {
+  position: relative;
+  width: var(--nova-drawer-width);
+  max-width: var(--nova-drawer-width);
+  height: 100vh;
+  margin: 0 0 0 auto;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+}
+
+.nova-drawer.show .nova-drawer-dialog {
+  transform: translateX(0);
+}
+
+.nova-drawer-content,
+.nova-drawer .modal-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 0 !important;
+  border-radius: 18px 0 0 18px !important;
+  box-shadow: -24px 0 64px rgba(15, 23, 42, .20) !important;
+  overflow: hidden;
+}
+
+.nova-drawer-content > form,
+.nova-drawer .modal-content > form {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.nova-drawer-header,
+.nova-drawer .modal-header {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(135deg, rgba(37, 99, 235, .12), rgba(20, 184, 166, .10)), #fff !important;
+  border-bottom: 1px solid rgba(15, 23, 42, .08);
+}
+
+.nova-drawer-body,
+.nova-drawer .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.2rem 1.25rem 2rem;
+  background: #f8fafc;
+}
+
+.nova-drawer-body > .row,
+.nova-drawer .modal-body > .row {
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
+}
+
+.nova-drawer-footer,
+.nova-drawer .modal-footer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: .65rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, .96);
+  border-top: 1px solid rgba(15, 23, 42, .08);
+  box-shadow: 0 -16px 30px rgba(15, 23, 42, .06);
+}
+
+.nova-drawer .form-control,
+.nova-drawer .form-select {
+  min-height: 44px;
+}
+
+.nova-drawer textarea.form-control {
+  min-height: 96px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+@media (max-width: 575.98px) {
+  .nova-drawer {
+    --nova-drawer-width: 100vw;
+  }
+  .nova-drawer-content,
+  .nova-drawer .modal-content {
+    border-radius: 0 !important;
+  }
+  .nova-drawer-footer button,
+  .nova-drawer .modal-footer button {
+    width: 100%;
+  }
+}
+
+/* rm-side-drawer — alias used in historico.php */
+.rm-side-drawer {
+  padding: 0 !important;
+}
+.rm-side-drawer.show {
+  display: block !important;
+  background: rgba(15, 23, 42, .48) !important;
+}
+.rm-side-drawer .rm-side-drawer-dialog {
+  width: min(720px, calc(100vw - 24px)) !important;
+  max-width: none !important;
+  height: calc(100vh - 24px) !important;
+  margin: 12px 12px 12px auto !important;
+  transform: translateX(40px) !important;
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1) !important;
+}
+.rm-side-drawer.show .rm-side-drawer-dialog {
+  transform: translateX(0) !important;
+}
+.rm-side-drawer .modal-content {
+  height: 100% !important;
+  max-height: 100% !important;
+  border-radius: 18px 0 0 18px !important;
+  overflow: hidden !important;
+}
+@media (max-width: 768px) {
+  .rm-side-drawer .rm-side-drawer-dialog {
+    width: 100vw !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+  }
+  .rm-side-drawer .modal-content {
+    border-radius: 0 !important;
+  }
+}
+
+/* ============================================================
+   NOVA GLOBAL ALERT PALETTE — variables + NovaToast component
+   ============================================================ */
+
+:root {
+  --nova-alert-red:    #ef4444;
+  --nova-alert-orange: #f97316;
+  --nova-alert-yellow: #eab308;
+  --nova-alert-green:  #22c55e;
+  --nova-alert-teal:   #14b8a6;
+  --nova-alert-cyan:   #06b6d4;
+  --nova-alert-blue:   #3b82f6;
+  --nova-alert-indigo: #6366f1;
+  --nova-alert-purple: #a855f7;
+  --nova-alert-pink:   #ec4899;
+  --nova-alert-dark:   #1e293b;
+}
+
+/* --- Toast container (top-right desktop / top-center mobile) --- */
+.nova-toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9900;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100vw - 28px));
+  pointer-events: none;
+}
+
+@media (max-width: 575.98px) {
+  .nova-toast-container {
+    top: 12px;
+    right: 50%;
+    transform: translateX(50%);
+  }
+}
+
+/* --- Individual toast item --- */
+.nova-toast-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 11px;
+  padding: 14px 14px 18px;
+  border-radius: 14px;
+  background: var(--nova-alert-blue);
+  color: #fff;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, .22), 0 4px 12px rgba(15, 23, 42, .10);
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(-10px) scale(.97);
+  transition: opacity .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.nova-toast-item.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.nova-toast-item.is-hiding {
+  opacity: 0;
+  transform: translateY(-6px) scale(.97);
+  transition: opacity .2s ease, transform .2s ease;
+  pointer-events: none;
+}
+
+/* --- Icon --- */
+.nova-toast-icon {
+  font-size: 1.15rem;
+  margin-top: 1px;
+  flex-shrink: 0;
+  color: rgba(255,255,255,.9);
+}
+
+/* --- Body --- */
+.nova-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nova-toast-title {
+  font-size: .82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  opacity: .88;
+  line-height: 1.2;
+}
+
+.nova-toast-message {
+  font-size: .92rem;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* --- Close button --- */
+.nova-toast-close {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .14s ease;
+  flex-shrink: 0;
+  margin-top: -2px;
+}
+
+.nova-toast-close:hover { background: rgba(255,255,255,.28); }
+.nova-toast-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* --- Progress bar --- */
+.nova-toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: rgba(255,255,255,.35);
+  transform-origin: left;
+  animation: nova-toast-shrink linear forwards;
+}
+
+@keyframes nova-toast-shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* --- Type variants (solid palette) --- */
+.nova-toast-item.is-success    { background: var(--nova-alert-green); }
+.nova-toast-item.is-error,
+.nova-toast-item.is-danger     { background: var(--nova-alert-red); }
+.nova-toast-item.is-warning    { background: var(--nova-alert-orange); }
+.nova-toast-item.is-info       { background: var(--nova-alert-blue); }
+.nova-toast-item.is-loading    { background: var(--nova-alert-indigo); }
+.nova-toast-item.is-neutral    { background: var(--nova-alert-dark); }
+.nova-toast-item.is-nextcloud  { background: var(--nova-alert-cyan); }
+.nova-toast-item.is-onlyoffice { background: var(--nova-alert-purple); }
+.nova-toast-item.is-redmine    { background: var(--nova-alert-blue); }
+.nova-toast-item.is-core       { background: var(--nova-alert-orange); }
+.nova-toast-item.is-emach      { background: var(--nova-alert-teal); }
+.nova-toast-item.is-telegram   { background: var(--nova-alert-indigo); }
+
+/* --- Nova Alert Cards (persistent, inline) — same palette, light variant --- */
+.nova-alert-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border-left: 4px solid currentColor;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: .92rem;
+}
+
+.nova-alert-card i { flex-shrink: 0; margin-top: 1px; }
+
+.nova-alert-card.is-success { border-color: var(--nova-alert-green);  background: #f0fdf4; color: #166534; }
+.nova-alert-card.is-error,
+.nova-alert-card.is-danger  { border-color: var(--nova-alert-red);    background: #fef2f2; color: #991b1b; }
+.nova-alert-card.is-warning { border-color: var(--nova-alert-orange); background: #fff7ed; color: #9a3412; }
+.nova-alert-card.is-info    { border-color: var(--nova-alert-blue);   background: #eff6ff; color: #1e40af; }
+.nova-alert-card.is-teal    { border-color: var(--nova-alert-teal);   background: #f0fdfa; color: #0f766e; }
+.nova-alert-card.is-indigo  { border-color: var(--nova-alert-indigo); background: #eef2ff; color: #3730a3; }
+.nova-alert-card.is-emach      { border-color: var(--nova-alert-teal);   background: #f0fdfa; color: #0f766e; }
+.nova-alert-card.is-nextcloud  { border-color: var(--nova-alert-cyan);   background: #ecfeff; color: #164e63; }
+.nova-alert-card.is-onlyoffice { border-color: var(--nova-alert-purple); background: #faf5ff; color: #6b21a8; }
+.nova-alert-card.is-telegram   { border-color: var(--nova-alert-indigo); background: #eef2ff; color: #3730a3; }
+.nova-alert-card.is-neutral    { border-color: var(--nova-alert-dark);   background: #f8fafc; color: #334155; }
+
+/* =============================================================================
+   NOVA User Table — .nova-table-card / .nova-user-table
+   ============================================================================= */
+
+.nova-user-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.nova-user-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 92px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(15,23,42,.07), 0 1px 3px rgba(15,23,42,.05);
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.nova-user-summary-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(15,23,42,.10), 0 2px 8px rgba(15,23,42,.06);
+}
+
+.nova-user-summary-card:focus-visible {
+  outline: none;
+  box-shadow: var(--nova-focus), 0 10px 26px rgba(15,23,42,.10);
+}
+
+.nova-user-summary-card.is-active {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .14), 0 10px 26px rgba(15,23,42,.10);
+}
+
+.nova-user-summary-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-size: 1.25rem;
+  flex: 0 0 46px;
+}
+
+.nova-user-summary-card span {
+  display: block;
+  color: #64748b;
+  font-size: .76rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.nova-user-summary-card strong {
+  display: block;
+  margin-top: 2px;
+  color: #0f172a;
+  font-size: 1.7rem;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.nova-user-summary-card.is-enabled {
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.nova-user-summary-card.is-enabled .nova-user-summary-icon {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.nova-user-summary-card.is-banned {
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.nova-user-summary-card.is-banned .nova-user-summary-icon {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+@media (max-width: 575.98px) {
+  .nova-user-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nova-table-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(15,23,42,.07), 0 1px 3px rgba(15,23,42,.05);
+  overflow: hidden;
+}
+
+/* Toolbar (search + actions row) */
+.nova-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.nova-table-toolbar-title {
+  font-size: .85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #64748b;
+  flex: none;
+}
+
+/* Search input */
+.nova-table-search {
+  position: relative;
+  flex: 1 1 180px;
+  min-width: 140px;
+  max-width: 340px;
+}
+
+.nova-table-search i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: .95rem;
+  pointer-events: none;
+}
+
+.nova-table-search input {
+  width: 100%;
+  padding: 7px 12px 7px 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: .88rem;
+  background: #f8fafc;
+  color: #0f172a;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+}
+
+.nova-table-search input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+  background: #fff;
+}
+
+/* Table base */
+.nova-user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .91rem;
+}
+
+.nova-user-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: .78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #64748b;
+  border-bottom: 2px solid #f1f5f9;
+  background: #fafbfc;
+  white-space: nowrap;
+}
+
+.nova-user-table thead th:first-child { padding-left: 18px; }
+.nova-user-table thead th:last-child  { padding-right: 18px; }
+
+.nova-user-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background .13s;
+}
+
+.nova-user-table tbody tr:last-child { border-bottom: none; }
+
+.nova-user-table tbody tr:hover { background: #f8fafc; }
+
+.nova-user-table tbody td {
+  padding: 11px 14px;
+  vertical-align: middle;
+  color: #1e293b;
+}
+
+.nova-user-table tbody td:first-child { padding-left: 18px; }
+.nova-user-table tbody td:last-child  { padding-right: 18px; }
+
+/* User name + meta cell */
+.nova-user-name {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: .93rem;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.nova-user-meta {
+  font-size: .78rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.nova-user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .85rem;
+  font-weight: 800;
+  color: #475569;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.nova-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Date meta text */
+.nova-date-meta {
+  font-size: .78rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+/* Badge variants for roles / states */
+.nova-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Status badges */
+.nova-badge.is-active,
+.nova-badge.is-activo   { background: #dcfce7 !important; color: #166534 !important; }
+.nova-badge.is-inactive,
+.nova-badge.is-inactivo { background: #f1f5f9; color: #64748b; }
+.nova-badge.is-banned,
+.nova-badge.is-baneado  { background: #fee2e2 !important; color: #991b1b !important; }
+.nova-badge.is-pending,
+.nova-badge.is-pendiente{ background: #fef9c3; color: #854d0e; }
+
+/* Role badges */
+.nova-badge.is-root     { background: #fef3c7; color: #92400e; }
+.nova-badge.is-admin    { background: #ede9fe; color: #5b21b6; }
+.nova-badge.is-gestor   { background: #ecfeff; color: #155e75; }
+.nova-badge.is-usuario  { background: #eff6ff; color: #1e40af; }
+.nova-badge.is-viewer   { background: #f0fdf4; color: #166534; }
+
+/* Module/integration badges */
+.nova-badge.is-redmine  { background: #fef2f2; color: #991b1b; }
+.nova-badge.is-nextcloud{ background: #ecfeff; color: #164e63; }
+.nova-badge.is-core     { background: #fff7ed; color: #9a3412; }
+.nova-badge.is-telegram { background: #eef2ff; color: #3730a3; }
+.nova-badge.is-emach    { background: #f0fdfa; color: #0f766e; }
+
+/* Action button variants */
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: .95rem;
+  cursor: pointer;
+  transition: background .15s, color .15s, transform .1s;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.btn-action:hover  { transform: scale(1.08); }
+.btn-action:active { transform: scale(.95); }
+
+.btn-action.is-edit    { background: #eff6ff; color: #2563eb; }
+.btn-action.is-edit:hover { background: #dbeafe; }
+
+.btn-action.is-delete  { background: #fef2f2; color: #dc2626; }
+.btn-action.is-delete:hover { background: #fee2e2; }
+
+.btn-action.is-password{ background: #fffbeb; color: #d97706; }
+.btn-action.is-password:hover { background: #fef3c7; }
+
+.btn-action.is-activate{ background: #f0fdf4; color: #16a34a; }
+.btn-action.is-activate:hover { background: #dcfce7; }
+
+.btn-action.is-ban     { background: #fef2f2; color: #dc2626; }
+.btn-action.is-ban:hover { background: #fee2e2; }
+
+.btn-action.is-view    { background: #f8fafc; color: #475569; }
+.btn-action.is-view:hover { background: #f1f5f9; }
+
+/* Actions cell — keep buttons inline */
+.nova-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+/* Empty-state row */
+.nova-table-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+  font-size: .9rem;
+}
+
+/* Responsive: hide optional columns on small screens */
+@media (max-width: 767.98px) {
+  .nova-col-hide-sm { display: none; }
+}
+
+@media (max-width: 991.98px) {
+  .nova-col-hide-md { display: none; }
+}
+
+/* =============================================================================
+   NOVA Global Sidebar System — S11
+   Converts all secondary horizontal navbars to a unified left sidebar.
+   ============================================================================= */
+
+:root {
+  --nova-sidebar-width: 270px;
+  --nova-sidebar-z: 1015;
+}
+
+/* ── Override Mantención sb-navbar from fixed to sticky so layout flows naturally ── */
+.sb-navbar,
+nav.sb-navbar {
+  position: sticky !important;
+  top: 0 !important;
+  /* z-index already set to var(--nova-navbar-z,1020) earlier in this file */
+}
+
+/* ── Layout container: topbar above, sidebar + content side by side ── */
+.nova-layout {
+  display: flex;
+  align-items: flex-start;
+  min-height: calc(100vh - 68px);
+}
+
+/* ── Sidebar ── */
+.nova-sidebar {
+  flex: 0 0 var(--nova-sidebar-width);
+  width: var(--nova-sidebar-width);
+  min-width: var(--nova-sidebar-width);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-right: 1px solid rgba(219, 228, 240, 0.72);
+  z-index: var(--nova-sidebar-z, 1015);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(203, 213, 225, 0.6) transparent;
+}
+
+/* Desktop: sticky sidebar that follows scroll */
+@media (min-width: 992px) {
+  .nova-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Override Bootstrap offcanvas-lg on desktop: remove transform/visibility overrides */
+  .nova-sidebar.offcanvas-lg {
+    position: sticky !important;
+    top: 0 !important;
+    transform: none !important;
+    visibility: visible !important;
+    background-color: #fff !important;
+    width: var(--nova-sidebar-width) !important;
+    height: 100vh !important;
+    border-right: 1px solid rgba(219, 228, 240, 0.72) !important;
+    box-shadow: none !important;
+  }
+}
+
+/* ── Sidebar header (module name, visible inside offcanvas on mobile) ── */
+.nova-sidebar-header {
+  flex: 0 0 auto;
+  padding: 1.1rem 1rem 0.9rem;
+  border-bottom: 1px solid rgba(219, 228, 240, 0.6);
+}
+
+/* ── Sidebar nav body ── */
+.nova-sidebar-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.6rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nova-sidebar-group {
+  margin-bottom: 2px;
+}
+
+.nova-sidebar-title {
+  padding: 0.55rem 0.5rem 0.25rem;
+  color: #94a3b8;
+  font-size: .69rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+
+/* ── Sidebar link ── */
+.nova-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.52rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #334155;
+  font-size: .875rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    background-color .18s ease,
+    color .18s ease,
+    transform .18s ease,
+    box-shadow .18s ease;
+}
+
+.nova-sidebar-link:hover {
+  background: #f1f5f9;
+  color: var(--nova-color-blue, #2563eb);
+  border-color: rgba(219, 228, 240, 0.7);
+  transform: translateX(4px);
+  text-decoration: none;
+}
+
+.nova-sidebar-link.active,
+.nova-sidebar-link.is-active {
+  background: linear-gradient(135deg, rgba(37, 99, 235, .10), rgba(20, 184, 166, .07));
+  color: var(--nova-color-blue, #2563eb);
+  border-color: rgba(37, 99, 235, .15);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, .10);
+}
+
+.nova-sidebar-link[aria-expanded="true"] {
+  color: var(--nova-color-blue, #2563eb);
+  background: rgba(37, 99, 235, .05);
+}
+
+/* Chevron for collapse toggles */
+.nova-sidebar-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: .75rem;
+  transition: transform .18s ease;
+}
+
+.nova-sidebar-link[aria-expanded="true"] .nova-sidebar-chevron {
+  transform: rotate(180deg);
+}
+
+/* ── Sidebar icon ── */
+.nova-sidebar-icon {
+  flex: 0 0 1.05rem;
+  font-size: 1rem;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ── Sub-nav (nested items under a collapsed group) ── */
+.nova-sidebar-sub {
+  padding: 2px 0 4px 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nova-sidebar-sub .nova-sidebar-link {
+  font-size: .82rem;
+  color: #475569;
+  padding: .38rem .6rem;
+  border-radius: 8px;
+}
+
+.nova-sidebar-sub .nova-sidebar-link:hover {
+  transform: translateX(3px);
+}
+
+/* ── Content area ── */
+.nova-content {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* ── Mobile sidebar toggle button (in topbar) ── */
+.nova-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: background .16s ease;
+  flex-shrink: 0;
+}
+
+.nova-sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Responsive ── */
+@media (max-width: 991.98px) {
+  .nova-sidebar-toggle {
+    display: inline-flex;
+  }
+
+  .nova-layout {
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .nova-content {
+    width: 100%;
+  }
+}
+
+@media (min-width: 992px) {
+  .nova-sidebar-toggle {
+    display: none !important;
+  }
+}
+
+/* ── Content padding per module ── */
+/* Admin and TIC: the nova-content replaces rm-layout/rm-main padding */
+.rm-shell .nova-content {
+  padding: 1.25rem 1.5rem 3rem;
+}
+
+/* Mantención: container-fluid.py-4 inside page-content handles its own padding */
+body.bg-light .nova-content {
+  padding: 0;
+}
+
+/* EMACH / Telegram: match existing container-fluid.py-4 behavior */
+body.emach-page .nova-content,
+body.telegram-page .nova-content {
+  padding: 0;
+}
+
+@media (max-width: 991.98px) {
+  .rm-shell .nova-content {
+    padding: 1rem 1rem 2rem;
+  }
+}
+
+/* =============================================================================
+   NOVA Navbar Redesign S10
+   All overrides appended last — beats module theme.css via load order.
+   ============================================================================= */
+
+/* ── 1. .sb-navbar z-index fix ──────────────────────────────────────────────
+   RedmineMantencion/assets/theme.css sets position:fixed; z-index:1050 on
+   .sb-navbar, same level as Bootstrap's .modal. Override to --nova-navbar-z
+   (1020) so modals always render above the navbar. ── */
+.sb-navbar,
+nav.sb-navbar {
+  z-index: var(--nova-navbar-z, 1020) !important;
+}
+
+/* Remaining main navbars — ensure z-index is within the NOVA stacking scale */
+.nova-topbar,
+.rm-navbar,
+.telegram-navbar,
+.emach-navbar {
+  z-index: var(--nova-navbar-z, 1020);
+}
+
+/* Section-nav wrappers — must not float above modals or drawers */
+.admin-nav-shell,
+.rm-section-nav,
+.telegram-menu-wrap,
+.emach-menu-wrap,
+.sb-native-menu-wrap {
+  z-index: var(--nova-navbar-z, 1020);
+}
+
+/* ── 2. Select2 dropdowns inside modals ──────────────────────────────────────
+   Select2 appends .select2-dropdown to <body>, so it must be explicitly raised
+   above the modal z-index when a modal is open. ── */
+.modal .select2-dropdown,
+.modal .select2-container--open .select2-dropdown,
+.select2-container--open .select2-dropdown {
+  z-index: calc(var(--nova-modal-z, 1050) + 60) !important;
+}
+
+/* ── 3. Dropdown menus — rounded, shadowed, fade-scale-in animation ──────── */
+.nova-topbar .dropdown-menu,
+.rm-navbar .dropdown-menu,
+.sb-navbar .dropdown-menu,
+.emach-navbar .dropdown-menu,
+.telegram-navbar .dropdown-menu,
+.sb-native-menu-wrap .dropdown-menu,
+.rm-section-nav .dropdown-menu,
+.admin-section-nav .dropdown-menu {
+  z-index: var(--nova-dropdown-z, 1030) !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(219, 228, 240, 0.8) !important;
+  box-shadow:
+    0 24px 56px rgba(15, 23, 42, 0.14),
+    0 6px 16px rgba(15, 23, 42, 0.08) !important;
+  padding: 6px !important;
+  animation: nova-dropdown-in .16s cubic-bezier(.22, 1, .36, 1);
+  transform-origin: top center;
+}
+
+@keyframes nova-dropdown-in {
+  from { opacity: 0; transform: scale(.95) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0);    }
+}
+
+.nova-topbar .dropdown-item,
+.rm-navbar .dropdown-item,
+.sb-navbar .dropdown-item,
+.emach-navbar .dropdown-item,
+.telegram-navbar .dropdown-item,
+.sb-native-menu-wrap .dropdown-item,
+.rm-section-nav .dropdown-item,
+.admin-section-nav .dropdown-item {
+  border-radius: 9px !important;
+  font-size: .875rem;
+  font-weight: 700;
+  padding: .45rem .85rem !important;
+  transition: background-color .14s ease, color .14s ease !important;
+}
+
+.nova-topbar .dropdown-item:hover,
+.rm-navbar .dropdown-item:hover,
+.sb-navbar .dropdown-item:hover,
+.emach-navbar .dropdown-item:hover,
+.telegram-navbar .dropdown-item:hover,
+.sb-native-menu-wrap .dropdown-item:hover,
+.rm-section-nav .dropdown-item:hover,
+.admin-section-nav .dropdown-item:hover {
+  background: #eff6ff !important;
+  color: var(--nova-color-blue, #2563eb) !important;
+}
+
+.nova-topbar .dropdown-item.active,
+.nova-topbar .dropdown-item:active,
+.rm-navbar .dropdown-item.active,
+.rm-navbar .dropdown-item:active,
+.sb-navbar .dropdown-item.active,
+.sb-navbar .dropdown-item:active,
+.emach-navbar .dropdown-item.active,
+.emach-navbar .dropdown-item:active,
+.telegram-navbar .dropdown-item.active,
+.telegram-navbar .dropdown-item:active,
+.sb-native-menu-wrap .dropdown-item.active,
+.sb-native-menu-wrap .dropdown-item:active,
+.rm-section-nav .dropdown-item.active,
+.rm-section-nav .dropdown-item:active,
+.admin-section-nav .dropdown-item.active,
+.admin-section-nav .dropdown-item:active {
+  background: var(--nova-color-blue, #2563eb) !important;
+  color: #fff !important;
+}
+
+/* ── 4. Mantención custom submenu (.js-submenu-menu) ─────────────────────── */
+.js-submenu-menu {
+  border-radius: 14px !important;
+  border: 1px solid rgba(219, 228, 240, 0.8) !important;
+  box-shadow:
+    0 24px 56px rgba(15, 23, 42, 0.14),
+    0 6px 16px rgba(15, 23, 42, 0.08) !important;
+  padding: 6px !important;
+  animation: nova-dropdown-in .16s cubic-bezier(.22, 1, .36, 1);
+}
+
+.js-submenu-menu .sb-nav-link,
+.js-submenu-menu a {
+  border-radius: 9px !important;
+  font-size: .875rem !important;
+  font-weight: 700 !important;
+  padding: .45rem .85rem !important;
+  transition: background-color .14s ease, color .14s ease !important;
+  white-space: nowrap;
+}
+
+.js-submenu-menu .sb-nav-link:hover,
+.js-submenu-menu a:hover {
+  background: #eff6ff !important;
+  color: var(--nova-color-blue, #2563eb) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* ── 5. Dark-navbar action buttons: pill shape + fluid hover elevation ────── */
+.nova-topbar .btn,
+.rm-navbar .btn,
+.sb-navbar .btn,
+.emach-navbar .btn,
+.telegram-navbar .btn {
+  border-radius: 999px !important;
+  transition:
+    background-color .18s ease,
+    color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .18s ease !important;
+}
+
+.nova-topbar .btn:hover:not(:disabled),
+.rm-navbar .btn:hover:not(:disabled),
+.sb-navbar .btn:hover:not(:disabled),
+.emach-navbar .btn:hover:not(:disabled),
+.telegram-navbar .btn:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+}
+
+/* ── 6. Session timer badges: pill shape ──────────────────────────────────── */
+.nova-session-badge,
+.sb-session-badge,
+.emach-session-badge,
+.telegram-session-badge {
+  border-radius: 999px !important;
+}
+
+/* ── 7. Responsive: hide nav-link label text on very small viewports ─────── */
+@media (max-width: 575.98px) {
+  .nova-navbar-label,
+  .sb-nav-link .d-none-xs,
+  .admin-section-nav .nav-link .nav-label,
+  .rm-section-nav .nav-link .nav-label,
+  .telegram-nav-link .nav-label,
+  .emach-nav-link .nav-label {
+    display: none;
+  }
+}
+
+/* =============================================================================
+   NOVA Semantic Navbar Classes (.nova-navbar-*) — S10 forward-compat stubs
+   Not yet wired into templates; adopt by adding these classes alongside
+   existing module-specific selectors.
+   ============================================================================= */
+
+/* Outer bar wrapper */
+.nova-navbar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: stretch;
+  background: var(--nova-gradient-brand, #102033);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 0;
+  border-radius: 0 0 20px 20px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22);
+  z-index: var(--nova-navbar-z, 1020);
+  padding: 0.6rem 1rem;
+}
+
+/* Inner content row */
+.nova-navbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Logical groups: brand | nav | actions */
+.nova-navbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.nova-navbar-group.ms-auto { margin-left: auto; }
+
+/* Individual nav item wrapper */
+.nova-navbar-item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Nav link — pill shape with 5-property transition per NOVA spec */
+.nova-navbar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.9rem;
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color .18s ease,
+    color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .18s ease;
+}
+
+.nova-navbar-link:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.36);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
+.nova-navbar-link.is-active {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.46);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .18);
+}
+
+.nova-navbar-link:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+/* Icon inside a nav link */
+.nova-navbar-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Label text — hide on very narrow viewports */
+.nova-navbar-label {
+  display: inline;
+}
+
+@media (max-width: 575.98px) {
+  .nova-navbar-label { display: none; }
+}
+
+/* Dropdown panel */
+.nova-navbar-dropdown {
+  min-width: 200px;
+  border-radius: 14px;
+  border: 1px solid rgba(219, 228, 240, 0.8);
+  background: #fff;
+  box-shadow:
+    0 24px 56px rgba(15, 23, 42, 0.14),
+    0 6px 16px rgba(15, 23, 42, 0.08);
+  padding: 6px;
+  z-index: var(--nova-dropdown-z, 1030);
+  animation: nova-dropdown-in .16s cubic-bezier(.22, 1, .36, 1);
+}
+
+/* Mobile navigation slot */
+.nova-navbar-mobile {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .nova-navbar-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+}
+
+/* =============================================================================
+   NOVA Sidebar — Mantención-specific overrides (S11)
+   ============================================================================= */
+
+/* 1. Remove body padding-top that was needed for the old fixed sb-navbar.
+      Now sb-navbar is sticky, so body doesn't need compensation padding.     */
+body.bg-light,
+body:not(.nova-page):not(.emach-page):not(.telegram-page) {
+  padding-top: 0 !important;
+}
+
+/* 2. Mantención: sidebar must start below the sticky sb-navbar (126px tall).
+      Uses :has() — supported in Chrome 105+, Firefox 121+, Safari 15.4+.    */
+@media (min-width: 992px) {
+  body:has(nav.sb-native-navbar) .nova-sidebar {
+    top: var(--navbar-height, 64px) !important;
+    height: calc(100vh - var(--navbar-height, 64px)) !important;
+  }
+}
+
+/* =========================================================
+   NOVA Config Tabs — internal sub-navigation inside content
+   Used by: Mantención /configuracion, TIC /configuracion
+   ========================================================= */
+.nova-config-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .75rem;
+  background: rgba(255, 255, 255, .75);
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 18px;
+  margin-bottom: 1rem;
+}
+
+.nova-config-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .5rem .85rem;
+  border-radius: 999px;
+  font-size: .8125rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: #475569;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all .18s ease;
+}
+
+.nova-config-tab:hover {
+  background: #f1f5f9;
+  color: var(--nova-color-blue, #2563eb);
+  border-color: rgba(219, 228, 240, .7);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.nova-config-tab.active {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .22);
+}
+
+.nova-config-tab.active:hover {
+  color: #fff;
+  transform: translateY(-1px);
+}
+

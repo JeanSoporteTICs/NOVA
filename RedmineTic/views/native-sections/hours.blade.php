@@ -68,7 +68,7 @@
         </div>
         <div class="col-12 col-md-4 col-xl-6">
             <div class="rm-form-actions">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i>Filtrar</button>
+                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-funnel"></i>Filtrar</button>
                 <a class="btn btn-outline-secondary" href="{{ $redmineRoute('redmine.native.section', ['section' => 'horas-extra', 'filters' => 1, 'mes' => '', 'anio' => '']) }}"><i class="bi bi-x-circle"></i>Limpiar filtros</a>
             </div>
         </div>
@@ -82,7 +82,7 @@
                 <h2>Listado</h2>
                 <p>Total de horas: <strong>{{ $meta['totalHours'] ?? '00:00' }}</strong></p>
             </div>
-            <button class="btn btn-outline-primary" id="copy-hours-table" type="button"><i class="bi bi-clipboard"></i>Copiar tabla</button>
+            <button class="btn-nova btn-nova-secondary" id="copy-hours-table" type="button"><i class="bi bi-clipboard"></i>Copiar tabla</button>
         </div>
 
         <div class="table-responsive rm-table-wrap">
@@ -110,7 +110,7 @@
                                             | Total de horas: {{ $groupTotal }}
                                         @endif
                                     </span>
-                                    <button class="btn btn-outline-primary" type="button"
+                                    <button class="btn-nova btn-nova-primary" type="button"
                                         data-nova-modal-open="editar-horas"
                                         data-source-file="{{ $row['_source_file'] ?? '' }}"
                                         data-fecha="{{ $row['fecha'] ?? '' }}"
@@ -172,7 +172,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-secondary" type="button" data-nova-modal-close><i class="bi bi-x-lg"></i>Cancelar</button>
-                <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar</button>
+                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar</button>
             </div>
         </form>
     </div>
@@ -214,6 +214,7 @@
             setTimeout(() => {
                 copyButton.innerHTML = '<i class="bi bi-clipboard"></i>Copiar tabla';
             }, 1600);
+
         };
         copyButton.addEventListener('click', async () => {
             const rows = [['Fecha', 'Detalle', 'N° Ticket']];

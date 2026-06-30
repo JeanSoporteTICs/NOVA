@@ -78,9 +78,7 @@ $csrf = legacy_csrf_token();
       include __DIR__ . '/../partials/hero.php';
     ?>
 
-    <?php if ($flash): ?>
-      <div class="alert alert-success"><?= $h($flash) ?></div>
-    <?php endif; ?>
+    <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
 
     <div class="card mb-3">
       <div class="card-body">
@@ -108,7 +106,7 @@ $csrf = legacy_csrf_token();
           </form>
         </div>
         <?php if (empty($events)): ?>
-          <div class="alert alert-info mb-0">Todavía no hay eventos registrados.</div>
+          <div class="nova-alert-card is-info mb-0"><i class="bi bi-shield-check"></i> <span>Todavia no hay eventos registrados.</span></div>
         <?php else: ?>
           <div class="security-console-wrap">
             <div class="security-console-toolbar">

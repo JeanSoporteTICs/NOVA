@@ -68,12 +68,21 @@ do {
         $offset = max($offset, ((int) ($update['update_id'] ?? 0)) + 1);
         $message = is_array($update['message'] ?? null) ? $update['message'] : [];
         $incomingChatId = (string) ($message['chat']['id'] ?? '');
-        $user = telegram_user_by_chat_id($incomingChatId);
-        if ($user === []) {
-            continue;
-        }
         $text = trim((string) ($message['text'] ?? ''));
         if ($text === '') {
+            continue;
+        }
+        $command = telegram_command_name($text);
+        $lookup = telegram_user_lookup_by_chat_id($incomingChatId);
+        $user = is_array($lookup['user'] ?? null) ? $lookup['user'] : [];
+        if ($user === []) {
+            if ($command === '/emach') {
+                $messageKey = ($lookup['error'] ?? '') === 'lookup_error'
+                    ? 'emach_user_lookup_error'
+                    : 'emach_missing_chat_id';
+                telegram_send_message($token, $incomingChatId, telegram_command_settings()->message($messageKey));
+                fwrite(STDOUT, '[' . date('Y-m-d H:i:s') . '] /emach rechazado: ' . ($lookup['detail'] ?? 'usuario no encontrado') . ' | chat_id=' . $incomingChatId . PHP_EOL);
+            }
             continue;
         }
         telegram_send_message($token, $incomingChatId, telegram_command_reply($text, $user));
@@ -105,10 +114,7 @@ function telegram_print_diagnostics(string $token): void
 
 function telegram_command_reply(string $text, array $user): string
 {
-    $command = strtolower(trim(strtok($text, ' ') ?: $text));
-    if (str_contains($command, '@')) {
-        $command = strstr($command, '@', true) ?: $command;
-    }
+    $command = telegram_command_name($text);
 
     $settings = telegram_command_settings();
     $commandKey = telegram_command_key($command);
@@ -124,6 +130,16 @@ function telegram_command_reply(string $text, array $user): string
         '/test' => $settings->render('test', ['fecha' => date('d/m/Y H:i:s')]),
         default => $settings->message('unknown'),
     };
+}
+
+function telegram_command_name(string $text): string
+{
+    $command = strtolower(trim(strtok($text, ' ') ?: $text));
+    if (str_contains($command, '@')) {
+        $command = strstr($command, '@', true) ?: $command;
+    }
+
+    return $command;
 }
 
 function telegram_command_settings(): \App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository
@@ -161,12 +177,12 @@ function telegram_command_arguments(string $text): string
 
 function telegram_redmine_tic_report_reply(string $text, array $user): string
 {
-    if (!class_exists(\RedmineTic\Support\Redmine\RedmineDataRepository::class)) {
+    if (!class_exists(\RedmineTic\Repositories\RedmineDataRepository::class)) {
         return telegram_command_settings()->message('tic_unavailable');
     }
 
     try {
-        $redmine = new \RedmineTic\Support\Redmine\RedmineDataRepository();
+        $redmine = new \RedmineTic\Repositories\RedmineDataRepository();
         $result = $redmine->forProject('redmine_tic')->createTelegramReport($text, $user);
     } catch (Throwable $e) {
         return telegram_command_settings()->render('tic_error', ['error' => $e->getMessage()]);
@@ -206,31 +222,60 @@ function telegram_bootstrap_laravel(): void
 
 function telegram_user_by_chat_id(string $chatId): array
 {
+    $lookup = telegram_user_lookup_by_chat_id($chatId);
+    return is_array($lookup['user'] ?? null) ? $lookup['user'] : [];
+}
+
+/**
+ * @return array{user:array<string,mixed>,error:string,detail:string}
+ */
+function telegram_user_lookup_by_chat_id(string $chatId): array
+{
     // Primary: look up by telegram_id_chat in usuarios_nova (DB-only since S30)
     if (class_exists(\Illuminate\Support\Facades\DB::class) && class_exists(\Illuminate\Support\Facades\Schema::class)) {
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')
                 && \Illuminate\Support\Facades\Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
                 $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+                    ->leftJoin('integraciones_usuario', static function ($join): void {
+                        $join->on('integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
+                            ->where('integraciones_usuario.tipo', '=', 'emach');
+                    })
                     ->where('telegram_id_chat', $chatId)
                     ->where('estado', 'activo')
-                    ->first(['id', 'uuid', 'usuario', 'nombre', 'apellido', 'rut', 'rol', 'redmine_id']);
+                    ->first([
+                        'usuarios_nova.id',
+                        'usuarios_nova.uuid',
+                        'usuarios_nova.usuario',
+                        'usuarios_nova.nombre',
+                        'usuarios_nova.apellido',
+                        'usuarios_nova.rut',
+                        'usuarios_nova.rol',
+                        'usuarios_nova.redmine_id',
+                        'integraciones_usuario.usuario_externo as emach_user',
+                        'integraciones_usuario.valor_secreto as emach_password',
+                    ]);
                 if ($row !== null) {
-                    return [
+                    return ['user' => [
                         'id'               => (string) ($row->uuid ?? $row->id ?? ''),
                         'name'             => (string) ($row->nombre ?? ''),
                         'apellido'         => (string) ($row->apellido ?? ''),
                         'username'         => (string) ($row->usuario ?? $row->rut ?? ''),
                         'redmine_id'       => (string) ($row->redmine_id ?? ''),
+                        'emach_credentials'=> [
+                            'user' => (string) ($row->emach_user ?? ''),
+                            'password' => (string) ($row->emach_password ?? ''),
+                        ],
                         'telegram_settings'=> ['chat_id' => $chatId],
-                    ];
+                    ], 'error' => '', 'detail' => 'ok'];
                 }
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            return ['user' => [], 'error' => 'lookup_error', 'detail' => $e->getMessage()];
         }
     }
 
-    return [];
+    return ['user' => [], 'error' => 'missing_chat_id', 'detail' => 'chat_id no asociado'];
 }
 
 function telegram_emach_last_mark_reply(array $user): string

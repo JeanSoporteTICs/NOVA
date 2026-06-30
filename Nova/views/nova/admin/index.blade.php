@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
@@ -15,14 +15,7 @@
         .rm-navbar { min-height: 68px; background: linear-gradient(115deg, #1f2f56 0%, #314ed8 62%, #4966ff 100%); box-shadow: 0 16px 36px rgba(31, 47, 86, .22); }
         .rm-brand-mark { display: inline-grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.24); color: #fff; }
         .rm-top-actions { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-        .rm-layout { width: min(1760px, 100%); margin: 0 auto; padding: 20px 24px 44px; }
         .rm-main { min-width: 0; }
-        .admin-nav-shell { position: sticky; top: 0; z-index: 20; margin: -2px -4px 16px; padding: 4px; background: rgba(238, 243, 251, .88); backdrop-filter: blur(10px); }
-        .admin-section-nav { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
-        .admin-section-nav .nav-link { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 42px; border: 1px solid #e2e8f0; border-radius: 999px; padding: 8px 13px; background: #fff; color: #334155; font-weight: 850; box-shadow: 0 8px 20px rgba(15,23,42,.04); }
-        .admin-section-nav .nav-link:hover { border-color: #bfdbfe; color: #1d4ed8; transform: translateY(-1px); }
-        .admin-section-nav .nav-link.active { background: #1d4ed8; border-color: #1d4ed8; color: #fff; box-shadow: 0 14px 30px rgba(37, 99, 235, .22); }
-        .admin-section-nav .nav-link span { white-space: nowrap; }
         .rm-hero { border: 0; border-radius: 18px; color: #fff; background: linear-gradient(130deg, #2563eb 0%, #0891b2 58%, #059669 100%); box-shadow: 0 18px 34px rgba(49, 91, 170, .14); overflow: hidden; }
         .rm-hero-icon { display: grid; width: 46px; height: 46px; place-items: center; flex: 0 0 auto; border-radius: 14px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); font-size: 1.25rem; }
         .rm-page-title { margin: 0; color: #fff; font-size: clamp(1.55rem, 3vw, 2.25rem); font-weight: 800; }
@@ -113,12 +106,6 @@
         .telegram-command-toggle { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4f0; border-radius: 12px; background: #fff; }
         .telegram-command-toggle code { color: #1d4ed8; font-weight: 950; }
         .telegram-command-toggle .form-check-input { width: 2.4rem; height: 1.25rem; margin: 0; }
-        .emach-time-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-        .emach-time-card { padding: 14px; border: 1px solid #dbe4f0; border-radius: 14px; background: #f8fafc; }
-        .emach-time-card h3 { margin: 0 0 10px; color: #0f172a; font-size: .98rem; font-weight: 900; }
-        .emach-time-card .form-label { color: #334155; font-size: .78rem; font-weight: 900; }
-        .emach-interval-preview { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-        .emach-interval-preview span { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 9px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: .78rem; font-weight: 900; }
         .field { margin-bottom: 12px; }
         .field label { display: block; margin-bottom: 6px; color: #334155; font-size: .86rem; font-weight: 800; }
         .field-help { display: none; margin-top: 6px; color: #b91c1c; font-size: .78rem; font-weight: 800; }
@@ -154,15 +141,11 @@
         .access-source { display: inline-flex; min-height: 20px; align-items: center; padding: 2px 6px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: .68rem; font-weight: 900; }
         .access-source.is-default { background: #dcfce7; color: #166534; }
         .access-source.is-manual { background: #dbeafe; color: #1d4ed8; }
-        .emach-credential-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: .72rem; font-weight: 900; white-space: nowrap; }
-        .emach-credential-badge.is-missing { background: #f1f5f9; color: #64748b; }
-        .telegram-user-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .72rem; font-weight: 900; white-space: nowrap; }
-        .telegram-user-badge.is-missing { background: #f1f5f9; color: #64748b; }
+        .emach-credential-badge, .telegram-user-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .72rem; font-weight: 900; white-space: nowrap; }
+        .emach-credential-badge.is-missing, .telegram-user-badge.is-missing { background: #fee2e2; color: #991b1b; }
+        .nova-user-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+        .nova-user-page-actions { display: flex; align-items: center; gap: 8px; }
         .row-actions { display: flex; gap: 7px; justify-content: flex-end; }
-        .nova-toast-stack { position: fixed; right: 22px; bottom: 22px; z-index: 1080; display: grid; gap: 10px; width: min(380px, calc(100vw - 32px)); }
-        .nova-toast { border-radius: 16px; border: 1px solid #cbd5e1; background: #fff; box-shadow: 0 20px 50px rgba(15, 23, 42, .18); padding: 14px 16px; display: flex; align-items: flex-start; gap: 10px; font-weight: 800; color: #0f172a; animation: toastIn .18s ease-out; }
-        .nova-toast.is-success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
-        .nova-toast.is-danger { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
         .nova-modal-backdrop { position: fixed; inset: 0; z-index: 1070; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(15, 23, 42, .54); }
         .nova-modal-backdrop.is-open { display: flex; }
         .nova-confirm { width: min(460px, 100%); border-radius: 18px; border: 0; background: #fff; box-shadow: 0 28px 70px rgba(15, 23, 42, .28); overflow: hidden; }
@@ -174,10 +157,8 @@
         .nova-confirm__body h2 { margin: 0 0 8px; font-size: 1.1rem; font-weight: 900; }
         .nova-confirm__body p { margin: 0; color: #475569; }
         .nova-confirm__actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-        @keyframes toastIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @media (max-width: 900px) {
             .rm-layout { padding: 14px 12px 32px; }
-            .admin-nav-shell { margin-left: -8px; margin-right: -8px; }
             .user-grid { grid-template-columns: 1fr; }
             .control-grid { grid-template-columns: 1fr; }
             .command-row { grid-template-columns: 1fr; }
@@ -186,7 +167,6 @@
             .telegram-message-grid { grid-template-columns: 1fr; }
             .telegram-message-editor-layout { grid-template-columns: 1fr; }
             .telegram-listener-grid { grid-template-columns: 1fr; }
-            .emach-time-grid { grid-template-columns: 1fr; }
             .form-section.is-two { grid-template-columns: 1fr; }
             .table-panel-head { grid-template-columns: 1fr; align-items: stretch; }
             .user-filters { grid-template-columns: 1fr; }
@@ -207,6 +187,9 @@
                     <span class="rm-brand-mark"><i class="bi bi-person-gear"></i></span>
                     <span>Administracion</span>
                 </a>
+                <button class="nova-sidebar-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#novaSidebar" aria-controls="novaSidebar" aria-label="Abrir menú lateral">
+                    <i class="bi bi-list"></i>
+                </button>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#novaUsersTopbar" aria-controls="novaUsersTopbar" aria-expanded="false" aria-label="Alternar navegacion">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -224,35 +207,40 @@
             </div>
         </nav>
 
-        <div class="rm-layout">
-            <main class="rm-main">
-                @php
-                    $adminSections = [
-                        'centro' => ['label' => 'Centro', 'icon' => 'bi-speedometer2', 'description' => 'Resumen rapido de usuarios, salud, accesos y Telegram.'],
-                        'configuracion' => ['label' => 'Configuracion', 'icon' => 'bi-sliders', 'description' => 'Ajustes globales de sesion, salud y notificaciones administrativas.'],
-                        'plataforma' => ['label' => 'Plataforma', 'icon' => 'bi-diagram-3', 'description' => 'Vista general de usuarios NOVA, fuentes y estado de la plataforma.'],
-                        'salud' => ['label' => 'Salud', 'icon' => 'bi-activity', 'description' => 'Chequeos de servicios y dependencias criticas.'],
-                        'auditoria' => ['label' => 'Auditoria', 'icon' => 'bi-journal-text', 'description' => 'Eventos recientes y acciones registradas en administracion.'],
-                        'respaldos' => ['label' => 'Respaldos', 'icon' => 'bi-archive', 'description' => 'Crea y revisa copias de archivos criticos.'],
-                        'telegram' => ['label' => 'Telegram', 'icon' => 'bi-telegram', 'description' => 'Configura el bot global y revisa el estado del servicio.'],
-                        'telegram-mensajes' => ['label' => 'Mensajes Telegram', 'icon' => 'bi-chat-square-text', 'description' => 'Edita las respuestas programadas que envia el bot.'],
-                        'emach' => ['label' => 'EMACH', 'icon' => 'bi-heart-pulse', 'description' => 'Define frecuencias de consulta y ventanas horarias EMACH.'],
-                        'usuarios' => ['label' => 'Usuarios', 'icon' => 'bi-people', 'description' => 'Crea usuarios, revisa integraciones personales y administra estados.'],
-                        'accesos' => ['label' => 'Accesos', 'icon' => 'bi-shield-lock', 'description' => 'Define a que vistas NOVA puede entrar cada usuario.'],
-                    ];
-                    $activeAdminSection = $adminSections[$section] ?? $adminSections['centro'];
-                @endphp
-
-                <div class="admin-nav-shell">
-                    <nav class="admin-section-nav" aria-label="Secciones Administracion">
-                        @foreach ($adminSections as $sectionKey => $item)
-                            <a class="nav-link {{ $section === $sectionKey ? 'active' : '' }}" href="{{ route('administracion.section', $sectionKey) }}" @if ($section === $sectionKey) aria-current="page" @endif>
-                                <i class="bi {{ $item['icon'] }}"></i><span>{{ $item['label'] }}</span>
-                            </a>
-                        @endforeach
-                    </nav>
+        @php
+            $adminSections = [
+                'centro' => ['label' => 'Centro', 'icon' => 'bi-speedometer2', 'description' => 'Resumen rapido de usuarios, salud, accesos y Telegram.'],
+                'configuracion' => ['label' => 'Configuracion', 'icon' => 'bi-sliders', 'description' => 'Ajustes globales de sesion, salud y notificaciones administrativas.'],
+                'plataforma' => ['label' => 'Plataforma', 'icon' => 'bi-diagram-3', 'description' => 'Vista general de usuarios NOVA, fuentes y estado de la plataforma.'],
+                'salud' => ['label' => 'Salud', 'icon' => 'bi-activity', 'description' => 'Chequeos de servicios y dependencias criticas.'],
+                'auditoria' => ['label' => 'Auditoria', 'icon' => 'bi-journal-text', 'description' => 'Eventos recientes y acciones registradas en administracion.'],
+                'respaldos' => ['label' => 'Respaldos', 'icon' => 'bi-archive', 'description' => 'Crea y revisa copias de archivos criticos.'],
+                'telegram' => ['label' => 'Telegram', 'icon' => 'bi-telegram', 'description' => 'Configura el bot global y revisa el estado del servicio.'],
+                'telegram-mensajes' => ['label' => 'Mensajes Telegram', 'icon' => 'bi-chat-square-text', 'description' => 'Edita las respuestas programadas que envia el bot.'],
+                'usuarios' => ['label' => 'Usuarios', 'icon' => 'bi-people', 'description' => 'Crea usuarios, revisa integraciones personales y administra estados.'],
+                'accesos' => ['label' => 'Accesos', 'icon' => 'bi-shield-lock', 'description' => 'Define a que vistas NOVA puede entrar cada usuario.'],
+            ];
+            $activeAdminSection = $adminSections[$section] ?? $adminSections['centro'];
+        @endphp
+        <div class="nova-layout">
+            <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
+                <div class="offcanvas-header d-lg-none border-bottom py-3">
+                    <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">Administracion</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
                 </div>
+                <nav class="nova-sidebar-body" aria-label="Secciones Administracion">
+                    @foreach ($adminSections as $sectionKey => $item)
+                        <a class="nova-sidebar-link {{ $section === $sectionKey ? 'active' : '' }}"
+                           href="{{ route('administracion.section', $sectionKey) }}"
+                           @if ($section === $sectionKey) aria-current="page" @endif>
+                            <i class="bi {{ $item['icon'] }} nova-sidebar-icon"></i>
+                            <span>{{ $item['label'] }}</span>
+                        </a>
+                    @endforeach
+                </nav>
+            </aside>
 
+            <main class="nova-content rm-main">
                 <section class="card rm-hero mb-4">
                     <div class="card-body p-3 p-lg-4 d-flex align-items-center gap-3 flex-wrap">
                         <div class="d-flex align-items-center gap-3">
@@ -408,7 +396,7 @@
                                         </div>
                                     </div>
                                     <div class="col-12">
-                                        <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar configuracion</button>
+                                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar configuracion</button>
                                     </div>
                                 </div>
                             </form>
@@ -539,7 +527,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <button class="btn btn-primary w-100" type="submit"><i class="bi bi-archive"></i>Crear respaldo</button>
+                                <button class="btn-nova btn-nova-info w-100" type="submit"><i class="bi bi-archive"></i>Crear respaldo</button>
                             </div>
                         </form>
                     </section>
@@ -601,7 +589,7 @@
                                     </div>
                                     <div class="col-12">
                                         <div class="d-flex flex-wrap gap-2">
-                                            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar Telegram</button>
+                                            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar Telegram</button>
                                             <a class="btn btn-outline-primary fw-bold" href="{{ route('administracion.section', 'telegram-mensajes') }}"><i class="bi bi-chat-square-text"></i>Mensajes Telegram</a>
                                         </div>
                                     </div>
@@ -660,12 +648,12 @@
                                 <form method="post" action="{{ route('administracion.telegram.listener') }}">
                                     @csrf
                                     <input type="hidden" name="action" value="delete_webhook">
-                                    <button class="btn btn-outline-warning fw-bold" type="submit" @disabled(!$webhookActive || !$telegramConfigured)><i class="bi bi-unlink"></i>Quitar webhook</button>
+                                    <button class="btn-nova btn-nova-warning fw-bold" type="submit" @disabled(!$webhookActive || !$telegramConfigured)><i class="bi bi-unlink"></i>Quitar webhook</button>
                                 </form>
                                 <a class="btn btn-outline-secondary fw-bold" href="{{ route('administracion.section', 'telegram') }}"><i class="bi bi-arrow-clockwise"></i>Refrescar</a>
                             </div>
                             @if ($webhookError !== '')
-                                <div class="alert alert-warning fw-semibold"><i class="bi bi-exclamation-triangle"></i> {{ $webhookError }}</div>
+                                <div class="nova-alert-card is-warning"><i class="bi bi-exclamation-triangle-fill"></i> {{ $webhookError }}</div>
                             @endif
                         </section>
                     </div>
@@ -681,6 +669,8 @@
                             'tic_unavailable' => 'TIC no disponible',
                             'tic_error' => 'Error TIC',
                             'emach_success' => 'Marcacion EMACH',
+                            'emach_missing_chat_id' => 'EMACH sin Chat ID',
+                            'emach_user_lookup_error' => 'EMACH sin conexion NOVA',
                             'emach_missing_credentials' => 'EMACH sin credenciales',
                             'emach_empty' => 'EMACH sin marcaciones',
                             'emach_error' => 'Error EMACH',
@@ -702,6 +692,8 @@
                             'tic_unavailable' => 'Se muestra si NOVA no puede cargar el modulo TIC.',
                             'tic_error' => 'Se muestra si falla la creacion del reporte TIC.',
                             'emach_success' => 'Respuesta con la ultima marcacion encontrada.',
+                            'emach_missing_chat_id' => 'Se muestra si el Chat ID que escribio al bot no esta asociado a un usuario NOVA.',
+                            'emach_user_lookup_error' => 'Se muestra si el listener Docker no puede consultar usuarios NOVA en la base de datos.',
                             'emach_missing_credentials' => 'Se muestra si el usuario no tiene credenciales EMACH guardadas.',
                             'emach_empty' => 'Se muestra si no hay marcaciones en el mes actual.',
                             'emach_error' => 'Se muestra si la consulta EMACH falla.',
@@ -780,7 +772,7 @@
                                                 </strong>
                                                 <span>
                                                     @if ($row['type'] === 'command')
-                                                        <code>{{ $row['command'] }}</code> · {{ $row['module'] }}
+                                                        <code>{{ $row['command'] }}</code> Â· {{ $row['module'] }}
                                                     @else
                                                         Sistema
                                                     @endif
@@ -847,91 +839,10 @@
                                     <strong>Guardar cambios</strong>
                                     <span>Se actualizaran respuestas y comandos activos para el bot Telegram.</span>
                                 </div>
-                                <button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-save"></i>Guardar mensajes</button>
+                                <button class="btn-nova btn-nova-primary fw-bold" type="submit"><i class="bi bi-save"></i>Guardar mensajes</button>
                             </div>
                         </div>
                     </form>
-                @endif
-
-                @if ($section === 'emach')
-                    @php
-                        $emachSchedule = (string) ($emachConfig['schedule'] ?? '07:00-09:30=15,16:30-19:30=15');
-                        $emachSlowInterval = (string) ($emachConfig['slow_interval'] ?? '300');
-                        $scheduleParts = array_values(array_filter(array_map('trim', explode(',', $emachSchedule))));
-                        $firstWindow = $scheduleParts[0] ?? '07:00-09:30=15';
-                        $secondWindow = $scheduleParts[1] ?? '16:30-19:30=15';
-                        [$firstRange, $firstSeconds] = array_pad(explode('=', $firstWindow, 2), 2, '15');
-                        [$secondRange, $secondSeconds] = array_pad(explode('=', $secondWindow, 2), 2, '15');
-                        [$firstStart, $firstEnd] = array_pad(explode('-', $firstRange, 2), 2, '');
-                        [$secondStart, $secondEnd] = array_pad(explode('-', $secondRange, 2), 2, '');
-                    @endphp
-                    <section class="card nova-card rm-work-panel rm-panel">
-                        <div class="rm-section-head">
-                            <div>
-                                <h2>EMACH global</h2>
-                                <p>Define cuando NOVA consulta con mayor frecuencia y cuando baja el ritmo.</p>
-                            </div>
-                            <span class="config-status is-ok">
-                                <i class="bi bi-clock-history"></i>Frecuencia configurada
-                            </span>
-                        </div>
-                        <form method="post" action="{{ route('administracion.config.update') }}" data-emach-timing-form>
-                            @csrf
-                            <input type="hidden" name="action" value="emach">
-                            <input type="hidden" name="schedule" value="{{ old('schedule', $emachSchedule) }}" data-emach-schedule>
-                            <div class="emach-time-grid">
-                                <article class="emach-time-card">
-                                    <h3><i class="bi bi-sunrise"></i> Entrada</h3>
-                                    <div class="row g-3">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label" for="emach-entry-start">Desde</label>
-                                            <input class="form-control" id="emach-entry-start" type="time" value="{{ $firstStart }}" data-emach-window-start>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label" for="emach-entry-end">Hasta</label>
-                                            <input class="form-control" id="emach-entry-end" type="time" value="{{ $firstEnd }}" data-emach-window-end>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label" for="emach-entry-interval">Cada segundos</label>
-                                            <input class="form-control" id="emach-entry-interval" type="number" min="15" value="{{ $firstSeconds }}" data-emach-window-interval>
-                                        </div>
-                                    </div>
-                                </article>
-                                <article class="emach-time-card">
-                                    <h3><i class="bi bi-sunset"></i> Salida</h3>
-                                    <div class="row g-3">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label" for="emach-exit-start">Desde</label>
-                                            <input class="form-control" id="emach-exit-start" type="time" value="{{ $secondStart }}" data-emach-window-start>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label" for="emach-exit-end">Hasta</label>
-                                            <input class="form-control" id="emach-exit-end" type="time" value="{{ $secondEnd }}" data-emach-window-end>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label" for="emach-exit-interval">Cada segundos</label>
-                                            <input class="form-control" id="emach-exit-interval" type="number" min="15" value="{{ $secondSeconds }}" data-emach-window-interval>
-                                        </div>
-                                    </div>
-                                </article>
-                            </div>
-                            <div class="row g-3 align-items-end mt-1">
-                                <div class="col-12 col-lg-3">
-                                    <label class="form-label fw-bold" for="config-emach-slow">Fuera de esos horarios</label>
-                                    <input class="form-control" id="config-emach-slow" name="slow_interval" type="number" min="15" value="{{ old('slow_interval', $emachSlowInterval) }}">
-                                    <div class="form-text fw-semibold">Intervalo lento en segundos.</div>
-                                </div>
-                                <div class="col-12 col-lg-3">
-                                    <button class="btn btn-primary w-100" type="submit"><i class="bi bi-save"></i>Guardar tiempos</button>
-                                </div>
-                            </div>
-                            <div class="emach-interval-preview">
-                                <span><i class="bi bi-lightning-charge"></i><span data-emach-preview>{{ $emachSchedule }}</span></span>
-                                <span><i class="bi bi-hourglass-split"></i>Lento: {{ $emachSlowInterval }}s</span>
-                            </div>
-                        </form>
-                        <div class="config-code">{{ $emachConfigPath }}</div>
-                    </section>
                 @endif
 
                 @if ($section === 'usuarios')
@@ -940,7 +851,6 @@
             <form class="nova-confirm nova-user-form form-panel" method="post" action="{{ route('administracion.users.update') }}">
                 @csrf
                 <input type="hidden" name="id" data-user-id>
-                <input type="hidden" name="redmine_id" data-user-redmine-id>
 
                 <div class="form-title nova-user-form__body" style="margin-bottom: 0;">
                     <h2 data-user-form-title>Crear usuario</h2>
@@ -955,6 +865,10 @@
                             <label for="rut">RUT</label>
                             <input class="form-control" id="rut" name="rut" placeholder="12.345.678-9" maxlength="12" data-user-rut>
                             <div class="field-help" data-user-rut-help>Ingrese un RUT valido.</div>
+                        </div>
+                        <div class="field">
+                            <label for="redmine_id">Redmine ID</label>
+                            <input class="form-control" id="redmine_id" name="redmine_id" type="number" min="1" step="1" data-user-redmine-id>
                         </div>
                         <div class="field">
                             <label for="username">Usuario acceso</label>
@@ -1004,55 +918,55 @@
                     </div>
 
                     <div class="form-section-title">Integraciones personales</div>
-                    <div class="alert alert-info fw-semibold mb-0">
+                    <div class="nova-alert-card is-info mb-0">
                         <i class="bi bi-person-lock"></i>
-                        Cada usuario debe ingresar sus propias credenciales desde el modulo correspondiente. Administracion solo ve si estan configuradas.
+                        <span>Cada usuario debe ingresar sus propias credenciales desde el modulo correspondiente. Administracion solo ve si estan configuradas.</span>
                     </div>
                 </div>
                 <div class="nova-user-form__footer">
                     <button class="btn btn-outline-secondary" type="button" data-user-close>Cancelar</button>
-                    <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar</button>
+                    <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar</button>
                 </div>
             </form>
             </div>
 
-            <section class="card nova-card rm-work-panel">
-                <div class="table-panel-head">
-                    <div>
-                        <h2>Usuarios registrados</h2>
-                        <div class="nova-muted small"><span data-user-count>{{ count($users) }}</span> usuario(s) visibles</div>
-                        <div class="nova-muted small">Busca, filtra y edita identidad, acceso y estado. Las credenciales personales las gestiona cada usuario.</div>
+            <div class="nova-table-card">
+                <div class="nova-table-toolbar">
+                    <span class="nova-table-toolbar-title">Usuarios NOVA</span>
+                    <div class="nova-table-search">
+                        <i class="bi bi-search"></i>
+                        <input type="search" placeholder="Buscar nombre, usuario o RUT" data-user-search>
                     </div>
-                    <div class="user-filters">
-                        <div class="user-search">
-                            <i class="bi bi-search"></i>
-                            <input class="form-control" type="search" placeholder="Buscar por nombre, ID o usuario acceso" data-user-search>
-                        </div>
-                        <select class="form-select column-filter" data-role-filter aria-label="Filtrar permiso NOVA">
-                            <option value="">Permiso: todos</option>
-                            <option value="admin">Admin</option>
-                            <option value="usuario">Usuario</option>
-                        </select>
-                        <select class="form-select column-filter" data-status-filter aria-label="Filtrar estado">
-                            <option value="">Estado: todos</option>
-                            <option value="activo">activo</option>
-                            <option value="baneado">baneado</option>
-                        </select>
-                        <button class="btn btn-outline-secondary" type="button" data-user-filter-clear title="Limpiar filtros"><i class="bi bi-x-circle"></i></button>
-                    </div>
-                    <button class="btn btn-primary user-primary-action" type="button" data-user-new><i class="bi bi-plus-circle"></i>Nuevo usuario</button>
+                    <select class="form-select form-select-sm" style="width:auto;min-width:130px" data-role-filter aria-label="Filtrar rol NOVA">
+                        <option value="">Rol: todos</option>
+                        <option value="admin">Admin</option>
+                        <option value="usuario">Usuario</option>
+                    </select>
+                    <select class="form-select form-select-sm" style="width:auto;min-width:130px" data-status-filter aria-label="Filtrar estado">
+                        <option value="">Estado: todos</option>
+                        <option value="activo">activo</option>
+                        <option value="baneado">baneado</option>
+                    </select>
+                    <select class="form-select form-select-sm" style="width:auto;min-width:120px" data-user-page-size aria-label="Filas por pagina">
+                        <option value="10">10 filas</option>
+                        <option value="25">25 filas</option>
+                        <option value="50">50 filas</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-user-filter-clear title="Limpiar filtros"><i class="bi bi-x-circle"></i></button>
+                    <span class="ms-auto nova-user-meta"><span data-user-count>{{ count($users) }}</span> visible(s)</span>
+                    <button class="btn-nova btn-nova-primary" type="button" data-user-new><i class="bi bi-plus-circle"></i>Nuevo</button>
                 </div>
-                <div class="table-responsive rm-table-wrap">
-                    <table class="table mb-0">
+                <div class="table-responsive">
+                    <table class="nova-user-table">
                         <thead>
                             <tr>
                                 <th>Usuario</th>
                                 <th>Nombre</th>
-                                <th>ID Redmine</th>
-                                <th>EMACH</th>
-                                <th>Telegram</th>
-                                <th>Permiso NOVA</th>
+                                <th>RUT</th>
+                                <th>Integraciones</th>
+                                <th>Rol</th>
                                 <th>Estado</th>
+                                <th class="nova-col-hide-md">Ultimo ingreso</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -1064,7 +978,14 @@
                                 $emachCredentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
                                 $hasEmachCredentials = trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '';
                                 $telegramSettings = is_array($user['telegram_settings'] ?? null) ? $user['telegram_settings'] : [];
-                                $hasTelegramSettings = trim((string) ($telegramSettings['chat_id'] ?? '')) !== '';
+                                $telegramChatId = trim((string) ($user['telegram_id_chat'] ?? ($telegramSettings['chat_id'] ?? '')));
+                                $hasTelegramSettings = preg_match('/^-?[1-9]\d{4,}$/', $telegramChatId) === 1;
+                                $userInitials = strtoupper(mb_substr($user['name'] ?? 'U', 0, 1) . mb_substr($user['apellido'] ?? '', 0, 1));
+                                $userRutDisplay = trim((string) ($user['rut'] ?? ''));
+                                $userAccessDisplay = trim((string) ($user['username'] ?? ''));
+                                $userRedmineDisplay = trim((string) ($user['redmine_id'] ?? ''));
+                                $showRedmineBelow = $userRedmineDisplay !== '' && $userAccessDisplay !== $userRedmineDisplay;
+                                $ultimoLogin = trim((string) ($user['ultimo_login_at'] ?? ''));
                             @endphp
                             <tr data-user-row
                                 data-user-row-id="{{ $user['id'] ?? '' }}"
@@ -1072,28 +993,45 @@
                                 data-user-row-username="{{ $user['username'] ?? '' }}"
                                 data-user-row-role="{{ $novaRole }}"
                                 data-user-row-status="{{ $userStatus }}"
+                                data-user-sort="{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: ($user['username'] ?? '') }}"
                                 data-search="{{ strtolower(($user['id'] ?? '') . ' ' . ($user['username'] ?? '') . ' ' . ($user['rut'] ?? '') . ' ' . ($user['rut_sin_dv'] ?? '') . ' ' . ($user['redmine_id'] ?? '') . ' ' . ($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}">
                                 <td>
-                                    <strong>{{ $user['username'] ?? '' }}</strong>
-                                    <div class="nova-muted small">{{ $user['rut'] ?? '' }}</div>
+                                    <div class="nova-user-cell">
+                                        <div class="nova-user-avatar">{{ $userInitials }}</div>
+                                        <div>
+                                            <div class="nova-user-name">{{ $userAccessDisplay !== '' ? $userAccessDisplay : '-' }}</div>
+                                            @if ($showRedmineBelow)
+                                                <div class="nova-user-meta">{{ $userRedmineDisplay }}</div>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </td>
-                                <td>{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</td>
-                                <td>{{ $user['redmine_id'] ?? '-' }}</td>
                                 <td>
-                                    <span class="emach-credential-badge {{ $hasEmachCredentials ? '' : 'is-missing' }}">
-                                        <i class="bi {{ $hasEmachCredentials ? 'bi-key-fill' : 'bi-key' }}"></i>{{ $hasEmachCredentials ? 'Guardadas' : 'Sin datos' }}
-                                    </span>
+                                    <div class="nova-user-name">{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</div>
+                                </td>
+                                <td><span class="nova-user-meta">{{ $userRutDisplay !== '' ? $userRutDisplay : '-' }}</span></td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <span class="emach-credential-badge {{ $hasEmachCredentials ? '' : 'is-missing' }}" title="{{ $hasEmachCredentials ? 'EMACH configurado' : 'Sin credenciales EMACH' }}">
+                                            <i class="bi {{ $hasEmachCredentials ? 'bi-key-fill' : 'bi-key' }}"></i>EMACH
+                                        </span>
+                                        <span class="telegram-user-badge {{ $hasTelegramSettings ? '' : 'is-missing' }}" title="{{ $hasTelegramSettings ? 'Telegram vinculado' : 'Sin Telegram' }}">
+                                            <i class="bi {{ $hasTelegramSettings ? 'bi-telegram' : 'bi-chat' }}"></i>TG
+                                        </span>
+                                    </div>
+                                </td>
+                                <td><span class="nova-badge {{ $novaRole === 'admin' ? 'is-admin' : 'is-usuario' }}">{{ $novaRole === 'admin' ? 'Admin' : 'Usuario' }}</span></td>
+                                <td><span class="nova-badge {{ $userStatus === 'baneado' ? 'is-baneado' : 'is-activo' }}">{{ $userStatus }}</span></td>
+                                <td class="nova-col-hide-md">
+                                    @if ($ultimoLogin !== '')
+                                        <span class="nova-date-meta">{{ \Carbon\Carbon::parse($ultimoLogin)->format('d/m/Y H:i') }}</span>
+                                    @else
+                                        <span class="nova-date-meta">-</span>
+                                    @endif
                                 </td>
                                 <td>
-                                    <span class="telegram-user-badge {{ $hasTelegramSettings ? '' : 'is-missing' }}">
-                                        <i class="bi {{ $hasTelegramSettings ? 'bi-telegram' : 'bi-chat' }}"></i>{{ $hasTelegramSettings ? 'Chat ID' : 'Sin datos' }}
-                                    </span>
-                                </td>
-                                <td><span class="nova-badge {{ $novaRole === 'admin' ? 'is-success' : '' }}">{{ $novaRole === 'admin' ? 'Admin' : 'Usuario' }}</span></td>
-                                <td><span class="nova-badge {{ $userStatus === 'baneado' ? 'is-danger' : '' }}">{{ $userStatus }}</span></td>
-                                <td>
-                                    <div class="row-actions">
-                                        <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    <div class="nova-table-actions">
+                                        <button class="btn-action is-edit" type="button"
                                             data-user-edit
                                             data-id="{{ $user['id'] ?? '' }}"
                                             data-redmine-id="{{ $user['redmine_id'] ?? '' }}"
@@ -1102,15 +1040,18 @@
                                             data-apellido="{{ $user['apellido'] ?? '' }}"
                                             data-rut="{{ $user['rut'] ?? '' }}"
                                             data-role="{{ $novaRole }}"
-                                            data-status="{{ $user['status'] ?? 'activo' }}">
+                                            data-status="{{ $user['status'] ?? 'activo' }}"
+                                            title="Editar usuario"
+                                            aria-label="Editar usuario">
                                             <i class="bi bi-pencil"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-primary" type="button"
+                                        <button class="btn-action is-password" type="button"
                                             title="Cambiar contrasena"
                                             data-password-open
                                             data-id="{{ $user['id'] ?? '' }}"
                                             data-username="{{ $user['username'] ?? '' }}"
-                                            data-display-name="{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}">
+                                            data-display-name="{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}"
+                                            aria-label="Cambiar contrasena">
                                             <i class="bi bi-key"></i>
                                         </button>
                                         <form method="post" action="{{ route('administracion.users.update') }}" data-confirm-form data-confirm-message="{{ $userStatus === 'baneado' ? 'Activar este usuario?' : 'Marcar usuario como baneado?' }}">
@@ -1118,9 +1059,9 @@
                                             <input type="hidden" name="action" value="{{ $userStatus === 'baneado' ? 'activate' : 'delete' }}">
                                             <input type="hidden" name="id" value="{{ $user['id'] ?? '' }}">
                                             @if ($userStatus === 'baneado')
-                                                <button class="btn btn-sm btn-outline-success" type="submit" title="Activar"><i class="bi bi-check-circle"></i></button>
+                                                <button class="btn-action is-activate" type="submit" title="Activar" aria-label="Activar usuario"><i class="bi bi-check-circle"></i></button>
                                             @else
-                                                <button class="btn btn-sm btn-outline-danger" type="submit" title="Banear"><i class="bi bi-slash-circle"></i></button>
+                                                <button class="btn-action is-ban" type="submit" title="Banear" aria-label="Banear usuario"><i class="bi bi-slash-circle"></i></button>
                                             @endif
                                         </form>
                                     </div>
@@ -1128,13 +1069,22 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8">No hay usuarios NOVA registrados.</td>
+                                <td colspan="8" class="nova-table-empty">
+                                    <i class="bi bi-people" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay usuarios NOVA registrados.
+                                </td>
                             </tr>
                         @endforelse
                         </tbody>
                     </table>
                 </div>
-            </section>
+                <div class="nova-user-pagination">
+                    <span class="nova-user-meta" data-user-page-info>Pagina 1 de 1</span>
+                    <div class="nova-user-page-actions">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-user-page-prev><i class="bi bi-chevron-left"></i>Anterior</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-user-page-next>Siguiente<i class="bi bi-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
                 </div>
                 @endif
 
@@ -1167,7 +1117,7 @@
                                         @endforeach
                                     </datalist>
                                 </div>
-                                <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar accesos</button>
+                                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar accesos</button>
                             </div>
                             <div class="access-list">
                                 @forelse ($accessRows as $row)
@@ -1225,20 +1175,18 @@
                         </section>
                     </form>
                 @endif
-            </main>
-        </div>
-    </div>
-    <div class="nova-toast-stack" aria-live="polite" aria-atomic="true">
-        @if (session('status'))
-            <div class="nova-toast is-success" data-toast><i class="bi bi-check-circle-fill"></i><span>{{ session('status') }}</span></div>
-        @endif
-        @if (session('error'))
-            <div class="nova-toast is-danger" data-toast><i class="bi bi-exclamation-triangle-fill"></i><span>{{ session('error') }}</span></div>
-        @endif
-        @if ($errors->any())
-            <div class="nova-toast is-danger" data-toast><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $errors->first() }}</span></div>
-        @endif
-    </div>
+            </main><!-- /.nova-content -->
+        </div><!-- /.nova-layout -->
+    </div><!-- /.rm-shell -->
+    @if (session('status'))
+        <div data-nova-flash="success" data-nova-flash-message="{{ session('status') }}" hidden></div>
+    @endif
+    @if (session('error'))
+        <div data-nova-flash="error" data-nova-flash-message="{{ session('error') }}" hidden></div>
+    @endif
+    @if ($errors->any())
+        <div data-nova-flash="error" data-nova-flash-message="{{ $errors->first() }}" hidden></div>
+    @endif
     <div class="nova-modal-backdrop" data-confirm-modal aria-hidden="true">
         <div class="nova-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
             <div class="nova-confirm__body">
@@ -1247,7 +1195,7 @@
             </div>
             <div class="nova-confirm__actions">
                 <button class="btn btn-outline-secondary" type="button" data-confirm-cancel>Cancelar</button>
-                <button class="btn btn-primary" type="button" data-confirm-accept>Confirmar</button>
+                <button class="btn-nova btn-nova-primary" type="button" data-confirm-accept>Confirmar</button>
             </div>
         </div>
     </div>
@@ -1270,7 +1218,7 @@
             </div>
             <div class="nova-confirm__actions">
                 <button class="btn btn-outline-secondary" type="button" data-password-close>Cancelar</button>
-                <button class="btn btn-primary" type="submit"><i class="bi bi-key"></i>Actualizar</button>
+                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-key"></i>Actualizar</button>
             </div>
         </form>
     </div>
@@ -1470,33 +1418,76 @@
         const searchInput = document.querySelector('[data-user-search]');
         const roleFilter = document.querySelector('[data-role-filter]');
         const statusFilter = document.querySelector('[data-status-filter]');
+        const pageSizeSelect = document.querySelector('[data-user-page-size]');
+        const pageInfo = document.querySelector('[data-user-page-info]');
+        const pagePrev = document.querySelector('[data-user-page-prev]');
+        const pageNext = document.querySelector('[data-user-page-next]');
+        const usersTableBody = document.querySelector('.nova-user-table tbody');
+        let currentUserPage = 1;
+
+        const statusSortRank = (row) => row.dataset.userRowStatus === 'baneado' ? 1 : 0;
+        rows
+            .sort((a, b) => {
+                const statusDiff = statusSortRank(a) - statusSortRank(b);
+                if (statusDiff !== 0) return statusDiff;
+                return normalizeSearch(a.dataset.userSort || a.dataset.userRowUsername).localeCompare(normalizeSearch(b.dataset.userSort || b.dataset.userRowUsername), 'es');
+            })
+            .forEach((row) => usersTableBody?.appendChild(row));
+
         const applyUserFilters = () => {
             const query = normalizeSearch(searchInput?.value || '');
             const role = roleFilter?.value || '';
             const status = statusFilter?.value || '';
-            let count = 0;
-
-            rows.forEach((row) => {
+            const pageSize = Math.max(10, parseInt(pageSizeSelect?.value || '10', 10) || 10);
+            const filteredRows = rows.filter((row) => {
                 const haystack = normalizeSearch(row.dataset.search);
                 const matchSearch = query === '' || haystack.includes(query);
                 const matchRole = role === '' || row.dataset.userRowRole === role;
                 const matchStatus = status === '' || row.dataset.userRowStatus === status;
-                const visible = matchSearch && matchRole && matchStatus;
-                row.style.display = visible ? '' : 'none';
-                if (visible) count += 1;
+                return matchSearch && matchRole && matchStatus;
+            });
+            const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+            currentUserPage = Math.min(Math.max(1, currentUserPage), totalPages);
+            const start = (currentUserPage - 1) * pageSize;
+            const end = start + pageSize;
+            const pageRows = new Set(filteredRows.slice(start, end));
+
+            rows.forEach((row) => {
+                row.style.display = pageRows.has(row) ? '' : 'none';
             });
 
-            if (visibleCount) visibleCount.textContent = String(count);
+            if (visibleCount) visibleCount.textContent = String(filteredRows.length);
+            if (pageInfo) {
+                const first = filteredRows.length === 0 ? 0 : start + 1;
+                const last = Math.min(end, filteredRows.length);
+                pageInfo.textContent = `${first}-${last} de ${filteredRows.length} | Pagina ${currentUserPage} de ${totalPages}`;
+            }
+            if (pagePrev) pagePrev.disabled = currentUserPage <= 1;
+            if (pageNext) pageNext.disabled = currentUserPage >= totalPages;
         };
-        searchInput?.addEventListener('input', applyUserFilters);
-        roleFilter?.addEventListener('change', applyUserFilters);
-        statusFilter?.addEventListener('change', applyUserFilters);
+        const resetUserPageAndApply = () => {
+            currentUserPage = 1;
+            applyUserFilters();
+        };
+        searchInput?.addEventListener('input', resetUserPageAndApply);
+        roleFilter?.addEventListener('change', resetUserPageAndApply);
+        statusFilter?.addEventListener('change', resetUserPageAndApply);
+        pageSizeSelect?.addEventListener('change', resetUserPageAndApply);
+        pagePrev?.addEventListener('click', () => {
+            currentUserPage -= 1;
+            applyUserFilters();
+        });
+        pageNext?.addEventListener('click', () => {
+            currentUserPage += 1;
+            applyUserFilters();
+        });
         document.querySelector('[data-user-filter-clear]')?.addEventListener('click', () => {
             if (searchInput) searchInput.value = '';
             if (roleFilter) roleFilter.value = '';
             if (statusFilter) statusFilter.value = '';
-            applyUserFilters();
+            resetUserPageAndApply();
         });
+        applyUserFilters();
 
         const accessUserCombobox = document.querySelector('[data-access-user-combobox]');
         const accessUserOptions = Array.from(document.querySelectorAll('#access-user-list option'));
@@ -1546,28 +1537,6 @@
         });
         setActiveAccessUser(accessIdentityField?.value || accessUserOptions[0]?.dataset.identity || '');
 
-        const emachTimingForm = document.querySelector('[data-emach-timing-form]');
-        const emachScheduleField = document.querySelector('[data-emach-schedule]');
-        const emachPreview = document.querySelector('[data-emach-preview]');
-        const updateEmachSchedule = () => {
-            if (!emachTimingForm || !emachScheduleField) return;
-            const cards = Array.from(emachTimingForm.querySelectorAll('.emach-time-card'));
-            const chunks = cards.map((card) => {
-                const start = card.querySelector('[data-emach-window-start]')?.value || '';
-                const end = card.querySelector('[data-emach-window-end]')?.value || '';
-                const interval = Math.max(15, parseInt(card.querySelector('[data-emach-window-interval]')?.value || '15', 10) || 15);
-                return start && end ? `${start}-${end}=${interval}` : '';
-            }).filter(Boolean);
-            emachScheduleField.value = chunks.join(',');
-            if (emachPreview) emachPreview.textContent = emachScheduleField.value || 'Sin ventanas rapidas';
-        };
-        emachTimingForm?.querySelectorAll('input').forEach((input) => {
-            input.addEventListener('input', updateEmachSchedule);
-            input.addEventListener('change', updateEmachSchedule);
-        });
-        emachTimingForm?.addEventListener('submit', updateEmachSchedule);
-        updateEmachSchedule();
-
         const telegramMessageOptions = Array.from(document.querySelectorAll('[data-telegram-message-option]'));
         const telegramMessagePanels = Array.from(document.querySelectorAll('[data-telegram-message-panel]'));
         const setActiveTelegramMessage = (key) => {
@@ -1584,19 +1553,8 @@
             });
         });
 
-        document.querySelector('.admin-section-nav .nav-link.active')?.scrollIntoView({
-            block: 'nearest',
-            inline: 'center',
-        });
+        document.querySelector('.nova-sidebar .nova-sidebar-link.active')?.scrollIntoView({ block: 'nearest' });
 
-        document.querySelectorAll('[data-toast]').forEach((toast) => {
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(10px)';
-                toast.style.transition = 'opacity .18s ease, transform .18s ease';
-                setTimeout(() => toast.remove(), 220);
-            }, 4500);
-        });
 
         const confirmModal = document.querySelector('[data-confirm-modal]');
         const confirmText = document.querySelector('[data-confirm-text]');

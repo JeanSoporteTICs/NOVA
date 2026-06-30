@@ -62,8 +62,8 @@ $navItems = [
         <span class="sb-brand-mark"><i class="bi bi-layout-sidebar-inset"></i></span>
         <span>Redmine Mantenci&oacute;n</span>
       </a>
-      <button class="navbar-toggler sb-navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir navegaci&oacute;n">
-        <span class="navbar-toggler-icon"></span>
+      <button class="nova-sidebar-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#novaSidebar" aria-controls="novaSidebar" aria-label="Abrir men&uacute; lateral">
+        <i class="bi bi-list"></i>
       </button>
       <div class="sb-nav-actions d-flex align-items-center gap-2">
         <span class="sb-session-badge badge bg-light text-dark d-inline-flex align-items-center gap-1" id="session-timer" data-remaining="<?= $h($remaining) ?>" data-timeout="<?= $h($sessionTimeout) ?>">
@@ -95,9 +95,13 @@ $navItems = [
     </div>
   </div>
 </nav>
-<div class="sb-native-menu-wrap">
-  <div class="collapse navbar-collapse sb-navbar-menu" id="navMenu">
-    <ul class="navbar-nav sb-nav-list me-auto mb-0">
+<div class="nova-layout">
+  <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
+    <div class="offcanvas-header d-lg-none border-bottom py-3">
+      <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">Redmine Mantenci&oacute;n</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <nav class="nova-sidebar-body" aria-label="Secciones Redmine Mantenci&oacute;n">
       <?php foreach ($navItems as $item): ?>
         <?php if (!$item['can']) { continue; } ?>
         <?php
@@ -108,55 +112,71 @@ $navItems = [
           }, false);
         ?>
         <?php if ($children): ?>
-          <li class="nav-item dropdown">
-            <a class="nav-link sb-nav-link dropdown-toggle <?= $isActive ? 'active' : '' ?>" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" <?= $isActive ? 'aria-current="page"' : '' ?>>
-              <i class="bi <?= $h($item['icon']) ?>"></i>
+          <?php $collapseId = 'sbGroup' . ucfirst((string) $item['key']); ?>
+          <div class="nova-sidebar-group">
+            <a class="nova-sidebar-link <?= $isActive ? 'active' : '' ?>"
+               href="#<?= $h($collapseId) ?>"
+               data-bs-toggle="collapse"
+               aria-expanded="<?= $isActive ? 'true' : 'false' ?>"
+               aria-controls="<?= $h($collapseId) ?>">
+              <i class="bi <?= $h($item['icon']) ?> nova-sidebar-icon"></i>
               <span><?= $item['label'] ?></span>
+              <i class="bi bi-chevron-down nova-sidebar-chevron"></i>
             </a>
-            <ul class="dropdown-menu shadow border-0">
-              <?php foreach ($children as $child): ?>
-                <?php
-                  $grandChildren = array_values(array_filter($child['children'] ?? [], fn($grandChild) => !empty($grandChild['can'])));
-                  $childActive = $activeNav === ($child['key'] ?? '') || array_reduce($grandChildren, fn($carry, $grandChild) => $carry || $activeNav === ($grandChild['key'] ?? ''), false);
-                ?>
-                <?php if ($grandChildren): ?>
-                  <li class="dropend">
-                    <a class="dropdown-item dropdown-toggle js-submenu-toggle <?= $childActive ? 'active' : '' ?>" href="#" aria-expanded="false">
-                      <i class="bi <?= $h($child['icon']) ?> me-2"></i><?= $child['label'] ?>
+            <div class="collapse <?= $isActive ? 'show' : '' ?>" id="<?= $h($collapseId) ?>">
+              <div class="nova-sidebar-sub">
+                <?php foreach ($children as $child): ?>
+                  <?php
+                    $grandChildren = array_values(array_filter($child['children'] ?? [], fn($grandChild) => !empty($grandChild['can'])));
+                    $childActive = $activeNav === ($child['key'] ?? '') || array_reduce($grandChildren, fn($carry, $grandChild) => $carry || $activeNav === ($grandChild['key'] ?? ''), false);
+                  ?>
+                  <?php if ($grandChildren): ?>
+                    <?php $subCollapseId = 'sbSub' . ucfirst((string) ($child['key'] ?? '')); ?>
+                    <a class="nova-sidebar-link <?= $childActive ? 'active' : '' ?>"
+                       href="#<?= $h($subCollapseId) ?>"
+                       data-bs-toggle="collapse"
+                       aria-expanded="<?= $childActive ? 'true' : 'false' ?>">
+                      <i class="bi <?= $h($child['icon']) ?> nova-sidebar-icon"></i>
+                      <span><?= $child['label'] ?></span>
+                      <i class="bi bi-chevron-down nova-sidebar-chevron"></i>
                     </a>
-                    <ul class="dropdown-menu js-submenu-menu shadow border-0">
-                      <?php foreach ($grandChildren as $grandChild): ?>
-                        <?php $grandActive = $activeNav === ($grandChild['key'] ?? ''); ?>
-                        <li>
-                          <a class="dropdown-item <?= $grandActive ? 'active' : '' ?>" href="<?= $h($grandChild['href']) ?>">
-                            <i class="bi <?= $h($grandChild['icon']) ?> me-2"></i><?= $grandChild['label'] ?>
+                    <div class="collapse <?= $childActive ? 'show' : '' ?>" id="<?= $h($subCollapseId) ?>">
+                      <div class="nova-sidebar-sub">
+                        <?php foreach ($grandChildren as $grandChild): ?>
+                          <?php $grandActive = $activeNav === ($grandChild['key'] ?? ''); ?>
+                          <a class="nova-sidebar-link <?= $grandActive ? 'active' : '' ?>"
+                             href="<?= $h($grandChild['href']) ?>"
+                             <?= $grandActive ? 'aria-current="page"' : '' ?>>
+                            <i class="bi <?= $h($grandChild['icon']) ?> nova-sidebar-icon"></i>
+                            <span><?= $grandChild['label'] ?></span>
                           </a>
-                        </li>
-                      <?php endforeach; ?>
-                    </ul>
-                  </li>
-                <?php else: ?>
-                  <li>
-                    <a class="dropdown-item <?= $childActive ? 'active' : '' ?>" href="<?= $h($child['href']) ?>">
-                      <i class="bi <?= $h($child['icon']) ?> me-2"></i><?= $child['label'] ?>
+                        <?php endforeach; ?>
+                      </div>
+                    </div>
+                  <?php else: ?>
+                    <a class="nova-sidebar-link <?= $childActive ? 'active' : '' ?>"
+                       href="<?= $h($child['href'] ?? '#') ?>"
+                       <?= $childActive ? 'aria-current="page"' : '' ?>>
+                      <i class="bi <?= $h($child['icon']) ?> nova-sidebar-icon"></i>
+                      <span><?= $child['label'] ?></span>
                     </a>
-                  </li>
-                <?php endif; ?>
-              <?php endforeach; ?>
-            </ul>
-          </li>
+                  <?php endif; ?>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          </div>
         <?php else: ?>
-          <li class="nav-item">
-            <a class="nav-link sb-nav-link <?= $isActive ? 'active' : '' ?>" href="<?= $h($item['href']) ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
-              <i class="bi <?= $h($item['icon']) ?>"></i>
-              <span><?= $item['label'] ?></span>
-            </a>
-          </li>
+          <a class="nova-sidebar-link <?= $isActive ? 'active' : '' ?>"
+             href="<?= $h($item['href']) ?>"
+             <?= $isActive ? 'aria-current="page"' : '' ?>>
+            <i class="bi <?= $h($item['icon']) ?> nova-sidebar-icon"></i>
+            <span><?= $item['label'] ?></span>
+          </a>
         <?php endif; ?>
       <?php endforeach; ?>
-    </ul>
-  </div>
-</div>
+    </nav>
+  </aside>
+  <main class="nova-content" id="nova-main-content">
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
 <div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
   <div class="nova-integration-card">
@@ -355,7 +375,7 @@ window.addEventListener('load', () => {
       'procedimientos/procedimientos.php',
       'procedimientos.php'
     ];
-    const navLinks = document.querySelectorAll('.navbar-nav a.nav-link');
+    const navLinks = document.querySelectorAll('.nova-sidebar-body a.nova-sidebar-link:not([data-bs-toggle])');
     const setActive = (urlStr) => {
       navLinks.forEach(a => {
         if (a.href === urlStr) a.classList.add('active'); else a.classList.remove('active');
@@ -639,7 +659,7 @@ window.addEventListener('load', () => {
       <div class="modal-body">
         <p class="mb-2">La plataforma se encuentra en mantenci&oacute;n. Mientras est&eacute; activa, no se podr&aacute;n ingresar ni importar datos nuevos.</p>
         <?php if ($maintenanceUntil !== ''): ?>
-          <div class="alert alert-warning mb-0"><i class="bi bi-clock"></i> Hora estimada: <?= $h($maintenanceUntil) ?></div>
+          <div class="nova-alert-card is-warning mb-0"><i class="bi bi-clock"></i> <span>Hora estimada: <?= $h($maintenanceUntil) ?></span></div>
         <?php endif; ?>
       </div>
       <div class="modal-footer">

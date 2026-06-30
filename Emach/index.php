@@ -537,7 +537,7 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
 <body class="emach-page">
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
-  <main class="container-fluid py-4">
+  <main class="nova-content"><div class="container-fluid py-4">
     <section class="card card-hero sb-page-hero emach-hero nova-system-hero mb-4">
       <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div class="d-flex align-items-center gap-3">
@@ -569,9 +569,9 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
           </a>
         </div>
         <?php if ($credentialMessage !== ''): ?>
-          <div class="alert <?= str_starts_with($credentialMessage, 'No se') ? 'alert-warning' : 'emach-success-alert' ?> fw-semibold" role="status">
-            <i class="bi <?= str_starts_with($credentialMessage, 'No se') ? 'bi-exclamation-triangle' : 'bi-check-circle' ?>"></i>
-            <?= $h($credentialMessage) ?>
+          <div class="nova-alert-card <?= str_starts_with($credentialMessage, 'No se') ? 'is-warning' : 'is-success' ?>" role="status">
+            <i class="bi <?= str_starts_with($credentialMessage, 'No se') ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill' ?>"></i>
+            <span><?= $h($credentialMessage) ?></span>
           </div>
         <?php endif; ?>
         <form class="row g-3 align-items-end" method="post" action="<?= $h(function_exists('url') ? url('/emach/index.php') : '/emach/index.php') ?>" data-emach-query-form data-has-saved-credentials="<?= $hasSavedEmachCredentials ? '1' : '0' ?>">
@@ -614,9 +614,9 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
     </section>
 
     <?php if ($submitted && !$planilla['ok']): ?>
-      <div class="alert alert-warning fw-semibold" role="alert">
-        <i class="bi bi-exclamation-triangle"></i>
-        No se pudo consultar EMACH: <?= $h($planilla['error']) ?>
+      <div class="nova-alert-card is-warning" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div>No se pudo consultar EMACH: <?= $h($planilla['error']) ?></div>
         <?php $diagnostics = is_array($planilla['diagnostics'] ?? null) ? $planilla['diagnostics'] : []; ?>
         <?php if (!empty($diagnostics)): ?>
           <details class="mt-3">
@@ -650,14 +650,14 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
         <?php endif; ?>
       </div>
     <?php elseif (!$submitted): ?>
-      <div class="alert alert-info fw-semibold" role="status">
+      <div class="nova-alert-card is-info" role="status">
         <i class="bi bi-shield-lock"></i>
-        Ingresa usuario y contrasena EMACH para cargar las marcaciones.
+        <span>Ingresa usuario y contrasena EMACH para cargar las marcaciones.</span>
       </div>
     <?php elseif ($submitted && $planilla['ok']): ?>
-      <div class="alert emach-success-alert fw-semibold" role="status">
-        <i class="bi bi-check-circle"></i>
-        Consulta cargada: <?= $h(count($rows)) ?> marcacion(es) de <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?>.
+      <div class="nova-alert-card is-emach" role="status">
+        <i class="bi bi-check-circle-fill"></i>
+        <span>Consulta cargada: <?= $h(count($rows)) ?> marcacion(es) de <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?>.</span>
       </div>
     <?php endif; ?>
 
@@ -739,7 +739,8 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
         </table>
       </div>
     </section>
-  </main>
+  </div></main><!-- /.nova-content -->
+</div><!-- /.nova-layout -->
 
   <div class="modal fade" id="emachCredentialsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -761,7 +762,7 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
             <input class="form-control" id="modal-emach-password" type="password" autocomplete="current-password" data-emach-modal-password>
           </div>
           <label class="emach-remember-row">
-            <input class="form-check-input" type="checkbox" value="1" data-emach-modal-remember>
+            <input class="form-check-input" type="checkbox" value="1" data-emach-modal-remember <?= $hasSavedEmachCredentials ? '' : 'checked' ?>>
             <span>
               <strong>Recordar credenciales</strong>
               <small>Se guardaran para tu usuario NOVA y se usaran en proximas consultas.</small>
@@ -790,6 +791,7 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
     const modalError = document.querySelector('[data-emach-modal-error]');
     const modalSubmit = document.querySelector('[data-emach-modal-submit]');
     const hasSavedCredentials = form?.dataset.hasSavedCredentials === '1';
+    const submitButtonDefaultHtml = modalSubmit?.innerHTML || '';
     let submitFromModal = false;
 
     form?.addEventListener('submit', (event) => {
@@ -814,9 +816,23 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
       if (hiddenPassword) hiddenPassword.value = password;
       if (hiddenRemember) hiddenRemember.value = modalRemember?.checked ? '1' : '0';
       submitFromModal = true;
+      if (modalSubmit) {
+        modalSubmit.disabled = true;
+        modalSubmit.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Consultando...';
+      }
       modal?.hide();
-      form?.submit();
+      if (form?.requestSubmit) {
+        form.requestSubmit();
+      } else {
+        form?.submit();
+      }
     };
+
+    modalEl?.addEventListener('hidden.bs.modal', () => {
+      if (submitFromModal || !modalSubmit) return;
+      modalSubmit.disabled = false;
+      modalSubmit.innerHTML = submitButtonDefaultHtml;
+    });
 
     modalSubmit?.addEventListener('click', submitWithModalCredentials);
     modalEl?.addEventListener('keydown', (event) => {

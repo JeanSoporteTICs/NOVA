@@ -126,15 +126,15 @@ foreach ($previewUsers as $item) {
             <div class="mb-3">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                 <label class="form-label mb-0">Archivo CSV o XLSX</label>
-                <a class="btn btn-sm btn-outline-success" href="/redmine-mantencion/assets/templates/plantilla-usuarios-nextcloud-v2.xlsx" download>
-                  <i class="bi bi-file-earmark-excel"></i> Descargar plantilla Excel
+                <a class="btn-nova btn-nova-success" href="/redmine-mantencion/assets/templates/plantilla-usuarios-nextcloud-v2.xlsx" download>
+                  <i class="bi bi-file-earmark-excel"></i> Descargar plantilla
                 </a>
               </div>
               <input type="file" name="nextcloud_file" class="form-control" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
               <div class="form-text">CSV funciona de inmediato. XLSX requiere la extensión ZIP habilitada en PHP.</div>
             </div>
 
-            <button class="btn btn-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+            <button class="btn-nova btn-nova-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
               <i class="bi bi-eye"></i> Previsualizar usuarios
             </button>
           </div>
@@ -160,7 +160,7 @@ foreach ($previewUsers as $item) {
                       <div class="text-muted small">Marca filas para cambiar su grupo o elimina las que no quieras crear. Los correos inválidos deben corregirse en el archivo y volver a cargarse.</div>
                     </div>
                   </div>
-                  <button type="<?= $hasSavedNextcloudCredentials ? 'submit' : 'button' ?>" class="btn btn-success" id="nextcloud-confirm-btn" data-maintenance="<?= $maintenanceMode ? '1' : '0' ?>" <?= $hasSavedNextcloudCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#nextcloudCredentialsModal"' ?> <?= ($maintenanceMode || $hasInvalidPreview) ? 'disabled' : '' ?> <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+                  <button type="<?= $hasSavedNextcloudCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-success" id="nextcloud-confirm-btn" data-maintenance="<?= $maintenanceMode ? '1' : '0' ?>" <?= $hasSavedNextcloudCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#nextcloudCredentialsModal"' ?> <?= ($maintenanceMode || $hasInvalidPreview) ? 'disabled' : '' ?> <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
                     <i class="bi bi-cloud-arrow-up"></i> Confirmar creación
                   </button>
                 </div>
@@ -183,7 +183,7 @@ foreach ($previewUsers as $item) {
                       </select>
                     </div>
                     <div class="col-lg-2 d-grid pt-lg-4">
-                      <button type="button" class="btn btn-outline-primary" id="nextcloud-apply-changes" disabled>
+                      <button type="button" class="btn-nova btn-nova-primary" id="nextcloud-apply-changes" disabled>
                         <i class="bi bi-check2-square"></i> Aplicar cambios
                       </button>
                     </div>
@@ -389,8 +389,8 @@ foreach ($previewUsers as $item) {
   </div>
 </div>
 
-<div class="modal fade" id="nextcloudCredentialsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+<div class="modal fade detail-drawer-modal" id="nextcloudCredentialsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog detail-drawer-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <div>
@@ -401,7 +401,7 @@ foreach ($previewUsers as $item) {
       </div>
       <div class="modal-body">
         <?php if ($hasSavedNextcloudCredentials): ?>
-          <div class="alert alert-info py-2 small">Hay credenciales guardadas para tu usuario. Puedes dejar los campos vacíos para usarlas.</div>
+          <div class="nova-alert-card is-info py-2 small">Hay credenciales guardadas para tu usuario. Puedes dejar los campos vacios para usarlas.</div>
         <?php endif; ?>
         <div class="row g-3">
           <div class="col-12">
@@ -423,7 +423,7 @@ foreach ($previewUsers as $item) {
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-success" form="nextcloud-preview-form">
+        <button type="submit" class="btn-nova btn-nova-success" form="nextcloud-preview-form">
           <i class="bi bi-cloud-arrow-up"></i> Crear usuarios
         </button>
       </div>

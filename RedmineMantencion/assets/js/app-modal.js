@@ -39,7 +39,11 @@
 
   window.appUi = {
     setLoading: setPageLoading,
-    toast: (message, tone = 'info') => showToast({ message, tone }),
+    // Delegates to NovaToast when available (loaded after this script), falls back to internal showToast
+    toast: (message, tone = 'info') => {
+      if (window.NovaToast) return window.NovaToast.show({ type: tone, message });
+      return showToast({ message, tone });
+    },
   };
 
   function ensureToastStyles() {
@@ -139,6 +143,10 @@
 
   window.appModal = {
     show(options) {
+      // Use NovaToast for simple feedback; fall back to internal showToast if NovaToast not loaded yet
+      if (window.NovaToast) {
+        return window.NovaToast.show({ type: options.tone || 'info', message: options.message || options.title || '' });
+      }
       return showToast({ ...options, confirm: false });
     },
     confirm(options) {

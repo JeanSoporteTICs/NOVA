@@ -60,16 +60,10 @@
         </section>
 
         @if (session('integration_status'))
-            <div class="nova-toast is-success integration-toast" role="status" aria-live="polite">
-                <i class="bi bi-check-circle-fill"></i>
-                <span>{{ session('integration_status') }}</span>
-            </div>
+            <div data-nova-flash="success" data-nova-flash-message="{{ session('integration_status') }}" hidden></div>
         @endif
         @if (session('integration_error'))
-            <div class="nova-toast is-info integration-toast" role="status" aria-live="polite">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                <span>{{ session('integration_error') }}</span>
-            </div>
+            <div data-nova-flash="warning" data-nova-flash-message="{{ session('integration_error') }}" hidden></div>
         @endif
 
         <section class="integration-grid mb-3">
@@ -183,7 +177,7 @@
                         </form>
                     </div>
                     <div class="offcanvas-footer integration-drawer-footer">
-                        <button class="btn btn-primary js-submit-button" type="submit" form="{{ $formId }}">
+                        <button class="btn-nova btn-nova-primary js-submit-button" type="submit" form="{{ $formId }}">
                             <span class="nova-spinner" aria-hidden="true"></span>
                             <i class="bi bi-save"></i>
                             <span>Guardar</span>
@@ -193,7 +187,7 @@
                             @csrf
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="type" value="{{ $type }}">
-                            <button class="btn btn-outline-danger" type="submit" @disabled(!$stored)>
+                            <button class="btn-nova btn-nova-danger" type="submit" @disabled(!$stored)>
                                 <i class="bi bi-trash"></i>
                                 <span>Eliminar</span>
                             </button>
@@ -300,12 +294,6 @@
         }
     });
 
-    window.setTimeout(function () {
-        document.querySelectorAll('.integration-toast').forEach(function (toast) {
-            toast.classList.add('is-hiding');
-            window.setTimeout(function () { toast.remove(); }, 220);
-        });
-    }, 3600);
 }());
 </script>
 </body>

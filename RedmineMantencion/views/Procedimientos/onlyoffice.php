@@ -111,9 +111,9 @@ $activeNav = 'procedimientos';
             if (!editorTarget) return;
             editorTarget.innerHTML = `
               <div class="h-100 d-flex align-items-center justify-content-center p-4">
-                <div class="alert alert-warning shadow-sm mb-0" role="alert">
-                  <div class="fw-semibold mb-1">No se pudo cargar OnlyOffice</div>
-                  <div>${message}</div>
+                <div class="nova-alert-card is-warning mb-0" role="alert">
+                  <i class="bi bi-exclamation-triangle-fill"></i>
+                  <div><strong>No se pudo cargar OnlyOffice</strong><br><span>${message}</span></div>
                 </div>
               </div>
             `;

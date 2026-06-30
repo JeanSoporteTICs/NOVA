@@ -258,17 +258,20 @@ final class NovaUserRepository
                         : null;
 
                     $user = array_merge($current, [
-                        'id'         => (string) $row->uuid,
-                        'redmine_id' => trim((string) $row->redmine_id),
-                        'username'   => trim((string) $row->usuario),
-                        'name'       => trim((string) $row->nombre),
-                        'apellido'   => trim((string) $row->apellido),
-                        'rut'        => trim((string) $row->rut),
-                        'rut_sin_dv' => trim((string) ($current['rut_sin_dv'] ?? $row->usuario)),
-                        'core_user'  => trim((string) $row->usuario_core),
-                        'role'       => $this->service->normalizeNovaRole((string) $row->rol),
-                        'status'     => $this->service->normalizeStatus((string)   $row->estado),
-                        'password'   => (string) $row->password,
+                        'id'              => (string) $row->uuid,
+                        'redmine_id'      => trim((string) $row->redmine_id),
+                        'username'        => trim((string) $row->usuario),
+                        'name'            => trim((string) $row->nombre),
+                        'apellido'        => trim((string) $row->apellido),
+                        'rut'             => trim((string) $row->rut),
+                        'rut_sin_dv'      => trim((string) ($current['rut_sin_dv'] ?? $row->usuario)),
+                        'core_user'       => trim((string) $row->usuario_core),
+                        'email'           => trim((string) ($row->email ?? '')),
+                        'role'            => $this->service->normalizeNovaRole((string) $row->rol),
+                        'status'          => $this->service->normalizeStatus((string)   $row->estado),
+                        'password'        => (string) $row->password,
+                        'ultimo_login_at' => (string) ($row->ultimo_login_at ?? ''),
+                        'creado_at'       => (string) ($row->creado_at ?? ''),
                     ]);
                     if (is_array($emachCredentials)) {
                         $user['emach_credentials'] = $emachCredentials;
@@ -321,21 +324,25 @@ final class NovaUserRepository
             }
 
             try {
+                $values = [
+                    'usuario'          => $username,
+                    'rut'              => trim((string) ($user['rut'] ?? '')) ?: null,
+                    'redmine_id'       => $this->unsignedIntegerOrNull($user['redmine_id'] ?? null),
+                    'nombre'           => $name,
+                    'apellido'         => $lastName,
+                    'rol'              => $this->service->normalizeNovaRole((string) ($user['role']   ?? 'usuario')),
+                    'estado'           => $this->service->normalizeStatus((string)   ($user['status'] ?? 'activo')),
+                    'password'         => $password,
+                    'usuario_core'     => trim((string) ($user['core_user'] ?? '')) ?: null,
+                    'telegram_id_chat' => trim((string) data_get($user, 'telegram_settings.chat_id', '')) ?: null,
+                ];
+                if (Schema::hasColumn('usuarios_nova', 'email')) {
+                    $values['email'] = trim((string) ($user['email'] ?? '')) ?: null;
+                }
+
                 $row = NovaUser::query()->updateOrCreate(
                     ['uuid' => $uuid],
-                    [
-                        'usuario'          => $username,
-                        'rut'              => trim((string) ($user['rut'] ?? '')) ?: null,
-                        'redmine_id'       => $this->unsignedIntegerOrNull($user['redmine_id'] ?? null),
-                        'nombre'           => $name,
-                        'apellido'         => $lastName,
-                        'email'            => trim((string) ($user['email'] ?? '')) ?: null,
-                        'rol'              => $this->service->normalizeNovaRole((string) ($user['role']   ?? 'usuario')),
-                        'estado'           => $this->service->normalizeStatus((string)   ($user['status'] ?? 'activo')),
-                        'password'         => $password,
-                        'usuario_core'     => trim((string) ($user['core_user'] ?? '')) ?: null,
-                        'telegram_id_chat' => trim((string) data_get($user, 'telegram_settings.chat_id', '')) ?: null,
-                    ]
+                    $values
                 );
                 $this->writeDatabaseIntegrations((int) $row->id, $user);
             } catch (\Throwable) {

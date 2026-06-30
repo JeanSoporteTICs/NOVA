@@ -47,12 +47,8 @@ $canAssignOtherUsers = dashboard_can_assign_other_users();
       include __DIR__ . '/../partials/hero.php';
     ?>
 
-    <?php if ($flash): ?>
-      <div class="alert alert-success"><?= $h($flash) ?></div>
-    <?php endif; ?>
-    <?php if ($error): ?>
-      <div class="alert alert-danger"><?= $h($error) ?></div>
-    <?php endif; ?>
+    <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
+    <?php if ($error): ?><div data-nova-flash="error" data-nova-flash-message="<?= $h($error) ?>" hidden></div><?php endif; ?>
 
     <div class="card manual-card">
       <div class="card-body manual-grid">

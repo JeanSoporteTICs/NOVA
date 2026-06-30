@@ -144,11 +144,11 @@ if (!function_exists('storage_base_path')) {
     }
 
     function config_mantencion_repository() {
-        if (!function_exists('app') || !class_exists(\App\Support\RedmineMantencion\MantencionConfigRepository::class)) {
+        if (!function_exists('app') || !class_exists(\App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository::class)) {
             return null;
         }
         try {
-            $repo = app(\App\Support\RedmineMantencion\MantencionConfigRepository::class);
+            $repo = app(\App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository::class);
             return $repo->tableReady() ? $repo : null;
         } catch (\Throwable) {
             return null;

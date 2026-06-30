@@ -27,8 +27,8 @@ $navItems = [
       <span class="emach-brand-mark"><i class="bi bi-heart-pulse"></i></span>
       <span>EMACH</span>
     </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#emachNavMenu" aria-controls="emachNavMenu" aria-expanded="false" aria-label="Abrir navegacion">
-      <span class="navbar-toggler-icon"></span>
+    <button class="nova-sidebar-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#novaSidebar" aria-controls="novaSidebar" aria-label="Abrir men&uacute; lateral">
+      <i class="bi bi-list"></i>
     </button>
     <div class="d-flex align-items-center gap-2 ms-auto emach-nav-actions">
       <span class="emach-session-badge badge bg-light text-dark d-inline-flex align-items-center gap-1" id="session-timer" data-remaining="<?= $h($remaining) ?>" data-timeout="<?= $h($sessionTimeout) ?>">
@@ -43,21 +43,22 @@ $navItems = [
     </div>
   </div>
 </nav>
-<div class="emach-menu-wrap">
-  <div class="collapse navbar-collapse show" id="emachNavMenu">
-    <ul class="navbar-nav emach-nav-list me-auto mb-0">
+<div class="nova-layout">
+  <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
+    <div class="offcanvas-header d-lg-none border-bottom py-3">
+      <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">EMACH</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <nav class="nova-sidebar-body" aria-label="Navegaci&oacute;n EMACH">
       <?php foreach ($navItems as $item): ?>
         <?php $isActive = $activeNav === $item['key']; ?>
-        <li class="nav-item">
-          <a class="nav-link emach-nav-link <?= $isActive ? 'active' : '' ?>" href="<?= $h($item['href']) ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
-            <i class="bi <?= $h($item['icon']) ?>"></i>
-            <span><?= $h($item['label']) ?></span>
-          </a>
-        </li>
+        <a class="nova-sidebar-link <?= $isActive ? 'active' : '' ?>" href="<?= $h($item['href']) ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
+          <i class="bi <?= $h($item['icon']) ?> nova-sidebar-icon"></i>
+          <span><?= $h($item['label']) ?></span>
+        </a>
       <?php endforeach; ?>
-    </ul>
-  </div>
-</div>
+    </nav>
+  </aside>
 
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
 <script>

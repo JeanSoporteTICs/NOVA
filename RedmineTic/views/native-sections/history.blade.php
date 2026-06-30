@@ -363,7 +363,7 @@
                             </td>
                             <td><span class="historico-source-badge {{ $source === 'horas_extra' ? 'is-hours' : '' }}">{{ $sourceText }}</span></td>
                             <td>
-                                <button type="button" class="btn btn-sm btn-outline-primary historico-detail-btn" data-bs-toggle="modal" data-bs-target="#historicoDetalleModal" data-detail='@json($detail)'>
+                                <button type="button" class="btn-action btn-action-view historico-detail-btn" data-bs-toggle="modal" data-bs-target="#historicoDetalleModal" data-detail='@json($detail)' title="Ver detalle" aria-label="Ver detalle">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </td>
@@ -372,7 +372,7 @@
                                     <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="Eliminar este registro del historico?">
                                         @csrf
                                         <input type="hidden" name="id" value="{{ $row['id'] ?? '' }}">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                        <button type="submit" class="btn-action btn-action-delete" title="Eliminar registro" aria-label="Eliminar registro"><i class="bi bi-trash"></i></button>
                                     </form>
                                 @else
                                     <span class="text-muted">-</span>

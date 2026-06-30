@@ -47,8 +47,8 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
     <p class="nc-gate-msg mb-4">
       Debe configurar sus credenciales de Nextcloud antes de usar esta sección.
     </p>
-    <a href="<?= $h($ncIntegracionesUrl) ?>" class="btn btn-primary">
-      <i class="bi bi-gear-fill"></i>&nbsp;Configurar credenciales Nextcloud
+    <a href="<?= $h($ncIntegracionesUrl) ?>" class="btn-nova btn-nova-primary">
+      <i class="bi bi-gear-fill"></i>Configurar credenciales Nextcloud
     </a>
   </div>
 
@@ -68,13 +68,13 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
           <i class="bi bi-arrow-clockwise"></i>
         </button>
         <?php if ($canEditProcedures): ?>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="nc-mkdir-btn">
+        <button type="button" class="btn-nova btn-nova-primary" id="nc-mkdir-btn">
           <i class="bi bi-folder-plus"></i> Nueva carpeta
         </button>
-        <button type="button" class="btn btn-sm btn-success" id="nc-create-office-btn">
+        <button type="button" class="btn-nova btn-nova-success" id="nc-create-office-btn">
           <i class="bi bi-file-earmark-plus"></i> Crear documento
         </button>
-        <label class="btn btn-sm btn-primary mb-0" for="nc-upload-input" role="button">
+        <label class="btn-nova btn-nova-info mb-0" for="nc-upload-input" role="button">
           <i class="bi bi-upload"></i> Subir
           <input type="file" id="nc-upload-input" class="visually-hidden" multiple>
         </label>
@@ -136,7 +136,7 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-primary" id="ncMkdirConfirm">Crear</button>
+          <button type="button" class="btn-nova btn-nova-primary" id="ncMkdirConfirm"><i class="bi bi-folder-plus"></i>Crear</button>
         </div>
       </div>
     </div>
@@ -157,7 +157,7 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-primary" id="ncRenameConfirm">Renombrar</button>
+          <button type="button" class="btn-nova btn-nova-primary" id="ncRenameConfirm"><i class="bi bi-pencil"></i>Renombrar</button>
         </div>
       </div>
     </div>
@@ -201,7 +201,7 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-primary" id="ncTransferConfirm">Aplicar</button>
+          <button type="button" class="btn-nova btn-nova-primary" id="ncTransferConfirm"><i class="bi bi-arrow-left-right"></i>Aplicar</button>
         </div>
       </div>
     </div>
@@ -247,7 +247,7 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-success" id="ncCreateOfficeConfirm">
+          <button type="button" class="btn-nova btn-nova-success" id="ncCreateOfficeConfirm">
             <i class="bi bi-file-earmark-plus"></i> Crear
           </button>
         </div>
@@ -270,7 +270,7 @@ $ncIntegracionesUrl = function_exists('legacy_app_url')
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-danger" id="ncDeleteConfirm">Eliminar</button>
+          <button type="button" class="btn-nova btn-nova-danger" id="ncDeleteConfirm"><i class="bi bi-trash3"></i>Eliminar</button>
         </div>
       </div>
     </div>

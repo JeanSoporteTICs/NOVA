@@ -34,7 +34,7 @@
                     <label for="password">Contrasena</label>
                     <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
                 </div>
-                <button class="btn btn-primary nova-w-full" type="submit"><i class="bi bi-box-arrow-in-right"></i>Ingresar</button>
+                <button class="btn-nova btn-nova-primary nova-w-full" type="submit"><i class="bi bi-box-arrow-in-right"></i>Ingresar</button>
             </form>
         </section>
     </main>

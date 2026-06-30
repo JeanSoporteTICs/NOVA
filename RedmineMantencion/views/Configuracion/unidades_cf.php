@@ -137,8 +137,8 @@ $total = is_array($unidades) ? count($unidades) : 0;
       include __DIR__ . '/../partials/hero.php';
     ?>
 
-    <?php if ($flash): ?><div class="alert alert-success"><?= $h($flash) ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="alert alert-danger"><?= $h($error) ?></div><?php endif; ?>
+    <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
+    <?php if ($error): ?><div data-nova-flash="error" data-nova-flash-message="<?= $h($error) ?>" hidden></div><?php endif; ?>
 
     <div class="card mb-3">
       <div class="card-body">
@@ -154,7 +154,7 @@ $total = is_array($unidades) ? count($unidades) : 0;
           <div class="col-lg-2 d-flex gap-2 justify-content-lg-end">
             <a class="btn btn-outline-secondary w-100" href="../Configuracion/configuracion.php"><i class="bi bi-arrow-left"></i> Volver</a>
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-            <button class="btn btn-primary w-100" type="submit"><i class="bi bi-arrow-repeat"></i> Actualizar</button>
+            <button class="btn-nova btn-nova-primary w-100" type="submit"><i class="bi bi-arrow-repeat"></i> Actualizar</button>
           </div>
         </form>
       </div>

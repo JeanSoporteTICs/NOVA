@@ -330,7 +330,16 @@ final class UserIntegrationRepository
     private function tablesAvailable(): bool
     {
         try {
-            return Schema::hasTable('usuarios_nova') && Schema::hasTable('integraciones_usuario');
+            return $this->usersTableAvailable() && Schema::hasTable('integraciones_usuario');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function usersTableAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('usuarios_nova');
         } catch (\Throwable) {
             return false;
         }
@@ -338,25 +347,44 @@ final class UserIntegrationRepository
 
     private function databaseUserIdForSession(array $sessionUser): ?int
     {
-        if (!$this->tablesAvailable()) {
+        if (!$this->usersTableAvailable()) {
             return null;
         }
 
         try {
-            foreach ([
-                'uuid' => $sessionUser['id'] ?? '',
-                'usuario' => $sessionUser['username'] ?? '',
-                'rut' => $sessionUser['rut'] ?? '',
-                'redmine_id' => $sessionUser['redmine_id'] ?? '',
-                'usuario_core' => $sessionUser['core_user'] ?? '',
-            ] as $column => $value) {
-                $value = trim((string) $value);
-                if ($value === '') {
-                    continue;
-                }
-                $id = DB::table('usuarios_nova')->where($column, $value)->value('id');
-                if ($id !== null) {
-                    return (int) $id;
+            $candidates = [
+                'uuid' => [
+                    $sessionUser['id'] ?? '',
+                    $sessionUser['_nova_user_id'] ?? '',
+                ],
+                'usuario' => [
+                    $sessionUser['username'] ?? '',
+                    $sessionUser['usuario'] ?? '',
+                    $sessionUser['rut_sin_dv'] ?? '',
+                ],
+                'rut' => [
+                    $sessionUser['rut'] ?? '',
+                ],
+                'redmine_id' => [
+                    $sessionUser['redmine_id'] ?? '',
+                    $sessionUser['legacy']['id'] ?? '',
+                ],
+                'usuario_core' => [
+                    $sessionUser['core_user'] ?? '',
+                    $sessionUser['usuario_core'] ?? '',
+                ],
+            ];
+
+            foreach ($candidates as $column => $values) {
+                foreach ($values as $value) {
+                    $value = trim((string) $value);
+                    if ($value === '') {
+                        continue;
+                    }
+                    $id = DB::table('usuarios_nova')->where($column, $value)->value('id');
+                    if ($id !== null) {
+                        return (int) $id;
+                    }
                 }
             }
         } catch (\Throwable) {

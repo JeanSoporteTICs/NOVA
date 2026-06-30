@@ -51,10 +51,10 @@
         </section>
 
         @if (session('integration_status'))
-            <div class="alert alert-success fw-semibold"><i class="bi bi-check-circle"></i> {{ session('integration_status') }}</div>
+            <div data-nova-flash="success" data-nova-flash-message="{{ session('integration_status') }}" hidden></div>
         @endif
         @if (session('integration_error'))
-            <div class="alert alert-warning fw-semibold"><i class="bi bi-exclamation-triangle"></i> {{ session('integration_error') }}</div>
+            <div data-nova-flash="warning" data-nova-flash-message="{{ session('integration_error') }}" hidden></div>
         @endif
 
         <section class="integration-grid integration-grid--{{ count($integrationDefinitions) }} mb-3">
@@ -112,14 +112,14 @@
                             <div class="form-text">Por seguridad nunca se muestra el valor guardado.</div>
                         </div>
                         <div>
-                            <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> Guardar</button>
+                            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i> Guardar</button>
                         </div>
                     </form>
                     <form method="post" action="{{ $postUrl }}" class="integration-delete-form" data-app-confirm="Eliminar credencial {{ $definition['label'] }}?">
                         @csrf
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="type" value="{{ $type }}">
-                        <button class="btn btn-outline-danger" type="submit" @disabled(!$stored)><i class="bi bi-trash"></i> Eliminar</button>
+                        <button class="btn-nova btn-nova-danger" type="submit" @disabled(!$stored)><i class="bi bi-trash"></i> Eliminar</button>
                     </form>
                 </article>
             @endforeach

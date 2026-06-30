@@ -567,10 +567,7 @@ ksort($catsSel);
   ?>
 
   <?php if ($alert): ?>
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-      <?= $h($alert) ?>
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+    <div data-nova-flash="<?= $ok ? 'success' : 'warning' ?>" data-nova-flash-message="<?= $h($alert) ?>" hidden></div>
   <?php endif; ?>
 
   <form id="filter-form" class="card card-body shadow-sm mb-3 historico-filter-card" method="get" aria-live="polite">
@@ -608,7 +605,7 @@ ksort($catsSel);
         <button
           type="submit"
           id="btn-apply"
-          class="btn btn-primary w-100"
+          class="btn-nova btn-nova-primary w-100"
           data-bs-spinner="true"
           aria-label="Aplicar filtros"
           aria-pressed="false">
@@ -617,7 +614,7 @@ ksort($catsSel);
       </div>
       <div class="col-md-2">
         <a
-          class="btn btn-outline-secondary w-100"
+          class="btn-nova btn-nova-secondary w-100"
           id="btn-clear"
           href="historico.php"
           aria-label="Limpiar filtros"
@@ -760,7 +757,7 @@ ksort($catsSel);
                   <td>
                     <button
                       type="button"
-                      class="btn btn-sm btn-outline-primary historico-detail-btn"
+                      class="btn-action btn-action-view historico-detail-btn"
                       data-bs-toggle="modal"
                       data-bs-target="#historicoDetalleModal"
                       data-preview_rows="<?= $previewRowsJson ?>"
@@ -770,6 +767,7 @@ ksort($catsSel);
                       data-asunto="<?= $h($row['asunto'] ?? '') ?>"
                       data-solicitante="<?= $h($row['solicitante'] ?? '') ?>"
                       data-descripcion="<?= $h($detalleDescripcion) ?>"
+                      title="Ver detalle"
                     >
                       <i class="bi bi-eye"></i>
                     </button>
@@ -780,7 +778,7 @@ ksort($catsSel);
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" value="<?= $h($row['id'] ?? '') ?>">
                         <input type="hidden" name="fuente" value="<?= $h($row['_fuente'] ?? '') ?>">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <button type="submit" class="btn-action btn-action-delete" title="Eliminar">
                           <i class="bi bi-trash"></i>
                         </button>
                       </form>
@@ -845,8 +843,8 @@ ksort($catsSel);
   </div>
 
 
-  <div class="modal fade rm-side-drawer" id="historicoDetalleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable rm-side-drawer-dialog">
+  <div class="modal fade rm-side-drawer detail-drawer-modal" id="historicoDetalleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable rm-side-drawer-dialog detail-drawer-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Detalle histórico</h5>

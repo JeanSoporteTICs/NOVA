@@ -51,7 +51,7 @@ $storageDir = telegram_storage_path();
 <body class="telegram-page">
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
-  <main class="container-fluid py-4">
+  <main class="nova-content"><div class="container-fluid py-4">
     <section class="card telegram-hero nova-system-hero mb-4">
       <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div class="d-flex align-items-center gap-3">
@@ -65,12 +65,8 @@ $storageDir = telegram_storage_path();
       </div>
     </section>
 
-    <?php if ($message !== ''): ?>
-      <div class="alert telegram-success fw-semibold"><i class="bi bi-check-circle"></i><?= $h($message) ?></div>
-    <?php endif; ?>
-    <?php if ($error !== ''): ?>
-      <div class="alert alert-warning fw-semibold"><i class="bi bi-exclamation-triangle"></i><?= $h($error) ?></div>
-    <?php endif; ?>
+    <?php if ($message !== ''): ?><div data-nova-flash="telegram" data-nova-flash-message="<?= $h($message) ?>" hidden></div><?php endif; ?>
+    <?php if ($error !== ''): ?><div data-nova-flash="warning" data-nova-flash-message="<?= $h($error) ?>" hidden></div><?php endif; ?>
 
     <section class="row g-3">
       <div class="col-12 col-xl-7">
@@ -127,6 +123,13 @@ $storageDir = telegram_storage_path();
         </article>
       </div>
     </section>
-  </main>
+  </div></main><!-- /.nova-content -->
+</div><!-- /.nova-layout -->
+<?php
+$novaUiJsPath = function_exists('base_path') ? base_path('public/assets/nova-ui.js') : __DIR__ . '/../public/assets/nova-ui.js';
+$novaUiJsVersion = @filemtime($novaUiJsPath) ?: time();
+$novaUiJsUrl = function_exists('asset') ? asset('assets/nova-ui.js') : '/NOVA/public/assets/nova-ui.js';
+?>
+<script src="<?= $h($novaUiJsUrl) ?>?v=<?= (int) $novaUiJsVersion ?>"></script>
 </body>
 </html>

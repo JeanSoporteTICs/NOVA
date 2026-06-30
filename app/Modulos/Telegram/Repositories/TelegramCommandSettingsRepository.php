@@ -90,6 +90,8 @@ class TelegramCommandSettingsRepository
                 'tic_unavailable'           => 'No pude cargar Redmine TIC desde el listener Telegram.',
                 'tic_error'                 => 'No pude crear el reporte TIC: {error}',
                 'emach_success'             => "Ultima marcacion EMACH\nFecha: {fecha}\nHora: {hora}\nTipo: {tipo}\nReloj: {reloj}",
+                'emach_missing_chat_id'     => 'Tu Chat ID no esta asociado a un usuario NOVA. Ingresa a NOVA > Telegram y guarda tu TELEGRAM_CHAT_ID.',
+                'emach_user_lookup_error'   => 'No pude consultar tu usuario NOVA desde el servicio Telegram. Revisa la conexion Docker con la base de datos.',
                 'emach_missing_credentials' => 'No tienes credenciales EMACH guardadas en NOVA.',
                 'emach_empty'               => 'No encontre marcaciones EMACH para el mes actual.',
                 'emach_error'               => 'No pude consultar EMACH: {error}',

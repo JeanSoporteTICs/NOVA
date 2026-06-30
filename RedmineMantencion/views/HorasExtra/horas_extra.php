@@ -282,15 +282,13 @@ function hhmm($mins) {
         </select>
       </div>
       <div class="col-md-4 col-lg-3 d-flex gap-2">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Filtrar</button>
-        <a class="btn btn-outline-secondary" href="?"><i class="bi bi-x-circle"></i> Limpiar</a>
+        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-funnel"></i> Filtrar</button>
+        <a class="btn-nova btn-nova-secondary" href="?"><i class="bi bi-x-circle"></i> Limpiar</a>
       </div>
     </div>
   </form>
 
-  <?php if ($flash): ?>
-    <div class="alert alert-success"><?= $h($flash) ?></div>
-  <?php endif; ?>
+  <?php if ($flash): ?><div data-nova-flash="<?= $flash === 'No se encontraron registros para esa fecha' ? 'info' : 'success' ?>" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
 
   <?php
     $totalHorasTablaMins = 0;
@@ -303,13 +301,13 @@ function hhmm($mins) {
           <i class="bi bi-table text-primary"></i>
           <span class="fw-semibold">Listado</span>
         </div>
-        <button type="button" class="btn btn-outline-primary btn-sm" id="copy-table-btn" aria-label="Copiar tabla">
+        <button type="button" class="btn-nova btn-nova-secondary" id="copy-table-btn" aria-label="Copiar tabla">
           <i class="bi bi-clipboard"></i> Copiar tabla
         </button>
       </div>
 
       <?php if (empty($grupos)): ?>
-        <div class="alert alert-info">No se encontraron registros para esa fecha</div>
+        <div class="nova-alert-card is-info"><i class="bi bi-calendar-x"></i> <span>No se encontraron registros para esa fecha</span></div>
       <?php else: ?>
         <div class="table-responsive">
           <table class="table table-hover align-middle" id="extras-table" data-total-hours="">
@@ -339,7 +337,7 @@ function hhmm($mins) {
                   <td colspan="3">
                     <div class="d-flex justify-content-between align-items-center w-100">
                       <span><strong><?= $h(fmt_fecha($fechaKey)) ?></strong> &middot; Hora inicio: <?= $h($horaIni) ?> | Hora término: <?= $h($horaFin) ?><?= $totalGrupo ? ' | Total de horas: ' . $h($totalGrupo) : '' ?></span>
-                      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>"><i class="bi bi-pencil-square"></i> Editar horas</button>
+                      <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal" data-bs-target="#editModal" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>" title="Editar horas"><i class="bi bi-pencil-square"></i></button>
                     </div>
                   </td>
                 </tr>
@@ -370,8 +368,8 @@ function hhmm($mins) {
 </div>
 
 <!-- Modal editar horas -->
-<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+<div class="modal fade detail-drawer-modal" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog detail-drawer-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Editar horas por fecha</h5>
@@ -398,7 +396,7 @@ function hhmm($mins) {
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>>Guardar</button>
+          <button type="submit" class="btn-nova btn-nova-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>>Guardar</button>
         </div>
       </form>
     </div>

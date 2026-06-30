@@ -20,7 +20,7 @@
             </div>
             <form method="post" action="{{ $redmineRoute('redmine.native.activity.action') }}">
                 @csrf
-                <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-trash"></i>Limpiar actividad</button>
+                <button class="btn-nova btn-nova-secondary" type="submit"><i class="bi bi-trash"></i>Limpiar actividad</button>
             </form>
         </div>
 <pre class="rm-log">@forelse ($lines as $line){{ $line }}

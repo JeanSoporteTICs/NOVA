@@ -18,6 +18,9 @@ $navItems = [
       <span class="telegram-brand-mark"><i class="bi bi-telegram"></i></span>
       <span>Telegram</span>
     </a>
+    <button class="nova-sidebar-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#novaSidebar" aria-controls="novaSidebar" aria-label="Abrir men&uacute; lateral">
+      <i class="bi bi-list"></i>
+    </button>
     <div class="d-flex align-items-center gap-2 ms-auto telegram-nav-actions">
       <?php include __DIR__ . '/session-control.php'; ?>
       <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($currentUser['nombre'] ?? $currentUser['name'] ?? 'Usuario') ?></span>
@@ -29,19 +32,22 @@ $navItems = [
     </div>
   </div>
 </nav>
-<div class="telegram-menu-wrap">
-  <ul class="navbar-nav telegram-nav-list me-auto mb-0">
-    <?php foreach ($navItems as $item): ?>
-      <?php $isActive = $activeNav === $item['key']; ?>
-      <li class="nav-item">
-        <a class="nav-link telegram-nav-link <?= $isActive ? 'active' : '' ?>" href="<?= $h($item['href']) ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
-          <i class="bi <?= $h($item['icon']) ?>"></i>
+<div class="nova-layout">
+  <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
+    <div class="offcanvas-header d-lg-none border-bottom py-3">
+      <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">Telegram</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <nav class="nova-sidebar-body" aria-label="Navegaci&oacute;n Telegram">
+      <?php foreach ($navItems as $item): ?>
+        <?php $isActive = $activeNav === $item['key']; ?>
+        <a class="nova-sidebar-link <?= $isActive ? 'active' : '' ?>" href="<?= $h($item['href']) ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
+          <i class="bi <?= $h($item['icon']) ?> nova-sidebar-icon"></i>
           <span><?= $h($item['label']) ?></span>
         </a>
-      </li>
-    <?php endforeach; ?>
-  </ul>
-</div>
+      <?php endforeach; ?>
+    </nav>
+  </aside>
 
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
 <script>

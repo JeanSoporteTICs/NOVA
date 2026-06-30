@@ -143,3 +143,37 @@
 [27-Jun-2026 13:33:50 America/Santiago] [NC_PERF] PING url=http://10.63.123.249:8080/healthcheck ms=12 http=200 available=yes
 [27-Jun-2026 13:33:50 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=yes ms=12
 [27-Jun-2026 16:33:25 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=no available=no ms=0
+[27-Jun-2026 21:24:27 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=no available=no ms=0
+[27-Jun-2026 21:43:19 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 21:43:21 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=1944 http=207 items=12
+[27-Jun-2026 21:43:21 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=1952 items=12
+[27-Jun-2026 21:50:16 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2328 http=207 items=12
+[27-Jun-2026 21:50:16 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2329 items=12
+[27-Jun-2026 21:50:16 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 21:57:26 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 21:57:28 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2332 http=207 items=12
+[27-Jun-2026 21:57:28 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2334 items=12
+[27-Jun-2026 22:14:04 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2159 http=207 items=12
+[27-Jun-2026 22:14:04 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2161 items=12
+[27-Jun-2026 22:14:04 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 22:14:21 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=1964 http=207 items=12
+[27-Jun-2026 22:14:21 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=1967 items=12
+[27-Jun-2026 22:14:21 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 22:22:12 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2210 http=207 items=12
+[27-Jun-2026 22:22:12 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2212 items=12
+[27-Jun-2026 22:22:12 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 22:50:04 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2173 http=207 items=12
+[27-Jun-2026 22:50:04 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2189 items=12
+[27-Jun-2026 22:50:04 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[27-Jun-2026 22:51:09 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=1730 http=207 items=12
+[27-Jun-2026 22:51:09 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=1734 items=12
+[27-Jun-2026 22:51:09 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[28-Jun-2026 16:43:50 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=1988 http=207 items=12
+[28-Jun-2026 16:43:50 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2003 items=12
+[28-Jun-2026 16:43:50 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[29-Jun-2026 12:18:31 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2587 http=207 items=12
+[29-Jun-2026 12:18:31 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2606 items=12
+[29-Jun-2026 12:18:31 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0
+[29-Jun-2026 23:13:34 America/Santiago] [NC_PERF] PROPFIND depth=1 path=/ url=https://www.coresalud.cl/nextcloud/remote.php/dav/files/19006667/ ms=2220 http=207 items=12
+[29-Jun-2026 23:13:34 America/Santiago] [NC_PERF] handle:list path=/ cached=no elapsed_ms=2267 items=12
+[29-Jun-2026 23:13:35 America/Santiago] [NC_PERF] handle:onlyoffice_status configured=yes available=no ms=0

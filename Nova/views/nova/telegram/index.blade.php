@@ -50,10 +50,22 @@
     </section>
 
     @if (session('telegram_status'))
-        <div class="alert alert-success fw-semibold"><i class="bi bi-check-circle"></i> {{ session('telegram_status') }}</div>
+        <div data-nova-flash="telegram" data-nova-flash-message="{{ session('telegram_status') }}" hidden></div>
     @endif
     @if (session('telegram_error'))
-        <div class="alert alert-warning fw-semibold"><i class="bi bi-exclamation-triangle"></i> {{ session('telegram_error') }}</div>
+        <div data-nova-flash="warning" data-nova-flash-message="{{ session('telegram_error') }}" hidden></div>
+    @endif
+    @if (session('telegram_status'))
+        <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>{{ session('telegram_status') }}</span>
+        </div>
+    @endif
+    @if (session('telegram_error'))
+        <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>{{ session('telegram_error') }}</span>
+        </div>
     @endif
 
     <section class="card telegram-card mb-3">
@@ -123,7 +135,7 @@
                         </div>
                         @endif
                         <div class="col-12">
-                            <button class="btn btn-primary telegram-submit" type="submit"><i class="bi bi-save"></i> Guardar</button>
+                            <button class="btn-nova btn-nova-primary telegram-submit" type="submit"><i class="bi bi-save"></i> Guardar</button>
                         </div>
                     </form>
                 </div>
@@ -137,8 +149,19 @@
                     @if ($mode === 'user')
                     <form method="post" action="{{ route('telegram.test') }}" class="mb-3">
                         @csrf
-                        <button class="btn btn-outline-primary w-100" type="submit" @disabled(!$configured || !($userTelegram['stored'] ?? false))><i class="bi bi-send"></i> Enviar mensaje de prueba</button>
+                        <button class="btn-nova btn-nova-info w-100" type="submit" @disabled(!$configured || !($userTelegram['stored'] ?? false))><i class="bi bi-send"></i> Enviar mensaje de prueba</button>
                     </form>
+                    @if (!$configured)
+                        <div class="nova-alert-card is-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Falta configurar TELEGRAM_BOT_TOKEN en administracion.
+                        </div>
+                    @elseif (!($userTelegram['stored'] ?? false))
+                        <div class="nova-alert-card is-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Guarda tu TELEGRAM_CHAT_ID para habilitar la prueba.
+                        </div>
+                    @endif
                     @else
                         @php
                             $webhookActive = (bool) data_get($listener, 'webhook.active', false);
@@ -173,12 +196,12 @@
                             <form method="post" action="{{ route('telegram.admin.listener') }}">
                                 @csrf
                                 <input type="hidden" name="action" value="delete_webhook">
-                                <button class="btn btn-outline-warning fw-bold" type="submit" @disabled(!$webhookActive || !$configured)><i class="bi bi-unlink"></i> Quitar webhook</button>
+                                <button class="btn-nova btn-nova-warning fw-bold" type="submit" @disabled(!$webhookActive || !$configured)><i class="bi bi-unlink"></i> Quitar webhook</button>
                             </form>
                             <a class="btn btn-outline-secondary fw-bold" href="{{ route('telegram.admin') }}"><i class="bi bi-arrow-clockwise"></i> Refrescar</a>
                         </div>
                         @if ($webhookError !== '')
-                            <div class="alert alert-warning fw-semibold"><i class="bi bi-exclamation-triangle"></i> {{ $webhookError }}</div>
+                            <div class="nova-alert-card is-warning"><i class="bi bi-exclamation-triangle-fill"></i> {{ $webhookError }}</div>
                         @endif
                         <div class="table-responsive mb-3">
                             <table class="table align-middle">
@@ -215,5 +238,6 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ asset('assets/nova-ui.js') }}"></script>
 </body>
 </html>
