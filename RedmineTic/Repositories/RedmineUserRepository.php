@@ -2,7 +2,6 @@
 
 namespace RedmineTic\Repositories;
 
-use App\Modulos\Nova\Models\NovaUser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -19,6 +18,11 @@ use Illuminate\Support\Str;
  */
 class RedmineUserRepository
 {
+    private ?bool $novaUsersTableAvailableCache = null;
+    private ?bool $redmineTicProfilesTableAvailableCache = null;
+    private ?bool $projectAccessTableAvailableCache = null;
+    private ?bool $userIntegrationsTableAvailableCache = null;
+
     public function __construct(
         private string $projectKey,
         private string $projectName,
@@ -74,6 +78,7 @@ class RedmineUserRepository
                 'api'                   => $this->integrationSecret((int) ($nova->id ?? 0), 'redmine_tic'),
                 'rol'                   => trim((string) ($profile->rol ?? $nova->rol ?? 'usuario')) ?: 'usuario',
                 'rol_nova'              => strtolower(trim((string) ($nova->rol ?? 'usuario'))),
+                'estado_nova'           => strtolower(trim((string) ($nova->estado ?? 'activo'))) ?: 'activo',
                 'password'              => (string) ($nova->password ?? ''),
                 'permisos'              => $permissions,
                 'estado_usuario'        => trim((string) ($profile->estado_usuario ?? $nova->estado ?? 'activo')) ?: 'activo',
@@ -116,9 +121,10 @@ class RedmineUserRepository
 
     /**
      * @param array<string,mixed> $payload
+     * @param array<string,array<string,mixed>> $roles
      * @return array{ok:bool,error:string,users:array<int,array<string,mixed>>}
      */
-    public function saveUser(array $payload): array
+    public function saveUser(array $payload, array $roles = []): array
     {
         $users           = $this->projectUsers();
         $id              = trim((string) ($payload['id'] ?? ''));
@@ -135,6 +141,9 @@ class RedmineUserRepository
                 }
 
                 $users[$index]['rol'] = $role;
+                if (isset($roles[$role]) && is_array($roles[$role])) {
+                    $users[$index]['permisos'] = $roles[$role];
+                }
                 $this->persistUsers([$users[$index]], true, 'baneado');
 
                 return ['ok' => true, 'error' => '', 'users' => $users];
@@ -176,11 +185,22 @@ class RedmineUserRepository
             'api'           => trim((string) ($payload['api'] ?? '')),
             'estado_usuario' => (($payload['estado_usuario'] ?? 'activo') === 'baneado') ? 'baneado' : 'activo',
         ];
+        if (isset($roles[$row['rol']]) && is_array($roles[$row['rol']])) {
+            $row['permisos'] = $roles[$row['rol']];
+        }
 
         $updated = false;
         foreach ($users as $index => $user) {
             if ((string) ($user['id'] ?? '') !== $id) {
                 continue;
+            }
+            if (
+                !isset($row['permisos'])
+                && trim((string) ($user['rol'] ?? '')) !== (string) $row['rol']
+                && isset($roles[$row['rol']])
+                && is_array($roles[$row['rol']])
+            ) {
+                $row['permisos'] = $roles[$row['rol']];
             }
             $users[$index] = array_merge($user, $row);
             $updated = true;
@@ -400,18 +420,18 @@ class RedmineUserRepository
             $apiToken      = trim((string) ($projectUser['api'] ?? ''));
             $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
 
-            if ($nova instanceof NovaUser) {
-                $this->saveUserIntegration((int) $nova->id, 'redmine_tic', $apiToken, (string) $redmineId);
-                $this->saveTelegramChatId((int) $nova->id, $telegramChatId);
-                $this->grantProjectAccess((int) $nova->id);
+            if ($nova !== null) {
+                $this->saveUserIntegration($nova, 'redmine_tic', $apiToken, (string) $redmineId);
+                $this->saveTelegramChatId($nova, $telegramChatId);
+                $this->grantProjectAccess($nova);
             }
 
-            if (!$nova instanceof NovaUser || !$this->redmineTicProfilesTableAvailable()) {
+            if ($nova === null || !$this->redmineTicProfilesTableAvailable()) {
                 continue;
             }
 
             $currentProfile = DB::table('redmine_tic_perfiles_usuario')
-                ->where('usuario_id', (int) $nova->id)
+                ->where('usuario_id', $nova)
                 ->first();
             $incomingStatus = array_key_exists('estado_usuario', $projectUser)
                 ? trim((string) $projectUser['estado_usuario'])
@@ -424,7 +444,7 @@ class RedmineUserRepository
 
             // Phase 3c: 'permisos' column was dropped — write only relational columns
             DB::table('redmine_tic_perfiles_usuario')->updateOrInsert(
-                ['usuario_id' => (int) $nova->id],
+                ['usuario_id' => $nova],
                 [
                     'rol'                  => trim((string) ($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
                     'estado_usuario'       => $this->normalizeProjectStatus($status),
@@ -435,7 +455,7 @@ class RedmineUserRepository
 
             if ($this->permRepo()->userPermissionsTableAvailable()) {
                 $perfilId = (int) DB::table('redmine_tic_perfiles_usuario')
-                    ->where('usuario_id', (int) $nova->id)
+                    ->where('usuario_id', $nova)
                     ->value('id');
                 $this->permRepo()->savePermissionsToRelational($perfilId, $permsToSave);
             }
@@ -446,7 +466,7 @@ class RedmineUserRepository
     // Private: user upsert helpers
     // -------------------------------------------------------------------------
 
-    private function upsertNovaUserFromProjectUser(array $projectUser, string $name, string $lastName, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): ?NovaUser
+    private function upsertNovaUserFromProjectUser(array $projectUser, string $name, string $lastName, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): ?int
     {
         if (!$this->novaUsersTableAvailable()) {
             return null;
@@ -460,24 +480,27 @@ class RedmineUserRepository
         $uuid = trim((string) ($projectUser['_nova_user_id'] ?? ''));
         if (!ctype_digit($redmineId)) {
             try {
-                $user = $uuid !== ''
-                    ? NovaUser::query()->where('uuid', $uuid)->first()
+                $existing = $uuid !== ''
+                    ? DB::table('usuarios_nova')->where('uuid', $uuid)->first()
                     : null;
-                if (!$user) {
+                if (!$existing) {
                     return null;
                 }
+
+                $values = ['actualizado_at' => now()];
                 if ($name !== '') {
-                    $user->nombre = $name;
+                    $values['nombre'] = $name;
                 }
                 if ($lastName !== '') {
-                    $user->apellido = $lastName;
+                    $values['apellido'] = $lastName;
                 }
                 if (!$preserveExistingStatus) {
-                    $user->estado = $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? $user->estado ?? 'activo'));
+                    $values['estado'] = $this->normalizeProjectStatus((string) ($projectUser['estado_usuario'] ?? $existing->estado ?? 'activo'));
                 }
-                $user->save();
 
-                return $user;
+                DB::table('usuarios_nova')->where('id', $existing->id)->update($values);
+
+                return (int) $existing->id;
             } catch (\Throwable) {
                 return null;
             }
@@ -495,32 +518,40 @@ class RedmineUserRepository
         $status = $this->normalizeProjectStatus($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
 
         try {
-            $user = NovaUser::query()->where('redmine_id', $redmineId)->first();
-            if (!$user && $rut !== '') {
-                $user = NovaUser::query()->where('rut', $rut)->first();
+            $existing = DB::table('usuarios_nova')->where('redmine_id', $redmineId)->first();
+            if (!$existing && $rut !== '') {
+                $existing = DB::table('usuarios_nova')->where('rut', $rut)->first();
             }
-            if (!$user && $username !== '') {
-                $user = NovaUser::query()->where('usuario', $username)->first();
-            }
-
-            if (!$user) {
-                $user           = new NovaUser();
-                $user->uuid     = (string) Str::uuid();
-                $user->password = Hash::make(Str::random(40));
+            if (!$existing && $username !== '') {
+                $existing = DB::table('usuarios_nova')->where('usuario', $username)->first();
             }
 
-            $user->usuario   = $this->uniqueNovaUsername($username, $user->exists ? (int) $user->id : null);
-            $user->rut       = $rut !== '' ? $rut : null;
-            $user->redmine_id = $redmineId;
-            $user->nombre    = $name;
-            $user->apellido  = $lastName;
-            $user->rol       = $role;
-            if (!$user->exists || !$preserveExistingStatus) {
-                $user->estado = $status;
-            }
-            $user->save();
+            $currentId = $existing ? (int) $existing->id : null;
 
-            return $user;
+            $values = [
+                'usuario'        => $this->uniqueNovaUsername($username, $currentId),
+                'rut'            => $rut !== '' ? $rut : null,
+                'redmine_id'     => $redmineId,
+                'nombre'         => $name,
+                'apellido'       => $lastName,
+                'rol'            => $role,
+                'actualizado_at' => now(),
+            ];
+            if (!$existing || !$preserveExistingStatus) {
+                $values['estado'] = $status;
+            }
+
+            if ($existing) {
+                DB::table('usuarios_nova')->where('id', $existing->id)->update($values);
+
+                return (int) $existing->id;
+            }
+
+            $values['uuid']      = (string) Str::uuid();
+            $values['password']  = Hash::make(Str::random(40));
+            $values['creado_at'] = now();
+
+            return (int) DB::table('usuarios_nova')->insertGetId($values);
         } catch (\Throwable) {
             return null;
         }
@@ -534,7 +565,7 @@ class RedmineUserRepository
 
         while (true) {
             try {
-                $query = NovaUser::query()->where('usuario', $candidate);
+                $query = DB::table('usuarios_nova')->where('usuario', $candidate);
                 if ($currentId !== null) {
                     $query->where('id', '<>', $currentId);
                 }
@@ -677,8 +708,24 @@ class RedmineUserRepository
         try {
             return (string) decrypt($secret);
         } catch (\Throwable) {
-            return $secret;
         }
+
+        return $this->looksLikeLaravelEncryptedValue($secret) ? '' : $secret;
+    }
+
+    private function looksLikeLaravelEncryptedValue(string $value): bool
+    {
+        $decoded = base64_decode($value, true);
+        if ($decoded === false) {
+            return false;
+        }
+
+        $payload = json_decode($decoded, true);
+
+        return is_array($payload)
+            && array_key_exists('iv', $payload)
+            && array_key_exists('value', $payload)
+            && array_key_exists('mac', $payload);
     }
 
     // -------------------------------------------------------------------------
@@ -721,37 +768,53 @@ class RedmineUserRepository
 
     private function novaUsersTableAvailable(): bool
     {
+        if ($this->novaUsersTableAvailableCache !== null) {
+            return $this->novaUsersTableAvailableCache;
+        }
+
         try {
-            return Schema::hasTable('usuarios_nova');
+            return $this->novaUsersTableAvailableCache = Schema::hasTable('usuarios_nova');
         } catch (\Throwable) {
-            return false;
+            return $this->novaUsersTableAvailableCache = false;
         }
     }
 
     private function redmineTicProfilesTableAvailable(): bool
     {
+        if ($this->redmineTicProfilesTableAvailableCache !== null) {
+            return $this->redmineTicProfilesTableAvailableCache;
+        }
+
         try {
-            return Schema::hasTable('redmine_tic_perfiles_usuario');
+            return $this->redmineTicProfilesTableAvailableCache = Schema::hasTable('redmine_tic_perfiles_usuario');
         } catch (\Throwable) {
-            return false;
+            return $this->redmineTicProfilesTableAvailableCache = false;
         }
     }
 
     private function projectAccessTableAvailable(): bool
     {
+        if ($this->projectAccessTableAvailableCache !== null) {
+            return $this->projectAccessTableAvailableCache;
+        }
+
         try {
-            return Schema::hasTable('permisos_usuario_modulo');
+            return $this->projectAccessTableAvailableCache = Schema::hasTable('permisos_usuario_modulo');
         } catch (\Throwable) {
-            return false;
+            return $this->projectAccessTableAvailableCache = false;
         }
     }
 
     private function userIntegrationsTableAvailable(): bool
     {
+        if ($this->userIntegrationsTableAvailableCache !== null) {
+            return $this->userIntegrationsTableAvailableCache;
+        }
+
         try {
-            return Schema::hasTable('integraciones_usuario');
+            return $this->userIntegrationsTableAvailableCache = Schema::hasTable('integraciones_usuario');
         } catch (\Throwable) {
-            return false;
+            return $this->userIntegrationsTableAvailableCache = false;
         }
     }
 

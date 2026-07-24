@@ -7,9 +7,12 @@ use App\Modulos\Nova\Services\ProjectAccessGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\View\View;
+use RedmineTic\Repositories\RedmineConfigRepository;
 use RedmineTic\Repositories\RedmineDataRepository;
 
 class RedmineDashboardController extends Controller
@@ -33,6 +36,31 @@ class RedmineDashboardController extends Controller
         'configuracion' => 'Configuracion',
         'estadisticas' => 'Estadisticas',
         'actividad' => 'Actividad',
+    ];
+
+    private const SECTION_PERMISSIONS = [
+        'dashboard' => 'mensajes_acceso',
+        'webhook' => 'simulador',
+        'horas-extra' => 'horas_extra',
+        'historico' => 'historico',
+        'usuarios' => 'usuarios',
+        'configuracion' => 'configuracion',
+        'estadisticas' => 'estadisticas',
+        'actividad' => 'actividad',
+    ];
+
+    private const CONFIG_PANEL_PERMISSIONS = [
+        'resumen' => 'cfg_resumen',
+        'conexion' => 'cfg_conexion',
+        'proyecto' => 'cfg_proyecto',
+        'redmine' => 'cfg_redmine',
+        'campos' => 'cfg_campos',
+        'retencion' => 'cfg_retencion',
+        'mantencion' => 'cfg_mantencion',
+        'roles' => 'cfg_roles',
+        'usuarios-permisos' => 'cfg_usuarios',
+        'categorias' => 'cfg_categorias',
+        'unidades' => 'cfg_unidades',
     ];
 
     public function __construct()
@@ -74,12 +102,37 @@ class RedmineDashboardController extends Controller
         $sections = $this->sectionsFor($redmine->projectKey());
         abort_unless(array_key_exists($section, $sections), 404);
 
-        $dashboardFilter = $section === 'dashboard' ? (string) $request->query('estado', 'todos') : 'todos';
+        $permissions = $this->effectivePermissions($request, $redmine);
+        abort_unless($this->can($permissions, self::SECTION_PERMISSIONS[$section] ?? ''), 403);
+        if ($section === 'configuracion') {
+            $allowedPanels = array_keys(array_filter(
+                self::CONFIG_PANEL_PERMISSIONS,
+                fn (string $permission): bool => $this->can($permissions, $permission)
+            ));
+            $panel = strtolower(trim((string) $request->query('panel', $allowedPanels[0] ?? '')));
+            abort_unless($this->can($permissions, self::CONFIG_PANEL_PERMISSIONS[$panel] ?? 'cfg_resumen'), 403);
+        }
+        $sections = array_filter(
+            $sections,
+            fn (string $label, string $key): bool => $this->can($permissions, self::SECTION_PERMISSIONS[$key] ?? ''),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        $dashboardFilter = $section === 'dashboard' ? (string) $request->query('estado', 'pendientes') : 'todos';
 
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $config = $redmine->configuration();
 
-        return view('redmine_tic::native', array_merge($redmine->nativeSectionData($section, $dashboardFilter, $request->query(), is_array($user) ? $user : []), [
+        $sectionData = $redmine->nativeSectionData($section, $dashboardFilter, $request->query(), is_array($user) ? $user : []);
+        if ($section === 'actividad') {
+            $sectionData['activityData'] = $redmine->activityData(
+                $request->query(),
+                is_array($user) ? (string)($user['id'] ?? '') : '',
+                $this->can($permissions, 'actividad_todos')
+            );
+        }
+
+        return view('redmine_tic::native', array_merge($sectionData, [
             'section' => $section,
             'sectionLabel' => $sections[$section],
             'sections' => $sections,
@@ -88,20 +141,36 @@ class RedmineDashboardController extends Controller
             'dashboardFilter' => $dashboardFilter,
             'redmineMaintenance' => $redmine->dashboardSummary()['maintenance'],
             'redmineRetentionHours' => max(1, (int) ($config['retencion_horas'] ?? 24)),
+            'allowedConfigPanels' => array_keys(array_filter(
+                self::CONFIG_PANEL_PERMISSIONS,
+                fn (string $permission): bool => $this->can($permissions, $permission)
+            )),
+            'effectivePermissions' => $permissions,
         ]));
     }
 
-    public function dashboardAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
+    public function dashboardAction(Request $request, RedmineDataRepository $redmine): RedirectResponse|JsonResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'mensajes_acceso');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
 
         $action = (string) $request->input('dashboard_action', $request->input('action', ''));
+        $this->authorizePermission(
+            $request,
+            $redmine,
+            in_array($action, ['delete', 'delete_selected'], true) ? 'reportes_eliminar' : 'reportes_editar'
+        );
         $ids = $this->ids($request->input('ids', []));
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $user = is_array($user) ? $user : [];
+
+        // Captured only for 'toggle_hours_extra', the one action currently submitted via AJAX
+        // (optimistic UI toggle). Other actions still use the full-page redirect flow below and
+        // don't need a precise success flag, so this stays null for them.
+        $toggleHoursExtraSuccess = null;
 
         $message = match ($action) {
             'update' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->updateReport($request->all()) ? 'Solicitud actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
@@ -110,9 +179,21 @@ class RedmineDashboardController extends Controller
             'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) archivada(s).',
             'process_selected' => $this->sendReports($request, $redmine, $redmine->filterAccessibleActiveReportIds($ids, $user)),
             'reset_errors' => $redmine->resetErrors($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' error(es) marcados como pendientes.',
-            'toggle_hours_extra' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->toggleHoursExtra((string) $request->input('id'), $request->boolean('hora_extra')) ? 'Hora extra actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
+            'toggle_hours_extra' => ($toggleHoursExtraSuccess = $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->toggleHoursExtra((string) $request->input('id'), $request->boolean('hora_extra'))) ? 'Hora extra actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
             default => 'Accion no reconocida.',
         };
+
+        if ($action !== 'process_selected' && $action !== '') {
+            $redmine->recordActivity('reporte_' . $action, [
+                'user_id' => (string) ($user['id'] ?? ''),
+                'message_id' => (string) $request->input('id', implode(',', $ids)),
+                'result' => str_contains($message, 'No se') ? 'error' : 'success',
+            ]);
+        }
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['ok' => $toggleHoursExtraSuccess ?? true, 'message' => $message]);
+        }
 
         return back()->with('redmine_status', $message);
     }
@@ -120,11 +201,13 @@ class RedmineDashboardController extends Controller
     public function userAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'usuarios');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
 
         $action = (string) $request->input('action', 'save');
+        $this->authorizePermission($request, $redmine, $action === 'delete' ? 'usuarios_eliminar' : 'usuarios_editar');
         if ($action === 'preview_redmine') {
             $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
             $result = $redmine->previewUsersFromRedmine(is_array($user) ? ($user['id'] ?? null) : null);
@@ -175,6 +258,7 @@ class RedmineDashboardController extends Controller
     public function categoryAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'cfg_categorias');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
@@ -205,6 +289,7 @@ class RedmineDashboardController extends Controller
     public function unitAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'cfg_unidades');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
@@ -235,34 +320,54 @@ class RedmineDashboardController extends Controller
     public function configurationAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'configuracion');
+        $panel = strtolower(trim((string) $request->query('panel', 'resumen')));
+        $this->authorizePermission($request, $redmine, self::CONFIG_PANEL_PERMISSIONS[$panel] ?? 'cfg_resumen');
         if ($redmine->maintenanceModeEnabled() && !$this->isMaintenanceSettingsRequest($request)) {
             return $this->maintenanceBlock($redmine);
         }
 
         if ($request->input('config_action') === 'save_user_permissions') {
             $userId = (string) $request->input('user_id', '');
+            $userRole = trim((string) $request->input('user_role', ''));
+            $permissions = $this->permissionPayload($request);
+            if (strtolower($userRole) === 'root') {
+                $permissions['all'] = true;
+            }
+            if ($request->boolean('apply_role_permissions') && $userRole !== '') {
+                $rolePermissions = $redmine->roles()[$userRole] ?? null;
+                if (is_array($rolePermissions)) {
+                    $permissions = $rolePermissions;
+                }
+            }
             $updated = $redmine->saveUserPermissions(
                 $userId,
-                (string) $request->input('user_role', ''),
-                $this->permissionPayload($request)
+                $userRole,
+                $permissions
             );
 
             return redirect()
-                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'usuarios-permisos', 'user_id' => $userId]))
-                ->with('redmine_status', $updated ? 'Permisos de usuario guardados.' : 'No se encontro el usuario seleccionado.');
+                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'usuarios-permisos']), 303)
+                ->with('redmine_status', $updated ? 'Permisos de usuario guardados.' : 'No se encontro el usuario seleccionado.')
+                ->with('redmine_selected_user_permissions', $userId);
         }
 
         if ($request->input('config_action') === 'save_role_permissions') {
             $roleName = trim((string) $request->input('role_name', ''));
+            $permissions = $this->permissionPayload($request);
+            if (strtolower($roleName) === 'root') {
+                $permissions['all'] = true;
+            }
             $updated = $redmine->saveRolePermissions(
                 $roleName,
-                $this->permissionPayload($request)
+                $permissions
             );
 
             return redirect()
-                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'roles', 'role' => $roleName]))
+                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'roles']), 303)
                 ->with('redmine_status', $updated ? 'Permisos de rol guardados.' : 'No se encontro el rol seleccionado.')
-                ->with('redmine_open_role_permissions', $roleName);
+                ->with('redmine_open_role_permissions', $roleName)
+                ->with('redmine_selected_role', $roleName);
         }
 
         if ($request->input('config_action') === 'delete_role') {
@@ -277,7 +382,6 @@ class RedmineDashboardController extends Controller
         $config = $redmine->configuration();
         foreach ([
             'platform_url',
-            'platform_token',
             'categories_url',
             'unidades_url',
             'webhook_url',
@@ -324,77 +428,39 @@ class RedmineDashboardController extends Controller
                 }
             }
         }
-        $this->applyRedmineOptionAction($request, $config);
-        $redmine->saveConfiguration($config);
 
-        $response = back()->with('redmine_status', 'Configuracion guardada.');
+        if (($blockedDefaultMessage = $this->defaultOptionDeleteMessage($request, $config)) !== null) {
+            return back()
+                ->with('redmine_status', $blockedDefaultMessage)
+                ->with('redmine_status_type', 'info')
+                ->with('redmine_open_options', (string) $request->input('opt_type', ''));
+        }
+
         $optionType = (string) $request->input('opt_type', '');
         $optionAction = (string) $request->input('opt_action', '');
         if (in_array($optionType, ['trackers', 'prioridades', 'estados'], true) && in_array($optionAction, ['create', 'update', 'delete', 'set_default'], true)) {
-            $response->with('redmine_open_options', $optionType);
+            $configRepository = new RedmineConfigRepository($redmine->projectKey(), $redmine->projectName());
+            $this->applyRedmineOptionAction($request, $configRepository);
+
+            return back()
+                ->with('redmine_status', 'Configuracion guardada.')
+                ->with('redmine_open_options', $optionType);
         }
 
+        $redmine->saveConfiguration($config);
+        if ($request->has('maintenance_mode')) {
+            $this->syncModuleMaintenanceState($redmine->projectKey(), !empty($config['maintenance_mode']));
+        }
+
+        $response = back()->with('redmine_status', 'Configuracion guardada.');
         return $response;
-    }
-
-    public function configurationExportAction(Request $request, RedmineDataRepository $redmine): Response|RedirectResponse
-    {
-        $this->prepare($request, $redmine);
-        $selected = $this->maintenanceSections($request->input('maintenance_sections', []), $redmine);
-        if ($selected === []) {
-            return back()->with('redmine_status', 'Selecciona al menos una seccion para exportar.');
-        }
-
-        $bundle = $redmine->exportMaintenanceBundle($selected);
-        $filename = 'mantencion-redmine-' . now('America/Santiago')->format('Ymd-His') . '.json';
-
-        return response(json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 200, [
-            'Content-Type' => 'application/json; charset=utf-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ]);
-    }
-
-    public function configurationImportAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
-    {
-        $this->prepare($request, $redmine);
-        if ($blocked = $this->maintenanceBlock($redmine)) {
-            return $blocked;
-        }
-
-        $request->validate([
-            'maintenance_file' => ['required', 'file', 'max:5120'],
-        ]);
-
-        $selected = $this->maintenanceSections($request->input('maintenance_sections', []), $redmine);
-        if ($selected === []) {
-            return back()->with('redmine_status', 'Selecciona al menos una seccion para importar.');
-        }
-
-        $file = $request->file('maintenance_file');
-        if (!$file || !$file->isValid()) {
-            return back()->with('redmine_status', 'No se pudo leer el archivo de importacion.');
-        }
-        if (strtolower((string) $file->getClientOriginalExtension()) !== 'json') {
-            return back()->with('redmine_status', 'El respaldo debe ser un archivo .json.');
-        }
-
-        $bundle = json_decode((string) file_get_contents($file->getRealPath()), true);
-        if (!is_array($bundle)) {
-            return back()->with('redmine_status', 'El archivo importado no es un respaldo JSON valido.');
-        }
-
-        try {
-            $written = $redmine->importMaintenanceBundle($bundle, $selected);
-        } catch (\Throwable $exception) {
-            return back()->with('redmine_status', 'Error al importar: ' . $exception->getMessage());
-        }
-
-        return back()->with('redmine_status', 'Importacion completada. Archivos actualizados: ' . $written . '.');
     }
 
     public function historyAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'historico');
+        $this->authorizePermission($request, $redmine, 'historico_acciones');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
@@ -407,6 +473,7 @@ class RedmineDashboardController extends Controller
     public function historyStatuses(Request $request, RedmineDataRepository $redmine): JsonResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'historico');
 
         $ids = collect(explode(',', (string) $request->query('ids', '')))
             ->map(static fn (string $id): string => preg_replace('/\D+/', '', trim($id)) ?? '')
@@ -425,11 +492,13 @@ class RedmineDashboardController extends Controller
     public function hoursAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'horas_extra');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
 
         $action = (string) $request->input('action', 'save');
+        $this->authorizePermission($request, $redmine, $action === 'delete' ? 'horas_extra_eliminar' : 'horas_extra_editar');
         $source = (string) $request->input('_source_file');
         if ($action === 'delete') {
             $deleted = $redmine->deleteHoursGroup($source, (string) $request->input('fecha'));
@@ -444,18 +513,27 @@ class RedmineDashboardController extends Controller
     public function activityAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'actividad');
+        $this->authorizePermission($request, $redmine, 'actividad_eliminar');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
 
-        $redmine->clearActivity();
+        $userId = (string) data_get($request->session()->get('redmine_project_user', []), 'id', '');
+        $deleted = $redmine->clearActivityForUser($userId);
+        $redmine->recordActivity('actividad_limpiada', [
+            'user_id' => $userId,
+            'result' => 'success',
+            'count' => $deleted,
+        ]);
 
-        return back()->with('redmine_status', 'Registro de actividad limpiado.');
+        return back()->with('redmine_status', $deleted . ' evento(s) propios eliminados de la bitácora.');
     }
 
     public function webhookAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'simulador');
         if ($blocked = $this->maintenanceBlock($redmine)) {
             return $blocked;
         }
@@ -490,6 +568,12 @@ class RedmineDashboardController extends Controller
         }
         $payload['origen'] = 'manual';
         $report = $redmine->createSimulatedReport($payload);
+        $redmine->recordActivity('reporte_manual_creado', [
+            'user_id' => is_array($user) ? (string) ($user['id'] ?? '') : '',
+            'message_id' => (string) ($report['id'] ?? ''),
+            'asunto' => (string) ($payload['asunto'] ?? ''),
+            'categoria' => (string) ($payload['categoria'] ?? ''),
+        ]);
 
         return back()
             ->with('redmine_status', 'Reporte manual creado en pendientes.')
@@ -539,15 +623,45 @@ class RedmineDashboardController extends Controller
         return $projectKey === 'redmine-mantencion' ? self::MANTENCION_SECTIONS : self::TIC_SECTIONS;
     }
 
-    /**
-     * @param mixed $value
-     * @return string[]
-     */
-    private function maintenanceSections($value, RedmineDataRepository $redmine): array
+    /** @return array<string,mixed> */
+    private function effectivePermissions(Request $request, RedmineDataRepository $redmine): array
     {
-        $available = array_keys($redmine->maintenanceSections());
+        $user = $request->session()->get('redmine_project_user', []);
+        $permissions = data_get($user, 'legacy.permisos', []);
+        if (is_array($permissions) && $permissions !== []) {
+            return $permissions;
+        }
 
-        return array_values(array_intersect(array_map('strval', (array) $value), $available));
+        $role = (string) data_get($user, 'legacy.rol', data_get($user, 'role', ''));
+        $rolePermissions = $redmine->roles()[$role] ?? [];
+
+        return is_array($rolePermissions) ? $rolePermissions : [];
+    }
+
+    /** @param array<string,mixed> $permissions */
+    private function can(array $permissions, string $permission): bool
+    {
+        $explicitPermissions = [
+            'actividad', 'actividad_eliminar', 'actividad_todos',
+            'reportes_editar', 'reportes_eliminar',
+            'horas_extra_editar', 'horas_extra_eliminar',
+            'historico_acciones', 'usuarios_editar', 'usuarios_eliminar',
+        ];
+        if (in_array($permission, $explicitPermissions, true) && array_key_exists($permission, $permissions)) {
+            $value = $permissions[$permission];
+            return $value === true || $value === 1 || $value === '1' || $value === 'si';
+        }
+        if (!empty($permissions['all'])) {
+            return true;
+        }
+
+        $value = $permissions[$permission] ?? false;
+        return $value === true || $value === 1 || $value === '1' || $value === 'todos' || $value === 'asignados';
+    }
+
+    private function authorizePermission(Request $request, RedmineDataRepository $redmine, string $permission): void
+    {
+        abort_unless($this->can($this->effectivePermissions($request, $redmine), $permission), 403);
     }
 
     private function maintenanceBlock(RedmineDataRepository $redmine): ?RedirectResponse
@@ -566,81 +680,92 @@ class RedmineDashboardController extends Controller
         return collect(array_keys($request->except(['_token'])))->every(static fn (string $field): bool => in_array($field, $allowed, true));
     }
 
+    private function syncModuleMaintenanceState(string $projectKey, bool $enabled): void
+    {
+        try {
+            if (!Schema::hasTable('modulos_nova') || !Schema::hasColumn('modulos_nova', 'en_mantencion')) {
+                return;
+            }
+
+            DB::table('modulos_nova')
+                ->where('clave_modulo', $projectKey)
+                ->update(['en_mantencion' => $enabled ? 1 : 0]);
+            Cache::forget('nova.modules.state');
+        } catch (\Throwable) {
+        }
+    }
+
     /**
      * @param array<string,mixed> $config
      */
-    private function applyRedmineOptionAction(Request $request, array &$config): void
+    private function defaultOptionDeleteMessage(Request $request, array $config): ?string
     {
+        if ((string) $request->input('opt_action', '') !== 'delete') {
+            return null;
+        }
+
         $type = (string) $request->input('opt_type', '');
-        $action = (string) $request->input('opt_action', '');
         $configKey = [
             'trackers' => 'tracker_id',
             'prioridades' => 'priority_id',
             'estados' => 'status_id',
         ][$type] ?? null;
 
-        if ($configKey === null || !in_array($action, ['create', 'update', 'delete', 'set_default'], true)) {
-            return;
+        if ($configKey === null) {
+            return null;
+        }
+
+        $id = trim((string) $request->input('opt_id', ''));
+        if ($id === '') {
+            return null;
         }
 
         $rows = array_values(array_filter((array) ($config[$type] ?? []), 'is_array'));
+        $rowIsDefault = collect($rows)->contains(static function (array $row) use ($id): bool {
+            return (string) ($row['id'] ?? '') === $id && !empty($row['default']);
+        });
+
+        if ((string) ($config[$configKey] ?? '') !== $id && !$rowIsDefault) {
+            return null;
+        }
+
+        $label = [
+            'trackers' => 'trackers',
+            'prioridades' => 'prioridades',
+            'estados' => 'estados',
+        ][$type];
+
+        return 'No se puede eliminar esta opcion porque esta definida como predeterminada. Selecciona otro valor predeterminado para ' . $label . ' antes de eliminarla.';
+    }
+
+    private function applyRedmineOptionAction(Request $request, RedmineConfigRepository $configRepository): bool
+    {
+        $type = (string) $request->input('opt_type', '');
+        $action = (string) $request->input('opt_action', '');
+        $databaseType = [
+            'trackers' => 'tracker',
+            'prioridades' => 'prioridad',
+            'estados' => 'estado',
+        ][$type] ?? null;
+
+        if ($databaseType === null || !in_array($action, ['create', 'update', 'delete', 'set_default'], true)) {
+            return false;
+        }
+
         $id = trim((string) $request->input('opt_id', ''));
         $name = trim((string) $request->input('opt_nombre', ''));
         if ($id === '' || ($action !== 'delete' && $action !== 'set_default' && $name === '')) {
-            return;
-        }
-
-        if ($action === 'delete') {
-            $rows = array_values(array_filter($rows, static fn (array $row): bool => (string) ($row['id'] ?? '') !== $id));
-            if ((string) ($config[$configKey] ?? '') === $id) {
-                $config[$configKey] = $rows[0]['id'] ?? null;
-                if (isset($rows[0])) {
-                    $rows[0]['default'] = true;
-                }
-            }
-            $config[$type] = $rows;
-            return;
-        }
-
-        if ($action === 'set_default') {
-            foreach ($rows as &$row) {
-                $row['default'] = (string) ($row['id'] ?? '') === $id;
-            }
-            unset($row);
-            $config[$configKey] = is_numeric($id) ? (int) $id : $id;
-            $config[$type] = $rows;
-            return;
+            return false;
         }
 
         $makeDefault = $request->boolean('opt_default');
-        if ($makeDefault) {
-            foreach ($rows as &$row) {
-                $row['default'] = false;
-            }
-            unset($row);
-            $config[$configKey] = is_numeric($id) ? (int) $id : $id;
-        }
 
-        $payload = [
-            'id' => is_numeric($id) ? (int) $id : $id,
-            'nombre' => $name,
-            'default' => $makeDefault,
-        ];
-
-        $updated = false;
-        foreach ($rows as $index => $row) {
-            if ((string) ($row['id'] ?? '') !== $id) {
-                continue;
-            }
-            $rows[$index] = array_merge($row, $payload);
-            $updated = true;
-            break;
-        }
-
-        if (!$updated) {
-            $rows[] = $payload;
-        }
-        $config[$type] = $rows;
+        return match ($action) {
+            'create' => $configRepository->createOption($databaseType, $id, $name, $makeDefault),
+            'update' => $configRepository->updateOption($databaseType, $id, $name, $makeDefault),
+            'delete' => $configRepository->deleteOption($databaseType, $id),
+            'set_default' => $configRepository->setDefaultOption($databaseType, $id),
+        };
     }
 
     /**
@@ -651,6 +776,7 @@ class RedmineDashboardController extends Controller
         $scope = static fn (string $field): string => in_array((string) $request->input($field, 'asignados'), ['todos', 'asignados'], true)
             ? (string) $request->input($field, 'asignados')
             : 'asignados';
+        $canViewActivity = $request->boolean('perm_actividad');
 
         return [
             'mensajes' => $scope('perm_mensajes_scope'),
@@ -661,10 +787,7 @@ class RedmineDashboardController extends Controller
             'historico_scope' => $scope('perm_historico_scope'),
             'configuracion' => $request->boolean('perm_configuracion'),
             'estadisticas' => $request->boolean('perm_estadisticas'),
-            'estadisticas_manual' => $request->boolean('perm_estadisticas_manual'),
             'usuarios' => $request->boolean('perm_usuarios'),
-            'categorias' => $request->boolean('perm_categorias'),
-            'unidades' => $request->boolean('perm_unidades'),
             'simulador' => $request->boolean('perm_simulador'),
             'reportes_editar' => $request->boolean('perm_reportes_editar'),
             'reportes_eliminar' => $request->boolean('perm_reportes_eliminar'),
@@ -678,18 +801,15 @@ class RedmineDashboardController extends Controller
             'cfg_redmine' => $request->boolean('perm_cfg_redmine'),
             'cfg_campos' => $request->boolean('perm_cfg_campos'),
             'cfg_retencion' => $request->boolean('perm_cfg_retencion'),
-            'cfg_webhook' => $request->boolean('perm_cfg_webhook'),
-            'cfg_sesion' => $request->boolean('perm_cfg_sesion'),
             'cfg_mantencion' => $request->boolean('perm_cfg_mantencion'),
-            'cfg_trackers' => $request->boolean('perm_cfg_trackers'),
-            'cfg_prioridades' => $request->boolean('perm_cfg_prioridades'),
-            'cfg_estados' => $request->boolean('perm_cfg_estados'),
             'cfg_roles' => $request->boolean('perm_cfg_roles'),
             'cfg_usuarios' => $request->boolean('perm_cfg_usuarios'),
-            'cfg_catalogos' => $request->boolean('perm_cfg_catalogos'),
             'cfg_categorias' => $request->boolean('perm_cfg_categorias'),
             'cfg_unidades' => $request->boolean('perm_cfg_unidades'),
-            'actividad' => $request->boolean('perm_actividad'),
+            'actividad' => $canViewActivity,
+            'actividad_eliminar' => $canViewActivity && $request->boolean('perm_actividad_eliminar'),
+            'actividad_todos' => $canViewActivity && $request->boolean('perm_actividad_todos'),
+            'mis_integraciones' => $request->boolean('perm_mis_integraciones'),
         ];
     }
 

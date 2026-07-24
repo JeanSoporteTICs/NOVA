@@ -13,12 +13,25 @@ $emachBaseUrl = function_exists('url') ? rtrim(url('/emach'), '/') : '/emach';
 $homeUrl = function_exists('url') ? url('/') : '/NOVA/public';
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $sessionExtendUrl = function_exists('route') ? route('session.extend') : '/NOVA/public/session/extend';
+$loginUrl = function_exists('route') ? route('login') : '/NOVA/public/login';
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $currentUser = $_SESSION['user'] ?? [];
+if (function_exists('request')) {
+  $novaSessionUser = request()->session()->get('nova_user');
+  if (is_array($novaSessionUser) && $novaSessionUser !== []) {
+    $currentUser = array_merge($currentUser, $novaSessionUser);
+  }
+}
 $navItems = [
   ['key' => 'inicio', 'label' => 'Consulta', 'href' => $emachBaseUrl, 'icon' => 'bi-table'],
+  ['key' => 'horario', 'label' => 'Horario', 'href' => $emachBaseUrl . '/horario.php', 'icon' => 'bi-calendar-week'],
   ['key' => 'configuracion', 'label' => 'Configuracion', 'href' => $emachBaseUrl . '/configuracion', 'icon' => 'bi-person-lock'],
 ];
+$currentRole = (string) ($currentUser['role'] ?? $currentUser['rol'] ?? 'usuario');
+$sessionIdentity = (string) ($currentUser['id'] ?? $currentUser['username'] ?? '');
+if (in_array($currentRole, config('nova.module_admin_roles', []), true)) {
+  $navItems[] = ['key' => 'actividad', 'label' => 'Actividad', 'href' => $emachBaseUrl . '/log', 'icon' => 'bi-activity'];
+}
 
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark emach-navbar">
@@ -61,26 +74,6 @@ $navItems = [
   </aside>
 
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
-<script>
-(function () {
-  var loader = document.getElementById('app-page-loader');
-  window.appUi = window.appUi || {};
-  window.appUi.setLoading = function (on) {
-    if (loader) loader.classList.toggle('is-visible', !!on);
-  };
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest('a[href]');
-    if (!a || e.defaultPrevented || a.target === '_blank') return;
-    try { var u = new URL(a.href, window.location.href); if (u.origin !== window.location.origin) return; } catch (_) { return; }
-    window.appUi.setLoading(true);
-  });
-  document.addEventListener('submit', function (e) {
-    if (!e.defaultPrevented) window.appUi.setLoading(true);
-  });
-  window.addEventListener('pageshow', function () { window.appUi.setLoading(false); });
-  window.addEventListener('load', function () { window.appUi.setLoading(false); });
-}());
-</script>
 
 <script>
 window.addEventListener('load', () => {
@@ -95,6 +88,8 @@ window.addEventListener('load', () => {
   let expiresAt = Date.now() + (remaining * 1000);
   const logoutUrl = '<?= $h($logoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($sessionExtendUrl) ?>';
+  const loginUrl = '<?= $h($loginUrl) ?>';
+  const sessionIdentity = '<?= $h($sessionIdentity) ?>';
   const csrfToken = '<?= $h($csrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const modalEl = document.getElementById('sessionModal');
   const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl) : null;
@@ -183,6 +178,10 @@ window.addEventListener('load', () => {
   }
 
   function submitLogout() {
+    if (sessionExpired) {
+      window.location.assign(loginUrl);
+      return;
+    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = logoutUrl;
@@ -222,7 +221,7 @@ window.addEventListener('load', () => {
             'X-CSRF-TOKEN': csrfToken
           },
           credentials: 'same-origin',
-          body: JSON.stringify({password: pwd})
+          body: JSON.stringify({password: pwd, identity: sessionIdentity})
         });
         const data = await resp.json();
         if (data.ok) {

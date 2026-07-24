@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 
 use App\Modulos\Nova\Repositories\ModuleRegistry;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
+use App\Modulos\Nova\Support\LegacyPhpSession;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -216,9 +217,7 @@ class LegacyProjectController extends Controller
             return;
         }
 
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        LegacyPhpSession::start(request(), $project);
 
         $projectUser = app(ProjectAccessGuard::class)->projectUser($project, $novaUser);
 
@@ -229,6 +228,23 @@ class LegacyProjectController extends Controller
             'rol' => $novaUser['role'] ?? 'usuario',
         ]);
         $_SESSION['last_activity'] = time();
+
+        // Release the legacy PHP session file lock as soon as we're done writing to
+        // it. PHP's default file-based session handler holds an exclusive lock from
+        // session_start() until the script ends (or session_write_close() is called),
+        // and LegacyPhpSession derives a deterministic, per-user+module session ID —
+        // so without an early close, concurrent AJAX requests from the same user in
+        // the same module queue up waiting for each other's lock instead of running
+        // in parallel. Precedent: emach already did this; redmine-mantencion's own
+        // toggle_hora_extra AJAX action was serializing on exactly this lock (confirmed
+        // via DevTools timing showing requests finishing ~6-7s apart in sequence).
+        // Any legacy code path that still needs to WRITE new session data later
+        // (e.g. a non-AJAX flash/toast message before a redirect) already reopens the
+        // session itself via auth_start_session() before writing — see dashboard_set_flash()
+        // / dashboard_set_toast() in RedmineMantencion/controllers/dashboard.php.
+        if (in_array($project, ['emach', 'redmine-mantencion', 'telegram'], true)) {
+            session_write_close();
+        }
     }
 
     private function abortIfDisabled(array $config): void
@@ -250,20 +266,6 @@ class LegacyProjectController extends Controller
     {
         if ($project !== 'redmine-mantencion') {
             return false;
-        }
-
-        $path = strtolower($this->normalizePath($path));
-        if ($path === 'controllers/procedimientos_file.php') {
-            return ($request->isMethod('GET') || $request->isMethod('HEAD'))
-                && trim((string) $request->query('id', '')) !== ''
-                && trim((string) $request->query('token', '')) !== '';
-        }
-
-        if ($path === 'controllers/onlyoffice.php') {
-            $action = trim((string) $request->query('action', ''));
-            return $request->isMethod('POST')
-                && in_array($action, ['callback', 'client_log'], true)
-                && trim((string) $request->query('id', '')) !== '';
         }
 
         return false;

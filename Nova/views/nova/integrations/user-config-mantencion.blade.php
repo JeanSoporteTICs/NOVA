@@ -11,7 +11,7 @@
 @php
     $activeNav = 'mis_integraciones';
     $configuredCount = collect($integrations)->filter(fn ($item) => !empty($item['stored']))->count();
-    $statusFor = function (array $definition, array $state): array {
+    $statusFor = function (string $type, array $definition, array $state): array {
         $stored = (bool) ($state['stored'] ?? false);
         $hasSecret = (bool) ($state['has_secret'] ?? false);
         $hasExternal = (bool) ($state['has_external_user'] ?? false);
@@ -19,6 +19,9 @@
 
         if (!$stored) {
             return ['class' => 'is-empty', 'label' => 'Sin configurar', 'icon' => 'bi-circle'];
+        }
+        if ($type === 'redmine_mantencion') {
+            return ['class' => 'is-ready', 'label' => 'Configurada', 'icon' => 'bi-circle-fill'];
         }
         if (!$hasSecret || ($needsExternal && !$hasExternal)) {
             return ['class' => 'is-warning', 'label' => 'Requiere actualizacion', 'icon' => 'bi-circle-fill'];
@@ -52,7 +55,6 @@
                         <ul class="integration-hero-list">
                             <li>Redmine</li>
                             <li>CORE</li>
-                            <li>Nextcloud</li>
                         </ul>
                     </div>
                 </div>
@@ -73,7 +75,7 @@
                     $stored = (bool) ($state['stored'] ?? false);
                     $maskedExternal = (string) ($state['masked_external_user'] ?? '');
                     $updatedAt = $formatDate($state['updated_at'] ?? '');
-                    $status = $statusFor($definition, $state);
+                    $status = $statusFor($type, $definition, $state);
                     $hasExternalField = $definition['external_label'] !== '';
                     $drawerId = 'integration-drawer-' . $type;
                     $formId = 'integration-form-' . $type;
@@ -161,10 +163,11 @@
 
                             <div>
                                 <label class="form-label" for="{{ $secretInputId }}">{{ $definition['secret_label'] }}</label>
-                                <div class="input-group integration-secret-group">
-                                    <input id="{{ $secretInputId }}" class="form-control js-secret-input" name="secret" type="password"
-                                           autocomplete="new-password" placeholder="{{ $stored ? '**************' : $definition['secret_label'] }}">
-                                    <button class="btn btn-outline-secondary js-toggle-secret" type="button" data-target="{{ $secretInputId }}">
+                                <div class="input-group integration-secret-group" data-secret-wrapper>
+                                    <input id="{{ $secretInputId }}" class="form-control" name="secret" type="password"
+                                           autocomplete="new-password" placeholder="{{ $stored ? '**************' : $definition['secret_label'] }}"
+                                           data-secret-input>
+                                    <button class="btn btn-outline-secondary" type="button" data-toggle-secret data-target="{{ $secretInputId }}" aria-controls="{{ $secretInputId }}">
                                         <i class="bi bi-eye"></i><span>Mostrar</span>
                                     </button>
                                 </div>
@@ -176,22 +179,22 @@
                             </div>
                         </form>
                     </div>
-                    <div class="offcanvas-footer integration-drawer-footer">
-                        <button class="btn-nova btn-nova-primary js-submit-button" type="submit" form="{{ $formId }}">
-                            <span class="nova-spinner" aria-hidden="true"></span>
-                            <i class="bi bi-save"></i>
-                            <span>Guardar</span>
-                        </button>
+                    <div class="offcanvas-footer nova-drawer-actions">
                         <form method="post" action="{{ $postUrl }}" class="integration-delete-form js-integration-delete"
                               data-app-confirm="Eliminar la cuenta {{ $definition['label'] }}?">
                             @csrf
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="type" value="{{ $type }}">
                             <button class="btn-nova btn-nova-danger" type="submit" @disabled(!$stored)>
-                                <i class="bi bi-trash"></i>
+                                <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
                                 <span>Eliminar</span>
                             </button>
                         </form>
+                        <button class="btn-nova btn-nova-primary js-submit-button" type="submit" form="{{ $formId }}">
+                            <span class="nova-spinner" aria-hidden="true"></span>
+                            <span class="btn-nova-icon"><i class="bi bi-check2"></i></span>
+                            <span>Guardar</span>
+                        </button>
                     </div>
                 </div>
             @endforeach
@@ -219,7 +222,7 @@
                         @foreach ($integrationDefinitions as $type => $definition)
                             @php
                                 $state = $integrations[$type] ?? [];
-                                $status = $statusFor($definition, $state);
+                                $status = $statusFor($type, $definition, $state);
                             @endphp
                             <tr>
                                 <td><strong>{{ $definition['label'] }}</strong></td>
@@ -243,6 +246,7 @@
 <script>
 (function () {
     document.addEventListener('click', function (event) {
+        // Card click — open its drawer (skip when clicking interactive elements)
         const card = event.target.closest('[data-integration-card]');
         if (card && !event.target.closest('button, a, input, select, textarea, label')) {
             const drawer = document.getElementById(card.getAttribute('data-drawer-target'));
@@ -251,18 +255,33 @@
             }
         }
 
-        const toggle = event.target.closest('.js-toggle-secret');
-        if (!toggle) return;
+        // Toggle secret field visibility
+        // Uses wrapper scope so multiple forms on the same page never conflict.
+        // Bug fix: removed "input.value === ''" guard — field is empty by design
+        // (passwords are never pre-populated) so the old check always blocked the toggle.
+        const toggleBtn = event.target.closest('[data-toggle-secret]');
+        if (!toggleBtn) return;
 
-        const input = document.getElementById(toggle.getAttribute('data-target'));
-        if (!input || input.value === '') return;
+        event.preventDefault();
+        event.stopPropagation();
 
-        const showing = input.type === 'text';
-        input.type = showing ? 'password' : 'text';
-        const icon = toggle.querySelector('i');
-        const label = toggle.querySelector('span');
-        if (icon) icon.className = showing ? 'bi bi-eye' : 'bi bi-eye-slash';
-        if (label) label.textContent = showing ? 'Mostrar' : 'Ocultar';
+        const targetId = toggleBtn.getAttribute('data-target') || toggleBtn.getAttribute('aria-controls') || '';
+        const wrapper = toggleBtn.closest('[data-secret-wrapper]');
+        const input = targetId !== ''
+            ? document.getElementById(targetId)
+            : wrapper?.querySelector('[data-secret-input]');
+        if (!input) return;
+
+        const isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        toggleBtn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+
+        const label = toggleBtn.querySelector('span');
+        if (label) label.textContent = isHidden ? 'Ocultar' : 'Mostrar';
+
+        const icon = toggleBtn.querySelector('i');
+        if (icon) icon.className = isHidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+        input.focus();
     });
 
     document.addEventListener('keydown', function (event) {
@@ -278,9 +297,7 @@
 
     document.addEventListener('submit', function (event) {
         const form = event.target;
-        const message = form.getAttribute('data-app-confirm');
-        if (message && !window.confirm(message)) {
-            event.preventDefault();
+        if (event.defaultPrevented) {
             return;
         }
 
@@ -292,6 +309,44 @@
             event.submitter.disabled = true;
             event.submitter.classList.add('is-submitting');
         }
+    });
+
+    // Snapshot / restore editable fields on offcanvas open / close.
+    // On save the page reloads (standard POST redirect), so snapshot is always fresh.
+    // On close-without-save we restore to the snapshot taken at open time.
+    document.querySelectorAll('.integration-drawer').forEach(function (drawer) {
+        const saveForm = drawer.querySelector('.js-integration-form');
+        if (!saveForm) return;
+
+        // Snapshot every time the drawer opens
+        drawer.addEventListener('show.bs.offcanvas', function () {
+            saveForm.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(function (field) {
+                field.dataset.originalValue = field.value;
+            });
+        });
+
+        // Restore on close — fires for X button, backdrop click, Escape, and programmatic hide
+        drawer.addEventListener('hide.bs.offcanvas', function () {
+            saveForm.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(function (field) {
+                field.value = Object.prototype.hasOwnProperty.call(field.dataset, 'originalValue')
+                    ? field.dataset.originalValue
+                    : '';
+            });
+
+            // Re-hide any revealed secret fields and reset their toggle buttons
+            saveForm.querySelectorAll('[data-secret-input]').forEach(function (secretInput) {
+                secretInput.type = 'password';
+                const wrapper = secretInput.closest('[data-secret-wrapper]');
+                if (!wrapper) return;
+                const toggleBtn = wrapper.querySelector('[data-toggle-secret]');
+                if (!toggleBtn) return;
+                toggleBtn.setAttribute('aria-pressed', 'false');
+                const label = toggleBtn.querySelector('span');
+                if (label) label.textContent = 'Mostrar';
+                const icon = toggleBtn.querySelector('i');
+                if (icon) icon.className = 'bi bi-eye';
+            });
+        });
     });
 
 }());

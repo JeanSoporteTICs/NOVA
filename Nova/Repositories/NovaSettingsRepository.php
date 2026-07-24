@@ -2,6 +2,8 @@
 
 namespace App\Modulos\Nova\Repositories;
 
+use App\Modulos\Nova\Support\SecretValue;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -11,6 +13,7 @@ final class NovaSettingsRepository
         'session_timeout'          => 3600,
         'notification_enabled'     => false,
         'health_warning_threshold' => 1,
+        'onlyoffice_enabled'       => true,
     ];
 
     /**
@@ -24,6 +27,57 @@ final class NovaSettingsRepository
     public function sessionTimeout(): int
     {
         return max(60, (int) ($this->all()['session_timeout'] ?? 3600));
+    }
+
+    /**
+     * @return array{url:string,secret:string,configured:bool,enabled:bool}
+     */
+    public function onlyOffice(): array
+    {
+        $settings = $this->all();
+        $url = rtrim(trim((string) ($settings['onlyoffice_url'] ?? '')), '/');
+        $secret = SecretValue::decryptSecret((string) ($settings['onlyoffice_jwt_secret'] ?? '')) ?? '';
+
+        return [
+            'url' => $url,
+            'secret' => $secret,
+            'configured' => $url !== '' && $secret !== '',
+            'enabled' => (bool) ($settings['onlyoffice_enabled'] ?? true),
+        ];
+    }
+
+    /**
+     * Safe projection for administration views. Never exposes the secret.
+     *
+     * @return array{url:string,secret_configured:bool,configured:bool,enabled:bool}
+     */
+    public function onlyOfficeStatus(): array
+    {
+        $config = $this->onlyOffice();
+
+        return [
+            'url' => $config['url'],
+            'secret_configured' => $config['secret'] !== '',
+            'configured' => $config['configured'],
+            'enabled' => $config['enabled'],
+        ];
+    }
+
+    public function saveOnlyOffice(string $url, string $secret = ''): void
+    {
+        $url = rtrim(trim($url), '/');
+        $this->writeSetting('onlyoffice_url', $url, 'string');
+
+        if ($secret !== '') {
+            $this->writeSetting('onlyoffice_jwt_secret', SecretValue::encryptSecret($secret), 'secret');
+        }
+        $this->forgetOnlyOfficeHealth();
+    }
+
+    public function setOnlyOfficeEnabled(bool $enabled): void
+    {
+        $this->writeSetting('onlyoffice_enabled', $enabled ? '1' : '0', 'bool');
+        $this->forgetOnlyOfficeHealth();
     }
 
     /**
@@ -70,6 +124,7 @@ final class NovaSettingsRepository
             'session_timeout'          => 'int',
             'notification_enabled'     => 'bool',
             'health_warning_threshold' => 'int',
+            'onlyoffice_enabled'       => 'bool',
         ];
         foreach ($settings as $key => $value) {
             $tipo   = $types[$key] ?? 'string';
@@ -88,6 +143,18 @@ final class NovaSettingsRepository
         }
     }
 
+    private function writeSetting(string $key, string $value, string $type): void
+    {
+        if (! $this->tableReady()) {
+            return;
+        }
+
+        DB::table('nova_settings')->updateOrInsert(
+            ['clave' => $key],
+            ['valor' => $value, 'tipo' => $type]
+        );
+    }
+
     private function cast(string $value, string $type): mixed
     {
         return match ($type) {
@@ -95,6 +162,14 @@ final class NovaSettingsRepository
             'int'   => (int) $value,
             default => $value,
         };
+    }
+
+    private function forgetOnlyOfficeHealth(): void
+    {
+        try {
+            Cache::forget('nova.onlyoffice.health');
+        } catch (\Throwable) {
+        }
     }
 
     private function tableReady(): bool

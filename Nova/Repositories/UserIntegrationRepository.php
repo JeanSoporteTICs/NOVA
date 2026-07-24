@@ -2,8 +2,10 @@
 
 namespace App\Modulos\Nova\Repositories;
 
+use App\Modulos\Nova\Support\SecretValue;
 use App\Support\StringNormalizer;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 final class UserIntegrationRepository
@@ -104,7 +106,10 @@ final class UserIntegrationRepository
     {
         $credentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
         $emachUser = trim((string) ($credentials['user'] ?? ''));
-        $password = $this->decryptSecret((string) ($credentials['password'] ?? ''));
+        $rawSecret = (string) ($credentials['password'] ?? '');
+        $password = SecretValue::decryptSecret($rawSecret) ?? '';
+
+        $this->maybeRewriteEmachSecret($user, $emachUser, $rawSecret, $password);
 
         return [
             'user' => $emachUser,
@@ -112,6 +117,35 @@ final class UserIntegrationRepository
             'stored' => $emachUser !== '' && $password !== '',
             'updated_at' => (string) ($credentials['updated_at'] ?? ''),
         ];
+    }
+
+    /**
+     * Opportunistically upgrades a plaintext-legacy EMACH secret to Laravel
+     * encrypt() the moment it's read in a flow that can resolve the owning
+     * row (usuario_id). Never runs for already-encrypted, invalid, or empty
+     * values, and never fails the read if the rewrite itself fails.
+     *
+     * @param array<string,mixed> $user
+     */
+    private function maybeRewriteEmachSecret(array $user, string $emachUser, string $rawSecret, string $decryptedPassword): void
+    {
+        if ($rawSecret === '' || $decryptedPassword === '') {
+            return;
+        }
+
+        if (SecretValue::inspect($rawSecret)['status'] !== 'plaintext_legacy') {
+            return;
+        }
+
+        $userId = $this->databaseUserIdForSession($user);
+        if ($userId === null) {
+            return;
+        }
+
+        try {
+            $this->writeIntegration($userId, 'emach', $emachUser, SecretValue::encryptSecret($decryptedPassword), '');
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -151,6 +185,16 @@ final class UserIntegrationRepository
         }
 
         return $this->writeTelegramChatId($userId, trim($chatId));
+    }
+
+    public function deleteTelegramForSession(array $sessionUser): bool
+    {
+        $userId = $this->databaseUserIdForSession($sessionUser);
+        if ($userId === null) {
+            return false;
+        }
+
+        return $this->clearTelegramChatId($userId);
     }
 
     /**
@@ -213,6 +257,32 @@ final class UserIntegrationRepository
         ];
     }
 
+    /**
+     * Returns a decrypted credential only to server-side integration flows.
+     *
+     * @return array{user:string,secret:string,stored:bool}
+     */
+    public function credentialForSession(array $sessionUser, string $type): array
+    {
+        $userId = $this->databaseUserIdForSession($sessionUser);
+        if ($userId === null || !$this->tablesAvailable()) {
+            return ['user' => '', 'secret' => '', 'stored' => false];
+        }
+
+        try {
+            $row = DB::table('integraciones_usuario')
+                ->where('usuario_id', $userId)
+                ->where('tipo', trim($type))
+                ->first();
+            $user = trim((string) ($row->usuario_externo ?? ''));
+            $secret = SecretValue::decryptSecret((string) ($row->valor_secreto ?? '')) ?? '';
+
+            return ['user' => $user, 'secret' => $secret, 'stored' => $user !== '' && $secret !== ''];
+        } catch (\Throwable) {
+            return ['user' => '', 'secret' => '', 'stored' => false];
+        }
+    }
+
     public function saveCredentialForSession(array $sessionUser, string $type, string $externalUser, string $secret): bool
     {
         $userId = $this->databaseUserIdForSession($sessionUser);
@@ -232,7 +302,18 @@ final class UserIntegrationRepository
             return false;
         }
 
-        $storedSecret = $secret !== '' ? $this->encryptSecret($secret) : $currentSecret;
+        if ($secret === '') {
+            $storedSecret = $currentSecret;
+        } else {
+            try {
+                $storedSecret = SecretValue::encryptSecret($secret);
+            } catch (\Throwable) {
+                Log::warning('UserIntegrationRepository: fallo al cifrar una credencial nueva; se descarta sin guardar texto plano ni modificar la anterior.', ['type' => $type]);
+
+                return false;
+            }
+        }
+
         if ($externalUser === '' && $storedSecret === '') {
             return false;
         }
@@ -282,27 +363,6 @@ final class UserIntegrationRepository
     private function write(array $users): bool
     {
         return true;
-    }
-
-    private function encryptSecret(string $secret): string
-    {
-        return function_exists('encrypt') ? encrypt($secret) : $secret;
-    }
-
-    private function decryptSecret(string $secret): string
-    {
-        if ($secret === '') {
-            return '';
-        }
-
-        if (function_exists('decrypt')) {
-            try {
-                return (string) decrypt($secret);
-            } catch (\Throwable) {
-            }
-        }
-
-        return $secret;
     }
 
     /**
@@ -447,6 +507,33 @@ final class UserIntegrationRepository
                 ->where('id', $userId)
                 ->update([
                     'telegram_id_chat' => $chatId,
+                    'actualizado_at' => now(),
+                ]);
+
+            if (Schema::hasTable('integraciones_usuario')) {
+                DB::table('integraciones_usuario')
+                    ->where('usuario_id', $userId)
+                    ->where('tipo', 'telegram')
+                    ->delete();
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function clearTelegramChatId(int $userId): bool
+    {
+        if ($userId <= 0 || !Schema::hasTable('usuarios_nova') || !Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
+            return false;
+        }
+
+        try {
+            DB::table('usuarios_nova')
+                ->where('id', $userId)
+                ->update([
+                    'telegram_id_chat' => null,
                     'actualizado_at' => now(),
                 ]);
 

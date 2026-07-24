@@ -177,7 +177,11 @@ function handle_estadisticas() {
         $periodo = trim($periodo);
         if (preg_match('/^(\d{4})-(\d{2})$/', $periodo, $m)) {
             $filters['desde'] = sprintf('%s-%s-01', $m[1], $m[2]);
-            $filters['hasta'] = sprintf('%s-%s-31', $m[1], $m[2]);
+            try {
+                $filters['hasta'] = (new DateTimeImmutable($filters['desde']))->modify('last day of this month')->format('Y-m-d');
+            } catch (Throwable) {
+                $filters['hasta'] = '';
+            }
         } elseif (preg_match('/^(\d{4})$/', $periodo, $m)) {
             $filters['desde'] = $m[1] . '-01-01';
             $filters['hasta'] = $m[1] . '-12-31';
@@ -188,6 +192,9 @@ function handle_estadisticas() {
     $hasta = normalize_date($_POST['hasta'] ?? $_GET['hasta'] ?? '');
     if ($desde) $filters['desde'] = $desde;
     if ($hasta) $filters['hasta'] = $hasta;
+    if ($filters['desde'] !== '' && $filters['hasta'] !== '' && $filters['desde'] > $filters['hasta']) {
+        [$filters['desde'], $filters['hasta']] = [$filters['hasta'], $filters['desde']];
+    }
 
     $messages = [];
     $messages = array_merge($messages, load_report_messages(__DIR__ . '/../data/reportes'));

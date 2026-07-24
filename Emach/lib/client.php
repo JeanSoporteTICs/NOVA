@@ -40,8 +40,8 @@ function emach_client_curl_request(string $url, string $cookieFile, array $optio
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 4,
-        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => (int) ($options['connect_timeout'] ?? 3),
+        CURLOPT_TIMEOUT => (int) ($options['timeout'] ?? 8),
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_COOKIEJAR => $cookieFile,
         CURLOPT_COOKIEFILE => $cookieFile,
@@ -76,39 +76,19 @@ function emach_client_curl_request(string $url, string $cookieFile, array $optio
     return $response;
 }
 
+/**
+ * Transport now lives in App\Modulos\Emach\ExternalClients\EmachScraperClient
+ * (Fase 8 lote 2 of the 2026-07 standardization program — see
+ * .claude/knowledge/external-clients-architecture.md). This function is kept
+ * as a thin wrapper, with the exact same signature and throwing behavior,
+ * because it's still called directly by telegram/bin/listen.php. The other
+ * emach_client_* functions below are unused now that the client owns this
+ * logic, but are left in place rather than deleted — see the architecture
+ * doc for why removing them is a separate future step.
+ */
 function emach_client_fetch_planilla_rows(int $year, int $month, string $username, string $password): array
 {
-    $cookieFile = tempnam(sys_get_temp_dir(), 'emach-client-');
-    if (!is_string($cookieFile) || $cookieFile === '') {
-        throw new RuntimeException('No se pudo crear cookie temporal.');
-    }
-
-    try {
-        emach_client_prime_session($cookieFile, $username, $password);
-        foreach (emach_client_planilla_urls($year, $month) as $url) {
-            $referer = str_contains($url, '/reportes/')
-                ? EMACH_CLIENT_BASE_URL . '/reportes/planilla'
-                : EMACH_CLIENT_BASE_URL . '/autoconsulta/marcas/';
-            $response = emach_client_curl_request($url, $cookieFile, [
-                'headers' => [
-                    'Accept: application/json, text/javascript, */*; q=0.01',
-                    'X-Requested-With: XMLHttpRequest',
-                ],
-                'referer' => $referer,
-            ]);
-            if ($response['error'] !== '') {
-                continue;
-            }
-            $payload = json_decode($response['body'], true);
-            if (is_array($payload) && is_array($payload['data'] ?? null)) {
-                return array_values(array_filter($payload['data'], 'is_array'));
-            }
-        }
-    } finally {
-        @unlink($cookieFile);
-    }
-
-    throw new RuntimeException('EMACH no devolvio JSON de planilla.');
+    return (new \App\Modulos\Emach\ExternalClients\EmachScraperClient())->fetchPlanillaRows($year, $month, $username, $password);
 }
 
 function emach_client_prime_session(string $cookieFile, string $username, string $password): void
@@ -117,17 +97,112 @@ function emach_client_prime_session(string $cookieFile, string $username, string
     $landing = emach_client_curl_request($landingUrl, $cookieFile, [
         'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
     ]);
-    emach_client_login_trabajador_from_html($landing['body'], $landing['effective_url'] ?: $landingUrl, $cookieFile, $username, $password);
+    if ($landing['error'] !== '') {
+        throw new RuntimeException('No se pudo conectar con EMACH: ' . $landing['error']);
+    }
+
+    $loggedAsWorker = emach_client_login_trabajador_from_html($landing['body'], $landing['effective_url'] ?: $landingUrl, $cookieFile, $username, $password);
+    if (!$loggedAsWorker) {
+        emach_client_login_from_html($landing['body'], $landing['effective_url'] ?: $landingUrl, $cookieFile, $username, $password);
+    }
+
+    $loginPageUrl = EMACH_CLIENT_BASE_URL . '/site/login';
+    $loginPage = emach_client_curl_request($loginPageUrl, $cookieFile, [
+        'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
+        'referer' => $landingUrl,
+    ]);
+    if ($loginPage['error'] !== '') {
+        throw new RuntimeException('No se pudo conectar con login EMACH: ' . $loginPage['error']);
+    }
+    if (!$loggedAsWorker) {
+        $loggedAsWorker = emach_client_login_trabajador_from_html($loginPage['body'], $loginPage['effective_url'] ?: $loginPageUrl, $cookieFile, $username, $password);
+    }
+    if (!$loggedAsWorker) {
+        emach_client_login_from_html($loginPage['body'], $loginPage['effective_url'] ?: $loginPageUrl, $cookieFile, $username, $password);
+    }
+
+    $loginAttempts = [
+        [EMACH_CLIENT_BASE_URL . '/cloud/doLoginTrabajador', [
+            'csrf_test_name' => '',
+            'url' => '/index.php/autoconsulta/marcas/',
+            'rut' => $username,
+            'pass' => $password,
+        ]],
+        [EMACH_CLIENT_BASE_URL . '/site/login', [
+            'LoginForm[username]' => $username,
+            'LoginForm[password]' => $password,
+            'LoginForm[rememberMe]' => '0',
+            'login' => $username,
+            'password' => $password,
+            'usuario' => $username,
+            'clave' => $password,
+            'rut' => $username,
+            'run' => $username,
+        ]],
+        [EMACH_CLIENT_BASE_URL . '/autoconsulta/login', [
+            'usuario' => $username,
+            'contrasena' => $password,
+            'clave' => $password,
+            'username' => $username,
+            'password' => $password,
+            'rut' => $username,
+            'run' => $username,
+        ]],
+        [EMACH_CLIENT_BASE_URL . '/autoconsulta/marcas/', [
+            'usuario' => $username,
+            'contrasena' => $password,
+            'clave' => $password,
+            'username' => $username,
+            'password' => $password,
+            'rut' => $username,
+            'run' => $username,
+        ]],
+        [EMACH_CLIENT_BASE_URL . '/autoconsulta/marcas', [
+            'usuario' => $username,
+            'contrasena' => $password,
+            'clave' => $password,
+            'username' => $username,
+            'password' => $password,
+            'rut' => $username,
+            'run' => $username,
+        ]],
+    ];
+
+    if (!$loggedAsWorker) {
+        foreach (array_slice($loginAttempts, 0, 2) as [$loginUrl, $fields]) {
+            $attemptResponse = emach_client_curl_request($loginUrl, $cookieFile, [
+                'method' => 'POST',
+                'fields' => $fields,
+                'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
+                'referer' => $landingUrl,
+            ]);
+            if ($attemptResponse['error'] !== '') {
+                throw new RuntimeException('No se pudo enviar login EMACH: ' . $attemptResponse['error']);
+            }
+        }
+    }
+
+    $afterLanding = emach_client_curl_request($landingUrl, $cookieFile, [
+        'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
+        'referer' => EMACH_CLIENT_BASE_URL . '/site/login',
+    ]);
+    if ($afterLanding['error'] !== '') {
+        throw new RuntimeException('No se pudo validar sesion EMACH: ' . $afterLanding['error']);
+    }
+    if (emach_client_is_login_page($afterLanding['body'])) {
+        throw new RuntimeException('Credenciales EMACH incorrectas o no aceptadas. Actualiza tu usuario y contrasena en NOVA; si estan correctas, revisa si EMACH solicita token/captcha adicional.');
+    }
+
     emach_client_curl_request(EMACH_CLIENT_BASE_URL . '/reportes/planilla', $cookieFile, [
         'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
         'referer' => $landingUrl,
     ]);
 }
 
-function emach_client_login_trabajador_from_html(string $html, string $pageUrl, string $cookieFile, string $username, string $password): void
+function emach_client_login_trabajador_from_html(string $html, string $pageUrl, string $cookieFile, string $username, string $password): bool
 {
     if ($html === '' || !preg_match('/<form\b([^>]*\bid\s*=\s*(["\'])frmTrabajador\2[^>]*)>(.*?)<\/form>/is', $html, $form)) {
-        throw new RuntimeException('No se encontro el formulario de trabajador en EMACH.');
+        return false;
     }
 
     $fields = [];
@@ -156,9 +231,91 @@ function emach_client_login_trabajador_from_html(string $html, string $pageUrl, 
         'referer' => $pageUrl,
     ]);
 
-    if ($response['error'] !== '' || $response['http_code'] < 200 || $response['http_code'] >= 400) {
-        throw new RuntimeException('Login trabajador EMACH fallo. HTTP ' . $response['http_code']);
+    return $response['error'] === '' && $response['http_code'] >= 200 && $response['http_code'] < 400;
+}
+
+function emach_client_login_from_html(string $html, string $pageUrl, string $cookieFile, string $username, string $password): bool
+{
+    if ($html === '' || stripos($html, '<form') === false) {
+        return false;
     }
+
+    preg_match_all('/<form\b([^>]*)>(.*?)<\/form>/is', $html, $forms, PREG_SET_ORDER);
+    foreach ($forms as $form) {
+        $formAttrs = emach_client_parse_attrs($form[1]);
+        $formBody = $form[2];
+        if (stripos($formBody, 'password') === false && stripos($formBody, 'contras') === false) {
+            continue;
+        }
+
+        $fields = [];
+        $passwordName = '';
+        $usernameName = '';
+        preg_match_all('/<input\b([^>]*)>/is', $formBody, $inputs, PREG_SET_ORDER);
+        foreach ($inputs as $input) {
+            $attrs = emach_client_parse_attrs($input[1]);
+            $name = (string) ($attrs['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $type = strtolower((string) ($attrs['type'] ?? 'text'));
+            $fields[$name] = (string) ($attrs['value'] ?? '');
+            if ($type === 'password') {
+                $passwordName = $name;
+            } elseif ($usernameName === '' && in_array($type, ['text', 'email', 'number', 'tel', 'search'], true)) {
+                $usernameName = $name;
+            }
+        }
+
+        if ($passwordName === '') {
+            continue;
+        }
+        if ($usernameName === '') {
+            foreach (array_keys($fields) as $name) {
+                $key = strtolower($name);
+                if (str_contains($key, 'user') || str_contains($key, 'login') || str_contains($key, 'rut') || str_contains($key, 'run') || str_contains($key, 'codigo')) {
+                    $usernameName = $name;
+                    break;
+                }
+            }
+        }
+        if ($usernameName === '') {
+            continue;
+        }
+
+        $fields[$usernameName] = $username;
+        $fields[$passwordName] = $password;
+        foreach (['login', 'yt0', 'submit', 'ingresar'] as $submitName) {
+            if (!isset($fields[$submitName])) {
+                $fields[$submitName] = 'Ingresar';
+            }
+        }
+
+        $action = emach_client_absolute_url((string) ($formAttrs['action'] ?? ''), $pageUrl);
+        $response = emach_client_curl_request($action, $cookieFile, [
+            'method' => 'POST',
+            'fields' => $fields,
+            'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
+            'referer' => $pageUrl,
+        ]);
+
+        if ($response['error'] === '' && $response['http_code'] >= 200 && $response['http_code'] < 400) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function emach_client_is_login_page(string $html): bool
+{
+    if ($html === '') {
+        return false;
+    }
+
+    return stripos($html, 'frmTrabajador') !== false
+        || stripos($html, 'id="frmUsuario"') !== false
+        || stripos($html, "id='frmUsuario'") !== false;
 }
 
 function emach_client_parse_attrs(string $tag): array

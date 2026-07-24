@@ -14,6 +14,7 @@ class RedmineCatalogRepository
 {
     private ?array $idsByTypeValue = null;
     private ?array $namesById      = null;
+    private ?bool $tableAvailableCache = null;
 
     public function __construct(
         private string $projectKey,
@@ -89,10 +90,13 @@ class RedmineCatalogRepository
 
     public function tableAvailable(): bool
     {
+        if ($this->tableAvailableCache !== null) {
+            return $this->tableAvailableCache;
+        }
         try {
-            return Schema::hasTable('modulos_nova') && Schema::hasTable('catalogos_modulo');
+            return $this->tableAvailableCache = Schema::hasTable('modulos_nova') && Schema::hasTable('catalogos_modulo');
         } catch (\Throwable) {
-            return false;
+            return $this->tableAvailableCache = false;
         }
     }
 

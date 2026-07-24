@@ -27,6 +27,7 @@
             "App\\Modulos\\Nova\\": "Nova/",
             "App\\Modulos\\RedmineMantencion\\": "RedmineMantencion/",
             "App\\Modulos\\Emach\\": "Emach/",
+            "App\\Modulos\\Procedimientos\\": "Procedimientos/",
             "RedmineTic\\": "RedmineTic/",
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",

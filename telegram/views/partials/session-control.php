@@ -10,7 +10,9 @@ $lastActivity = function_exists('session')
 $remaining = max(0, $sessionTimeout - (time() - $lastActivity));
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $sessionExtendUrl = function_exists('route') ? route('session.extend') : '/NOVA/public/session/extend';
+$loginUrl = function_exists('route') ? route('login') : '/NOVA/public/login';
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
+$sessionIdentity = function_exists('session') ? (string) session('nova_user.id', '') : (string) ($_SESSION['user']['id'] ?? '');
 
 ?>
 <span class="telegram-session-badge badge bg-light text-dark d-inline-flex align-items-center gap-1" id="session-timer" data-remaining="<?= $h($remaining) ?>" data-timeout="<?= $h($sessionTimeout) ?>">
@@ -36,6 +38,8 @@ window.addEventListener('load', () => {
   const modal = window.bootstrap ? new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false}) : null;
   const logoutUrl = '<?= $h($logoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($sessionExtendUrl) ?>';
+  const loginUrl = '<?= $h($loginUrl) ?>';
+  const sessionIdentity = '<?= $h($sessionIdentity) ?>';
   const csrfToken = '<?= $h($csrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
   function paint(secondsLeft) {
@@ -96,6 +100,10 @@ window.addEventListener('load', () => {
   }
 
   function submitLogout() {
+    if (secondsLeft() <= 0) {
+      window.location.assign(loginUrl);
+      return;
+    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = logoutUrl;
@@ -127,7 +135,7 @@ window.addEventListener('load', () => {
         method: 'POST',
         headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken},
         credentials: 'same-origin',
-        body: JSON.stringify({password})
+        body: JSON.stringify({password, identity: sessionIdentity})
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.msg || 'No se pudo extender la sesion.');

@@ -15,6 +15,7 @@ if ($role === 'gestor') {
     $_GET['usuario'] = $currentUserId;
   }
 }
+unset($_POST['unidad'], $_GET['unidad']);
 require_once __DIR__ . '/../../controllers/estadisticas.php';
 $stats = handle_estadisticas();
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
@@ -26,6 +27,11 @@ $fmtDMY = function($dateStr) {
 };
 $desdeVal = $_POST['desde'] ?? $_GET['desde'] ?? '';
 $hastaVal = $_POST['hasta'] ?? $_GET['hasta'] ?? '';
+$desdeVal = normalize_date($desdeVal);
+$hastaVal = normalize_date($hastaVal);
+if ($desdeVal !== '' && $hastaVal !== '' && $desdeVal > $hastaVal) {
+  [$desdeVal, $hastaVal] = [$hastaVal, $desdeVal];
+}
 $periodoLabel = 'Todos';
 if ($desdeVal && $hastaVal) {
   $periodoLabel = $fmtDMY($desdeVal) . ' a ' . $fmtDMY($hastaVal);
@@ -45,25 +51,29 @@ if (!empty($stats['actualizado'])) {
 }
 $yearNow = date('Y');
 $monthNow = (int)date('n');
+$timelineReference = normalize_date($desdeVal) ?: date('Y-m-d');
+$timelineReferenceYear = (int)substr($timelineReference, 0, 4);
+$timelineReferenceMonth = (int)substr($timelineReference, 5, 2);
 $cats = [];
-$units = [];
 $users = [];
 $selectedUserId = $_POST['usuario'] ?? $_GET['usuario'] ?? '';
 $selectedUserLabel = '';
+$selectedCategoria = $_POST['categoria'] ?? $_GET['categoria'] ?? '';
 $catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
 $cats = $catalogRepo !== null ? $catalogRepo->categoriaNames() : [];
-$units = $catalogRepo !== null ? $catalogRepo->unidadNames() : [];
+sort($cats, SORT_NATURAL | SORT_FLAG_CASE);
 $parsed = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
   if (is_array($parsed)) {
     foreach ($parsed as $u) {
       if (!is_array($u)) continue;
       $estadoUsuario = strtolower(trim((string)($u['estado'] ?? $u['estado_usuario'] ?? 'activo')));
       if (!in_array($estadoUsuario, ['activo', 'active'], true)) continue;
-      $id = $u['id'] ?? '';
+      $id = (string)($u['id'] ?? '');
       $nombre = trim(($u['nombre'] ?? '') . ' ' . ($u['apellido'] ?? ''));
       if ($id !== '') $users[$id] = $nombre ?: $id;
     }
   }
+asort($users, SORT_NATURAL | SORT_FLAG_CASE);
 $selectedUserLabel = '';
 if ($selectedUserId !== '') {
   if (isset($users[$selectedUserId])) {
@@ -78,95 +88,10 @@ $userNameMap = $users;
 <html lang="es">
 <head>
   <?php $pageTitle = 'Estadisticas'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    .timeline-box {
-      border-radius: 12px;
-      padding: 12px 16px;
-      border: 1px solid #d1d5db;
-      background: #f9fafc;
-      box-shadow: inset 0 1px 0 #fff, 0 8px 16px rgba(0,0,0,0.04);
-    }
-    .timeline-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.9rem;
-      color: #1f2937;
-      font-weight: 700;
-      border-bottom: 1px solid #d1d5db;
-      padding-bottom: 6px;
-      margin-bottom: 10px;
-    }
-    .timeline-months {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 4px;
-      margin-bottom: 8px;
-    }
-    .timeline-months button {
-      border: 1px solid #d1d5db;
-      background: #f1f2f5;
-      padding: 6px 4px;
-      font-size: 0.78rem;
-      color: #374151;
-      border-radius: 6px;
-      transition: all .15s ease;
-    }
-    .timeline-months button:hover {
-      background: #e8edff;
-      border-color: #4e73df;
-      color: #1f2937;
-    }
-    .timeline-months button.active,
-    .timeline-months button.range {
-      background: linear-gradient(180deg, #5a7be7, #3f62d4);
-      color: #fff;
-      border-color: #3558c4;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
-    }
-    .timeline-months button.range-edge {
-      box-shadow: 0 0 0 2px rgba(78,115,223,0.3);
-    }
-    .timeline-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.82rem;
-      color: #6b7280;
-    }
-    .stat-card {
-      border-left: 0.35rem solid var(--sb-primary);
-      border-radius: 14px;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.07);
-    }
-    .stat-icon {
-      width: 48px; height: 48px;
-      border-radius: 12px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(78,115,223,0.12);
-      color: var(--sb-primary);
-      font-size: 1.35rem;
-    }
-  .chart-card {
-    height: 360px;
-    display: flex;
-    flex-direction: column;
-  }
-  .chart-card canvas {
-    flex: 1;
-    min-height: 0;
-    max-height: 380px;
-    height: 320px !important;
-    width: 100% !important;
-  }
-/* Ajustes de graficos en modal */
-#chart-usuarios-modal,
-#chart-fechas-modal {
-  width: 100% !important;
-  height: 360px !important;
-  }
-  </style>
+  <?php $chartJsVersion = @filemtime(__DIR__ . '/../../assets/js/chart.umd.min.js') ?: time(); ?>
+  <script src="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/js/chart.umd.min.js?v=<?= (int)$chartJsVersion ?>"></script>
+  <?php $estadisticasCssVersion = @filemtime(__DIR__ . '/../../assets/css/estadisticas.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/estadisticas.css?v=<?= (int)$estadisticasCssVersion ?>">
 </head>
 <body class="bg-light">
 <?php $activeNav = 'estadisticas'; include __DIR__ . '/../partials/navbar.php'; ?>
@@ -212,7 +137,7 @@ $userNameMap = $users;
             <span class="text-uppercase text-muted" style="font-size:0.8rem;">Meses</span>
           </div>
           <div class="d-flex align-items-center justify-content-between mb-2">
-            <div class="text-muted" style="font-size:0.8rem;">Trimestre <?= ceil($monthNow/3) ?> <?= $h($yearNow) ?></div>
+            <div class="text-muted" style="font-size:0.8rem;">Trimestre <?= (int)ceil($timelineReferenceMonth/3) ?> <?= $h($timelineReferenceYear) ?></div>
             <div class="d-flex gap-2">
               <button type="button" class="btn btn-sm btn-outline-primary" onclick="setPeriodo('month')">Mes actual</button>
               <button type="button" class="btn btn-sm btn-outline-primary" onclick="setPeriodo('year')">Año actual</button>
@@ -241,43 +166,30 @@ $userNameMap = $users;
           </div>
         </div>
       </div>
-      <div class="col-sm-6 col-md-3">
+      <div class="col-sm-6 col-lg-3">
         <label class="form-label">Periodo (YYYY-MM o YYYY)</label>
-        <input type="text" name="periodo" class="form-control" placeholder="2025-12 o 2025" value="<?= $h($_POST['periodo'] ?? '') ?>">
+        <input type="text" name="periodo" class="form-control" placeholder="2025-12 o 2025" value="<?= $h($_POST['periodo'] ?? $_GET['periodo'] ?? '') ?>">
       </div>
-      <div class="col-sm-6 col-md-3">
+      <div class="col-sm-6 col-lg-3">
         <label class="form-label">Usuario asignado</label>
-        <input list="dl-users" name="usuario" class="form-control" placeholder="Buscar usuario" value="<?= $h($_POST['usuario'] ?? $_GET['usuario'] ?? '') ?>">
-        <datalist id="dl-users">
+        <select name="usuario" class="form-select">
           <option value="">(Todos)</option>
           <?php foreach ($users as $id=>$name): ?>
-            <option value="<?= $h($name) ?>"><?= $h($name) ?></option>
-            <option value="<?= $h($id) ?>"><?= $h($name) ?> (ID <?= $h($id) ?>)</option>
+            <option value="<?= $h($id) ?>" <?= (string)$selectedUserId === (string)$id ? 'selected' : '' ?>><?= $h($name) ?> (ID <?= $h($id) ?>)</option>
           <?php endforeach; ?>
-        </datalist>
+        </select>
         <?php if ($selectedUserLabel): ?>
           <div class="form-text">Seleccionado: <?= $h($selectedUserLabel) ?></div>
         <?php endif; ?>
       </div>
-      <div class="col-sm-6 col-md-3">
+      <div class="col-sm-6 col-lg-3">
         <label class="form-label">Categoría</label>
-        <input list="dl-cats" name="categoria" class="form-control" placeholder="Buscar categoría" value="<?= $h($_POST['categoria'] ?? '') ?>">
-        <datalist id="dl-cats">
+        <select name="categoria" class="form-select">
           <option value="">(Todas)</option>
           <?php foreach ($cats as $c): ?>
-            <option value="<?= $h($c) ?>"></option>
+            <option value="<?= $h($c) ?>" <?= (string)$selectedCategoria === (string)$c ? 'selected' : '' ?>><?= $h($c) ?></option>
           <?php endforeach; ?>
-        </datalist>
-      </div>
-      <div class="col-sm-6 col-md-3">
-        <label class="form-label">Unidad</label>
-        <input list="dl-units" name="unidad" class="form-control" placeholder="Buscar unidad" value="<?= $h($_POST['unidad'] ?? '') ?>">
-        <datalist id="dl-units">
-          <option value="">(Todas)</option>
-          <?php foreach ($units as $u): ?>
-            <option value="<?= $h($u) ?>"></option>
-          <?php endforeach; ?>
-        </datalist>
+        </select>
       </div>
       <div class="col-md-3">
         <button class="btn-nova btn-nova-primary btn-icon"><i class="bi bi-funnel"></i> Aplicar filtros</button>
@@ -332,26 +244,6 @@ $userNameMap = $users;
         </ul>
       </div>
     </div>
-    <div class="col-lg-3 col-md-6">
-      <div class="card p-3 h-100 stat-card" style="border-left-color:#36b9cc;" role="button" data-bs-toggle="modal" data-bs-target="#modalUnidades">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <div class="stat-icon" style="background:rgba(54,185,204,0.12);color:#36b9cc;"><i class="bi bi-building"></i></div>
-          <span class="fw-semibold text-muted">Por unidad</span>
-        </div>
-        <ul class="list-group list-group-flush">
-          <?php $sliceUnits = array_slice($stats['por_unidad'] ?? [], 0, 2, true); ?>
-          <?php foreach ($sliceUnits as $unit => $c): ?>
-            <li class="list-group-item d-flex justify-content-between">
-              <span><?= $h($unit) ?></span><span class="badge bg-primary rounded-pill"><?= $h($c) ?></span>
-            </li>
-          <?php endforeach; ?>
-          <?php if (empty($sliceUnits)): ?><li class="list-group-item text-muted">Sin datos</li><?php endif; ?>
-        </ul>
-      </div>
-    </div>
-  </div>
-
-  <div class="row g-3 mb-3">
     <div class="col-lg-3 col-md-6">
       <div class="card p-3 h-100 stat-card" style="border-left-color:#e74a3b;" role="button" data-bs-toggle="modal" data-bs-target="#modalEstado">
         <div class="d-flex align-items-center gap-2 mb-2">
@@ -439,42 +331,6 @@ $userNameMap = $users;
       </div>
     </div>
   </div>
-
-  <!-- Modal Unidades -->
-  <div class="modal fade" id="modalUnidades" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Reportes por unidad (<?= array_sum($stats['por_unidad'] ?? []) ?>)</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <ul class="list-group list-group-flush">
-            <?php $idx=0; foreach (($stats['msgs_por_unidad'] ?? []) as $unit => $lista): $idx++; $collapseId = 'u2-'.$idx; ?>
-              <li class="list-group-item">
-                <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#<?= $collapseId ?>" role="button" aria-expanded="false" aria-controls="<?= $collapseId ?>">
-                  <strong><?= $h($unit) ?></strong>
-                  <span class="badge bg-primary"><?= count($lista) ?></span>
-                </div>
-                <div class="collapse mt-2" id="<?= $collapseId ?>">
-                  <ul class="list-group list-group-flush">
-                    <?php foreach ($lista as $msg): ?>
-                      <li class="list-group-item">
-                        <div class="fw-semibold"><?= $h(($msg['asunto'] ?? '') ?: ($msg['mensaje'] ?? '')) ?></div>
-                        <small class="text-muted"><?= $h($msg['fecha_stats'] ?? ($msg['fecha'] ?? '')) ?> <?= !empty($msg['redmine_id']) ? '- Ticket ' . $h($msg['redmine_id']) : '' ?></small>
-                      </li>
-                    <?php endforeach; ?>
-                  </ul>
-                </div>
-              </li>
-            <?php endforeach; ?>
-            <?php if (empty($stats['msgs_por_unidad'])): ?><li class="list-group-item text-muted">Sin datos</li><?php endif; ?>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-
 
   <!-- Modal Estado -->
   <div class="modal fade" id="modalEstado" tabindex="-1" aria-hidden="true">
@@ -597,18 +453,20 @@ $userNameMap = $users;
   </div>
 </div>
 
-<?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 <script>
 function setPeriodo(mode) {
   const desde = document.querySelector('input[name="desde"]');
   const hasta = document.querySelector('input[name="hasta"]');
+  const periodo = document.querySelector('input[name="periodo"]');
   const today = new Date();
   const pad = (n) => n.toString().padStart(2,'0');
+  const lastDay = (year, month) => pad(new Date(year, month, 0).getDate());
+  if (periodo) periodo.value = '';
   if (mode === 'month') {
     const y = today.getFullYear();
     const m = pad(today.getMonth() + 1);
     if (desde) desde.value = `${y}-${m}-01`;
-    if (hasta) hasta.value = `${y}-${m}-31`;
+    if (hasta) hasta.value = `${y}-${m}-${lastDay(y, today.getMonth() + 1)}`;
   } else if (mode === 'year') {
     const y = today.getFullYear();
     if (desde) desde.value = `${y}-01-01`;
@@ -664,10 +522,13 @@ function selectMonthRange(m) {
   if (rangeStart !== null && rangeEnd !== null) {
     const year = new Date().getFullYear();
     const pad = (n) => n.toString().padStart(2,'0');
+    const lastDay = (month) => pad(new Date(year, month, 0).getDate());
     const desde = document.querySelector('input[name="desde"]');
     const hasta = document.querySelector('input[name="hasta"]');
+    const periodo = document.querySelector('input[name="periodo"]');
+    if (periodo) periodo.value = '';
     if (desde) desde.value = `${year}-${pad(rangeStart)}-01`;
-    if (hasta) hasta.value = `${year}-${pad(rangeEnd)}-31`;
+    if (hasta) hasta.value = `${year}-${pad(rangeEnd)}-${lastDay(rangeEnd)}`;
     const form = document.getElementById('stats-form');
     if (form) form.submit();
   } else {
@@ -675,10 +536,13 @@ function selectMonthRange(m) {
     if (btn && rangeStart !== null) {
       const year = new Date().getFullYear();
       const pad = (n) => n.toString().padStart(2,'0');
+      const lastDay = (month) => pad(new Date(year, month, 0).getDate());
       const desde = document.querySelector('input[name="desde"]');
       const hasta = document.querySelector('input[name="hasta"]');
+      const periodo = document.querySelector('input[name="periodo"]');
+      if (periodo) periodo.value = '';
       if (desde) desde.value = `${year}-${pad(rangeStart)}-01`;
-      if (hasta) hasta.value = `${year}-${pad(rangeStart)}-31`;
+      if (hasta) hasta.value = `${year}-${pad(rangeStart)}-${lastDay(rangeStart)}`;
     }
   }
 }
@@ -686,9 +550,13 @@ function selectMonthRange(m) {
 function applyInitialMonthSelection() {
   const parseDateVal = (str) => {
     if (!str) return null;
-    if (/^\\d{2}-\\d{2}-\\d{4}$/.test(str)) {
+    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
       const [d,m,y] = str.split('-');
-      return new Date(`${y}-${m}-${d}`);
+      return new Date(Number(y), Number(m) - 1, Number(d));
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      const [y,m,d] = str.split('-');
+      return new Date(Number(y), Number(m) - 1, Number(d));
     }
     return new Date(str);
   };
@@ -722,7 +590,7 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
       return;
     }
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+    s.src = '<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/js/chart.umd.min.js?v=<?= (int)$chartJsVersion ?>';
     s.async = true;
     s.setAttribute('data-chartjs-inline', '1');
     s.onload = () => callback();
@@ -977,5 +845,6 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
   });
 </script>
 </div> <!-- #page-content -->
+<?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 </body>
 </html>

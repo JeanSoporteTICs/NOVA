@@ -21,31 +21,33 @@ $mantencionAppUrl = function_exists('url') ? rtrim(url('/redmine-mantencion/app'
 $novaHomeUrl = function_exists('url') ? url('/') : '/NOVA/public';
 $novaLogoutUrl = function_exists('route') ? route('logout') : $mantencionBaseUrl . '/logout.php';
 $novaSessionExtendUrl = function_exists('route') ? route('session.extend') : $mantencionBaseUrl . '/session_extend.php';
+$novaLoginUrl = function_exists('route') ? route('login') : $novaHomeUrl . '/login';
 $novaCsrfToken = function_exists('csrf_token') ? csrf_token() : '';
+$novaSessionIdentity = function_exists('session') ? (string) session('nova_user.id', '') : (string) ($_SESSION['user']['id'] ?? '');
 $navItems = [
-    ['key' => 'mensajes', 'label' => 'Reportes', 'href' => $mantencionAppUrl, 'icon' => 'bi-inboxes', 'can' => true],
+    ['key' => 'mensajes', 'label' => 'Reportes', 'href' => $mantencionAppUrl, 'icon' => 'bi-inboxes', 'can' => auth_can('mensajes_acceso')],
     ['key' => 'manual', 'label' => 'Pendiente manual', 'href' => '../Pendientes/manual.php', 'icon' => 'bi-pencil-square', 'can' => auth_can('simulador')],
     ['key' => 'horas', 'label' => 'Horas extra', 'href' => '../HorasExtra/horas_extra.php', 'icon' => 'bi-clock-history', 'can' => auth_can('horas_extra')],
     ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => '../Historico/historico.php', 'icon' => 'bi-archive', 'can' => auth_can('historico')],
-    ['key' => 'procedimientos', 'label' => 'Procedimientos', 'href' => '../Procedimientos/procedimientos.php', 'icon' => 'bi-journal-richtext', 'can' => auth_can('procedimientos')],
-    ['key' => 'mis_integraciones', 'label' => 'Cuentas conectadas', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => true],
+    ['key' => 'mis_integraciones', 'label' => 'Cuentas conectadas', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => auth_can('mis_integraciones')],
     ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => '../Usuarios/usuarios.php', 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
     [
         'key' => 'integraciones',
         'label' => 'Integraciones',
         'href' => '#',
         'icon' => 'bi-diagram-3',
-        'can' => in_array($role, ['root', 'gestor'], true),
+        'can' => auth_can('integraciones_nextcloud'),
         'children' => [
             [
                 'key' => 'integraciones_nextcloud',
                 'label' => 'Nextcloud',
                 'href' => '#',
                 'icon' => 'bi-cloud',
-                'can' => in_array($role, ['root', 'gestor'], true),
+                'can' => auth_can('integraciones_nextcloud'),
                 'children' => [
-                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Nextcloud', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-usuarios', 'icon' => 'bi-cloud-plus', 'can' => in_array($role, ['root', 'gestor'], true)],
-                    ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-historial', 'icon' => 'bi-clock-history', 'can' => in_array($role, ['root', 'gestor'], true)],
+                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Nextcloud', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-usuarios', 'icon' => 'bi-cloud-plus', 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_grupos', 'label' => 'Grupos', 'href' => $mantencionAppUrl . '/configuracion?panel=nextcloud', 'icon' => 'bi-people', 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-historial', 'icon' => 'bi-clock-history', 'can' => auth_can('integraciones_nextcloud')],
                 ],
             ],
         ],
@@ -181,6 +183,7 @@ $navItems = [
 <div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
   <div class="nova-integration-card">
     <span class="nova-integration-icon"><i class="bi bi-cloud-arrow-down"></i></span>
+    <img class="nova-integration-gif" id="nova-integration-gif" src="" alt="" hidden>
     <strong id="nova-integration-title">Consultando integraci&oacute;n</strong>
     <span id="nova-integration-detail">La operaci&oacute;n puede tardar unos segundos.</span>
     <div class="nova-integration-bar" aria-hidden="true"><i></i></div>
@@ -188,53 +191,8 @@ $navItems = [
 </div>
 <script>
 (function () {
-  const loader = document.getElementById('app-page-loader');
   const integrationOverlay = document.getElementById('nova-integration-overlay');
   window.appUi = window.appUi || {};
-  window.appUi.setLoading = function (state) {
-    if (!loader) return;
-    if (state) {
-      loader.classList.add('is-visible');
-    } else {
-      loader.classList.remove('is-visible');
-    }
-  };
-  const cleanupModalState = function () {
-    document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) { backdrop.remove(); });
-    if (!document.querySelector('.modal.show')) {
-      document.body.classList.remove('modal-open');
-      document.body.style.removeProperty('overflow');
-      document.body.style.removeProperty('padding-right');
-    }
-  };
-  window.appUi.closeModal = function (modal) {
-    if (!modal) return;
-    if (window.bootstrap && window.bootstrap.Modal) {
-      window.bootstrap.Modal.getOrCreateInstance(modal).hide();
-      window.setTimeout(cleanupModalState, 180);
-      return;
-    }
-    modal.classList.remove('show');
-    modal.setAttribute('aria-hidden', 'true');
-    modal.removeAttribute('aria-modal');
-    modal.style.display = 'none';
-    cleanupModalState();
-  };
-  window.appUi.openModal = function (modal) {
-    if (!modal) return;
-    if (modal.parentElement !== document.body) {
-      document.body.appendChild(modal);
-    }
-    if (window.bootstrap && window.bootstrap.Modal) {
-      window.bootstrap.Modal.getOrCreateInstance(modal).show();
-      return;
-    }
-    modal.classList.add('show');
-    modal.removeAttribute('aria-hidden');
-    modal.setAttribute('aria-modal', 'true');
-    modal.style.display = 'block';
-    document.body.classList.add('modal-open');
-  };
   const promoteModalToBody = function (modal) {
     if (!modal || modal.parentElement === document.body) return;
     document.body.appendChild(modal);
@@ -289,10 +247,19 @@ $navItems = [
     const title = document.getElementById('nova-integration-title');
     const detail = document.getElementById('nova-integration-detail');
     const icon = integrationOverlay.querySelector('.nova-integration-icon i');
+    const iconContainer = integrationOverlay.querySelector('.nova-integration-icon');
+    const gif = document.getElementById('nova-integration-gif');
     if (state) {
       if (title) title.textContent = options.title || 'Consultando integración';
       if (detail) detail.textContent = options.detail || 'La operación puede tardar unos segundos.';
       if (icon) icon.className = 'bi ' + (options.icon || 'bi-cloud-arrow-down');
+      if (gif) {
+        gif.hidden = !options.image;
+        gif.src = options.image || '';
+        gif.alt = options.image ? (options.imageAlt || '') : '';
+      }
+      if (iconContainer) iconContainer.hidden = Boolean(options.image);
+      integrationOverlay.classList.toggle('has-media', Boolean(options.image));
       integrationOverlay.classList.add('is-active');
       integrationOverlay.setAttribute('aria-hidden', 'false');
       document.body.classList.add('nova-integration-loading');
@@ -307,9 +274,14 @@ $navItems = [
     const action = ((actionInput && actionInput.value) || '') + ' ' + ((submitter && submitter.value) || '') + ' ' + ((submitter && submitter.textContent) || '');
     const lower = action.toLowerCase();
     if (!/(sync|sincron|import|fetch|consult|confirm|core|api)/i.test(lower)) return null;
-    if (lower.indexOf('nextcloud') !== -1) return { title: 'Procesando Nextcloud', detail: 'Conectando con Nextcloud y preparando la respuesta.', icon: 'bi-cloud-arrow-up' };
+    if (lower.indexOf('nextcloud') !== -1) return {
+      title: lower.indexOf('group') !== -1 ? 'Consultando grupos de Nextcloud' : 'Procesando Nextcloud',
+      detail: lower.indexOf('group') !== -1 ? 'Obteniendo los grupos disponibles. Esto puede tardar algunos segundos.' : 'Conectando con Nextcloud y preparando la respuesta.',
+      icon: 'bi-cloud-arrow-up',
+      image: <?= json_encode(legacy_app_url('assets/img/Nextcloud.gif'), JSON_UNESCAPED_SLASHES) ?>,
+      imageAlt: 'Consultando Nextcloud'
+    };
     if (lower.indexOf('core') !== -1) return { title: 'Consultando CORE', detail: 'Buscando y normalizando datos recibidos desde CORE.', icon: 'bi-database-down' };
-    if (lower.indexOf('onlyoffice') !== -1) return { title: 'Consultando OnlyOffice', detail: 'Validando datos con el servicio configurado.', icon: 'bi-file-earmark-richtext' };
     if (lower.indexOf('redmine') !== -1 || lower.indexOf('sync') !== -1 || lower.indexOf('sincron') !== -1) return { title: 'Sincronizando Redmine', detail: 'Actualizando catálogos y datos desde Redmine.', icon: 'bi-arrow-repeat' };
     if (lower.indexOf('import') !== -1) return { title: 'Importando datos', detail: 'Procesando archivo o datos externos.', icon: 'bi-file-earmark-arrow-up' };
     return { title: 'Consultando integración', detail: 'La operación puede tardar unos segundos.', icon: 'bi-cloud-arrow-down' };
@@ -338,28 +310,19 @@ $navItems = [
     if (e.key !== 'Escape') return;
     document.querySelectorAll('.modal.show:not([data-nova-session-modal])').forEach(window.appUi.closeModal);
   });
-  // Show loader on full-page navigations
-  document.addEventListener('click', function (e) {
-    const a = e.target.closest('a[href]');
-    if (!a || e.defaultPrevented || a.target === '_blank') return;
-    const url = new URL(a.href, window.location.href);
-    if (url.origin !== window.location.origin) return;
-    window.appUi.setLoading(true);
-  });
-  // Show loader on form submits
+  // Show the module-specific overlay only for integration submits.
   document.addEventListener('submit', function (e) {
     if (e.defaultPrevented) return;
+    if (e.target.closest('[data-app-no-loading], [data-no-page-loader]')) return;
     const copy = integrationCopyForForm(e.target, e.submitter || document.activeElement);
     if (copy) {
       window.appUi.setIntegrationLoading(true, copy);
       const button = e.submitter || e.target.querySelector('button[type="submit"], button:not([type])');
       if (button && button.classList) button.classList.add('is-submitting');
     }
-    window.appUi.setLoading(true);
   });
-  // Hide loader when page finishes loading
-  window.addEventListener('pageshow', function () { window.appUi?.setLoading?.(false); window.appUi?.setIntegrationLoading?.(false); });
-  window.addEventListener('load', function () { window.appUi?.setLoading?.(false); window.appUi?.setIntegrationLoading?.(false); });
+  window.addEventListener('pageshow', function () { window.appUi?.setIntegrationLoading?.(false); });
+  window.addEventListener('load', function () { window.appUi?.setIntegrationLoading?.(false); });
 }());
 window.addEventListener('load', () => {
   // Navegaci&oacute;n parcial: carga vistas sin recargar navbar/footer si existe #page-content en destino.
@@ -372,8 +335,7 @@ window.addEventListener('load', () => {
       'dashboard.php',
       'horasextra/horas_extra.php',
       'horas_extra.php',
-      'procedimientos/procedimientos.php',
-      'procedimientos.php'
+      'pendientes/manual.php',
     ];
     const navLinks = document.querySelectorAll('.nova-sidebar-body a.nova-sidebar-link:not([data-bs-toggle])');
     const setActive = (urlStr) => {
@@ -426,6 +388,7 @@ window.addEventListener('load', () => {
           return;
         }
         pageContent.innerHTML = contentHtml;
+        window.NovaSearchSelect?.init(pageContent);
         // limpiar nodos de texto vacíos/BOM
         Array.from(pageContent.childNodes).forEach(n => {
           if (n.nodeType === 3 && /^\s*$/.test(n.textContent.replace(/\uFEFF/g, ''))) {
@@ -471,6 +434,8 @@ window.addEventListener('load', () => {
   let expiresAt = Date.now() + (remaining * 1000);
   const logoutUrl = '<?= $h($novaLogoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($novaSessionExtendUrl) ?>';
+  const loginUrl = '<?= $h($novaLoginUrl) ?>';
+  const sessionIdentity = '<?= $h($novaSessionIdentity) ?>';
   const csrfToken = '<?= $h($novaCsrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const modalEl = document.getElementById('sessionModal');
   const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl) : null;
@@ -578,6 +543,10 @@ window.addEventListener('load', () => {
   };
 
   function submitLogout() {
+    if (sessionExpired) {
+      window.location.assign(loginUrl);
+      return;
+    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = logoutUrl;
@@ -616,7 +585,7 @@ window.addEventListener('load', () => {
             'X-CSRF-TOKEN': csrfToken
           },
           credentials: 'same-origin',
-          body: JSON.stringify({password: pwd})
+          body: JSON.stringify({password: pwd, identity: sessionIdentity})
         });
         const data = await resp.json();
         if (data.ok) {

@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../../controllers/auth.php';
-auth_require_role(['root', 'gestor'], '/redmine-mantencion/login.php');
+auth_require_login('/redmine-mantencion/login.php');
+if (!auth_can('usuarios')) {
+  http_response_code(403);
+  exit('No tienes permiso para ver Usuarios.');
+}
 require_once __DIR__ . '/../../controllers/usuarios.php';
 [$usuarios, $flash, $importPreview] = handle_usuarios();
 $usuariosActivos = count(array_filter($usuarios, static fn ($u): bool => strtolower(trim((string)($u['estado'] ?? 'activo'))) !== 'baneado'));
@@ -13,29 +17,8 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
 <html lang="es">
 <head>
   <?php $pageTitle = 'Usuarios'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <style>
-    body { margin: 0; }
-    .navbar { margin-top: 0 !important; margin-bottom: 0; }
-    .btn-icon { display: inline-flex; align-items: center; gap: .35rem; }
-    .table thead th { font-weight: 600; text-transform: uppercase; font-size: .78rem; letter-spacing: .02em; }
-    .user-status-badge { min-width: 78px; justify-content: center; }
-    .credential-icons { display: inline-flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
-    .credential-icon {
-      width: 28px;
-      height: 28px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      color: #fff;
-      font-size: .92rem;
-      line-height: 1;
-    }
-    .credential-icon--api { background: #198754; }
-    .credential-icon--core { background: #0dcaf0; color: #052c33; }
-    .credential-icon--nextcloud { background: #0d6efd; }
-    .credential-icon--empty { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
-  </style>
+  <?php $usuariosCssVersion = @filemtime(__DIR__ . '/../../assets/css/usuarios.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/usuarios.css?v=<?= (int)$usuariosCssVersion ?>">
 </head>
 <body class="bg-light">
 <?php $activeNav = 'usuarios'; include __DIR__ . '/../partials/navbar.php'; ?>
@@ -96,7 +79,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
             <th>Estado</th>
             <th>Credenciales</th>
             <th class="nova-col-hide-md">Ultimo ingreso</th>
-            <th>Acciones</th>
+            <th class="nova-col-actions">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -111,8 +94,10 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
           $uLogin = trim((string)($u['ultimo_login_at'] ?? ''));
           $uLoginFmt = $uLogin !== '' ? date('d/m/Y H:i', strtotime($uLogin)) : '-';
           $hasApi = trim((string)($u['api'] ?? '')) !== '';
-          $hasCore = trim((string)($u['core_user'] ?? '')) !== '' && trim((string)($u['core_pass_enc'] ?? '')) !== '';
-          $hasNc = trim((string)($u['nextcloud_user'] ?? '')) !== '' && trim((string)($u['nextcloud_pass_enc'] ?? '')) !== '';
+          $hasCore = !empty($u['has_core_credentials'])
+              || (trim((string)($u['core_user'] ?? '')) !== '' && trim((string)($u['core_pass_enc'] ?? '')) !== '');
+          $hasNc = !empty($u['has_nextcloud_credentials'])
+              || (trim((string)($u['nextcloud_user'] ?? '')) !== '' && trim((string)($u['nextcloud_pass_enc'] ?? '')) !== '');
           $roleBadge = match ($uRol) {
               'root' => 'is-root',
               'administrador', 'admin' => 'is-admin',
@@ -138,8 +123,10 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
               <span class="nova-badge <?= $h($estadoBadge) ?>"><?= $uEstado === 'baneado' ? 'Baneado' : 'Activo' ?></span>
             </td>
             <td data-col="api">
-              <div class="nova-table-actions">
-                <span class="nova-badge <?= $hasApi ? 'is-redmine' : 'is-inactivo' ?>" title="<?= $hasApi ? 'API configurada' : 'Sin token API' ?>">API</span>
+              <div class="nova-table-actions user-credentials-cell">
+                <?php if ($hasApi): ?>
+                  <span class="nova-badge is-redmine" title="API Redmine configurada">API</span>
+                <?php endif; ?>
                 <?php if ($hasCore): ?>
                   <span class="nova-badge is-core" title="CORE guardado">CORE</span>
                 <?php endif; ?>
@@ -151,7 +138,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
             <td class="nova-col-hide-md nova-date-meta" data-col="login"><?= $h($uLoginFmt) ?></td>
             <td>
               <div class="nova-table-actions">
-                <button type="button" class="btn-action is-edit" data-bs-toggle="modal" data-bs-target="#editModal" <?= $maintenanceMode ? 'disabled' : '' ?>
+                <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal" data-bs-target="#editModal" <?= $maintenanceMode ? 'disabled' : '' ?>
                   data-id="<?= $h($u['id'] ?? '') ?>"
                   data-nombre="<?= $h($u['nombre'] ?? '') ?>"
                   data-apellido="<?= $h($u['apellido'] ?? '') ?>"
@@ -162,7 +149,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
                 </button>
                 <button
                   type="button"
-                  class="btn-action is-delete"
+                  class="btn-action btn-action-delete"
                   data-bs-toggle="modal"
                   data-bs-target="#deleteAccessModal"
                   data-id="<?= $h($u['id'] ?? '') ?>"
@@ -276,7 +263,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-danger" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>>
+          <button type="submit" class="btn-nova btn-nova-danger" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>>
             <i class="bi bi-person-x"></i> Quitar acceso
           </button>
         </div>
@@ -310,7 +297,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
               </select>
             </div>
             <div class="col-12">
-              <div class="alert alert-info mb-0">
+              <div class="nova-alert-card is-info mb-0">
                 <i class="bi bi-person-lock"></i>
                 Desde esta vista solo se modifica el rol dentro del proyecto. La identidad, estado y credenciales personales se mantienen en NOVA.
               </div>
@@ -358,7 +345,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
               </select>
             </div>
             <div class="col-12">
-              <div class="alert alert-info mb-0">
+              <div class="nova-alert-card is-info mb-0">
                 <i class="bi bi-person-lock"></i>
                 Las credenciales de Redmine, CORE y Nextcloud son personales. Cada usuario debe ingresarlas desde el modulo correspondiente.
               </div>
@@ -374,7 +361,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
 </div>
 
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
-<button id="users-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);" class="btn btn-primary">
+<button id="users-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" class="btn btn-primary nova-scroll-top">
     <i class="bi bi-arrow-up"></i>
 </button>
 <script>
@@ -516,21 +503,6 @@ if (newIdInput) {
 setupEditModal();
 setupDeleteModal();
 setupImportModal();
-
-(() => {
-  const scrollTopBtn = document.getElementById('users-scroll-top');
-  if (!scrollTopBtn) return;
-  if (scrollTopBtn.parentElement !== document.body) {
-    document.body.appendChild(scrollTopBtn);
-  }
-  const update = () => {
-    scrollTopBtn.style.display = (window.scrollY || document.documentElement.scrollTop || 0) > 220 ? 'flex' : 'none';
-  };
-  scrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  window.addEventListener('scroll', update, { passive: true });
-  window.addEventListener('resize', update);
-  update();
-})();
 </script>
 </div>
 </body>

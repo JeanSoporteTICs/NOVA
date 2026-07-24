@@ -9,19 +9,36 @@ use Illuminate\Support\Facades\Schema;
  * Manages relational permission tables for roles and user permission keys.
  * Tables: redmine_tic_permisos_rol, redmine_tic_permisos_usuario
  *
- * Note: allPermissionsFromRelational() and savePermissionsToRelational() (user-level
- * permissions embedded in project-user management) intentionally remain in
- * RedmineDataRepository since they are called from user management code that
- * manages many concerns at once. Only role permissions are extracted here.
+ * Note: RedmineDataRepository::allPermissionsFromRelational() and
+ * ::savePermissionsToRelational() still exist as private bridges to this
+ * class's public methods of the same name — kept only because
+ * tests/Feature/Phase3aPermissionsTest.php reaches them via reflection
+ * (ETAPA B / Lote B2). Do not remove those bridges without first migrating
+ * that test to call this class's public API directly.
  */
 class RedminePermissionRepository
 {
     private const SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
+    private ?bool $userPermissionsTableAvailableCache = null;
+    private ?bool $rolePermissionsTableAvailableCache = null;
 
     public function __construct(
         private string $projectKey,
         private string $projectName,
     ) {}
+
+    /**
+     * Returns roles from the relational table (with its own JSON-blob
+     * fallback), then falls back to hard-coded defaults if still empty.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public function roles(): array
+    {
+        $databaseRoles = $this->rolesFromDatabase();
+
+        return $databaseRoles !== [] ? $databaseRoles : $this->defaultRoles();
+    }
 
     /**
      * Returns roles from the relational table, then falls back to the JSON blob
@@ -160,6 +177,64 @@ class RedminePermissionRepository
         }
     }
 
+    /** @param array<string,mixed> $permissions */
+    public function saveRolePermissions(string $role, array $permissions): bool
+    {
+        $role = trim($role);
+        if ($role === '' || !$this->rolPermissionsTableAvailable()) {
+            return false;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return false;
+        }
+
+        $rows = [];
+        foreach ($permissions as $key => $value) {
+            $key = trim((string) $key);
+            if ($key === '') {
+                continue;
+            }
+            $rows[] = [
+                'modulo_id' => $moduleId,
+                'rol' => $role,
+                'clave' => $key,
+                'valor' => $this->encodeValue($key, $value),
+                'actualizado_at' => now(),
+            ];
+        }
+        if ($rows === []) {
+            return false;
+        }
+
+        try {
+            DB::table('redmine_tic_permisos_rol')->upsert(
+                $rows,
+                ['modulo_id', 'rol', 'clave'],
+                ['valor', 'actualizado_at']
+            );
+
+            $savedKeys = array_column($rows, 'clave');
+            DB::table('redmine_tic_permisos_rol')
+                ->where('modulo_id', $moduleId)
+                ->where('rol', $role)
+                ->whereNotIn('clave', $savedKeys)
+                ->delete();
+
+            $persisted = $this->rolesFromRelational()[$role] ?? null;
+            if (!is_array($persisted)) {
+                return false;
+            }
+            ksort($persisted);
+            ksort($permissions);
+
+            return $persisted === $permissions;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function encodeValue(string $clave, mixed $value): string
     {
         if (in_array($clave, self::SCOPE_KEYS, true)) {
@@ -254,19 +329,25 @@ class RedminePermissionRepository
 
     public function userPermissionsTableAvailable(): bool
     {
+        if ($this->userPermissionsTableAvailableCache !== null) {
+            return $this->userPermissionsTableAvailableCache;
+        }
         try {
-            return Schema::hasTable('redmine_tic_permisos_usuario');
+            return $this->userPermissionsTableAvailableCache = Schema::hasTable('redmine_tic_permisos_usuario');
         } catch (\Throwable) {
-            return false;
+            return $this->userPermissionsTableAvailableCache = false;
         }
     }
 
     public function rolPermissionsTableAvailable(): bool
     {
+        if ($this->rolePermissionsTableAvailableCache !== null) {
+            return $this->rolePermissionsTableAvailableCache;
+        }
         try {
-            return Schema::hasTable('redmine_tic_permisos_rol');
+            return $this->rolePermissionsTableAvailableCache = Schema::hasTable('redmine_tic_permisos_rol');
         } catch (\Throwable) {
-            return false;
+            return $this->rolePermissionsTableAvailableCache = false;
         }
     }
 
@@ -282,12 +363,12 @@ class RedminePermissionRepository
             'historico_scope'      => 'todos',
             'configuracion'        => true,
             'estadisticas'         => true,
-            'estadisticas_manual'  => true,
             'usuarios'             => true,
-            'categorias'           => true,
-            'unidades'             => true,
             'simulador'            => true,
             'actividad'            => true,
+            'actividad_eliminar'   => true,
+            'actividad_todos'      => true,
+            'mis_integraciones'    => true,
             'reportes_editar'      => true,
             'reportes_eliminar'    => true,
             'horas_extra_editar'   => true,
@@ -300,15 +381,9 @@ class RedminePermissionRepository
             'cfg_redmine'          => true,
             'cfg_campos'           => true,
             'cfg_retencion'        => true,
-            'cfg_webhook'          => true,
-            'cfg_sesion'           => true,
             'cfg_mantencion'       => true,
-            'cfg_trackers'         => true,
-            'cfg_prioridades'      => true,
-            'cfg_estados'          => true,
             'cfg_roles'            => true,
             'cfg_usuarios'         => true,
-            'cfg_catalogos'        => true,
             'cfg_categorias'       => true,
             'cfg_unidades'         => true,
         ];
@@ -327,15 +402,9 @@ class RedminePermissionRepository
                 'cfg_redmine'          => false,
                 'cfg_campos'           => false,
                 'cfg_retencion'        => false,
-                'cfg_webhook'          => false,
-                'cfg_sesion'           => false,
                 'cfg_mantencion'       => false,
-                'cfg_trackers'         => false,
-                'cfg_prioridades'      => false,
-                'cfg_estados'          => false,
                 'cfg_roles'            => false,
                 'cfg_usuarios'         => false,
-                'cfg_catalogos'        => false,
                 'cfg_categorias'       => false,
                 'cfg_unidades'         => false,
             ]),
@@ -348,12 +417,12 @@ class RedminePermissionRepository
                 'historico_scope'      => 'asignados',
                 'configuracion'        => false,
                 'estadisticas'         => true,
-                'estadisticas_manual'  => false,
                 'usuarios'             => false,
-                'categorias'           => false,
-                'unidades'             => false,
                 'simulador'            => true,
                 'actividad'            => false,
+                'actividad_eliminar'   => false,
+                'actividad_todos'      => false,
+                'mis_integraciones'    => true,
                 'reportes_editar'      => false,
                 'reportes_eliminar'    => false,
                 'horas_extra_editar'   => false,
@@ -366,15 +435,9 @@ class RedminePermissionRepository
                 'cfg_redmine'          => false,
                 'cfg_campos'           => false,
                 'cfg_retencion'        => false,
-                'cfg_webhook'          => false,
-                'cfg_sesion'           => false,
                 'cfg_mantencion'       => false,
-                'cfg_trackers'         => false,
-                'cfg_prioridades'      => false,
-                'cfg_estados'          => false,
                 'cfg_roles'            => false,
                 'cfg_usuarios'         => false,
-                'cfg_catalogos'        => false,
                 'cfg_categorias'       => false,
                 'cfg_unidades'         => false,
             ],

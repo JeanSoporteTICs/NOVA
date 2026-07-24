@@ -72,6 +72,11 @@ function core_credentials_central_user_id(string $userId): ?int {
             ->orWhere('uuid', $userId)
             ->orWhere('usuario', $userId)
             ->value('id');
+        if ($rowId === null && ctype_digit($userId)) {
+            $rowId = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+                ->where('id', (int)$userId)
+                ->value('id');
+        }
 
         return $rowId === null ? null : (int)$rowId;
     } catch (\Throwable) {
@@ -89,19 +94,45 @@ function core_credentials_central_for_user(string $userId, string $type): array 
             ->where('usuario_id', $novaUserId)
             ->where('tipo', $type)
             ->first();
-        $secret = trim((string)($row->valor_secreto ?? ''));
-        if ($secret !== '') {
-            try {
-                $secret = (string)decrypt($secret);
-            } catch (\Throwable) {
-            }
+        $rawSecret = trim((string)($row->valor_secreto ?? ''));
+        $secret = \App\Modulos\Nova\Support\SecretValue::decryptSecret($rawSecret) ?? '';
+
+        // Auto-rewrite covers 'nextcloud' (Lote A4) and 'core' (Lote A5).
+        if ($type === 'nextcloud' || $type === 'core') {
+            core_credentials_maybe_rewrite_secret($novaUserId, $type, $rawSecret, $secret);
         }
+
         return [
             'user' => trim((string)($row->usuario_externo ?? '')),
             'pass' => $secret,
         ];
     } catch (\Throwable) {
         return ['user' => '', 'pass' => ''];
+    }
+}
+
+/**
+ * Opportunistically upgrades a plaintext-legacy or legacy enc:v1 secret to
+ * Laravel encrypt() the moment it's read for a resolved usuario_id/tipo row.
+ * Never runs for already-encrypted, invalid, or empty values, and never
+ * fails the read if the rewrite itself fails.
+ */
+function core_credentials_maybe_rewrite_secret(int $userId, string $type, string $rawSecret, string $decryptedSecret): void {
+    if ($rawSecret === '' || $decryptedSecret === '') {
+        return;
+    }
+    if (!\App\Modulos\Nova\Support\SecretValue::inspect($rawSecret)['needs_rewrite']) {
+        return;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+            ->where('usuario_id', $userId)
+            ->where('tipo', $type)
+            ->update([
+                'valor_secreto' => \App\Modulos\Nova\Support\SecretValue::encryptSecret($decryptedSecret),
+                'actualizado_at' => now(),
+            ]);
+    } catch (\Throwable) {
     }
 }
 
@@ -117,7 +148,7 @@ function core_credentials_central_save_for_user(string $userId, string $type, st
             ['usuario_id' => $novaUserId, 'tipo' => $type],
             [
                 'usuario_externo' => $externalUser,
-                'valor_secreto' => encrypt($secret),
+                'valor_secreto' => \App\Modulos\Nova\Support\SecretValue::encryptSecret($secret),
                 'actualizado_at' => now(),
             ]
         );

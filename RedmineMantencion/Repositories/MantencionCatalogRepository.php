@@ -11,15 +11,20 @@ final class MantencionCatalogRepository
 
     private ?int $moduleId = null;
     private bool $moduleIdResolved = false;
+    private ?bool $tableReadyCache = null;
+    private array $columnAvailableCache = [];
 
     public function tableReady(): bool
     {
+        if ($this->tableReadyCache !== null) {
+            return $this->tableReadyCache;
+        }
         try {
-            return Schema::hasTable('modulos_nova')
+            return $this->tableReadyCache = Schema::hasTable('modulos_nova')
                 && Schema::hasTable('categorias')
                 && Schema::hasTable('unidades');
         } catch (\Throwable) {
-            return false;
+            return $this->tableReadyCache = false;
         }
     }
 
@@ -106,23 +111,23 @@ final class MantencionCatalogRepository
 
         try {
             $columns = ['id', 'nombre'];
-            if (Schema::hasColumn($table, 'clave_externa')) {
+            if ($this->columnAvailable($table, 'clave_externa')) {
                 $columns[] = 'clave_externa';
             }
-            if (Schema::hasColumn($table, 'origen')) {
+            if ($this->columnAvailable($table, 'origen')) {
                 $columns[] = 'origen';
             }
 
             $query = DB::table($table)
                 ->where('modulo_id', $moduleId);
 
-            if (Schema::hasColumn($table, 'activo')) {
+            if ($this->columnAvailable($table, 'activo')) {
                 $query->where('activo', 1);
             }
 
             $rows = $query
                 ->orderByRaw($this->originOrderSql($table))
-                ->orderByRaw(Schema::hasColumn($table, 'clave_externa') ? "CASE WHEN clave_externa IS NULL OR clave_externa = '' THEN 1 ELSE 0 END" : 'id asc')
+                ->orderByRaw($this->columnAvailable($table, 'clave_externa') ? "CASE WHEN clave_externa IS NULL OR clave_externa = '' THEN 1 ELSE 0 END" : 'id asc')
                 ->orderBy('nombre')
                 ->orderBy('id')
                 ->get($columns);
@@ -181,13 +186,13 @@ final class MantencionCatalogRepository
                 ->where('modulo_id', $moduleId)
                 ->where('nombre', $name);
 
-            if (Schema::hasColumn($table, 'activo')) {
+            if ($this->columnAvailable($table, 'activo')) {
                 $query->where('activo', 1);
             }
 
             $id = $query
                 ->orderByRaw($this->originOrderSql($table))
-                ->orderByRaw(Schema::hasColumn($table, 'clave_externa') ? "CASE WHEN clave_externa IS NULL OR clave_externa = '' THEN 1 ELSE 0 END" : 'id asc')
+                ->orderByRaw($this->columnAvailable($table, 'clave_externa') ? "CASE WHEN clave_externa IS NULL OR clave_externa = '' THEN 1 ELSE 0 END" : 'id asc')
                 ->orderBy('id')
                 ->value('id');
         } catch (\Throwable) {
@@ -204,6 +209,13 @@ final class MantencionCatalogRepository
         if ($moduleId === null || ! $this->tableReady()) {
             return;
         }
+
+        // Resolve column existence once for the whole sync instead of per row —
+        // these don't change mid-request. See Fase 4 lote 2.
+        $hasClaveExterna = $this->columnAvailable($table, 'clave_externa');
+        $hasActivo = $this->columnAvailable($table, 'activo');
+        $hasPredeterminado = $this->columnAvailable($table, 'predeterminado');
+        $hasOrigen = $this->columnAvailable($table, 'origen');
 
         foreach ($rows as $row) {
             if (! is_array($row)) {
@@ -222,21 +234,21 @@ final class MantencionCatalogRepository
                 'actualizado_at' => now(),
             ];
 
-            if (Schema::hasColumn($table, 'clave_externa')) {
+            if ($hasClaveExterna) {
                 $values['clave_externa'] = $externalId !== '' ? $externalId : null;
             }
-            if (Schema::hasColumn($table, 'activo')) {
+            if ($hasActivo) {
                 $values['activo'] = true;
             }
-            if (Schema::hasColumn($table, 'predeterminado')) {
+            if ($hasPredeterminado) {
                 $values['predeterminado'] = false;
             }
-            if (Schema::hasColumn($table, 'origen')) {
+            if ($hasOrigen) {
                 $values['origen'] = 'redmine_mantencion_storage';
             }
 
             try {
-                $id = $this->findExistingRowId($table, $moduleId, $name, $externalId);
+                $id = $this->findExistingRowId($table, $moduleId, $name, $externalId, $hasClaveExterna, $hasOrigen);
                 if ($id !== null) {
                     DB::table($table)->where('id', $id)->update($values);
                     continue;
@@ -250,11 +262,11 @@ final class MantencionCatalogRepository
         }
     }
 
-    private function findExistingRowId(string $table, int $moduleId, string $name, string $externalId): ?int
+    private function findExistingRowId(string $table, int $moduleId, string $name, string $externalId, bool $hasClaveExterna, bool $hasOrigen): ?int
     {
         $query = DB::table($table)->where('modulo_id', $moduleId);
 
-        if ($externalId !== '' && Schema::hasColumn($table, 'clave_externa')) {
+        if ($externalId !== '' && $hasClaveExterna) {
             $byExternal = (clone $query)->where('clave_externa', $externalId)->value('id');
             if ($byExternal !== null) {
                 return (int) $byExternal;
@@ -263,7 +275,7 @@ final class MantencionCatalogRepository
 
         $byName = (clone $query)
             ->where('nombre', $name)
-            ->orderByRaw($this->originOrderSql($table))
+            ->orderByRaw($this->originOrderSql($table, $hasOrigen))
             ->orderBy('id')
             ->value('id');
 
@@ -274,7 +286,7 @@ final class MantencionCatalogRepository
     {
         $moduleId = $this->resolveModuleId();
         $id = trim($id);
-        if ($moduleId === null || $id === '' || ! $this->tableReady() || ! Schema::hasColumn($table, 'activo')) {
+        if ($moduleId === null || $id === '' || ! $this->tableReady() || ! $this->columnAvailable($table, 'activo')) {
             return;
         }
 
@@ -283,11 +295,11 @@ final class MantencionCatalogRepository
             if (ctype_digit($id)) {
                 $query->where(function ($inner) use ($id, $table): void {
                     $inner->where('id', (int) $id);
-                    if (Schema::hasColumn($table, 'clave_externa')) {
+                    if ($this->columnAvailable($table, 'clave_externa')) {
                         $inner->orWhere('clave_externa', $id);
                     }
                 });
-            } elseif (Schema::hasColumn($table, 'clave_externa')) {
+            } elseif ($this->columnAvailable($table, 'clave_externa')) {
                 $query->where('clave_externa', $id);
             } else {
                 return;
@@ -337,9 +349,10 @@ final class MantencionCatalogRepository
         return '';
     }
 
-    private function originOrderSql(string $table): string
+    private function originOrderSql(string $table, ?bool $hasOrigen = null): string
     {
-        if (! Schema::hasColumn($table, 'origen')) {
+        $hasOrigen ??= $this->columnAvailable($table, 'origen');
+        if (! $hasOrigen) {
             return 'id asc';
         }
 
@@ -366,5 +379,19 @@ final class MantencionCatalogRepository
         }
 
         return $this->moduleId;
+    }
+
+    private function columnAvailable(string $table, string $column): bool
+    {
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $this->columnAvailableCache)) {
+            return $this->columnAvailableCache[$key];
+        }
+
+        try {
+            return $this->columnAvailableCache[$key] = Schema::hasColumn($table, $column);
+        } catch (\Throwable) {
+            return $this->columnAvailableCache[$key] = false;
+        }
     }
 }

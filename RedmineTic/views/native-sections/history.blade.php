@@ -28,50 +28,26 @@
     };
 
     $redmineIssueUrl = static function ($redmineId) use ($config): string {
-        $id = preg_replace('/\D+/', '', trim((string) $redmineId)) ?? '';
-        if ($id === '') return '';
-        $platformUrl = trim((string) ($config['platform_url'] ?? ''));
-        $parts = parse_url($platformUrl);
-        if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) return '';
-        $path = (string) ($parts['path'] ?? '');
-        $projectsPos = strpos($path, '/projects/');
-        $prefix = $projectsPos === false ? '' : substr($path, 0, $projectsPos);
-        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-        $base = rtrim($parts['scheme'] . '://' . $parts['host'] . $port . $prefix, '/');
-        return $base . '/issues/' . rawurlencode($id);
+        return \RedmineTic\Support\RedmineUrlSupport::redmineIssueUrl(
+            (string) ($config['platform_url'] ?? ''),
+            (string) $redmineId
+        );
     };
 
     $sourceValue = static function (array $row): string {
-        if (!empty($row['_history_is_hours_extra'])) return 'horas_extra';
-        return 'reportes';
+        $origin = strtolower(trim((string) ($row['origen'] ?? '')));
+        if ($origin === 'telegram' || trim((string) ($row['chat_id_telegram'] ?? '')) !== '') return 'telegram';
+        return 'manual';
     };
 
-    $sourceLabel = static function (array $row): string {
-        if (!empty($row['_history_is_hours_extra'])) return 'Horas extra';
-        return (string) ($row['_history_type'] ?? 'Archivado');
-    };
-
-    $statusClass = static function ($value) use ($normalizeText): string {
-        $status = $normalizeText($value);
-        if (str_contains($status, 'manual')) return 'historico-status--manual';
-        if (str_contains($status, 'gestionad') || str_contains($status, 'proces') || str_contains($status, 'cerrad')) return 'historico-status--managed';
-        if (str_contains($status, 'error') || str_contains($status, 'rechaz')) return 'historico-status--danger';
-        return 'historico-status--neutral';
-    };
-
-    $statusIcon = static function (string $class): string {
-        return match ($class) {
-            'historico-status--manual' => 'bi-pencil-square',
-            'historico-status--managed' => 'bi-check2-circle',
-            'historico-status--danger' => 'bi-exclamation-triangle',
-            default => 'bi-info-circle',
-        };
-    };
+    $sourceLabel = static fn (array $row): string => $sourceValue($row) === 'telegram' ? 'Telegram' : 'Manual';
+    $sourceIcon = static fn (array $row): string => $sourceValue($row) === 'telegram' ? 'bi-telegram' : 'bi-pencil-square';
 
     $fDesde = $normDate($query['desde'] ?? '');
     $fHasta = $normDate($query['hasta'] ?? '');
     $fFuente = trim((string) ($query['fuente'] ?? ''));
     $fBusqueda = trim((string) ($query['buscar'] ?? ''));
+    $fDescripcion = trim((string) ($query['descripcion'] ?? ''));
     $fCategoria = trim((string) ($query['categoria'] ?? ''));
     $perPageOptions = [25, 50, 100];
     $perPage = (int) ($query['per_page'] ?? 25);
@@ -105,6 +81,11 @@
             ]));
             if ($needle !== '' && !str_contains($haystack, $needle)) continue;
         }
+        if ($fDescripcion !== '') {
+            $descriptionNeedle = $normalizeText($fDescripcion);
+            $descriptionText = $normalizeText($row['descripcion'] ?? '');
+            if ($descriptionNeedle !== '' && !str_contains($descriptionText, $descriptionNeedle)) continue;
+        }
         $row['_history_date_norm'] = $date;
         $filtered[] = $row;
     }
@@ -115,8 +96,7 @@
     $currentPage = min($currentPage, $totalPages);
     $pageOffset = ($currentPage - 1) * $perPage;
     $pagedRows = array_slice($filtered, $pageOffset, $perPage);
-    $rangeStart = $totalFiltered > 0 ? $pageOffset + 1 : 0;
-    $rangeEnd = min($totalFiltered, $pageOffset + count($pagedRows));
+    $visibleRows = count($pagedRows);
     $hoursRows = count(array_filter($filtered, static fn ($row): bool => is_array($row) && !empty($row['_history_is_hours_extra'])));
     $archivedRows = max(0, $totalFiltered - $hoursRows);
 
@@ -140,11 +120,12 @@
     $chips = [];
     if ($fDesde !== '') $chips[] = ['icon' => 'bi-calendar-event', 'label' => 'Desde ' . $fmtDate($fDesde), 'remove' => 'desde'];
     if ($fHasta !== '') $chips[] = ['icon' => 'bi-calendar-check', 'label' => 'Hasta ' . $fmtDate($fHasta), 'remove' => 'hasta'];
-    if ($fFuente !== '') $chips[] = ['icon' => 'bi-inboxes', 'label' => 'Fuente ' . ($fFuente === 'horas_extra' ? 'Horas extra' : 'Reportes'), 'remove' => 'fuente'];
+    if ($fFuente !== '') $chips[] = ['icon' => 'bi-inboxes', 'label' => 'Fuente ' . ($fFuente === 'telegram' ? 'Telegram' : 'Manual'), 'remove' => 'fuente'];
     if ($fBusqueda !== '') $chips[] = ['icon' => 'bi-search', 'label' => 'Busqueda ' . $fBusqueda, 'remove' => 'buscar'];
+    if ($fDescripcion !== '') $chips[] = ['icon' => 'bi-card-text', 'label' => 'Descripcion ' . $fDescripcion, 'remove' => 'descripcion'];
     if ($fCategoria !== '') $chips[] = ['icon' => 'bi-tags', 'label' => 'Categoria ' . $fCategoria, 'remove' => 'categoria'];
 
-    $tableColspan = 12;
+    $tableColspan = 9;
 @endphp
 
 <section class="rm-module-head">
@@ -160,52 +141,8 @@
     </div>
 </section>
 
-<style>
-    .historico-filter-card { border: 1px solid rgba(215,226,239,.95); background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,255,.92)); }
-    .historico-filter-card .btn { min-height: 48px; white-space: nowrap; }
-    .historico-summary { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.08); background: rgba(248,250,255,.9); }
-    .historico-count { display: inline-flex; align-items: center; gap: .5rem; color: #0f172a; font-weight: 900; }
-    .historico-summary__tools { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; justify-content: flex-end; }
-    .historico-filter-chips { display: flex; flex-wrap: wrap; gap: .5rem; padding: .85rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.06); background: rgba(255,255,255,.72); }
-    .historico-filter-chip { display: inline-flex; align-items: center; gap: .38rem; min-height: 32px; padding: .36rem .62rem; border-radius: 999px; border: 1px solid rgba(37,99,235,.18); background: rgba(37,99,235,.08); color: #1d4ed8; font-size: .82rem; font-weight: 900; text-decoration: none; }
-    .historico-filter-chip:hover { background: #2563eb; color: #fff; }
-    .historico-redmine-sync { padding: .9rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.08); background: #eff6ff; }
-    .historico-redmine-sync__header { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .55rem; color: #1d4ed8; font-weight: 900; }
-    .historico-table-card { overflow: hidden; }
-    .historico-table-card.is-compact .historico-table { font-size: .84rem; }
-    .historico-table-card.is-compact .historico-table th,
-    .historico-table-card.is-compact .historico-table td { padding-top: .45rem; padding-bottom: .45rem; }
-    .historico-table { min-width: 1320px; }
-    .historico-table th { white-space: nowrap; vertical-align: middle; }
-    .historico-table td { vertical-align: middle; font-weight: 650; }
-    .historico-date { display: inline-flex; align-items: center; gap: .35rem; min-width: 108px; color: #1e3a8a; font-weight: 900; }
-    .historico-redmine-link { display: inline-flex; align-items: center; gap: .35rem; min-height: 30px; padding: .28rem .62rem; border-radius: 999px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; font-weight: 900; text-decoration: none; }
-    .historico-redmine-link:hover { background: #2563eb; color: #fff; }
-    .historico-source-badge { display: inline-flex; align-items: center; gap: .35rem; border-radius: 999px; padding: .4rem .7rem; background: rgba(56,189,248,.14); color: #075985; border: 1px solid rgba(56,189,248,.22); font-weight: 900; white-space: nowrap; }
-    .historico-source-badge.is-hours { background: #ecfdf5; color: #166534; border-color: rgba(34,197,94,.24); }
-    .historico-status { display: inline-flex; align-items: center; gap: .35rem; max-width: 150px; border-radius: 999px; padding: .35rem .65rem; font-size: .78rem; font-weight: 900; }
-    .historico-status--manual { background: #fff7ed; color: #9a3412; border: 1px solid rgba(249,115,22,.24); }
-    .historico-status--managed { background: #ecfdf5; color: #047857; border: 1px solid rgba(16,185,129,.24); }
-    .historico-status--danger { background: #fef2f2; color: #b91c1c; border: 1px solid rgba(239,68,68,.24); }
-    .historico-status--neutral { background: #f8fafc; color: #334155; border: 1px solid #d7e2ef; }
-    .historico-redmine-status { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px; padding: .32rem .62rem; border-radius: 999px; font-size: .78rem; font-weight: 900; white-space: nowrap; }
-    .historico-redmine-status small { opacity: .8; font-weight: 800; }
-    .historico-redmine-status--syncing { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-    .historico-redmine-status--closed { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
-    .historico-redmine-status--open,
-    .historico-redmine-status--new,
-    .historico-redmine-status--progress { background: #ecfdf5; color: #166534; border: 1px solid rgba(34,197,94,.24); }
-    .historico-redmine-status--resolved { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-    .historico-redmine-status--rejected,
-    .historico-redmine-status--unknown { background: #f8fafc; color: #475569; border: 1px solid #d7e2ef; }
-    .historico-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .9rem 1.1rem; border-top: 1px solid #d7e2ef; background: #f8fafc; }
-    .historico-pagination__left,
-    .historico-page-size-form { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
-    .historico-page-size-form .form-select { width: 86px; }
-    .historico-pagination .page-link { min-width: 34px; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 900; }
-    .historico-pagination .page-item.active .page-link { background: #2563eb; border-color: #2563eb; color: #fff; box-shadow: 0 10px 18px rgba(37,99,235,.2); }
-    .loader-overlay { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: rgba(248,250,252,.74); backdrop-filter: blur(2px); }
-</style>
+@php $redmineTicHistoryCssVersion = @filemtime(public_path('assets/redmine-tic-history.css')) ?: '1'; @endphp
+<link href="{{ asset('assets/redmine-tic-history.css') }}?v={{ $redmineTicHistoryCssVersion }}" rel="stylesheet">
 
 <form id="filter-form" class="card card-body shadow-sm mb-3 historico-filter-card" method="get" action="{{ $baseHistoryUrl }}" aria-live="polite">
     <input type="hidden" name="page" value="1">
@@ -223,8 +160,8 @@
             <label class="form-label fw-bold" for="history-fuente">Fuente</label>
             <select id="history-fuente" class="form-select" name="fuente">
                 <option value="">Todas</option>
-                <option value="reportes" @selected($fFuente === 'reportes')>Reportes</option>
-                <option value="horas_extra" @selected($fFuente === 'horas_extra')>Horas extra</option>
+                <option value="manual" @selected($fFuente === 'manual')>Manual</option>
+                <option value="telegram" @selected($fFuente === 'telegram')>Telegram</option>
             </select>
         </div>
         <div class="col-md-3">
@@ -239,6 +176,10 @@
                     <option value="{{ $category }}" @selected($fCategoria === $category)>{{ $category }}</option>
                 @endforeach
             </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-bold" for="history-descripcion">Buscar en descripcion</label>
+            <input id="history-descripcion" class="form-control" type="search" name="descripcion" value="{{ $fDescripcion }}" placeholder="Texto contenido en la descripcion">
         </div>
         <div class="col-md-2">
             <button type="submit" id="btn-apply" class="btn btn-primary w-100"><i class="bi bi-funnel"></i>Filtrar</button>
@@ -257,7 +198,7 @@
     <div class="historico-summary">
         <div>
             <span class="historico-count"><i class="bi bi-clock-history text-primary"></i>{{ $totalFiltered }} registros</span>
-            <span class="text-muted ms-2">Mostrando {{ $rangeStart }}-{{ $rangeEnd }} de {{ $totalFiltered }}</span>
+            <span class="text-muted ms-2">Mostrando {{ $visibleRows }} de {{ $totalFiltered }} registros</span>
         </div>
         <div class="historico-summary__tools">
             <span class="historico-source-badge"><i class="bi bi-archive"></i>Archivados: {{ $archivedRows }}</span>
@@ -295,6 +236,17 @@
                 </div>
             </div>
             <table class="table table-hover historico-table align-middle mb-0" role="grid" aria-label="Historico de reportes" aria-busy="false">
+                <colgroup>
+                    <col class="historico-col-fecha">
+                    <col class="historico-col-redmine">
+                    <col class="historico-col-estado">
+                    <col class="historico-col-solicitante">
+                    <col class="historico-col-categoria">
+                    <col class="historico-col-asunto">
+                    <col class="historico-col-fuente">
+                    <col class="historico-col-detalle">
+                    <col class="historico-col-acciones">
+                </colgroup>
                 <thead class="table-light">
                     <tr>
                         <th>Fecha</th>
@@ -302,10 +254,7 @@
                         <th>Estado Redmine</th>
                         <th>Solicitante</th>
                         <th>Categoria</th>
-                        <th>Establecimiento</th>
-                        <th>Departamento</th>
-                        <th>Asignado CORE</th>
-                        <th>Estado CORE</th>
+                        <th>Asunto</th>
                         <th>Fuente</th>
                         <th>Detalle</th>
                         <th>Acciones</th>
@@ -318,19 +267,31 @@
                             $issueUrl = $redmineIssueUrl($redmineId);
                             $source = $sourceValue($row);
                             $sourceText = $sourceLabel($row);
+                            $sourceIconClass = $sourceIcon($row);
+                            $isHoursExtra = !empty($row['_history_is_hours_extra']) || in_array(strtolower(trim((string) ($row['hora_extra'] ?? ''))), ['si', 'sí', '1', 'true'], true);
                             $coreEstado = trim((string) ($row['core_estado'] ?? $row['estado'] ?? ''));
-                            $coreClass = $statusClass($coreEstado);
+                            $unidadSolicitante = $row['unidad_solicitante'] ?? $row['core_establecimiento'] ?? $row['unidad'] ?? '';
                             $detail = [
                                 'asunto' => $row['asunto'] ?? $row['mensaje'] ?? '',
                                 'solicitante' => $row['solicitante'] ?? '',
                                 'descripcion' => $row['descripcion'] ?? $row['mensaje'] ?? '',
+                                'fecha' => $fmtDate($row['_history_date_norm'] ?? $row['fecha_inicio'] ?? $row['fecha'] ?? ''),
                                 'redmine_id' => $redmineId,
+                                'estado_redmine' => $row['estado_redmine'] ?? '',
+                                'tipo' => $row['tipo'] ?? '',
+                                'prioridad' => $row['prioridad'] ?? '',
                                 'categoria' => $row['categoria'] ?? '',
-                                'establecimiento' => $row['core_establecimiento'] ?? $row['unidad_solicitante'] ?? '',
-                                'departamento' => $row['core_departamento'] ?? $row['unidad'] ?? '',
+                                'unidad_solicitante' => $unidadSolicitante,
+                                'unidad' => $row['unidad'] ?? '',
                                 'asignado' => $row['core_usuario_asignado'] ?? $row['asignado_nombre'] ?? $row['asignado_a'] ?? '',
                                 'estado' => $coreEstado,
                                 'fuente' => $sourceText,
+                                'hora_extra' => $isHoursExtra ? 'Sí' : 'No',
+                                'tiempo_estimado' => $row['tiempo_estimado'] ?? '',
+                                'fecha_inicio' => $fmtDate($row['fecha_inicio'] ?? ''),
+                                'fecha_fin' => $fmtDate($row['fecha_fin'] ?? ''),
+                                'hora' => $row['hora'] ?? '',
+                                'chat_id_telegram' => $row['chat_id_telegram'] ?? '',
                             ];
                         @endphp
                         <tr>
@@ -351,17 +312,17 @@
                                     <span class="text-muted">-</span>
                                 @endif
                             </td>
-                            <td class="text-truncate" style="max-width: 160px;" title="{{ $row['solicitante'] ?? '' }}">{{ $row['solicitante'] ?? '-' }}</td>
-                            <td class="text-truncate" style="max-width: 200px;" title="{{ $row['categoria'] ?? '' }}">{{ $row['categoria'] ?? '-' }}</td>
-                            <td class="text-truncate" style="max-width: 150px;" title="{{ $row['core_establecimiento'] ?? ($row['unidad_solicitante'] ?? '') }}">{{ $row['core_establecimiento'] ?? ($row['unidad_solicitante'] ?? '-') }}</td>
-                            <td class="text-truncate" style="max-width: 150px;" title="{{ $row['core_departamento'] ?? ($row['unidad'] ?? '') }}">{{ $row['core_departamento'] ?? ($row['unidad'] ?? '-') }}</td>
-                            <td class="text-truncate" style="max-width: 150px;" title="{{ $row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? ($row['asignado_a'] ?? '')) }}">{{ $row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? ($row['asignado_a'] ?? '-')) }}</td>
+                            <td class="historico-cell-truncate" title="{{ $row['solicitante'] ?? '' }}">{{ $row['solicitante'] ?? '-' }}</td>
+                            <td class="historico-cell-truncate" title="{{ $row['categoria'] ?? '' }}">{{ $row['categoria'] ?? '-' }}</td>
+                            <td class="historico-cell-truncate" title="{{ $row['asunto'] ?? ($row['mensaje'] ?? '') }}">{{ $row['asunto'] ?? ($row['mensaje'] ?? '-') }}</td>
                             <td>
-                                <span class="historico-status {{ $coreClass }} text-truncate" title="{{ $coreEstado }}">
-                                    <i class="bi {{ $statusIcon($coreClass) }}"></i>{{ $coreEstado !== '' ? $coreEstado : 'Sin estado' }}
+                                <span class="historico-source-badge {{ $source === 'telegram' ? 'is-telegram' : 'is-manual' }}" title="Creado desde {{ $sourceText }}">
+                                    <i class="bi {{ $sourceIconClass }}"></i>{{ $sourceText }}
+                                    @if ($isHoursExtra)
+                                        <span class="historico-overtime-icon" title="Hora extra" aria-label="Hora extra"><i class="bi bi-clock-fill"></i></span>
+                                    @endif
                                 </span>
                             </td>
-                            <td><span class="historico-source-badge {{ $source === 'horas_extra' ? 'is-hours' : '' }}">{{ $sourceText }}</span></td>
                             <td>
                                 <button type="button" class="btn-action btn-action-view historico-detail-btn" data-bs-toggle="modal" data-bs-target="#historicoDetalleModal" data-detail='@json($detail)' title="Ver detalle" aria-label="Ver detalle">
                                     <i class="bi bi-eye"></i>
@@ -392,7 +353,7 @@
         <nav class="historico-pagination" aria-label="Paginacion historico">
             <div class="historico-pagination__left">
                 <form method="get" action="{{ $baseHistoryUrl }}" class="historico-page-size-form">
-                    @foreach (['desde' => $fDesde, 'hasta' => $fHasta, 'fuente' => $fFuente, 'buscar' => $fBusqueda, 'categoria' => $fCategoria] as $name => $value)
+                    @foreach (['desde' => $fDesde, 'hasta' => $fHasta, 'fuente' => $fFuente, 'buscar' => $fBusqueda, 'descripcion' => $fDescripcion, 'categoria' => $fCategoria] as $name => $value)
                         <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                     @endforeach
                     <input type="hidden" name="page" value="1">
@@ -404,7 +365,7 @@
                     </select>
                     <span>registros</span>
                 </form>
-                <div class="text-muted fw-bold">{{ $rangeStart }}-{{ $rangeEnd }} de {{ $totalFiltered }} registros</div>
+                <div class="text-muted fw-bold">Mostrando {{ $visibleRows }} de {{ $totalFiltered }} registros</div>
             </div>
             @if ($totalPages > 1)
                 <ul class="pagination pagination-sm mb-0">
@@ -439,14 +400,10 @@
                     <div class="fw-bold fs-5" id="historico-detalle-titulo"></div>
                     <div class="text-muted small" id="historico-detalle-solicitante"></div>
                 </div>
-                <div class="table-responsive detail-drawer-panel mb-3">
-                    <table class="table table-sm mb-0 align-middle">
-                        <tbody id="historico-detalle-body"></tbody>
-                    </table>
-                </div>
+                <dl class="historico-detail-facts" id="historico-detalle-body"></dl>
                 <div class="detail-drawer-panel">
-                    <label for="historico-detalle-descripcion" class="form-label fw-bold">Descripcion</label>
-                    <textarea id="historico-detalle-descripcion" class="form-control" rows="8" readonly></textarea>
+                    <div class="form-label fw-bold"><i class="bi bi-table me-2"></i>Descripcion / datos del reporte</div>
+                    <div id="historico-detalle-descripcion" class="nova-description-preview historico-description-preview"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -567,19 +524,34 @@ document.addEventListener('DOMContentLoaded', () => {
         try { detail = JSON.parse(button.getAttribute('data-detail') || '{}'); } catch (error) { detail = {}; }
         document.getElementById('historico-detalle-titulo').textContent = detail.asunto || 'Detalle historico';
         document.getElementById('historico-detalle-solicitante').textContent = detail.solicitante ? `Solicitante: ${detail.solicitante}` : '';
-        document.getElementById('historico-detalle-descripcion').value = detail.descripcion || '';
+        const description = document.getElementById('historico-detalle-descripcion');
+        if (window.NovaDescriptionTables?.render) {
+            window.NovaDescriptionTables.render({ value: detail.descripcion || '' }, description);
+        } else if (description) {
+            description.textContent = detail.descripcion || 'Sin descripción.';
+        }
         const body = document.getElementById('historico-detalle-body');
         const labels = {
-            redmine_id: 'Redmine ID',
-            categoria: 'Categoria',
-            establecimiento: 'Establecimiento',
-            departamento: 'Departamento',
-            asignado: 'Asignado CORE',
-            estado: 'Estado CORE',
-            fuente: 'Fuente',
+            fecha: ['Fecha', 'bi-calendar3'],
+            redmine_id: ['Redmine ID', 'bi-box-arrow-up-right'],
+            estado_redmine: ['Estado Redmine', 'bi-folder2-open'],
+            estado: ['Estado local', 'bi-check2-circle'],
+            tipo: ['Tipo', 'bi-ticket-perforated'],
+            prioridad: ['Prioridad', 'bi-flag'],
+            categoria: ['Categoria', 'bi-tags'],
+            unidad_solicitante: ['Unidad solicitante', 'bi-building'],
+            unidad: ['Ubicación', 'bi-geo-alt'],
+            asignado: ['Asignado', 'bi-person-check'],
+            fuente: ['Fuente', 'bi-cloud-arrow-down'],
+            hora_extra: ['Hora extra', 'bi-clock-history'],
+            tiempo_estimado: ['Tiempo estimado', 'bi-hourglass-split'],
+            fecha_inicio: ['Fecha inicio', 'bi-calendar-event'],
+            fecha_fin: ['Fecha fin', 'bi-calendar-check'],
+            hora: ['Hora', 'bi-clock'],
+            chat_id_telegram: ['Chat ID Telegram', 'bi-telegram'],
         };
-        body.innerHTML = Object.entries(labels).map(([key, label]) => `
-            <tr><th class="table-light" style="width: 36%;">${escapeHtml(label)}</th><td>${escapeHtml(detail[key] || '-')}</td></tr>
+        body.innerHTML = Object.entries(labels).map(([key, meta]) => `
+            <div><dt><i class="bi ${escapeHtml(meta[1])}"></i>${escapeHtml(meta[0])}</dt><dd>${escapeHtml(detail[key] || '-')}</dd></div>
         `).join('');
     });
 });

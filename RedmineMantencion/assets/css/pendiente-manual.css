@@ -1,0 +1,24 @@
+    .manual-card { border: 0; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08); }
+    .manual-grid label { font-weight: 600; color: #334155; }
+    .manual-grid .form-control, .manual-grid .form-select { border-color: #d7deea; }
+    .manual-grid .field-label { min-width: 120px; text-align: right; padding-top: 6px; font-weight: 700; color: #334155; }
+    .manual-grid .field-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); gap: 12px; align-items: start; }
+    .manual-grid .field-row.single { grid-template-columns: 120px minmax(0, 1fr); }
+    .manual-grid .field-row.three { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
+    .manual-grid .toolbar { border: 1px solid #d7deea; border-bottom: 0; border-radius: .5rem .5rem 0 0; background: #f8fafc; padding: .35rem .5rem; color: #64748b; font-size: .875rem; }
+    .manual-description-tabs { display: flex; gap: .25rem; }
+    .manual-description-tab { padding: .3rem .55rem; border: 0; border-radius: .4rem; background: transparent; color: #64748b; font-weight: 700; }
+    .manual-description-tab:hover, .manual-description-tab.is-active { background: #e8f1ff; color: #1d4ed8; }
+    .manual-grid textarea.editor { min-height: 200px; border-top-left-radius: 0; border-top-right-radius: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; tab-size: 4; }
+    .manual-description-preview { min-height: 200px; padding: .75rem; border: 1px solid #d7deea; border-radius: 0 0 .5rem .5rem; background: #fff; }
+    .manual-description-preview__text { white-space: pre-wrap; }
+    .manual-description-preview th { background: #eaf2ff; color: #173b5c; white-space: pre-wrap; }
+    .manual-description-preview td { white-space: pre-wrap; }
+    .manual-grid .helper-link { font-size: .9rem; text-decoration: none; }
+    @media (max-width: 992px) {
+      .manual-grid .field-row,
+      .manual-grid .field-row.single,
+      .manual-grid .field-row.three { grid-template-columns: 1fr; }
+      .manual-grid .field-label { min-width: 0; text-align: left; padding-top: 0; }
+    }
+  

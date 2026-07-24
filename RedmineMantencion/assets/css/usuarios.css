@@ -1,0 +1,26 @@
+    body { margin: 0; }
+    .navbar { margin-top: 0 !important; margin-bottom: 0; }
+    .btn-icon { display: inline-flex; align-items: center; gap: .35rem; }
+    .table thead th { font-weight: 600; text-transform: uppercase; font-size: .78rem; letter-spacing: .02em; }
+    .user-status-badge { min-width: 78px; justify-content: center; }
+    .credential-icons { display: inline-flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+    .credential-icon {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      color: #fff;
+      font-size: .92rem;
+      line-height: 1;
+    }
+    .credential-icon--api { background: #198754; }
+    .credential-icon--core { background: #0dcaf0; color: #052c33; }
+    .credential-icon--nextcloud { background: #0d6efd; }
+    .credential-icon--empty { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
+    .nova-user-table .nova-badge.is-redmine { background: #fee2e2 !important; color: #991b1b !important; }
+    .nova-user-table .nova-badge.is-core { background: #dcfce7 !important; color: #166534 !important; }
+    .nova-user-table .nova-badge.is-nextcloud { background: #dbeafe !important; color: #1d4ed8 !important; }
+    .user-credentials-cell { min-height: 1.7rem; }
+  

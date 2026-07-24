@@ -40,6 +40,28 @@ function nextcloud_consume_preview(): array {
     return is_array($preview) ? $preview : [];
 }
 
+function nextcloud_security_actor(): string {
+    auth_start_session();
+    $name = trim((string)($_SESSION['user']['nombre'] ?? ''));
+    $id = trim((string)($_SESSION['user']['id'] ?? ''));
+    if ($name === '' && $id === '') {
+        return 'usuario desconocido';
+    }
+    return trim($name . ($id !== '' ? ' (ID ' . $id . ')' : ''));
+}
+
+function nextcloud_log_action(string $tag, string $details): void {
+    if (!function_exists('log_security_event')) {
+        return;
+    }
+    $tag = preg_replace('/[^A-Z0-9_]+/', '_', strtoupper($tag)) ?? strtoupper($tag);
+    $details = preg_replace('/[\r\n\t]+/', ' ', $details) ?? $details;
+    $details = trim($details);
+    $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    $suffix = $ip !== '' ? ' | IP ' . $ip : '';
+    log_security_event($tag, nextcloud_security_actor() . ' | ' . $details . $suffix);
+}
+
 function nextcloud_redirect_back(): void {
     header('Location: ' . ($_SERVER['REQUEST_URI'] ?? '/redmine-mantencion/views/Integraciones/Nextcloud.php'));
     exit;
@@ -47,14 +69,6 @@ function nextcloud_redirect_back(): void {
 
 function nextcloud_sanitize(string $value): string {
     return trim(filter_var($value, FILTER_UNSAFE_RAW) ?? '');
-}
-
-function nextcloud_normalize_document_path(string $path): string {
-    $parts = array_values(array_filter(explode('/', str_replace('\\', '/', $path)), static function (string $part): bool {
-        $part = trim($part);
-        return $part !== '' && $part !== '.' && $part !== '..';
-    }));
-    return $parts ? '/' . implode('/', $parts) : '/NOVA/Procedimientos';
 }
 
 function nextcloud_config_load(): array {
@@ -81,17 +95,21 @@ function nextcloud_config(): array {
     $cfg = nextcloud_config_load();
     $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
     $globalUser = trim((string)($cfg['nextcloud_admin_user'] ?? ''));
-    $globalPass = core_credentials_decrypt((string)($cfg['nextcloud_admin_pass_enc'] ?? ''));
+    $globalPassRaw = trim((string)($cfg['nextcloud_admin_pass_enc'] ?? ''));
+    $globalPass = $globalPassRaw !== '' ? (\App\Modulos\Nova\Support\SecretValue::decryptSecret($globalPassRaw) ?? '') : '';
     if ($userId !== '' && $globalUser !== '' && $globalPass !== '' && !nextcloud_credentials_has_saved($userId)) {
-        nextcloud_credentials_save_for_user($userId, $globalUser, $globalPass);
-        $cfg['nextcloud_admin_user'] = '';
-        $cfg['nextcloud_admin_pass_enc'] = '';
-        nextcloud_config_save($cfg);
+        // Only clear the legacy global field once the per-user row is confirmed saved —
+        // previously this cleared unconditionally, which could silently drop the
+        // password if the per-user save failed.
+        if (nextcloud_credentials_save_for_user($userId, $globalUser, $globalPass)) {
+            $cfg['nextcloud_admin_user'] = '';
+            $cfg['nextcloud_admin_pass_enc'] = '';
+            nextcloud_config_save($cfg);
+        }
     }
     $savedUserCredentials = nextcloud_credentials_for_user($userId);
     $adminUser = trim((string)($savedUserCredentials['user'] ?? ''));
     $adminPass = trim((string)($savedUserCredentials['pass'] ?? ''));
-    $proceduresRoot = nextcloud_normalize_document_path((string)($cfg['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos'));
     return [
         'url' => trim((string)($cfg['nextcloud_url'] ?? 'https://www.coresalud.cl/nextcloud')),
         'admin_user' => $adminUser,
@@ -99,8 +117,6 @@ function nextcloud_config(): array {
         'default_group' => trim((string)($cfg['nextcloud_default_group'] ?? '')),
         'default_quota' => trim((string)($cfg['nextcloud_default_quota'] ?? '')),
         'default_language' => trim((string)($cfg['nextcloud_default_language'] ?? 'es')),
-        'procedures_storage' => 'nextcloud',
-        'procedures_nextcloud_root' => $proceduresRoot,
         'has_password' => nextcloud_credentials_has_saved($userId),
         'has_global_password' => false,
     ];
@@ -112,8 +128,6 @@ function nextcloud_save_config(array $post): bool {
     $cfg['nextcloud_default_group'] = nextcloud_sanitize($post['nextcloud_default_group'] ?? '');
     $cfg['nextcloud_default_quota'] = nextcloud_sanitize($post['nextcloud_default_quota'] ?? '');
     $cfg['nextcloud_default_language'] = nextcloud_sanitize($post['nextcloud_default_language'] ?? 'es');
-    $cfg['procedures_storage'] = 'nextcloud';
-    $cfg['procedures_nextcloud_root'] = nextcloud_normalize_document_path(nextcloud_sanitize($post['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos'));
     $cfg['nextcloud_admin_user'] = '';
     $cfg['nextcloud_admin_pass_enc'] = '';
     return nextcloud_config_save($cfg);
@@ -434,7 +448,7 @@ function nextcloud_parse_xlsx(string $path, array $defaults): array {
     return ['rows' => $rows];
 }
 
-function nextcloud_request(array $cfg, string $method, string $path, array $payload = []): array {
+function nextcloud_request(array $cfg, string $method, string $path, array $payload = [], int $timeoutSeconds = 10): array {
     $base = rtrim((string)$cfg['url'], '/');
     $url = $base . '/ocs/v1.php/cloud' . $path . (str_contains($path, '?') ? '&' : '?') . 'format=json';
     $pairs = [];
@@ -448,22 +462,28 @@ function nextcloud_request(array $cfg, string $method, string $path, array $payl
         }
     }
     $ch = curl_init($url);
+    $timeoutSeconds = max(5, min(60, $timeoutSeconds));
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_USERPWD => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
         CURLOPT_HTTPHEADER => ['OCS-APIRequest: true', 'Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
-        CURLOPT_TIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => $timeoutSeconds,
     ]);
     if ($pairs) curl_setopt($ch, CURLOPT_POSTFIELDS, implode('&', $pairs));
     $_ncT0 = microtime(true);
     $resp = curl_exec($ch);
     $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
     if ($resp === false) {
+        $errno = curl_errno($ch);
         $err = curl_error($ch);
         curl_close($ch);
         error_log('[NC_PERF] OCS ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' CURL_ERROR=' . $err);
-        return ['ok' => false, 'statuscode' => 0, 'message' => $err];
+        $message = $errno === CURLE_OPERATION_TIMEDOUT
+            ? 'Nextcloud demoró más de ' . $timeoutSeconds . ' segundos en responder. Intenta nuevamente.'
+            : 'No fue posible conectar con Nextcloud. Verifica la URL y vuelve a intentarlo.';
+        return ['ok' => false, 'statuscode' => 0, 'message' => $message];
     }
     $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -532,48 +552,68 @@ function nextcloud_sharing_request(array $cfg, string $method, string $path, arr
     ];
 }
 
+/**
+ * Transport now lives in App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient
+ * (Fase 8 lote 3 of the 2026-07 standardization program — see
+ * .claude/knowledge/external-clients-architecture.md). This function stays
+ * as a thin wrapper — same signature, same return shape — because it's
+ * still called directly by nc_browser.php, procedimientos.php and
+ * Other Nextcloud flows are not touched by this lote. Audit logging
+ * (nextcloud_log_action()) for WebDAV writes stays here rather than moving
+ * into the client, per this module's own rule that every WebDAV write path
+ * must call it — see .claude/skills/09-nextcloud/SKILL.md.
+ */
 function nextcloud_webdav_base_url(array $cfg): string {
-    $base = rtrim((string)($cfg['url'] ?? ''), '/');
-    $user = rawurlencode((string)($cfg['admin_user'] ?? ''));
-    return $base . '/remote.php/dav/files/' . $user;
+    return (new \App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient())->baseUrl($cfg);
 }
 
 function nextcloud_webdav_request(array $cfg, string $method, string $path, $body = null, array $headers = []): array {
-    $path = '/' . ltrim(str_replace('\\', '/', $path), '/');
-    $url = nextcloud_webdav_base_url($cfg) . implode('/', array_map('rawurlencode', explode('/', $path)));
-    $ch = curl_init($url);
-    $requestHeaders = array_merge(['Accept: application/xml, application/json'], $headers);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CUSTOMREQUEST => $method,
-        CURLOPT_USERPWD => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
-        CURLOPT_HTTPHEADER => $requestHeaders,
-        CURLOPT_HEADER => true,
-        CURLOPT_TIMEOUT => 60,
-    ]);
-    if ($body !== null) {
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    $method = strtoupper($method);
+    $normalizedPath = '/' . ltrim(str_replace('\\', '/', $path), '/');
+    $result = (new \App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient())->request($cfg, $method, $path, $body, $headers);
+
+    if (!in_array($method, ['PUT', 'DELETE', 'MOVE', 'COPY', 'MKCOL'], true) || !function_exists('nextcloud_log_action')) {
+        return $result;
     }
-    $_ncT0 = microtime(true);
-    $response = curl_exec($ch);
-    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
-    if ($response === false) {
-        $err = curl_error($ch);
-        curl_close($ch);
-        error_log('[NC_PERF] WEBDAV ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' CURL_ERROR=' . $err);
-        return ['ok' => false, 'http' => 0, 'body' => '', 'headers' => '', 'message' => $err];
+
+    // http === 0 only happens on the client's curl-failure branch (a real
+    // HTTP response, even 4xx/5xx, always has a non-zero status) — same
+    // discriminator the original inline code used implicitly via early return.
+    if ($result['http'] === 0) {
+        nextcloud_log_action(
+            $method === 'PUT' ? 'NEXTCLOUD_WEBDAV_WRITE' : 'NEXTCLOUD_' . ($method === 'MKCOL' ? 'MKDIR' : $method),
+            'FAIL | WebDAV ' . $method . ' | path ' . $normalizedPath . ' | error ' . $result['message']
+        );
+
+        return $result;
     }
-    $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
-    error_log('[NC_PERF] WEBDAV ' . $method . ' ' . $url . ' ms=' . $_ncMs . ' http=' . $http);
-    return [
-        'ok' => $http >= 200 && $http < 300,
-        'http' => $http,
-        'headers' => substr((string)$response, 0, $headerSize),
-        'body' => substr((string)$response, $headerSize),
-        'message' => $http >= 400 ? 'HTTP ' . $http : '',
-    ];
+
+    $tag = match ($method) {
+        'PUT' => 'NEXTCLOUD_WEBDAV_WRITE',
+        'DELETE' => 'NEXTCLOUD_DELETE',
+        'MOVE' => 'NEXTCLOUD_MOVE',
+        'COPY' => 'NEXTCLOUD_COPY',
+        'MKCOL' => 'NEXTCLOUD_MKDIR',
+        default => 'NEXTCLOUD_WEBDAV',
+    };
+    $destination = '';
+    foreach ($headers as $header) {
+        if (stripos((string)$header, 'Destination:') === 0) {
+            $destination = trim(substr((string)$header, strlen('Destination:')));
+            break;
+        }
+    }
+    nextcloud_log_action(
+        $tag,
+        ($result['ok'] ? 'OK' : 'FAIL')
+            . ' | WebDAV ' . $method
+            . ' | path ' . $normalizedPath
+            . ($destination !== '' ? ' | destino ' . $destination : '')
+            . ($body !== null ? ' | bytes ' . strlen((string)$body) : '')
+            . ' | http ' . $result['http']
+    );
+
+    return $result;
 }
 
 function nextcloud_ensure_directory(array $cfg, string $path): array {
@@ -654,7 +694,7 @@ function nextcloud_fetch_groups(string $search = ''): array {
     if ($search !== '') {
         $query .= '&search=' . rawurlencode($search);
     }
-    $res = nextcloud_request($cfg, 'GET', '/groups' . $query);
+    $res = nextcloud_request($cfg, 'GET', '/groups' . $query, [], 30);
     if (!$res['ok']) {
         return ['error' => (($res['message'] ?? '') ?: 'HTTP ' . ($res['http'] ?? 0))];
     }
@@ -708,14 +748,8 @@ function nextcloud_created_history_load(): array {
     if (!nextcloud_history_table_ready()) {
         return [];
     }
-    $cutoff = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->modify('-24 hours')->format('Y-m-d H:i:s');
     try {
-        \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')
-            ->where('created_at_cl', '<', $cutoff)
-            ->delete();
-
         $batches = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')
-            ->where('created_at_cl', '>=', $cutoff)
             ->orderByDesc('created_at_cl')
             ->get();
 
@@ -728,7 +762,6 @@ function nextcloud_created_history_load(): array {
             $entry = [
                 'id' => (string)$batch->legacy_id,
                 'created_at' => (new DateTimeImmutable((string)$batch->created_at_cl))->format(DateTimeInterface::ATOM),
-                'expires_at' => (new DateTimeImmutable((string)$batch->expires_at))->format(DateTimeInterface::ATOM),
                 'users' => [],
                 'created_users' => [],
                 'existing_users' => [],
@@ -741,7 +774,6 @@ function nextcloud_created_history_load(): array {
                     'displayName' => (string)($user->display_name ?? ''),
                     'email' => (string)($user->email ?? ''),
                     'group' => (string)($user->grupo ?? ''),
-                    'password' => (string)($user->password ?? ''),
                     'status' => (string)($user->status ?? ''),
                     'message' => (string)($user->message ?? ''),
                 ];
@@ -761,24 +793,11 @@ function nextcloud_created_history_load(): array {
     }
 }
 
-function nextcloud_created_history_clear(): bool {
-    if (!nextcloud_history_table_ready()) {
-        return false;
-    }
-    try {
-        \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')->delete();
-        return true;
-    } catch (Throwable) {
-        return false;
-    }
-}
-
 function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = [], array $failedUsers = [], array $resultUsers = []): ?array {
     if (!$createdUsers && !$existingUsers && !$failedUsers && !$resultUsers) return null;
     $batch = [
         'id' => bin2hex(random_bytes(6)),
         'created_at' => (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('c'),
-        'expires_at' => (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->modify('+24 hours')->format('c'),
         'users' => array_values($createdUsers),
         'created_users' => array_values($createdUsers),
         'existing_users' => array_values($existingUsers),
@@ -795,7 +814,6 @@ function nextcloud_created_history_save_batch(array $createdUsers, array $existi
                 'modulo_id' => $moduleId,
                 'legacy_id' => $batch['id'],
                 'created_at_cl' => date('Y-m-d H:i:s', strtotime((string)$batch['created_at'])),
-                'expires_at' => date('Y-m-d H:i:s', strtotime((string)$batch['expires_at'])),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -811,7 +829,6 @@ function nextcloud_created_history_save_batch(array $createdUsers, array $existi
                         'display_name' => (string)($user['displayName'] ?? ''),
                         'email' => (string)($user['email'] ?? ''),
                         'grupo' => (string)($user['group'] ?? ''),
-                        'password' => (string)($user['password'] ?? ''),
                         'status' => (string)($user['status'] ?? ''),
                         'message' => (string)($user['message'] ?? ''),
                         'created_at' => now(),
@@ -884,6 +901,7 @@ function nextcloud_import_prepared_users(array $users, array $runtimeCredentials
         $cfg['admin_pass'] = $runtimePass;
     }
     if ($cfg['url'] === '' || $cfg['admin_user'] === '' || $cfg['admin_pass'] === '') {
+        nextcloud_log_action('NEXTCLOUD_USERS_IMPORT_FAIL', 'Intento de crear usuarios Nextcloud sin credenciales completas');
         return ['error' => 'Configura URL, usuario administrador y contraseña de aplicación de Nextcloud.'];
     }
     $created = 0;
@@ -973,6 +991,14 @@ function nextcloud_import_prepared_users(array $users, array $runtimeCredentials
         }
     }
     $batch = nextcloud_created_history_save_batch($createdUsers, $existingUsers, $failedUsers, $resultUsers);
+    nextcloud_log_action(
+        'NEXTCLOUD_USERS_IMPORT',
+        'Creacion/importacion de usuarios Nextcloud | total ' . count($users)
+            . ' | creados ' . $created
+            . ' | existentes ' . $exists
+            . ' | fallidos ' . count($failedUsers)
+            . (($batch && !empty($batch['id'])) ? ' | lote ' . (string)$batch['id'] : '')
+    );
     return [
         'ok' => true,
         'created' => $created,
@@ -1033,6 +1059,11 @@ function handle_nextcloud(): array {
             nextcloud_set_flash('Grupos consultados: ' . count($res['groups'] ?? []));
             nextcloud_redirect_back();
         }
+        if ($action === 'clear_nextcloud_groups') {
+            nextcloud_save_cached_groups([]);
+            nextcloud_set_flash('Grupos guardados eliminados.');
+            nextcloud_redirect_back();
+        }
         if ($action === 'import_nextcloud_users') {
             $res = nextcloud_prepare_users($_FILES['nextcloud_file'] ?? [], $_POST);
             if (isset($res['error'])) return [$res['error'], nextcloud_config(), nextcloud_cached_groups(), $lastImport, $preview];
@@ -1048,7 +1079,6 @@ function handle_nextcloud(): array {
             if (!$users) return ['No hay usuarios preparados para importar.', nextcloud_config(), nextcloud_cached_groups(), $lastImport, $preview];
             $runtimeUser = trim((string)($_POST['nextcloud_runtime_user'] ?? ''));
             $runtimePass = trim((string)($_POST['nextcloud_runtime_pass'] ?? ''));
-            $rememberNextcloud = !empty($_POST['nextcloud_remember_credentials']);
             if ($runtimeUser === '' || $runtimePass === '') {
                 $savedCredentials = nextcloud_credentials_for_user(function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '');
                 if ($runtimeUser === '') {
@@ -1063,9 +1093,6 @@ function handle_nextcloud(): array {
                 'pass' => $runtimePass,
             ]);
             if (isset($res['error'])) return [$res['error'], nextcloud_config(), nextcloud_cached_groups(), $lastImport, $preview];
-            if ($rememberNextcloud && $runtimeUser !== '' && $runtimePass !== '') {
-                nextcloud_credentials_save_for_user(function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '', $runtimeUser, $runtimePass);
-            }
             $msg = 'Importación Nextcloud completada. Creados: ' . (int)($res['created'] ?? 0) . ' | existentes: ' . (int)($res['exists'] ?? 0);
             $failed = $res['failed'] ?? [];
             if (is_array($failed) && $failed) {
@@ -1083,147 +1110,23 @@ function handle_nextcloud(): array {
 // Personal Nextcloud file-browser helpers (per-user credentials)
 // ──────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Thin wrappers delegating to NextcloudWebdavClient — see the note above
+ * nextcloud_webdav_request(). Same signatures, same return shapes.
+ */
 function nextcloud_path_safe(string $path): string
 {
-    $path = str_replace('\\', '/', $path);
-    $parts = array_values(array_filter(
-        explode('/', $path),
-        static fn (string $p): bool => $p !== '' && $p !== '.' && $p !== '..'
-    ));
-    return '/' . implode('/', $parts);
+    return (new \App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient())->pathSafe($path);
 }
 
 function nextcloud_propfind_parse(string $xml): array
 {
-    if (trim($xml) === '') {
-        return [];
-    }
-    $prev = libxml_use_internal_errors(true);
-    $doc  = new DOMDocument();
-    $doc->loadXML($xml);
-    libxml_use_internal_errors($prev);
-
-    $xpath = new DOMXPath($doc);
-    $xpath->registerNamespace('d',  'DAV:');
-    $xpath->registerNamespace('oc', 'http://owncloud.org/ns');
-
-    $responses = $xpath->query('//d:response');
-    if (!$responses || $responses->length === 0) {
-        return [];
-    }
-
-    $items       = [];
-    $skippedRoot = false;
-
-    foreach ($responses as $response) {
-        if (!$skippedRoot) {
-            $skippedRoot = true;
-            continue;
-        }
-
-        $href = urldecode(trim((string) ($xpath->evaluate('string(d:href)', $response))));
-
-        // Extract the user-relative path from the DAV href.
-        // href looks like: /[basepath]/remote.php/dav/files/USER/actual/path
-        $pathPart = '';
-        if (preg_match('#/remote\.php/dav/files/[^/]+(/.*)?$#', $href, $m)) {
-            $pathPart = rtrim((string) ($m[1] ?? ''), '/');
-        }
-        if ($pathPart === '') {
-            $pathPart = '/' . ltrim($href, '/');
-        }
-        if ($pathPart === '') {
-            $pathPart = '/';
-        }
-
-        $isDir       = $xpath->evaluate('count(d:propstat/d:prop/d:resourcetype/d:collection)', $response) > 0;
-        $displayName = trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:displayname)', $response)));
-        if ($displayName === '') {
-            $displayName = basename($pathPart);
-        }
-
-        $items[] = [
-            'name'          => $displayName,
-            'path'          => $pathPart,
-            'type'          => $isDir ? 'dir' : 'file',
-            'mime'          => $isDir ? 'httpd/unix-directory' : trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:getcontenttype)', $response))),
-            'size'          => (int) ($xpath->evaluate('number(d:propstat/d:prop/d:getcontentlength)', $response)),
-            'last_modified' => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:getlastmodified)', $response))),
-            'etag'          => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/d:getetag)', $response))),
-            'file_id'       => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/oc:fileid)', $response))),
-            'permissions'   => trim((string) ($xpath->evaluate('string(d:propstat/d:prop/oc:permissions)', $response))),
-        ];
-    }
-
-    usort($items, static function (array $a, array $b): int {
-        if ($a['type'] !== $b['type']) {
-            return $a['type'] === 'dir' ? -1 : 1;
-        }
-        return strnatcasecmp((string) $a['name'], (string) $b['name']);
-    });
-
-    return $items;
+    return (new \App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient())->propfindParse($xml);
 }
 
 function nextcloud_list_directory(array $cfg, string $path): array
 {
-    $path = nextcloud_path_safe($path);
-
-    $propfindBody = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><d:displayname/><d:getcontenttype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><d:resourcetype/><oc:fileid/><oc:permissions/></d:prop></d:propfind>';
-
-    $pathSegments = '/' . ltrim($path, '/');
-    $url = nextcloud_webdav_base_url($cfg)
-        . implode('/', array_map('rawurlencode', explode('/', $pathSegments)));
-
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CUSTOMREQUEST  => 'PROPFIND',
-        CURLOPT_USERPWD        => $cfg['admin_user'] . ':' . $cfg['admin_pass'],
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/xml; charset=utf-8',
-            'Depth: 1',
-            'Accept: application/xml',
-        ],
-        CURLOPT_POSTFIELDS => $propfindBody,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT        => 5,
-    ]);
-
-    $_ncT0 = microtime(true);
-    $resp = curl_exec($ch);
-    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
-    if ($resp === false) {
-        $errno = curl_errno($ch);
-        $err = curl_error($ch);
-        curl_close($ch);
-        error_log('[NC_PERF] PROPFIND depth=1 path=' . $path . ' url=' . $url . ' ms=' . $_ncMs . ' CURL_ERRNO=' . $errno . ' ' . $err);
-        if ($errno === 28) {
-            return [
-                'ok' => false,
-                'error' => 'Nextcloud no respondio a tiempo. Intente nuevamente o revise la conexion del servidor.',
-                'timeout' => true,
-            ];
-        }
-        return ['ok' => false, 'error' => $err];
-    }
-    $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http !== 207) {
-        error_log('[NC_PERF] PROPFIND depth=1 path=' . $path . ' url=' . $url . ' ms=' . $_ncMs . ' http=' . $http);
-        $hint = match ($http) {
-            401 => ' — credenciales inválidas',
-            403 => ' — sin permiso',
-            404 => ' — ruta no encontrada',
-            default => '',
-        };
-        return ['ok' => false, 'error' => 'HTTP ' . $http . $hint, 'http' => $http];
-    }
-
-    $_ncItems = nextcloud_propfind_parse((string) $resp);
-    error_log('[NC_PERF] PROPFIND depth=1 path=' . $path . ' url=' . $url . ' ms=' . $_ncMs . ' http=' . $http . ' items=' . count($_ncItems));
-    return ['ok' => true, 'path' => $path, 'items' => $_ncItems];
+    return (new \App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient())->listDirectory($cfg, $path);
 }
 
 function nextcloud_shares_with_me(array $cfg): array

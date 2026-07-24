@@ -2,61 +2,62 @@
 
 namespace RedmineTic\Repositories;
 
-use Illuminate\Support\Facades\DB;
+use App\Modulos\Nova\Repositories\HorasExtraRepository;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * DB operations for hours-extra groups and pivot table.
- * Tables: redmine_tic_horas_extra_grupos, redmine_tic_horas_extra_grupo_reportes
+ * Gestiona a qué grupo del dominio compartido Horas Extra (ver
+ * Nova\Repositories\HorasExtraRepository) pertenece cada reporte de TIC,
+ * filtrando siempre por origen='tic'. Los reportes en sí siguen viviendo
+ * exclusivamente en redmine_tic_reportes.
  *
- * Note: hoursExtraFromDatabase() and hoursExtraData() remain in
- * RedmineDataRepository because they need pre-hydrated report arrays that
- * are produced by the report persistence layer.
+ * Nota: hoursExtraFromDatabase() y hoursExtraData() permanecen en
+ * RedmineDataRepository porque necesitan arreglos de reportes ya
+ * hidratados que produce la capa de persistencia de reportes.
  */
 class RedmineHoursExtraRepository
 {
-    public function __construct(
-        private string $projectKey,
-        private string $projectName,
-    ) {}
+    private const ORIGEN = 'tic';
 
-    public function saveGroup(string $sourceFile, array $payload): void
+    private ?HorasExtraRepository $shared = null;
+
+    public function saveGroup(string $sourceFile, array $payload): bool
     {
         $date = trim((string) ($payload['fecha'] ?? ''));
         if ($date === '' || !$this->tableAvailable()) {
-            return;
+            return false;
         }
 
-        $moduleId = $this->moduleId();
-        if ($moduleId === null) {
-            return;
-        }
-
-        DB::table('redmine_tic_horas_extra_grupos')
-            ->where('modulo_id', $moduleId)
-            ->where('fecha', $this->parseDate($date))
-            ->update([
-                'hora_inicio'    => $this->parseTime($payload['hora_inicio'] ?? null),
-                'hora_fin'       => $this->parseTime($payload['hora_fin'] ?? null),
-                'actualizado_at' => now(),
-            ]);
+        return $this->shared()->updateGroupsByOrigenAndFecha(
+            self::ORIGEN,
+            $this->parseDate($date),
+            $this->parseTime($payload['hora_inicio'] ?? null),
+            $this->parseTime($payload['hora_fin'] ?? null),
+        );
     }
 
+    /**
+     * Legacy: antes eliminaba el grupo completo del módulo para esa fecha.
+     * Con tabla compartida, en cambio, desvincula solo los reportes de
+     * origen 'tic' de esa fecha; si Mantención todavía tiene reportes en el
+     * mismo grupo, el grupo permanece intacto para ese origen.
+     */
     public function deleteGroup(string $sourceFile, string $date): int
     {
-        if ($date === '' || !$this->tableAvailable()) {
+        if ($date === '' || !$this->pivotTableAvailable()) {
             return 0;
         }
 
-        $moduleId = $this->moduleId();
-        if ($moduleId === null) {
-            return 0;
+        $reporteIds = $this->shared()->reporteIdsPorOrigenYFecha(self::ORIGEN, $this->parseDate($date));
+
+        $count = 0;
+        foreach ($reporteIds as $reporteId) {
+            if ($this->shared()->detachReporte(self::ORIGEN, $reporteId)) {
+                $count++;
+            }
         }
 
-        return DB::table('redmine_tic_horas_extra_grupos')
-            ->where('modulo_id', $moduleId)
-            ->where('fecha', $this->parseDate($date))
-            ->delete();
+        return $count;
     }
 
     public function syncForReport(array $report): void
@@ -72,103 +73,92 @@ class RedmineHoursExtraRepository
             return;
         }
 
-        $date     = trim((string) ($report['fecha_inicio'] ?? $report['fecha'] ?? now('America/Santiago')->format('Y-m-d')));
-        $dt       = date_create($date) ?: now('America/Santiago');
+        $date = trim((string) ($report['fecha_inicio'] ?? $report['fecha'] ?? now('America/Santiago')->format('Y-m-d')));
+        $dt = date_create($date) ?: now('America/Santiago');
         $targetDate = $dt->format('Y-m-d');
-
-        $moduleId = $this->moduleId();
-        if ($moduleId === null) {
-            return;
-        }
-
-        DB::table('redmine_tic_horas_extra_grupos')->updateOrInsert(
-            ['modulo_id' => $moduleId, 'fecha' => $targetDate],
-            [
-                'hora_inicio'    => $this->parseTime($report['hora_inicio'] ?? $report['hora'] ?? null),
-                'hora_fin'       => $this->parseTime($report['hora_fin']   ?? $report['hora'] ?? null),
-                'actualizado_at' => now(),
-            ]
-        );
-
-        if ($this->pivotTableAvailable()) {
-            $reporteId = is_numeric($id) ? (int) $id : 0;
-            if ($reporteId > 0) {
-                $grupoId = (int) DB::table('redmine_tic_horas_extra_grupos')
-                    ->where('modulo_id', $moduleId)
-                    ->where('fecha', $targetDate)
-                    ->value('id');
-                if ($grupoId > 0) {
-                    try {
-                        DB::table('redmine_tic_horas_extra_grupo_reportes')->updateOrInsert(
-                            ['grupo_id' => $grupoId, 'reporte_id' => $reporteId],
-                            ['creado_at' => now()]
-                        );
-                    } catch (\Throwable) {
-                    }
-                }
-            }
-        }
-    }
-
-    public function remove(string $id): void
-    {
-        if (!$this->tableAvailable() || trim($id) === '') {
-            return;
-        }
-
-        $moduleId  = $this->moduleId();
-        if ($moduleId === null) {
-            return;
-        }
 
         $reporteId = is_numeric($id) ? (int) $id : 0;
         if ($reporteId <= 0 || !$this->pivotTableAvailable()) {
             return;
         }
 
-        $grupoIds = DB::table('redmine_tic_horas_extra_grupo_reportes')
-            ->where('reporte_id', $reporteId)
-            ->pluck('grupo_id')
-            ->all();
+        $horaInicio = $this->parseTime($report['hora_inicio'] ?? $report['hora'] ?? null);
+        $horaFin = $this->parseTime($report['hora_fin'] ?? $report['hora'] ?? null);
+        $usuarioId = $this->shared()->resolveUsuarioId((string) ($report['asignado_a'] ?? ''));
 
-        DB::table('redmine_tic_horas_extra_grupo_reportes')
-            ->where('reporte_id', $reporteId)
-            ->delete();
-
-        foreach ($grupoIds as $grupoId) {
-            $grupoId = (int) $grupoId;
-            $inModule = DB::table('redmine_tic_horas_extra_grupos')
-                ->where('id', $grupoId)
-                ->where('modulo_id', $moduleId)
-                ->exists();
-            if (!$inModule) {
-                continue;
-            }
-            $hasReports = DB::table('redmine_tic_horas_extra_grupo_reportes')
-                ->where('grupo_id', $grupoId)
-                ->exists();
-            if (!$hasReports) {
-                DB::table('redmine_tic_horas_extra_grupos')->where('id', $grupoId)->delete();
-            }
+        $grupoId = $this->shared()->findOrCreateGroup($usuarioId, $targetDate, $horaInicio, $horaFin);
+        if ($grupoId === null) {
+            return;
         }
+
+        // Si el grupo ya existia (p.ej. creado antes por Mantencion para el mismo
+        // usuario+fecha), se fusionan aqui las horas de este reporte sin pisar valores ya definidos.
+        $this->shared()->updateGroupTime($grupoId, $horaInicio, $horaFin);
+        $this->shared()->attachReporte($grupoId, self::ORIGEN, $reporteId);
+    }
+
+    public function remove(string $id): void
+    {
+        if (!$this->pivotTableAvailable() || trim($id) === '') {
+            return;
+        }
+
+        $reporteId = is_numeric($id) ? (int) $id : 0;
+        if ($reporteId <= 0) {
+            return;
+        }
+
+        $this->shared()->detachReporte(self::ORIGEN, $reporteId);
     }
 
     public function tableAvailable(): bool
     {
-        try {
-            return Schema::hasTable('modulos_nova') && Schema::hasTable('redmine_tic_horas_extra_grupos');
-        } catch (\Throwable) {
-            return false;
-        }
+        return $this->shared()->tableReady();
     }
 
     public function pivotTableAvailable(): bool
     {
         try {
-            return $this->tableAvailable() && Schema::hasTable('redmine_tic_horas_extra_grupo_reportes');
+            return $this->tableAvailable() && Schema::hasTable('horas_extra_grupo_reportes');
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Grupos con reportes de origen 'tic', ya listos para que
+     * RedmineDataRepository los hidrate contra redmine_tic_reportes.
+     *
+     * @return array<int,array{grupo_id:int,usuario_id:?int,fecha:string,hora_inicio:?string,hora_fin:?string,total_minutos:?int,reporte_ids:array<int,int>}>
+     */
+    public function groupsForOrigen(): array
+    {
+        return $this->shared()->groupsForOrigen(self::ORIGEN);
+    }
+
+    public function resolveUsuarioId(?string $redmineId): ?int
+    {
+        return $this->shared()->resolveUsuarioId($redmineId);
+    }
+
+    public function findOrCreateGroup(?int $usuarioId, string $fecha, ?string $horaInicio, ?string $horaFin): ?int
+    {
+        return $this->shared()->findOrCreateGroup($usuarioId, $fecha, $horaInicio, $horaFin);
+    }
+
+    public function updateGroupTime(int $grupoId, ?string $horaInicio, ?string $horaFin): bool
+    {
+        return $this->shared()->updateGroupTime($grupoId, $horaInicio, $horaFin);
+    }
+
+    public function attachReporte(int $grupoId, int $reporteId): void
+    {
+        $this->shared()->attachReporte($grupoId, self::ORIGEN, $reporteId);
+    }
+
+    private function shared(): HorasExtraRepository
+    {
+        return $this->shared ??= new HorasExtraRepository();
     }
 
     // ---- small date/time utilities (duplicated from RedmineDataRepository) ----
@@ -205,34 +195,6 @@ class RedmineHoursExtraRepository
         try {
             return (new \DateTimeImmutable($value))->format('H:i:s');
         } catch (\Exception) {
-            return null;
-        }
-    }
-
-    private function moduleId(): ?int
-    {
-        try {
-            $id = DB::table('modulos_nova')->where('clave_modulo', $this->projectKey)->value('id');
-            if ($id !== null) {
-                return (int) $id;
-            }
-
-            DB::table('modulos_nova')->insert([
-                'clave_modulo'   => $this->projectKey,
-                'nombre'         => $this->projectName,
-                'descripcion'    => '',
-                'icono'          => '',
-                'tipo'           => 'native',
-                'ruta'           => $this->projectKey,
-                'entrada'        => 'laravel:redmine.native.dashboard',
-                'habilitado'     => 1,
-                'orden'          => 100,
-                'creado_at'      => now(),
-                'actualizado_at' => now(),
-            ]);
-
-            return (int) DB::getPdo()->lastInsertId();
-        } catch (\Throwable) {
             return null;
         }
     }

@@ -178,18 +178,7 @@ function emach_monitor_user_credentials(): array
 
 function emach_monitor_decrypt_secret(string $secret): string
 {
-    if ($secret === '') {
-        return '';
-    }
-
-    if (function_exists('decrypt')) {
-        try {
-            return (string) decrypt($secret);
-        } catch (Throwable) {
-        }
-    }
-
-    return $secret;
+    return \App\Modulos\Nova\Support\SecretValue::decryptSecret($secret) ?? '';
 }
 
 function emach_monitor_parse_schedule(string $spec): array

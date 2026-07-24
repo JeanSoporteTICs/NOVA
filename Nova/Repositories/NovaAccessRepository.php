@@ -20,7 +20,10 @@ final class NovaAccessRepository
      */
     public function matrix(): array
     {
-        $users     = $this->users->all();
+        $users     = array_values(array_filter(
+            $this->users->all(),
+            static fn (array $user): bool => strtolower(trim((string) ($user['status'] ?? ''))) === 'activo'
+        ));
         $modules   = $this->manageableModules();
         $overrides = $this->overrides();
         $matrix    = [];

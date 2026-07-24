@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Modulos\Telegram\Repositories\TelegramCommandCatalog;
 use App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository;
 use App\Modulos\Telegram\Services\TelegramService;
+use App\Modulos\Shared\Repositories\ModuleLogRepository;
 use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Throwable;
 
 class TelegramController extends Controller
 {
-    public function __construct(private TelegramService $telegram)
+    public function __construct(private TelegramService $telegram, private ModuleLogRepository $moduleLogs)
     {
     }
 
@@ -57,24 +58,6 @@ class TelegramController extends Controller
         ]);
     }
 
-    public function update(Request $request, UserIntegrationRepository $integrations): RedirectResponse
-    {
-        $chatId = trim((string) $request->input('chat_id', ''));
-        if ($chatId === '') {
-            return back()->withInput()->with('telegram_error', 'Completa tu TELEGRAM_CHAT_ID.');
-        }
-
-        if (!$integrations->saveTelegramForSession($this->sessionUser($request), $chatId)) {
-            return back()->withInput()->with('telegram_error', 'No se pudo guardar tu Chat ID.');
-        }
-
-        $sessionUser = $this->sessionUser($request);
-        $sessionUser['has_telegram_settings'] = true;
-        $request->session()->put('nova_user', $sessionUser);
-
-        return redirect()->route('telegram.index')->with('telegram_status', 'Chat ID guardado para tu usuario.');
-    }
-
     public function updateAdmin(Request $request): RedirectResponse
     {
         $this->authorizeAdmin($request);
@@ -97,6 +80,8 @@ class TelegramController extends Controller
             return back()->withInput()->with('telegram_error', 'No se pudo guardar la configuracion Telegram.');
         }
 
+        $this->log($request, 'configuracion_global_guardada');
+
         return redirect()->route('telegram.admin')->with('telegram_status', 'Configuracion global Telegram guardada.');
     }
 
@@ -109,8 +94,11 @@ class TelegramController extends Controller
                 'chat_id' => $chatId,
             ]);
         } catch (Throwable $e) {
+            $this->log($request, 'mensaje_prueba_error', $e->getMessage());
             return back()->with('telegram_error', $e->getMessage());
         }
+
+        $this->log($request, 'mensaje_prueba_enviado');
 
         return redirect()->route('telegram.index')->with('telegram_status', 'Mensaje de prueba enviado.');
     }
@@ -157,5 +145,11 @@ class TelegramController extends Controller
     {
         $role = (string) data_get($request->session()->get('nova_user'), 'role', 'usuario');
         abort_unless(in_array($role, config('nova.module_admin_roles', []), true), 403);
+    }
+
+    private function log(Request $request, string $event, string $detail = ''): void
+    {
+        $user = $this->sessionUser($request);
+        $this->moduleLogs->append('telegram', $event, (string) ($user['id'] ?? $user['uuid'] ?? ''), $detail);
     }
 }

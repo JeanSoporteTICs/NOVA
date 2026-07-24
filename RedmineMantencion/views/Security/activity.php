@@ -2,10 +2,10 @@
 require_once __DIR__ . '/../../controllers/auth.php';
 require_once __DIR__ . '/../../controllers/security.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
-auth_require_role(['root', 'administrador', 'gestor'], '/redmine-mantencion/login.php');
+auth_require_login('/redmine-mantencion/login.php');
 if (!auth_can('actividad')) {
-  header('Location: ' . legacy_app_url());
-  exit;
+  http_response_code(403);
+  exit('No tienes permiso para ver Actividad reciente.');
 }
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -18,7 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate();
     if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
     if (($_POST['action'] ?? '') === 'clear_activity') {
-        security_clear_events();
+        if (!auth_can('actividad_eliminar')) {
+            http_response_code(403);
+            exit('No tienes permiso para eliminar la bitácora de actividad.');
+        }
+        $viewerName = trim((string)(($_SESSION['user']['nombre'] ?? '') . ' ' . ($_SESSION['user']['apellido'] ?? '')));
+        $deleted = security_clear_user_events($viewerName, (string)($_SESSION['user']['id'] ?? ''));
         if (function_exists('log_security_event')) {
             log_security_event(
                 'ACTIVITY_CLEAR',
@@ -29,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 )
             );
         }
-        $_SESSION['security_flash'] = 'Actividad reciente borrada.';
+        $_SESSION['security_flash'] = $deleted . ' evento(s) propios eliminados de la bitácora.';
     }
     header('Location: ' . legacy_app_url('views/Security/activity.php'));
     exit;
@@ -47,17 +52,38 @@ $formatSecurityTimestamp = fn($ts) => (function($value) {
     return $dt->setTimezone(new DateTimeZone('America/Santiago'))->format('d-m-Y H:i:s');
 })($ts);
 $selectedTag = strtoupper(trim((string)($_GET['tag'] ?? '')));
-$allEvents = security_load_events(200);
-$eventTags = array_values(array_unique(array_filter(array_map(static fn(array $event): string => (string)($event['tag'] ?? ''), $allEvents))));
-sort($eventTags);
-$events = $selectedTag !== ''
-    ? array_values(array_filter($allEvents, static fn(array $event): bool => (string)($event['tag'] ?? '') === $selectedTag))
-    : array_slice($allEvents, 0, 80);
-$events = array_slice($events, 0, 120);
-$tagUrl = static function (string $tag): string {
-    return $tag === ''
-        ? 'activity.php'
-        : 'activity.php?tag=' . rawurlencode($tag);
+$selectedChannel = strtolower(trim((string)($_GET['canal'] ?? '')));
+$search = trim((string)($_GET['buscar'] ?? ''));
+$dateFrom = trim((string)($_GET['desde'] ?? ''));
+$dateTo = trim((string)($_GET['hasta'] ?? ''));
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = (int)($_GET['per_page'] ?? 50);
+$activityViewerName = trim((string)(($_SESSION['user']['nombre'] ?? '') . ' ' . ($_SESSION['user']['apellido'] ?? '')));
+$activityResult = security_search_events([
+    'tag' => $selectedTag,
+    'canal' => $selectedChannel,
+    'buscar' => $search,
+    'desde' => $dateFrom,
+    'hasta' => $dateTo,
+], $page, $perPage, $activityViewerName, auth_can('actividad_todos'), (string)($_SESSION['user']['id'] ?? ''));
+$events = $activityResult['events'];
+$eventTags = $activityResult['tags'];
+$eventChannels = $activityResult['channels'];
+$totalEvents = (int)$activityResult['total'];
+$page = (int)$activityResult['page'];
+$perPage = (int)$activityResult['per_page'];
+$totalPages = (int)$activityResult['pages'];
+$hasFilters = $selectedTag !== '' || $selectedChannel !== '' || $search !== '' || $dateFrom !== '' || $dateTo !== '';
+$pageUrl = static function (int $targetPage) use ($selectedTag, $selectedChannel, $search, $dateFrom, $dateTo, $perPage): string {
+    return 'activity.php?' . http_build_query(array_filter([
+        'tag' => $selectedTag,
+        'canal' => $selectedChannel,
+        'buscar' => $search,
+        'desde' => $dateFrom,
+        'hasta' => $dateTo,
+        'per_page' => $perPage,
+        'page' => max(1, $targetPage),
+    ], static fn($value): bool => $value !== ''));
 };
 $activeNav = 'security';
 $csrf = legacy_csrf_token();
@@ -74,7 +100,7 @@ $csrf = legacy_csrf_token();
     <?php
       $heroIcon = 'bi-shield-lock';
       $heroTitle = 'Actividad reciente';
-      $heroSubtitle = 'Accesos, CSRF y eventos críticos registrados en la plataforma.';
+      $heroSubtitle = 'Consultas, movimientos, accesos y eventos operativos registrados en Mantención.';
       include __DIR__ . '/../partials/hero.php';
     ?>
 
@@ -82,57 +108,126 @@ $csrf = legacy_csrf_token();
 
     <div class="card mb-3">
       <div class="card-body">
-        <p class="text-muted mb-3">Se registran los últimos intentos de inicio de sesión y alertas de seguridad. Si ves fallas repetidas en poco tiempo, considera rotar tokens API o revisar accesos.</p>
-        <div class="security-terminal-filters mb-3" aria-label="Filtros de actividad">
-          <a class="security-terminal-filter <?= $selectedTag === '' ? 'is-active' : '' ?>" href="<?= $h($tagUrl('')) ?>">
-            <span>$</span> ALL
-          </a>
-          <?php foreach ($eventTags as $tag): ?>
-            <a class="security-terminal-filter <?= $selectedTag === $tag ? 'is-active' : '' ?>" href="<?= $h($tagUrl($tag)) ?>">
-              <span>grep</span> <?= $h($tag) ?>
-            </a>
-          <?php endforeach; ?>
-        </div>
-        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
-          <div class="text-muted small">
-            <?= $selectedTag !== '' ? 'Filtro activo: ' . $h($selectedTag) . ' | ' : '' ?><?= count($events) ?> eventos visibles
+        <div class="security-activity-intro">
+          <div>
+            <span class="security-activity-eyebrow"><i class="bi bi-database-check"></i> Auditoría en base de datos</span>
+            <p class="text-muted mb-0">Consulta accesos, cambios, importaciones, envíos a Redmine y eventos operativos de Mantención.</p>
           </div>
-          <form method="post" class="mb-0">
-            <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-            <input type="hidden" name="action" value="clear_activity">
-            <button type="submit" class="btn btn-outline-danger btn-sm">
-              <i class="bi bi-trash3"></i> Limpiar actividad reciente
-            </button>
-          </form>
+          <div class="security-activity-total">
+            <strong><?= $h(number_format($totalEvents, 0, ',', '.')) ?></strong>
+            <span><?= $hasFilters ? 'coincidencias' : 'eventos registrados' ?></span>
+          </div>
+        </div>
+
+        <form method="get" class="security-activity-filters" aria-label="Filtros de actividad">
+          <div class="security-activity-filter is-search">
+            <label for="activity-search"><i class="bi bi-search"></i> Buscar</label>
+            <input id="activity-search" name="buscar" class="form-control" type="search" value="<?= $h($search) ?>" placeholder="Detalle, evento, canal o ID">
+          </div>
+          <div class="security-activity-filter">
+            <label for="activity-tag"><i class="bi bi-tag"></i> Evento</label>
+            <select id="activity-tag" name="tag" class="form-select">
+              <option value="">Todos los eventos</option>
+              <option value="NEXTCLOUD" <?= $selectedTag === 'NEXTCLOUD' ? 'selected' : '' ?>>Todos los eventos Nextcloud</option>
+              <?php foreach ($eventTags as $tag): ?>
+                <option value="<?= $h($tag) ?>" <?= $selectedTag === strtoupper((string)$tag) ? 'selected' : '' ?>><?= $h($tag) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="security-activity-filter">
+            <label for="activity-channel"><i class="bi bi-diagram-3"></i> Canal</label>
+            <select id="activity-channel" name="canal" class="form-select">
+              <option value="">Todos los canales</option>
+              <?php foreach ($eventChannels as $channel): ?>
+                <option value="<?= $h($channel) ?>" <?= $selectedChannel === strtolower((string)$channel) ? 'selected' : '' ?>><?= $h(ucfirst((string)$channel)) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="security-activity-filter">
+            <label for="activity-from"><i class="bi bi-calendar-event"></i> Desde</label>
+            <input id="activity-from" name="desde" class="form-control" type="date" value="<?= $h($dateFrom) ?>">
+          </div>
+          <div class="security-activity-filter">
+            <label for="activity-to"><i class="bi bi-calendar-check"></i> Hasta</label>
+            <input id="activity-to" name="hasta" class="form-control" type="date" value="<?= $h($dateTo) ?>">
+          </div>
+          <div class="security-activity-filter is-size">
+            <label for="activity-per-page"><i class="bi bi-list-ol"></i> Por página</label>
+            <select id="activity-per-page" name="per_page" class="form-select">
+              <?php foreach ([25, 50, 100] as $option): ?>
+                <option value="<?= $option ?>" <?= $perPage === $option ? 'selected' : '' ?>><?= $option ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="security-activity-filter-actions">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Aplicar filtros</button>
+            <a href="activity.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i> Limpiar</a>
+          </div>
+        </form>
+
+        <div class="security-activity-resultbar">
+          <div>
+            <i class="bi bi-eye"></i>
+            Mostrando <?= count($events) ?> de <?= $h(number_format($totalEvents, 0, ',', '.')) ?> eventos
+            <span class="security-activity-filtered"><?= auth_can('actividad_todos') ? 'Todos los usuarios' : 'Solo mis registros' ?></span>
+            <?php if ($hasFilters): ?><span class="security-activity-filtered">Filtros activos</span><?php endif; ?>
+          </div>
+          <?php if (auth_can('actividad_eliminar')): ?>
+            <form method="post" class="mb-0" data-app-confirm="¿Eliminar toda la actividad reciente? Esta acción no se puede deshacer.">
+              <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+              <input type="hidden" name="action" value="clear_activity">
+              <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash3"></i> Vaciar mi bitácora
+              </button>
+            </form>
+          <?php endif; ?>
         </div>
         <?php if (empty($events)): ?>
-          <div class="nova-alert-card is-info mb-0"><i class="bi bi-shield-check"></i> <span>Todavia no hay eventos registrados.</span></div>
+          <div class="nova-empty-state security-activity-empty">
+            <i class="bi bi-search"></i>
+            <h3><?= $hasFilters ? 'No hay coincidencias' : 'Todavía no hay eventos' ?></h3>
+            <p><?= $hasFilters ? 'Prueba ampliando las fechas o quitando alguno de los filtros.' : 'Los nuevos eventos de Mantención aparecerán aquí.' ?></p>
+            <?php if ($hasFilters): ?><a href="activity.php" class="btn btn-outline-primary"><i class="bi bi-arrow-counterclockwise"></i> Limpiar filtros</a><?php endif; ?>
+          </div>
         <?php else: ?>
           <div class="security-console-wrap">
             <div class="security-console-toolbar">
               <span class="security-console-dot" aria-hidden="true"></span>
-              <span>security.log :: live tail</span>
+              <span>Actividad Mantención :: página <?= $page ?> de <?= $totalPages ?></span>
             </div>
             <div class="table-responsive">
-            <table class="table align-middle security-console">
+              <table class="table align-middle security-console security-operational-console">
               <thead>
                 <tr>
-                  <th scope="col" style="width:200px;">Fecha / hora</th>
-                  <th scope="col" style="width:150px;">Evento</th>
-                  <th scope="col">Detalles</th>
+                  <th scope="col" class="security-console-col-time">Fecha / hora</th>
+                  <th scope="col" class="security-console-col-user">Usuario</th>
+                  <th scope="col" class="security-console-col-event">Acción</th>
+                  <th scope="col" class="security-console-col-result">Resultado</th>
+                  <th scope="col">Detalle seguro</th>
                 </tr>
               </thead>
               <tbody>
                 <?php foreach ($events as $evt): ?>
                   <tr>
                     <td class="console-time"><?= $h($formatSecurityTimestamp($evt['ts'])) ?: '----' ?></td>
-                    <td><span class="console-tag"><?= $h($evt['tag']) ?></span></td>
+                    <td class="console-user"><i class="bi <?= ($evt['user'] ?? '') === 'Sistema' ? 'bi-cpu' : 'bi-person-circle' ?>"></i> <?= $h($evt['user'] ?? 'Sistema') ?></td>
+                    <td><span class="console-tag" title="<?= $h($evt['tag'] ?? '') ?>"><?= $h($evt['action'] ?? 'Evento') ?></span></td>
+                    <td><span class="security-result is-<?= $h($evt['result'] ?? 'info') ?>"><i class="bi <?= ($evt['result'] ?? '') === 'success' ? 'bi-check-circle' : (($evt['result'] ?? '') === 'error' ? 'bi-x-circle' : 'bi-info-circle') ?>"></i><?= ($evt['result'] ?? '') === 'success' ? 'Correcto' : (($evt['result'] ?? '') === 'error' ? 'Error' : 'Informativo') ?></span></td>
                     <td class="console-details"><?= $h($evt['details']) ?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
-            </table>
+              </table>
             </div>
+            <?php if ($totalPages > 1): ?>
+              <div class="security-activity-pagination">
+                <span>Página <?= $page ?> de <?= $totalPages ?></span>
+                <nav aria-label="Paginación de actividad">
+                  <a class="btn btn-sm btn-outline-light <?= $page <= 1 ? 'disabled' : '' ?>" href="<?= $h($pageUrl($page - 1)) ?>" <?= $page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' ?>><i class="bi bi-chevron-left"></i> Anterior</a>
+                  <a class="btn btn-sm btn-outline-light <?= $page >= $totalPages ? 'disabled' : '' ?>" href="<?= $h($pageUrl($page + 1)) ?>" <?= $page >= $totalPages ? 'aria-disabled="true" tabindex="-1"' : '' ?>>Siguiente <i class="bi bi-chevron-right"></i></a>
+                </nav>
+              </div>
+            <?php endif; ?>
           </div>
         <?php endif; ?>
       </div>

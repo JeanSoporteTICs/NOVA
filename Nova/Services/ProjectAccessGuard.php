@@ -44,7 +44,10 @@ final class ProjectAccessGuard
         $needles = $this->sessionNeedles($sessionUser);
 
         if ($explicitAccess === true) {
-            return $this->sessionProjectUser($sessionUser);
+            // El acceso central habilita el modulo, pero los permisos internos
+            // siguen perteneciendo al perfil del proyecto.
+            return $this->findProjectUser($projectKey, $needles)
+                ?? $this->sessionProjectUser($sessionUser);
         }
 
         $user = $this->findProjectUser($projectKey, $needles);

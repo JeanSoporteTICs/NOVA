@@ -39,6 +39,13 @@ class ModuleAdminController extends Controller
             ];
         }
 
+        uasort($state, static fn (array $left, array $right): int => ($left['order'] <=> $right['order']));
+        $position = 10;
+        foreach (array_keys($state) as $key) {
+            $state[$key]['order'] = $position;
+            $position += 10;
+        }
+
         $modules->saveState($state);
 
         return redirect()->route('modules.index')->with('status', 'Modulos actualizados.');

@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../../controllers/auth.php';
 auth_require_login('/redmine-mantencion/login.php');
+if (!auth_can('horas_extra')) {
+    http_response_code(403);
+    exit('No tienes permiso para ver Horas extra.');
+}
 require_once __DIR__ . '/../../controllers/dashboard.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
 $maintenanceMode = maintenance_mode_enabled();
@@ -37,18 +41,21 @@ function normalize_date_key($fecha) {
     }
 }
 
-function deduplicate_groups_by_start_date(array $groups): array {
+function deduplicate_groups_by_shared_date(array $groups): array {
     $out = [];
     foreach ($groups as $group) {
         if (!is_array($group) || empty($group['reports']) || !is_array($group['reports'])) {
             continue;
         }
         $groupFecha = normalize_date_key($group['fecha'] ?? '');
+        if ($groupFecha === '') {
+            continue;
+        }
         foreach ($group['reports'] as $report) {
             if (!is_array($report)) {
                 continue;
             }
-            $startDate = normalize_date_key($report['fecha_inicio'] ?? $report['fecha'] ?? $groupFecha);
+            $startDate = $groupFecha;
             if ($startDate === '') {
                 continue;
             }
@@ -61,13 +68,11 @@ function deduplicate_groups_by_start_date(array $groups): array {
                     '__order' => [],
                 ];
             }
-            if ($groupFecha === $startDate) {
-                if (!empty($group['hora_inicio'])) {
-                    $out[$startDate]['hora_inicio'] = $group['hora_inicio'];
-                }
-                if (!empty($group['hora_fin'])) {
-                    $out[$startDate]['hora_fin'] = $group['hora_fin'];
-                }
+            if (!empty($group['hora_inicio'])) {
+                $out[$startDate]['hora_inicio'] = $group['hora_inicio'];
+            }
+            if (!empty($group['hora_fin'])) {
+                $out[$startDate]['hora_fin'] = $group['hora_fin'];
             }
             $reportKey = $report['id'] ?? null;
             if ($reportKey === null) {
@@ -103,6 +108,22 @@ function deduplicate_groups_by_start_date(array $groups): array {
     return array_values($out);
 }
 
+function filter_hours_groups_for_user(array $groups, string $userId): array {
+    if ($userId === '') {
+        return [];
+    }
+
+    return array_values(array_filter(array_map(static function ($group) use ($userId) {
+        if (!is_array($group)) return null;
+        $group['reports'] = array_values(array_filter(
+            (array)($group['reports'] ?? []),
+            static fn($report) => is_array($report) && (string)($report['asignado_a'] ?? '') === $userId
+        ));
+
+        return $group['reports'] !== [] ? $group : null;
+    }, $groups), static fn($group) => $group !== null));
+}
+
 function sanitize_time_value($value) {
     $value = trim((string)$value);
     if ($value === '') return '';
@@ -128,26 +149,9 @@ function update_hours_by_date($fecha, $horaIni, $horaFin) {
 }
 
 $grupos = load_hours_extra_all();
-$grupos = deduplicate_groups_by_start_date($grupos);
-// Filtrar por usuario para roles usuario/administrador/gestor
+$grupos = deduplicate_groups_by_shared_date($grupos);
 $uid = auth_get_user_id();
-$hoursScope = 'asignados';
-if (function_exists('auth_user_has_all_permissions') && auth_user_has_all_permissions()) {
-    $hoursScope = 'todos';
-} elseif (function_exists('auth_get_permission_value')) {
-    $value = strtolower(trim((string)auth_get_permission_value('horas_extra')));
-    $hoursScope = $value === 'todos' ? 'todos' : 'asignados';
-}
-if ($hoursScope !== 'todos' && $uid !== '') {
-    $grupos = array_values(array_filter(array_map(function($g) use ($uid) {
-        if (!is_array($g)) return null;
-        if (isset($g['reports']) && is_array($g['reports'])) {
-            $g['reports'] = array_values(array_filter($g['reports'], fn($r) => (string)($r['asignado_a'] ?? '') === (string)$uid));
-            return count($g['reports']) > 0 ? $g : null;
-        }
-        return ((string)($g['asignado_a'] ?? '') === (string)$uid) ? $g : null;
-    }, $grupos), fn($g) => $g !== null));
-}
+$grupos = filter_hours_groups_for_user($grupos, (string)$uid);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_extra') {
     if (function_exists('csrf_validate')) csrf_validate();
@@ -160,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     } else {
         $flash = 'No se encontraron registros para esa fecha';
     }
-    $grupos = deduplicate_groups_by_start_date(load_hours_extra_all());
+    $grupos = filter_hours_groups_for_user(deduplicate_groups_by_shared_date(load_hours_extra_all()), (string)$uid);
     if ($fecha !== '' && $selMes === '' && $selAnio === '') {
         $dtTmp = DateTime::createFromFormat('Y-m-d', $fecha) ?: DateTime::createFromFormat('d-m-Y', $fecha);
         if ($dtTmp instanceof DateTime) {
@@ -234,16 +238,233 @@ function hhmm($mins) {
     $mm = str_pad((string)($mins % 60), 2, '0', STR_PAD_LEFT);
     return "$hh:$mm";
 }
+
+function mantencion_emach_minutes_from_time($value) {
+    $value = trim((string)$value);
+    if (!preg_match('/^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/', $value, $matches)) {
+        return null;
+    }
+    $hour = (int)$matches[1];
+    if ($hour < 0 || $hour > 23) {
+        return null;
+    }
+    return ($hour * 60) + (int)$matches[2];
+}
+
+function mantencion_emach_clock_from_minutes($minutes) {
+    $minutes = max(0, min(1439, (int)$minutes));
+    return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
+}
+
+function mantencion_emach_central_user_id(array $sessionUser): ?int {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        return null;
+    }
+
+    try {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')) {
+            return null;
+        }
+
+        $candidates = [
+            'uuid' => [$sessionUser['_nova_user_id'] ?? '', $sessionUser['uuid'] ?? ''],
+            'usuario' => [$sessionUser['username'] ?? '', $sessionUser['usuario'] ?? '', $sessionUser['rut_sin_dv'] ?? '', $sessionUser['id'] ?? ''],
+            'rut' => [$sessionUser['rut'] ?? ''],
+            'redmine_id' => [$sessionUser['redmine_id'] ?? '', $sessionUser['id'] ?? ''],
+            'usuario_core' => [$sessionUser['core_user'] ?? '', $sessionUser['usuario_core'] ?? ''],
+        ];
+
+        foreach ($candidates as $column => $values) {
+            foreach ($values as $value) {
+                $value = trim((string)$value);
+                if ($value === '') {
+                    continue;
+                }
+                $id = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where($column, $value)->value('id');
+                if ($id !== null) {
+                    return (int)$id;
+                }
+            }
+        }
+    } catch (Throwable) {
+    }
+
+    return null;
+}
+
+function mantencion_emach_schedule_for_user(?int $userId): array {
+    if (!$userId || !class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
+        return [];
+    }
+
+    try {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('emach_horarios_usuario')) {
+            return [];
+        }
+
+        $schedule = [];
+        $rows = \Illuminate\Support\Facades\DB::table('emach_horarios_usuario')
+            ->where('usuario_id', $userId)
+            ->get();
+        foreach ($rows as $row) {
+            $day = (int)($row->dia_semana ?? 0);
+            if ($day < 1 || $day > 7) {
+                continue;
+            }
+            $schedule[$day] = [
+                'activo' => (bool)($row->activo ?? false),
+                'salida' => substr((string)($row->hora_salida ?? ''), 0, 5),
+            ];
+        }
+        return $schedule;
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+function mantencion_emach_exit_marks_from_session(): array {
+    if (!function_exists('request') || !request()->hasSession()) {
+        return [];
+    }
+
+    $payload = request()->session()->get('emach.last_query', []);
+    $rows = is_array($payload) ? (array)data_get($payload, 'planilla.rows', []) : [];
+    $marks = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $type = strtoupper(trim((string)($row[5] ?? data_get($row, 'tipo', ''))));
+        if ($type !== 'SALIDA') {
+            continue;
+        }
+        $dateKey = normalize_date_key((string)($row[3] ?? data_get($row, 'fecha', '')));
+        $minutes = mantencion_emach_minutes_from_time((string)($row[4] ?? data_get($row, 'marcas', data_get($row, 'marca', ''))));
+        if ($dateKey === '' || $minutes === null) {
+            continue;
+        }
+        $marks[$dateKey]['exit'] = max((int)($marks[$dateKey]['exit'] ?? -1), $minutes);
+    }
+    return $marks;
+}
+
+function mantencion_emach_credentials_configured(array $sessionUser): bool {
+    if (!function_exists('app')) {
+        return false;
+    }
+
+    try {
+        $credentials = app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)->emachForSession($sessionUser);
+        return !empty($credentials['stored']);
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function mantencion_emach_overtime_suggestions(array $groups): array {
+    $suggestions = [];
+    foreach ($groups as $group) {
+        $dateKey = normalize_date_key($group['fecha'] ?? '');
+        if ($dateKey !== '') {
+            $suggestions[$dateKey] = [
+                'ok' => false,
+                'hora_inicio' => '',
+                'hora_fin' => '',
+                'total' => '',
+                'status' => 'Sin datos EMACH para calcular esta fecha.',
+            ];
+        }
+    }
+    if (!$suggestions) {
+        return [];
+    }
+
+    auth_start_session();
+    $sessionUser = is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
+    if (function_exists('request')) {
+        $novaUser = request()->session()->get('nova_user', []);
+        if (is_array($novaUser)) {
+            $sessionUser = array_merge($novaUser, $sessionUser);
+        }
+    }
+
+    if (!mantencion_emach_credentials_configured($sessionUser)) {
+        return array_map(function ($suggestion) {
+            $suggestion['status'] = 'Configura tus credenciales EMACH antes de calcular.';
+            return $suggestion;
+        }, $suggestions);
+    }
+
+    $userId = mantencion_emach_central_user_id($sessionUser);
+    if ($userId === null) {
+        return array_map(function ($suggestion) {
+            $suggestion['status'] = 'No pude asociar tu usuario NOVA con EMACH.';
+            return $suggestion;
+        }, $suggestions);
+    }
+
+    $schedule = mantencion_emach_schedule_for_user($userId);
+    if (!$schedule) {
+        return array_map(function ($suggestion) {
+            $suggestion['status'] = 'Define tu horario semanal en EMACH > Horario.';
+            return $suggestion;
+        }, $suggestions);
+    }
+
+    $marks = mantencion_emach_exit_marks_from_session();
+    if (!$marks) {
+        return array_map(function ($suggestion) {
+            $suggestion['status'] = 'Consulta tus marcaciones en EMACH antes de calcular.';
+            return $suggestion;
+        }, $suggestions);
+    }
+
+    foreach (array_keys($suggestions) as $dateKey) {
+        $date = DateTime::createFromFormat('Y-m-d', $dateKey);
+        if (!$date) {
+            continue;
+        }
+        $weekday = (int)$date->format('N');
+        $configured = $schedule[$weekday] ?? null;
+        if (!$configured || empty($configured['activo'])) {
+            $suggestions[$dateKey]['status'] = 'Ese dia no tiene jornada activa en tu horario EMACH.';
+            continue;
+        }
+        $scheduledExit = mantencion_emach_minutes_from_time($configured['salida'] ?? '');
+        if ($scheduledExit === null) {
+            $suggestions[$dateKey]['status'] = 'Tu horario EMACH no tiene hora de salida para ese dia.';
+            continue;
+        }
+        $actualExit = $marks[$dateKey]['exit'] ?? null;
+        if ($actualExit === null) {
+            $suggestions[$dateKey]['status'] = 'No encontre una marcacion de salida EMACH para esa fecha.';
+            continue;
+        }
+        $extraMinutes = $actualExit - $scheduledExit;
+        if ($extraMinutes <= 0) {
+            $suggestions[$dateKey]['status'] = 'La salida EMACH no supera tu horario de salida.';
+            continue;
+        }
+        $suggestions[$dateKey] = [
+            'ok' => true,
+            'hora_inicio' => mantencion_emach_clock_from_minutes($scheduledExit),
+            'hora_fin' => mantencion_emach_clock_from_minutes($actualExit),
+            'total' => hhmm($extraMinutes),
+            'status' => 'Calculado con horario EMACH y marcacion de salida.',
+        ];
+    }
+
+    return $suggestions;
+}
+
+$emachSuggestions = mantencion_emach_overtime_suggestions($grupos);
 ?>
 <!doctype html>
 <html lang="es">
 <head>
   <?php $pageTitle = 'Horas extra'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <style>
-  
-    .group-row { background:#eef2ff; border-top:2px solid #d6d9f5; border-bottom:2px solid #d6d9f5; }
-    .table thead th { white-space: nowrap; }
-  </style>
+  <?php $horasExtraCssVersion = @filemtime(__DIR__ . '/../../assets/css/horas-extra.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/horas-extra.css?v=<?= (int)$horasExtraCssVersion ?>">
 </head>
 <body class="bg-light">
 <?php $activeNav = 'horas'; include __DIR__ . '/../partials/navbar.php'; ?>
@@ -332,12 +553,13 @@ function hhmm($mins) {
                 $minsGrupo = minutos_diff($horaIni, $horaFin);
                 if ($minsGrupo !== null) $totalHorasTablaMins += $minsGrupo;
                 $totalGrupo = hhmm($minsGrupo);
+                $emachSuggestion = $emachSuggestions[$fechaKey] ?? [];
               ?>
                 <tr class="group-row" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>" data-total="<?= $h($totalGrupo) ?>">
                   <td colspan="3">
                     <div class="d-flex justify-content-between align-items-center w-100">
                       <span><strong><?= $h(fmt_fecha($fechaKey)) ?></strong> &middot; Hora inicio: <?= $h($horaIni) ?> | Hora término: <?= $h($horaFin) ?><?= $totalGrupo ? ' | Total de horas: ' . $h($totalGrupo) : '' ?></span>
-                      <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal" data-bs-target="#editModal" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>" title="Editar horas"><i class="bi bi-pencil-square"></i></button>
+                      <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal" data-bs-target="#editModal" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>" data-emach-ok="<?= !empty($emachSuggestion['ok']) ? '1' : '0' ?>" data-emach-hora-inicio="<?= $h($emachSuggestion['hora_inicio'] ?? '') ?>" data-emach-hora-fin="<?= $h($emachSuggestion['hora_fin'] ?? '') ?>" data-emach-total="<?= $h($emachSuggestion['total'] ?? '') ?>" data-emach-status="<?= $h($emachSuggestion['status'] ?? 'Sin datos EMACH para calcular esta fecha.') ?>" title="Editar horas" aria-label="Editar horas"><i class="bi bi-pencil-square"></i></button>
                     </div>
                   </td>
                 </tr>
@@ -391,6 +613,12 @@ function hhmm($mins) {
             <label class="form-label">Hora de t&eacute;rmino</label>
             <input type="time" class="form-control" name="hora_fin" id="md-hora-fin" step="1">
           </div>
+          <div class="mb-3">
+            <button type="button" class="btn btn-outline-primary" id="md-calcular-emach">
+              <i class="bi bi-calculator"></i> Calcular desde EMACH
+            </button>
+            <div class="form-text fw-semibold" id="md-emach-status"></div>
+          </div>
           <div class="mb-2 text-muted small" id="md-total-horas"></div>
           <p class="text-muted small mb-0">Las horas se aplican a todos los reportes de esa fecha.</p>
         </div>
@@ -409,6 +637,10 @@ const editModal = document.getElementById('editModal');
 const totalHorasEl = document.getElementById('md-total-horas');
 const horaIniInput = document.getElementById('md-hora-ini');
 const horaFinInput = document.getElementById('md-hora-fin');
+const calcularEmachBtn = document.getElementById('md-calcular-emach');
+const emachStatusEl = document.getElementById('md-emach-status');
+const emachSuggestionEndpoint = '<?= $h(function_exists('url') ? url('/emach/horas-extra-sugerencia') : '/emach/horas-extra-sugerencia') ?>';
+const laravelCsrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
 function parseTimeInput(value) {
   if (!value) return null;
@@ -450,11 +682,73 @@ if (editModal) {
     setVal('md-fecha', 'data-fecha');
     setVal('md-hora-ini', 'data-horaini');
     setVal('md-hora-fin', 'data-horafin');
+    editModal.dataset.emachOk = btn.getAttribute('data-emach-ok') || '0';
+    editModal.dataset.emachHoraInicio = btn.getAttribute('data-emach-hora-inicio') || '';
+    editModal.dataset.emachHoraFin = btn.getAttribute('data-emach-hora-fin') || '';
+    editModal.dataset.emachTotal = btn.getAttribute('data-emach-total') || '';
+    editModal.dataset.emachStatus = btn.getAttribute('data-emach-status') || '';
+    if (emachStatusEl) {
+      emachStatusEl.classList.remove('text-success', 'text-danger');
+      emachStatusEl.textContent = '';
+    }
     updateTotalHorasPreview();
   });
 }
 if (horaIniInput) horaIniInput.addEventListener('input', updateTotalHorasPreview);
 if (horaFinInput) horaFinInput.addEventListener('input', updateTotalHorasPreview);
+if (calcularEmachBtn && editModal && emachStatusEl) {
+  const applyEmachSuggestion = (suggestion, message) => {
+    if (horaIniInput) horaIniInput.value = suggestion.hora_inicio || '';
+    if (horaFinInput) horaFinInput.value = suggestion.hora_fin || '';
+    emachStatusEl.classList.remove('text-danger');
+    emachStatusEl.classList.add('text-success');
+    emachStatusEl.textContent = message || `Inicio desde tu salida programada y termino desde EMACH. Total: ${suggestion.total || '00:00'}.`;
+    updateTotalHorasPreview();
+  };
+
+  calcularEmachBtn.addEventListener('click', async () => {
+    emachStatusEl.classList.remove('text-success', 'text-danger');
+    if (editModal.dataset.emachOk === '1') {
+      applyEmachSuggestion({
+        hora_inicio: editModal.dataset.emachHoraInicio || '',
+        hora_fin: editModal.dataset.emachHoraFin || '',
+        total: editModal.dataset.emachTotal || '00:00'
+      });
+      return;
+    }
+
+    calcularEmachBtn.disabled = true;
+    emachStatusEl.textContent = 'Consultando EMACH...';
+    try {
+      const fecha = document.getElementById('md-fecha')?.value || '';
+      const response = await fetch(emachSuggestionEndpoint, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': laravelCsrfToken
+        },
+        body: JSON.stringify({ fecha })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || editModal.dataset.emachStatus || 'Sin datos EMACH para calcular esta fecha.');
+      }
+
+      editModal.dataset.emachOk = '1';
+      editModal.dataset.emachHoraInicio = payload.hora_inicio || '';
+      editModal.dataset.emachHoraFin = payload.hora_fin || '';
+      editModal.dataset.emachTotal = payload.total || '00:00';
+      editModal.dataset.emachStatus = payload.message || '';
+      applyEmachSuggestion(payload, `${payload.message || 'Calculado desde EMACH.'} Total: ${payload.total || '00:00'}.`);
+    } catch (error) {
+      emachStatusEl.classList.add('text-danger');
+      emachStatusEl.textContent = error?.message || 'No se pudo consultar EMACH.';
+    } finally {
+      calcularEmachBtn.disabled = false;
+    }
+  });
+}
 
 // Copiar tabla con formato similar al ejemplo (compatible con Excel)
 const copyBtn = document.getElementById('copy-table-btn');

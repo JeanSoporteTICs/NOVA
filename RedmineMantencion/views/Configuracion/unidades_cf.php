@@ -42,7 +42,6 @@ $configRepo = function_exists('config_mantencion_repository') ? config_mantencio
 $cfg = $configRepo !== null ? $configRepo->loadAll() : [];
 $platformUrl = $cfg['platform_url'] ?? '';
 $cfOverride = $cfg['unidades_url'] ?? '';
-$apiKey = $cfg['platform_token'] ?? '';
 
 $currentUserId = auth_get_user_id();
 $userToken = '';
@@ -51,7 +50,7 @@ if ($currentUserId) {
     $userToken = auth_central_redmine_api_token($currentUserId, 'redmine_mantencion');
   }
 }
-$apiKey = $userToken ?: $apiKey;
+$apiKey = $userToken;
 
 $cfUrl = $cfOverride ?: build_cf_url($platformUrl);
 $flash = null;
@@ -62,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (function_exists('csrf_validate')) csrf_validate();
   if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
 if (!$apiKey) {
-  $error = 'Falta token de API (usuario o plataforma).';
+  $error = 'Falta token de API personal. Agrega tu API en Cuentas conectadas.';
 } elseif (!$cfUrl) {
   $error = 'URL de API inv&aacute;lida. Revisa platform_url/unidades_url.';
 } else {

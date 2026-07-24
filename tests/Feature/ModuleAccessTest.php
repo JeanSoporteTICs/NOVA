@@ -86,6 +86,24 @@ class ModuleAccessTest extends TestCase
     }
 
     /**
+     * ETAPA B / Lote B5.5 — the maintenance bundle export/import flow was
+     * retired (belonged to the pre-relational JSON persistence era, had no
+     * UI/JS/command/cron caller). These routes must be fully gone, not just
+     * unreachable from the UI.
+     */
+    public function test_removed_maintenance_bundle_routes_return_404()
+    {
+        $this->post('/redmine_tic/app/configuracion/importar')->assertStatus(404);
+        $this->post('/redmine_tic/app/configuracion/exportar')->assertStatus(404);
+    }
+
+    public function test_removed_maintenance_bundle_route_names_no_longer_registered()
+    {
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('redmine.native.config.import'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('redmine.native.config.export'));
+    }
+
+    /**
      * @return array<string,mixed>
      */
     private function fakeSessionUser(): array

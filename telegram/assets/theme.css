@@ -1,7 +1,5 @@
 :root {
   --telegram-dark: #102033;
-  --telegram-primary: #229ed9;
-  --telegram-accent: #14b8a6;
   --telegram-border: #d7e2ef;
 }
 
@@ -36,37 +34,6 @@ body.telegram-page {
   font-weight: 900;
 }
 
-.telegram-menu-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  padding: .9rem 1rem;
-  border-bottom: 1px solid rgba(148, 163, 184, .22);
-  background: rgba(244, 248, 252, .92);
-  backdrop-filter: blur(14px);
-}
-
-.telegram-nav-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .55rem;
-}
-
-.telegram-nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: .45rem;
-  min-height: 42px;
-  padding: .55rem .9rem;
-  border: 1px solid #d7e2ef;
-  border-radius: 8px;
-  background: #fff;
-  color: #334155;
-  font-weight: 900;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, .06);
-}
-
-.telegram-nav-link.active,
 .telegram-submit {
   color: #fff;
   border-color: transparent;
@@ -115,12 +82,6 @@ body.telegram-page {
   font-weight: 750;
 }
 
-.telegram-success {
-  border: 1px solid rgba(16, 185, 129, .22);
-  border-radius: 12px;
-  background: #ecfdf5;
-  color: #065f46;
-}
 
 .telegram-code-block {
   display: grid;

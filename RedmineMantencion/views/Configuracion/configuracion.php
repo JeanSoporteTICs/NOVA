@@ -1,6 +1,22 @@
 <?php
 require_once __DIR__ . '/../../controllers/auth.php';
-auth_require_role(['root','administrador','gestor'], '/redmine-mantencion/login.php');
+auth_require_login('/redmine-mantencion/login.php');
+$requestedPanel = strtolower(trim((string)($_GET['panel'] ?? '')));
+$isNextcloudGroupsPanel = $requestedPanel === 'nextcloud';
+if ($isNextcloudGroupsPanel ? !auth_can('integraciones_nextcloud') : (!auth_can('configuracion') && !auth_can('categorias'))) {
+  http_response_code(403);
+  exit($isNextcloudGroupsPanel ? 'No tienes permiso para administrar grupos de Nextcloud.' : 'No tienes permiso para ver Configuración.');
+}
+$requestedPanelPermission = [
+  'resumen' => 'cfg_resumen', 'conexion' => 'cfg_conexion', 'proyecto' => 'cfg_proyecto',
+  'retencion' => 'cfg_retencion', 'trackers' => 'cfg_trackers', 'prioridades' => 'cfg_prioridades',
+  'estados' => 'cfg_estados', 'categorias' => 'cfg_categorias', 'mantencion' => 'cfg_mantencion',
+  'nextcloud' => 'integraciones_nextcloud', 'roles' => 'cfg_roles', 'usuarios' => 'cfg_usuarios',
+];
+if ($requestedPanel !== '' && (!isset($requestedPanelPermission[$requestedPanel]) || !auth_can($requestedPanelPermission[$requestedPanel]))) {
+  http_response_code(403);
+  exit('No tienes permiso para ver esta sección de Configuración.');
+}
 require_once __DIR__ . '/../../controllers/configuracion.php';
 require_once __DIR__ . '/../../controllers/categorias.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
@@ -10,7 +26,6 @@ $maintenanceFlash = handle_maintenance_request();
 [$nextcloudFlash, $nextcloudCfg, $nextcloudGroups] = handle_nextcloud();
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $role = auth_get_user_role();
-$onlyCatalogs = ($role === 'administrador');
 $csrf = legacy_csrf_token();
 $maintenanceMode = maintenance_mode_enabled();
 $maintenanceSettings = maintenance_mode_settings();
@@ -41,16 +56,16 @@ foreach ($usuariosSelectableData as $u) {
 
 $saveRolePermissions = function (string $role, array $permissions): void {
   if (!class_exists(\Illuminate\Support\Facades\DB::class)) return;
-  \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->where('rol', $role)->delete();
-  foreach ($permissions as $permission => $value) {
-    \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->insert([
-      'rol' => $role,
-      'permiso' => (string)$permission,
-      'valor' => is_bool($value) ? ($value ? '1' : '') : (string)$value,
-      'creado_at' => now(),
-      'actualizado_at' => now(),
-    ]);
-  }
+  \Illuminate\Support\Facades\DB::transaction(function () use ($role, $permissions): void {
+    \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->where('rol', $role)->delete();
+    foreach ($permissions as $permission => $value) {
+      \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->insert([
+        'rol' => $role,
+        'permiso' => (string)$permission,
+        'valor' => is_bool($value) ? ($value ? '1' : '') : (string)$value,
+      ]);
+    }
+  });
 };
 
 $saveUserRole = function (string $userId, string $role): void {
@@ -64,23 +79,42 @@ $saveUserRole = function (string $userId, string $role): void {
     ->update(['rol' => $role, 'actualizado_at' => now()]);
 };
 
+$saveUserPermissions = function (string $userId, array $permissions): void {
+  if ($userId === '' || !class_exists(\Illuminate\Support\Facades\DB::class)
+      || !\Illuminate\Support\Facades\Schema::hasTable('mantencion_permisos_usuario')) return;
+  $novaId = (int)\Illuminate\Support\Facades\DB::table('usuarios_nova')
+    ->where(function ($query) use ($userId): void {
+      $query->where('redmine_id', $userId)->orWhere('uuid', $userId)->orWhere('usuario', $userId);
+    })->value('id');
+  if ($novaId <= 0) return;
+  \Illuminate\Support\Facades\DB::transaction(function () use ($novaId, $permissions): void {
+    \Illuminate\Support\Facades\DB::table('mantencion_permisos_usuario')->where('usuario_id', $novaId)->delete();
+    foreach ($permissions as $permission => $value) {
+      \Illuminate\Support\Facades\DB::table('mantencion_permisos_usuario')->insert([
+        'usuario_id' => $novaId,
+        'permiso' => (string)$permission,
+        'valor' => is_bool($value) ? ($value ? '1' : '') : (string)$value,
+        'actualizado_at' => now(),
+      ]);
+    }
+  });
+};
+
 $ensureRolePermission = function (string $role, string $key, $value) use (&$rolesData): void {
   if (!isset($rolesData[$role]) || !is_array($rolesData[$role])) return;
   if (!array_key_exists($key, $rolesData[$role])) {
     $rolesData[$role][$key] = $value;
   }
 };
-$ensureRolePermission('root', 'procedimientos', true);
-$ensureRolePermission('root', 'procedimientos_editar', true);
-$ensureRolePermission('gestor', 'procedimientos', true);
-$ensureRolePermission('gestor', 'procedimientos_editar', true);
-$ensureRolePermission('administrador', 'procedimientos', true);
-$ensureRolePermission('administrador', 'procedimientos_editar', true);
-$ensureRolePermission('usuario', 'procedimientos', true);
-$ensureRolePermission('usuario', 'procedimientos_editar', false);
 foreach (array_keys($rolesData) as $roleName) {
-  $ensureRolePermission((string)$roleName, 'procedimientos', true);
-  $ensureRolePermission((string)$roleName, 'procedimientos_editar', in_array((string)$roleName, ['root', 'gestor', 'administrador'], true));
+  $ensureRolePermission((string)$roleName, 'mis_integraciones', true);
+  $ensureRolePermission((string)$roleName, 'integraciones_nextcloud', in_array((string)$roleName, ['root', 'gestor'], true));
+  $ensureRolePermission((string)$roleName, 'actividad_eliminar', !empty($rolesData[$roleName]['actividad']));
+  $ensureRolePermission((string)$roleName, 'actividad_todos', !empty($rolesData[$roleName]['actividad']));
+  $baseConfigAccess = !empty($rolesData[$roleName]['configuracion']);
+  foreach (['cfg_resumen', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $configPermission) {
+    $ensureRolePermission((string)$roleName, $configPermission, $configPermission === 'cfg_categorias' ? !empty($rolesData[$roleName]['categorias']) : $baseConfigAccess);
+  }
 }
 $categoriasData = [];
 $catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
@@ -95,8 +129,6 @@ if (empty($rolesData)) {
       'historico' => true,
       'historico_scope' => 'todos',
       'historico_acciones' => true,
-      'procedimientos' => true,
-      'procedimientos_editar' => true,
       'configuracion' => true,
       'estadisticas' => true,
       'usuarios' => true,
@@ -105,7 +137,6 @@ if (empty($rolesData)) {
       'cfg_conexion' => true,
       'cfg_proyecto' => true,
       'cfg_retencion' => true,
-      'cfg_sesion' => true,
         'cfg_trackers' => true,
         'cfg_prioridades' => true,
         'cfg_estados' => true,
@@ -121,8 +152,6 @@ if (empty($rolesData)) {
       'historico' => true,
       'historico_scope' => 'asignados',
       'historico_acciones' => true,
-      'procedimientos' => true,
-      'procedimientos_editar' => true,
       'configuracion' => true,
       'estadisticas' => true,
       'usuarios' => true,
@@ -131,7 +160,6 @@ if (empty($rolesData)) {
       'cfg_conexion' => true,
       'cfg_proyecto' => true,
       'cfg_retencion' => true,
-      'cfg_sesion' => true,
       'cfg_trackers' => true,
       'cfg_prioridades' => true,
       'cfg_estados' => true,
@@ -145,8 +173,6 @@ if (empty($rolesData)) {
       'historico' => false,
       'historico_scope' => 'asignados',
       'historico_acciones' => false,
-      'procedimientos' => true,
-      'procedimientos_editar' => true,
       'configuracion' => true,
       'estadisticas' => true,
       'usuarios' => false,
@@ -155,7 +181,6 @@ if (empty($rolesData)) {
       'cfg_conexion' => true,
       'cfg_proyecto' => true,
       'cfg_retencion' => true,
-      'cfg_sesion' => true,
       'cfg_trackers' => true,
       'cfg_prioridades' => true,
       'cfg_estados' => true,
@@ -171,8 +196,6 @@ if (empty($rolesData)) {
       'historico' => false,
       'historico_scope' => 'asignados',
       'historico_acciones' => false,
-      'procedimientos' => true,
-      'procedimientos_editar' => false,
       'configuracion' => false,
       'estadisticas' => false,
       'usuarios' => false,
@@ -181,7 +204,6 @@ if (empty($rolesData)) {
       'cfg_conexion' => false,
       'cfg_proyecto' => false,
       'cfg_retencion' => false,
-      'cfg_sesion' => false,
       'cfg_trackers' => false,
       'cfg_prioridades' => false,
       'cfg_estados' => false,
@@ -191,11 +213,16 @@ if (empty($rolesData)) {
   ];
 }
 
-$flashRoles = null;
+$flashRoles = $_SESSION['mantencion_roles_flash'] ?? null;
+unset($_SESSION['mantencion_roles_flash']);
 $flashUsuarios = null;
 $openRolesModal = false;
 $openUsersModal = false;
-$selectedRoleSel = $_POST['role_select'] ?? 'gestor';
+$selectedRoleSel = $_POST['role_select']
+  ?? $_SESSION['mantencion_roles_selected']
+  ?? $_GET['role']
+  ?? 'gestor';
+unset($_SESSION['mantencion_roles_selected']);
 $newRoleName = trim($_POST['new_role'] ?? '');
 $selectedRole = $newRoleName !== '' ? $newRoleName : $selectedRoleSel;
 $selectedUser = $_POST['user_select'] ?? '';
@@ -204,7 +231,7 @@ $canManageUsers = auth_can('cfg_usuarios');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $action = $_POST['action'] ?? '';
-  if ($maintenanceMode && !in_array($action, ['maintenance_settings', 'maintenance_export'], true)) {
+  if ($maintenanceMode && $action !== 'maintenance_settings') {
     if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
   }
   if ($action === 'load_role' && $canManageRoles) {
@@ -227,8 +254,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'historico' => true,
           'historico_scope' => ($_POST['historico_scope'] ?? 'todos'),
           'historico_acciones' => isset($_POST['perm_historico_acciones']),
-          'procedimientos' => true,
-          'procedimientos_editar' => true,
           'configuracion' => true,
           'estadisticas' => true,
           'usuarios' => true,
@@ -237,17 +262,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'cfg_conexion' => true,
           'cfg_proyecto' => true,
           'cfg_retencion' => true,
-          'cfg_sesion' => true,
           'cfg_trackers' => true,
           'cfg_prioridades' => true,
           'cfg_estados' => true,
           'cfg_roles' => true,
           'cfg_usuarios' => true,
-          'actividad' => true,
+          'actividad' => isset($_POST['perm_actividad']),
+          'actividad_eliminar' => isset($_POST['perm_actividad']) && isset($_POST['perm_actividad_eliminar']),
+          'actividad_todos' => isset($_POST['perm_actividad']) && isset($_POST['perm_actividad_todos']),
         ];
       } else {
         $roleCanViewHistorico = isset($_POST['perm_historico']);
-        $roleCanViewProcedimientos = isset($_POST['perm_procedimientos']);
         $rolesData[$selectedRole] = [
           'mensajes' => ($_POST['mensajes_scope'] ?? 'asignados'),
           'mensajes_acceso' => isset($_POST['perm_mensajes']),
@@ -255,9 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'historico' => $roleCanViewHistorico,
           'historico_scope' => ($_POST['historico_scope'] ?? 'asignados'),
           'historico_acciones' => $roleCanViewHistorico && isset($_POST['perm_historico_acciones']),
-          'procedimientos' => $roleCanViewProcedimientos,
-          'procedimientos_editar' => $roleCanViewProcedimientos && isset($_POST['perm_procedimientos_editar']),
-          'configuracion' => isset($_POST['perm_configuracion']),
+          'configuracion' => (string)($_POST['perm_configuracion'] ?? '0') === '1',
           'estadisticas' => isset($_POST['perm_estadisticas']),
           'usuarios' => isset($_POST['perm_usuarios']),
           'categorias' => isset($_POST['perm_categorias']),
@@ -265,18 +288,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'cfg_conexion' => isset($_POST['perm_cfg_conexion']),
           'cfg_proyecto' => isset($_POST['perm_cfg_proyecto']),
           'cfg_retencion' => isset($_POST['perm_cfg_retencion']),
-          'cfg_sesion' => isset($_POST['perm_cfg_sesion']),
           'cfg_trackers' => isset($_POST['perm_cfg_trackers']),
           'cfg_prioridades' => isset($_POST['perm_cfg_prioridades']),
           'cfg_estados' => isset($_POST['perm_cfg_estados']),
           'cfg_roles' => isset($_POST['perm_cfg_roles']),
           'cfg_usuarios' => isset($_POST['perm_cfg_usuarios']),
           'actividad' => isset($_POST['perm_actividad']),
+          'actividad_eliminar' => isset($_POST['perm_actividad']) && isset($_POST['perm_actividad_eliminar']),
+          'actividad_todos' => isset($_POST['perm_actividad']) && isset($_POST['perm_actividad_todos']),
+          'mis_integraciones' => isset($_POST['perm_mis_integraciones']),
+          'integraciones_nextcloud' => isset($_POST['perm_integraciones_nextcloud']),
+          'cfg_resumen' => isset($_POST['perm_cfg_resumen']),
+          'cfg_categorias' => isset($_POST['perm_cfg_categorias']),
+          'cfg_mantencion' => isset($_POST['perm_cfg_mantencion']),
+          'cfg_nextcloud' => isset($_POST['perm_cfg_nextcloud']),
         ];
       }
       $saveRolePermissions($selectedRole, $rolesData[$selectedRole] ?? []);
-      $flashRoles = 'Permisos actualizados para el rol "' . $h($selectedRole) . '"';
-      $openRolesModal = true;
+      // PRG: fuerza una lectura fresca desde BD, evita reenvíos del formulario y
+      // conserva el rol seleccionado al volver al panel.
+      $_SESSION['mantencion_roles_flash'] = 'Permisos guardados correctamente.';
+      $_SESSION['mantencion_roles_selected'] = $selectedRole;
+      $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
+        . '/redmine-mantencion/app/configuracion?panel=roles';
+      header('Location: ' . $rolesRedirectUrl, true, 303);
+      exit;
     }
   }
   if ($action === 'load_user_perms' && $canManageUsers) {
@@ -301,7 +337,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         unset($u);
       }
       $userCanViewHistorico = isset($_POST['u_perm_historico']);
-      $userCanViewProcedimientos = isset($_POST['u_perm_procedimientos']);
       $cfgUser = [
         'mensajes' => ($_POST['u_mensajes_scope'] ?? 'asignados'),
         'mensajes_acceso' => isset($_POST['u_perm_mensajes']),
@@ -309,9 +344,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'historico' => $userCanViewHistorico,
         'historico_acciones' => $userCanViewHistorico && isset($_POST['u_perm_historico_acciones']),
         'historico_scope' => ($_POST['u_historico_scope'] ?? 'asignados'),
-        'procedimientos' => $userCanViewProcedimientos,
-        'procedimientos_editar' => $userCanViewProcedimientos && isset($_POST['u_perm_procedimientos_editar']),
-        'configuracion' => isset($_POST['u_perm_configuracion']),
+        'configuracion' => (string)($_POST['u_perm_configuracion'] ?? '0') === '1',
         'estadisticas' => isset($_POST['u_perm_estadisticas']),
         'usuarios' => isset($_POST['u_perm_usuarios']),
         'categorias' => isset($_POST['u_perm_categorias']),
@@ -319,14 +352,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'cfg_conexion' => isset($_POST['u_perm_cfg_conexion']),
         'cfg_proyecto' => isset($_POST['u_perm_cfg_proyecto']),
         'cfg_retencion' => isset($_POST['u_perm_cfg_retencion']),
-        'cfg_sesion' => isset($_POST['u_perm_cfg_sesion']),
         'cfg_trackers' => isset($_POST['u_perm_cfg_trackers']),
         'cfg_prioridades' => isset($_POST['u_perm_cfg_prioridades']),
         'cfg_estados' => isset($_POST['u_perm_cfg_estados']),
         'cfg_roles' => isset($_POST['u_perm_cfg_roles']),
         'cfg_usuarios' => isset($_POST['u_perm_cfg_usuarios']),
         'actividad' => isset($_POST['u_perm_actividad']),
+        'actividad_eliminar' => isset($_POST['u_perm_actividad']) && isset($_POST['u_perm_actividad_eliminar']),
+        'actividad_todos' => isset($_POST['u_perm_actividad']) && isset($_POST['u_perm_actividad_todos']),
+        'mis_integraciones' => isset($_POST['u_perm_mis_integraciones']),
+        'integraciones_nextcloud' => isset($_POST['u_perm_integraciones_nextcloud']),
+        'cfg_resumen' => isset($_POST['u_perm_cfg_resumen']),
+        'cfg_categorias' => isset($_POST['u_perm_cfg_categorias']),
+        'cfg_mantencion' => isset($_POST['u_perm_cfg_mantencion']),
+        'cfg_nextcloud' => isset($_POST['u_perm_cfg_nextcloud']),
       ];
+      $effectiveUserRole = strtolower($newUserRole !== '' ? $newUserRole : (string)($usuariosIndex[$selectedUser]['rol'] ?? 'usuario'));
+      if ($effectiveUserRole === 'root') $cfgUser['all'] = true;
       foreach ($usuariosData as &$u) {
         if ((string)($u['id'] ?? '') === $selectedUser) {
           $u['permisos'] = $cfgUser;
@@ -342,6 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if ($newUserRole !== '') {
         $saveUserRole($selectedUser, $newUserRole);
       }
+      $saveUserPermissions($selectedUser, $cfgUser);
       $flashUsuarios = 'Permisos actualizados para el usuario ID ' . $h($selectedUser);
       $openUsersModal = true;
     }
@@ -361,571 +404,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <html lang="es">
 <head>
   <?php $pageTitle = 'Configuración'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <style>
-    /* Fallback modal styles si Bootstrap no carga */
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 1055;
-      inset: 0;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.5);
-      overflow: hidden;
-    }
-    .modal.show { display: flex; }
-    .modal-dialog {
-      margin: 0 auto;
-      max-height: calc(100vh - 30px);
-    }
-    .modal-dialog.modal-dialog-top { margin-top: 12px; }
-    .modal-dialog-scrollable,
-    .modal-dialog-scrollable .modal-content {
-      max-height: calc(100vh - 60px);
-    }
-    .modal-dialog-scrollable .modal-body,
-    .modal-body.modal-body-tight {
-      max-height: calc(100vh - 200px);
-      overflow-y: auto;
-    }
-    .modal-backdrop { display: block; }
-    .modal-dialog-scrollable .modal-body {
-      max-height: calc(100vh - 220px);
-      overflow-y: auto;
-    }
-    /* Botones de config */
-    .cfg-grid { row-gap: 20px; }
-    .cfg-btn {
-      padding: 22px 22px;
-      font-size: 1.05rem;
-      width: 100%;
-      border-radius: 16px;
-      background: #fff;
-      color: #1f2937;
-      box-shadow: 0 10px 28px rgba(17, 24, 39, 0.08);
-      border: 1px solid rgba(0,0,0,0.03);
-      transition: all .18s ease;
-      min-height: 88px;
-    }
-    .cfg-btn i { font-size: 1.35rem; }
-    .cfg-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 16px 36px rgba(53,88,230,0.18);
-      color: var(--sb-primary);
-    }
-    .cfg-btn span { font-weight: 600; letter-spacing: 0.01em; }
-    .cfg-btn .bi-arrow-right-short { font-size: 1.4rem; }
-    .cfg-section { background: #fff; border-radius: 18px; box-shadow: 0 12px 30px rgba(17,24,39,0.08); padding: 18px 20px; }
-    .cfg-section h5 { font-weight: 700; }
-    .form-check { margin-bottom: 8px; }
-    .permission-section-help {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      color: #475569;
-      font-size: .88rem;
-      margin: -6px 0 14px;
-      padding: 10px 12px;
-      border: 1px solid #dbeafe;
-      border-radius: 12px;
-      background: #eff6ff;
-    }
-    .permission-section-help::before {
-      content: "i";
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      background: #2563eb;
-      color: #fff;
-      font-size: .75rem;
-      font-weight: 800;
-      flex: 0 0 auto;
-      margin-top: 1px;
-    }
-    .permission-related {
-      position: relative;
-      padding-bottom: 0 !important;
-    }
-    .permission-child {
-      position: relative;
-      min-height: 29px !important;
-      width: 75%;
-      margin-top: -4px !important;
-      margin-left: auto !important;
-      border-color: #dbeafe !important;
-      background: #f8fbff !important;
-      box-shadow: inset 3px 0 0 #93c5fd;
-    }
-    .permission-child::before {
-      content: "";
-      position: absolute;
-      left: -25%;
-      top: -14px;
-      width: 25%;
-      height: 24px;
-      border-left: 2px solid #bfdbfe;
-      border-bottom: 2px solid #bfdbfe;
-      border-bottom-left-radius: 8px;
-      pointer-events: none;
-    }
-    .permission-tag {
-      display: inline-flex;
-      align-items: center;
-      margin-left: 6px;
-      padding: 1px 5px;
-      border-radius: 999px;
-      background: #e0f2fe;
-      color: #0369a1;
-      font-size: .58rem;
-      font-weight: 800;
-      line-height: 1;
-      vertical-align: middle;
-    }
-    .permission-note {
-      display: block;
-      margin-top: 1px;
-      color: #64748b;
-      font-size: .58rem;
-      font-weight: 500;
-      line-height: 1.25;
-    }
-    .permission-child .form-check-label {
-      display: block;
-    }
-    .permission-child .form-check-input:disabled + .form-check-label,
-    .permission-child .form-check-input:disabled ~ .form-check-label {
-      color: #9ca3af !important;
-    }
-    .permission-child .form-check-input:disabled ~ .form-check-label .permission-tag {
-      background: #f3f4f6;
-      color: #9ca3af;
-    }
-    .permission-child .form-check-input:disabled ~ .form-check-label .permission-note {
-      color: #9ca3af;
-    }
-    .user-picker {
-      position: relative;
-    }
-    .user-picker-results {
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: calc(100% + 6px);
-      max-height: 260px;
-      overflow-y: auto;
-      border: 1px solid #dbeafe;
-      border-radius: 12px;
-      background: #fff;
-      box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
-      z-index: 1056;
-    }
-    .user-picker-option {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border: 0;
-      border-bottom: 1px solid #eef2f7;
-      background: #fff;
-      color: #1f2937;
-      text-align: left;
-      font-weight: 700;
-    }
-    .user-picker-option:hover,
-    .user-picker-option.is-active {
-      background: #eff6ff;
-      color: #1d4ed8;
-    }
-    .user-picker-option:last-child {
-      border-bottom: 0;
-    }
-    .user-picker-id {
-      flex: 0 0 auto;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: #e0f2fe;
-      color: #0369a1;
-      font-size: .76rem;
-      font-weight: 800;
-    }
-    .user-picker-empty {
-      padding: 12px;
-      color: #64748b;
-      font-size: .9rem;
-    }
-    .roles-modal-shell { display: grid; gap: 18px; }
-    :is(#rolesModal, #usuariosModal) .modal-content {
-      border: 0;
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 24px 70px rgba(15, 23, 42, .18);
-    }
-    :is(#rolesModal, #usuariosModal) .modal-header {
-      background: linear-gradient(135deg, #f8fbff, #eef6ff);
-      border-bottom: 1px solid #dbeafe;
-      padding: 18px 22px;
-    }
-    :is(#rolesModal, #usuariosModal) .modal-title {
-      font-weight: 800;
-      color: #111827;
-    }
-    :is(#rolesModal, #usuariosModal) .modal-body {
-      background: #f6f8fb;
-      padding: 18px;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12 {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 10px 26px rgba(15, 23, 42, .05);
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 {
-      width: 100%;
-      display: block;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 .form-label,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 .form-label,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12 > .form-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      font-weight: 800;
-      color: #111827;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 .form-label::before,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 .form-label::before,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12 > .form-label::before {
-      content: "";
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: #2563eb;
-      box-shadow: 0 0 0 4px #dbeafe;
-      flex: 0 0 auto;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 .form-text,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 .form-text {
-      margin-bottom: 0;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 input[name="new_role"] {
-      margin-top: 10px !important;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(2) .row {
-      row-gap: 12px;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(2) .col-md-4 {
-      padding: 12px;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      background: #f8fafc;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(2) .small {
-      font-weight: 800;
-      color: #374151;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-scope-section .row {
-      row-gap: 12px;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-scope-section .col-md-4 {
-      padding: 12px;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      background: #f8fafc;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-scope-section .small {
-      font-weight: 800;
-      color: #374151;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .col-md-4,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .col-md-4 {
-      padding: 0 6px;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .col-md-4 {
-      padding: 0 6px;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check {
-      min-height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      margin: 0 0 10px;
-      padding: 12px 14px;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      background: #fff;
-      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check {
-      min-height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      margin: 0 0 10px;
-      padding: 12px 14px;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      background: #fff;
-      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check:has(.form-check-input:checked),
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check:has(.form-check-input:checked) {
-      border-color: #93c5fd;
-      background: #f8fbff;
-      box-shadow: 0 8px 20px rgba(37, 99, 235, .08);
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check:has(.form-check-input:checked) {
-      border-color: #93c5fd;
-      background: #f8fbff;
-      box-shadow: 0 8px 20px rgba(37, 99, 235, .08);
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input {
-      order: 2;
-      margin-left: 12px;
-      width: 2.7rem;
-      height: 1.45rem;
-      margin-top: 0;
-      margin-right: 0;
-      border: 1px solid #cbd5e1;
-      border-radius: 999px;
-      background-color: #cbd5e1;
-      background-image: none;
-      cursor: pointer;
-      position: relative;
-      flex: 0 0 auto;
-      transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
-      appearance: none;
-      -webkit-appearance: none;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input {
-      order: 2;
-      margin-left: 12px;
-      width: 2.7rem;
-      height: 1.45rem;
-      margin-top: 0;
-      margin-right: 0;
-      border: 1px solid #cbd5e1;
-      border-radius: 999px;
-      background-color: #cbd5e1;
-      background-image: none;
-      cursor: pointer;
-      position: relative;
-      flex: 0 0 auto;
-      transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
-      appearance: none;
-      -webkit-appearance: none;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input::before,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input::before {
-      content: "";
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 1.05rem;
-      height: 1.05rem;
-      border-radius: 999px;
-      background: #fff;
-      box-shadow: 0 2px 6px rgba(15, 23, 42, .25);
-      transition: transform .18s ease;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input::before {
-      content: "";
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 1.05rem;
-      height: 1.05rem;
-      border-radius: 999px;
-      background: #fff;
-      box-shadow: 0 2px 6px rgba(15, 23, 42, .25);
-      transition: transform .18s ease;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:checked,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:checked {
-      border-color: #2563eb;
-      background-color: #2563eb;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input:checked {
-      border-color: #2563eb;
-      background-color: #2563eb;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:checked::before,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:checked::before {
-      transform: translateX(1.22rem);
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input:checked::before {
-      transform: translateX(1.22rem);
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:focus,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:focus {
-      box-shadow: 0 0 0 .2rem rgba(37, 99, 235, .18);
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:disabled,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:disabled {
-      border-color: #e5e7eb;
-      background-color: #e5e7eb;
-      cursor: not-allowed;
-      opacity: 1;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-label,
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-label {
-      order: 1;
-      flex: 1 1 auto;
-      font-weight: 700;
-      color: #1f2937;
-      line-height: 1.2;
-    }
-    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-label {
-      order: 1;
-      flex: 1 1 auto;
-      font-weight: 700;
-      color: #1f2937;
-      line-height: 1.2;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell .form-check.ms-3 {
-      background: #f9fafb;
-      padding: 5px 8px;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-input {
-      width: 1.5rem;
-      height: .8rem;
-      margin-left: 6px;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-input::before {
-      top: 1px;
-      left: 1px;
-      width: .58rem;
-      height: .58rem;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-input:checked::before {
-      transform: translateX(.68rem);
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-label {
-      font-size: .62rem;
-    }
-    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .text-end {
-      position: sticky;
-      bottom: -18px;
-      margin: 0 -16px -16px;
-      padding: 16px;
-      background: linear-gradient(180deg, rgba(255,255,255,0), #fff 35%);
-      border: 0;
-      box-shadow: none;
-      z-index: 3;
-    }
-    :is(#rolesModal, #usuariosModal) #btn-save-roles,
-    :is(#rolesModal, #usuariosModal) #btn-save-user-perms {
-      min-width: 180px;
-      font-weight: 800;
-    }
-    @media (max-width: 767.98px) {
-      :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 input[name="new_role"] { margin-top: 10px !important; }
-    }
-    .table thead th { font-weight: 700; text-transform: uppercase; font-size: .78rem; letter-spacing: .02em; }
-  </style>
-  <style>
-    .cfg-hero { background: linear-gradient(120deg, rgba(78,115,223,0.12), rgba(28,200,138,0.12)); border-radius: 20px; padding: 24px; box-shadow: 0 14px 36px rgba(0,0,0,0.06); }
-    .cfg-btn { padding: 24px 26px; font-size: 1.05rem; width: 100%; border-radius: 18px; background: #fff; color: #1f2937; box-shadow: 0 12px 30px rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.03); transition: all .18s ease; min-height: 88px; }
-    .cfg-btn i { font-size: 1.35rem; }
-    .cfg-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 16px 36px rgba(53,88,230,0.18);
-      color: var(--sb-primary);
-    }
-    .cfg-btn span { font-weight: 600; letter-spacing: 0.01em; }
-    .cfg-btn .bi-arrow-right-short { font-size: 1.4rem; }
-    .rm-config-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-    .rm-config-nav-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; border: 1px solid #d8e3f4; border-radius: 10px; background: #fff; color: #1f2937; font-weight: 800; text-decoration: none; box-shadow: 0 8px 18px rgba(15, 23, 42, .04); transition: transform .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease; }
-    .rm-config-nav-link:hover,
-    .rm-config-nav-link:focus { color: #fff; background: #2563eb; border-color: #2563eb; transform: translateY(-1px); box-shadow: 0 12px 24px rgba(37, 99, 235, .18); }
-    .rm-config-nav-link.active { color: #fff; background: #2563eb; border-color: #2563eb; box-shadow: 0 12px 24px rgba(37, 99, 235, .18); }
-    .rm-config-view-panel { position: static; inset: auto; z-index: auto; display: none; width: 100%; height: auto; overflow: visible; background: transparent; opacity: 1; }
-    .rm-config-view-panel.is-active { display: block !important; opacity: 1 !important; visibility: visible !important; }
-    .rm-config-view-panel .rm-panel-shell { width: 100%; max-width: none; margin: 0; max-height: none; }
-    .rm-config-view-panel .rm-panel-card { max-height: none; border: 1px solid #d8e3f4; border-radius: 16px; background: #fff; box-shadow: 0 14px 30px rgba(15, 23, 42, .055); overflow: hidden; }
-    .rm-config-view-panel .rm-panel-head { display: flex; justify-content: space-between; gap: 12px; padding: 16px; background: #fff; border-bottom: 1px solid #d8e3f4; }
-    .rm-config-view-panel .rm-panel-body,
-    .rm-config-view-panel .rm-panel-body.rm-panel-body-tight { max-height: none; overflow: visible; background: #fff; }
-    .rm-config-view-panel .rm-panel-footer,
-    .rm-config-view-panel .btn-close { display: none !important; }
-    .rm-config-summary { display: grid; gap: 16px; }
-    .rm-config-summary-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-    .rm-summary-kpi { display: flex; align-items: center; gap: 12px; min-height: 92px; padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #fff; box-shadow: 0 12px 26px rgba(15, 23, 42, .05); }
-    .rm-summary-kpi > span { display: grid; width: 46px; height: 46px; place-items: center; flex: 0 0 auto; border-radius: 14px; color: #fff; font-size: 1.25rem; }
-    .rm-summary-kpi > span.is-blue { background: linear-gradient(135deg, #2563eb, #4f86f7); }
-    .rm-summary-kpi > span.is-cyan { background: linear-gradient(135deg, #0ea5e9, #14b8a6); }
-    .rm-summary-kpi > span.is-green { background: linear-gradient(135deg, #10b981, #22c55e); }
-    .rm-summary-kpi > span.is-orange { background: linear-gradient(135deg, #f97316, #f59e0b); }
-    .rm-summary-kpi > span.is-slate { background: linear-gradient(135deg, #64748b, #94a3b8); }
-    .rm-summary-kpi small { display: block; color: #64748b; font-size: .8rem; font-weight: 900; }
-    .rm-summary-kpi strong { display: block; color: #0f172a; font-size: 1.45rem; line-height: 1.1; font-weight: 900; overflow-wrap: anywhere; }
-    .rm-config-summary-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 16px; align-items: stretch; }
-    .rm-summary-card { min-width: 0; padding: 16px; border: 1px solid #d8e3f4; border-radius: 16px; background: linear-gradient(180deg, #fff 0%, #fbfdff 100%); box-shadow: 0 14px 30px rgba(15, 23, 42, .055); }
-    .rm-summary-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #d8e3f4; }
-    .rm-summary-card-head > span { display: grid; width: 44px; height: 44px; place-items: center; flex: 0 0 auto; border-radius: 14px; background: #eef6ff; color: #2563eb; border: 1px solid #d4e4f7; font-size: 1.2rem; }
-    .rm-summary-card-head h2 { margin: 0; color: #0f172a; font-size: 1.05rem; font-weight: 900; }
-    .rm-summary-card-head p { margin: 3px 0 0; color: #64748b; font-weight: 700; }
-    .rm-summary-list,
-    .rm-summary-operation-grid { display: grid; gap: 10px; }
-    .rm-summary-operation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .rm-summary-list div,
-    .rm-summary-operation-grid div { min-width: 0; padding: 12px; border: 1px solid #d8e3f4; border-radius: 12px; background: #f8fbff; }
-    .rm-summary-list span,
-    .rm-summary-operation-grid span { display: block; margin-bottom: 4px; color: #64748b; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
-    .rm-summary-list strong,
-    .rm-summary-operation-grid strong { display: block; min-width: 0; color: #0f172a; font-size: .95rem; line-height: 1.25; font-weight: 900; overflow-wrap: anywhere; word-break: break-word; }
-    @media (max-width: 991.98px) { .rm-config-summary-kpis, .rm-config-summary-grid, .rm-summary-operation-grid { grid-template-columns: 1fr; } }
-    .table thead th { font-weight: 700; text-transform: uppercase; font-size: .78rem; letter-spacing: .02em; }
-  </style>
+<?php $configuracionCssVersion = @filemtime(__DIR__ . '/../../assets/css/configuracion.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/configuracion.css?v=<?= (int)$configuracionCssVersion ?>">
 </head>
 <body class="bg-light">
-<?php $activeNav = 'configuracion'; include __DIR__ . '/../partials/navbar.php'; ?>
+<?php $activeNav = $isNextcloudGroupsPanel ? 'integraciones_nextcloud_grupos' : 'configuracion'; include __DIR__ . '/../partials/navbar.php'; ?>
 
 <div id="page-content">
 <div class="container-fluid py-4">
   <?php
-    $heroIcon = 'bi-gear-wide-connected';
-    $heroTitle = 'Configuración de Redmine';
-    $heroSubtitle = 'Administra conexión, proyecto, tiempos y listas maestras.';
+    $heroIcon = $isNextcloudGroupsPanel ? 'bi-people' : 'bi-gear-wide-connected';
+    $heroTitle = $isNextcloudGroupsPanel ? 'Grupos de Nextcloud' : 'Configuración de Redmine';
+    $heroSubtitle = $isNextcloudGroupsPanel
+      ? 'Consulta y administra los grupos utilizados por la integración Nextcloud.'
+      : 'Administra conexión, proyecto, tiempos y listas maestras.';
     $heroExtras = '';
     $configPanels = [
       'resumen' => ['label' => 'Resumen', 'icon' => 'bi-speedometer2'],
-      'conexion' => ['label' => 'Conexion', 'icon' => 'bi-plug'],
+      'conexion' => ['label' => 'Conexión', 'icon' => 'bi-plug'],
       'proyecto' => ['label' => 'Proyecto', 'icon' => 'bi-kanban'],
-      'retencion' => ['label' => 'Retencion', 'icon' => 'bi-stopwatch'],
+      'retencion' => ['label' => 'Retención', 'icon' => 'bi-stopwatch'],
       'trackers' => ['label' => 'Trackers', 'icon' => 'bi-diagram-3'],
       'prioridades' => ['label' => 'Prioridades', 'icon' => 'bi-exclamation-triangle'],
       'estados' => ['label' => 'Estados', 'icon' => 'bi-kanban'],
-      'categorias' => ['label' => 'Categorias', 'icon' => 'bi-tags'],
-      'mantencion' => ['label' => 'Mantencion', 'icon' => 'bi-tools'],
-      'nextcloud' => ['label' => 'Nextcloud', 'icon' => 'bi-cloud'],
+      'categorias' => ['label' => 'Categorías', 'icon' => 'bi-tags'],
+      'mantencion' => ['label' => 'Mantención', 'icon' => 'bi-tools'],
       'roles' => ['label' => 'Roles y permisos', 'icon' => 'bi-shield-check'],
       'usuarios' => ['label' => 'Usuarios y permisos', 'icon' => 'bi-person-lock'],
     ];
-    if ($onlyCatalogs) {
-      $configPanels = array_intersect_key($configPanels, array_flip(['resumen', 'categorias']));
+    $configPanelPermissions = [
+      'resumen' => 'cfg_resumen', 'conexion' => 'cfg_conexion', 'proyecto' => 'cfg_proyecto',
+      'retencion' => 'cfg_retencion', 'trackers' => 'cfg_trackers', 'prioridades' => 'cfg_prioridades',
+      'estados' => 'cfg_estados', 'categorias' => 'cfg_categorias', 'mantencion' => 'cfg_mantencion',
+      'nextcloud' => 'integraciones_nextcloud', 'roles' => 'cfg_roles', 'usuarios' => 'cfg_usuarios',
+    ];
+    if ($isNextcloudGroupsPanel) {
+      $configPanels = ['nextcloud' => ['label' => 'Grupos', 'icon' => 'bi-people']];
     }
-    if (!$canManageRoles) unset($configPanels['roles']);
-    if (!$canManageUsers) unset($configPanels['usuarios']);
-    $activeConfigPanel = strtolower((string)($_GET['panel'] ?? 'resumen'));
+    $configPanels = array_filter($configPanels, static fn($meta, $key) => auth_can($configPanelPermissions[$key] ?? 'configuracion'), ARRAY_FILTER_USE_BOTH);
+    $requestedConfigPanel = isset($_GET['panel']) ? strtolower((string)$_GET['panel']) : '';
+    $activeConfigPanel = $requestedConfigPanel !== '' ? $requestedConfigPanel : (string)(array_key_first($configPanels) ?? '');
     if (!empty($openRolesModal) && isset($configPanels['roles'])) $activeConfigPanel = 'roles';
     if (!empty($openUsersModal) && isset($configPanels['usuarios'])) $activeConfigPanel = 'usuarios';
     if (isset($_GET['synccat']) && isset($configPanels['categorias'])) $activeConfigPanel = 'categorias';
     if (isset($_POST['opt_type']) && isset($configPanels[$_POST['opt_type']])) $activeConfigPanel = (string)$_POST['opt_type'];
-    if (!isset($configPanels[$activeConfigPanel])) $activeConfigPanel = 'resumen';
+    if (!isset($configPanels[$activeConfigPanel])) {
+      http_response_code(403);
+      exit('No tienes permiso para ver esta sección de Configuración.');
+    }
     $configBaseUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
     $configPanelUrl = fn($panel) => $configBaseUrl . '?panel=' . rawurlencode((string)$panel);
     include __DIR__ . '/../partials/hero.php'; ?>
@@ -935,15 +461,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <?php if (!empty($nextcloudFlash)): ?><div data-nova-flash="nextcloud" data-nova-flash-message="<?= $h($nextcloudFlash) ?>" hidden></div><?php endif; ?>
 <?php
   ?>
-  <div class="nova-config-tabs" role="navigation" aria-label="Opciones de configuracion">
-    <?php foreach ($configPanels as $panelKey => $panelMeta): ?>
-      <a class="nova-config-tab <?= $activeConfigPanel === $panelKey ? 'active' : '' ?>"
-         href="<?= $h($configPanelUrl($panelKey)) ?>"
-         <?= $activeConfigPanel === $panelKey ? 'aria-current="page"' : '' ?>>
-        <i class="bi <?= $h($panelMeta['icon']) ?>"></i><?= $h($panelMeta['label']) ?>
-      </a>
-    <?php endforeach; ?>
-  </div>
+  <div class="rm-config-shell rm-maint-config-shell <?= $isNextcloudGroupsPanel ? 'is-standalone' : '' ?>">
+    <?php if (!$isNextcloudGroupsPanel): ?>
+    <aside class="rm-config-rail">
+      <div class="rm-config-rail-head">
+        <span><i class="bi bi-gear-wide-connected"></i></span>
+        <div>
+          <small>Redmine Mantención</small>
+          <strong>Configuración</strong>
+        </div>
+      </div>
+      <nav class="rm-config-nav" aria-label="Opciones de configuración">
+        <?php foreach ($configPanels as $panelKey => $panelMeta): ?>
+          <a class="rm-config-nav-link <?= $activeConfigPanel === $panelKey ? 'active' : '' ?>"
+             href="<?= $h($configPanelUrl($panelKey)) ?>"
+             <?= $activeConfigPanel === $panelKey ? 'aria-current="page"' : '' ?>>
+            <i class="bi <?= $h($panelMeta['icon']) ?>"></i>
+            <span><?= $h($panelMeta['label']) ?></span>
+            <i class="bi bi-chevron-right rm-config-nav-chevron"></i>
+          </a>
+        <?php endforeach; ?>
+      </nav>
+ <!-- Los cambios afectan solo al módulo Mantención     <p class="rm-config-rail-help"><i class="bi bi-info-circle"></i> .</p> -->
+    </aside>
+    <?php endif; ?>
+    <main class="rm-config-content">
 
   <?php if ($activeConfigPanel === 'resumen'): ?>
   <section class="rm-config-summary">
@@ -979,7 +521,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           <div><span>Proyecto</span><strong><?= $h($cfg['project_name'] ?? '-') ?></strong></div>
           <div><span>URL issues</span><strong><?= $h($cfg['platform_url'] ?? '-') ?></strong></div>
           <div><span>URL categorias</span><strong><?= $h($cfg['categories_url'] ?? '-') ?></strong></div>
-          <div><span>OnlyOffice</span><strong><?= $h($cfg['onlyoffice_url'] ?? '-') ?></strong></div>
         </div>
       </article>
 
@@ -1025,10 +566,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <label class="form-label">URL Nextcloud</label>
                 <input name="nextcloud_url" class="form-control" value="<?= $h($nextcloudCfg['url'] ?? 'https://www.coresalud.cl/nextcloud') ?>" placeholder="https://www.coresalud.cl/nextcloud" required>
               </div>
-              <div class="nova-alert-card is-nextcloud py-2 small">
+              <!-- <div class="nova-alert-card is-nextcloud py-2 small">
                 <i class="bi bi-cloud-fill"></i>
                 <span>Las credenciales de Nextcloud se administran desde <strong>Cuentas conectadas</strong>, junto a las credenciales CORE de cada usuario.</span>
-              </div>
+              </div> -->
               <div class="mb-3">
                 <label class="form-label">Grupo por defecto</label>
                 <?php if (!empty($nextcloudGroups)): ?>
@@ -1059,18 +600,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <input name="nextcloud_default_language" class="form-control" value="<?= $h($nextcloudCfg['default_language'] ?? 'es') ?>" placeholder="es">
                 </div>
               </div>
-              <hr class="my-3">
-              <h6 class="fw-bold mb-3"><i class="bi bi-file-earmark-text text-success"></i> Procedimientos</h6>
-              <div class="mb-3">
-                <label class="form-label">Almacenamiento documental</label>
-                <input type="hidden" name="procedures_storage" value="nextcloud">
-                <div class="form-control bg-light">Nextcloud</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Carpeta raíz Nextcloud</label>
-                <input name="procedures_nextcloud_root" class="form-control" value="<?= $h($nextcloudCfg['procedures_nextcloud_root'] ?? '/NOVA/Procedimientos') ?>" placeholder="/NOVA/Procedimientos">
-                <div class="form-text">Se usa para documentos nuevos y carpetas creadas desde Procedimientos.</div>
-              </div>
               <button class="btn-nova btn-nova-primary w-100 mt-3" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
                 <i class="bi bi-save"></i> Guardar configuración
               </button>
@@ -1090,6 +619,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     <i class="bi bi-arrow-repeat"></i> Consultar grupos
                   </button>
                 </form>
+                <?php if (!empty($nextcloudGroups)): ?>
+                  <form method="post" class="m-0" data-app-confirm="¿Eliminar todos los grupos guardados?">
+                    <input type="hidden" name="action" value="clear_nextcloud_groups">
+                    <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                    <button class="btn-nova btn-nova-danger" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+                      <i class="bi bi-trash3"></i> Eliminar guardados
+                    </button>
+                  </form>
+                <?php endif; ?>
               </div>
               <?php if (!empty($nextcloudGroups)): ?>
                 <div class="border rounded-4 p-3 bg-light" style="max-height:360px;overflow:auto;">
@@ -1121,7 +659,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       <div class="rm-panel-head">
         <div>
           <h5 class="rm-panel-title mb-0">Mantenci&oacute;n</h5>
-          <div class="text-muted small">Exporta o importa respaldos operativos en formato JSON.</div>
+          <div class="text-muted small">Controla el modo de solo lectura de la plataforma.</div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
@@ -1147,51 +685,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           </div>
           <div class="form-text mt-2">Cuando est&aacute; activa, la plataforma queda en solo lectura y solo este modal permite cambiar la mantenci&oacute;n.</div>
         </form>
-        <div class="nova-alert-card is-warning small">
-          <i class="bi bi-exclamation-triangle-fill"></i>
-          <span>La importaci&oacute;n sobrescribe los archivos de las secciones seleccionadas. Antes de importar se genera backup autom&aacute;tico de los JSON reemplazados.</span>
-        </div>
-        <div class="row g-3">
-          <div class="col-md-6">
-            <form method="post" class="h-100 p-3 border rounded-4 bg-white">
-              <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-              <input type="hidden" name="action" value="maintenance_export">
-              <h6 class="fw-bold mb-2"><i class="bi bi-download text-primary"></i> Exportar</h6>
-              <p class="text-muted small">Descarga un paquete comprimido con un manifest y archivos JSON separados por ruta.</p>
-              <?php foreach (maintenance_sections() as $key => $section): ?>
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" name="maintenance_sections[]" value="<?= $h($key) ?>" id="export-<?= $h($key) ?>" checked>
-                  <label class="form-check-label" for="export-<?= $h($key) ?>"><?= $h($section['label']) ?></label>
-                </div>
-              <?php endforeach; ?>
-              <button class="btn-nova btn-nova-primary w-100 mt-3" type="submit">
-                <i class="bi bi-file-earmark-arrow-down"></i> Exportar respaldo
-              </button>
-            </form>
-          </div>
-          <div class="col-md-6">
-            <form method="post" enctype="multipart/form-data" class="h-100 p-3 border rounded-4 bg-white" data-app-confirm="Importar el respaldo combinara los datos de las secciones seleccionadas. Continuar?" data-app-confirm-text="Importar">
-              <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-              <input type="hidden" name="action" value="maintenance_import">
-              <h6 class="fw-bold mb-2"><i class="bi bi-upload text-success"></i> Importar</h6>
-              <p class="text-muted small">Carga un respaldo exportado desde esta plataforma.</p>
-              <div class="mb-3">
-                <label class="form-label">Archivo de respaldo</label>
-                <input type="file" class="form-control" name="maintenance_file" accept="application/json,.json,.zip,.tar,.tgz,.gz" required>
-                <div class="form-text">Acepta el paquete comprimido exportado o el JSON antiguo.</div>
-              </div>
-              <?php foreach (maintenance_sections() as $key => $section): ?>
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" name="maintenance_sections[]" value="<?= $h($key) ?>" id="import-<?= $h($key) ?>" checked>
-                  <label class="form-check-label" for="import-<?= $h($key) ?>"><?= $h($section['label']) ?></label>
-                </div>
-              <?php endforeach; ?>
-              <button class="btn-nova btn-nova-success w-100 mt-3" type="submit">
-                <i class="bi bi-file-earmark-arrow-up"></i> Importar respaldo
-              </button>
-            </form>
-          </div>
-        </div>
       </div>
       <div class="rm-panel-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -1246,14 +739,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="update">
                       <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
-                      <button class="btn-action btn-action-edit" type="submit" title="Guardar"><i class="bi bi-check-lg"></i></button>
+                      <button class="btn-action btn-action-edit" type="submit" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>
                     </form>
                     <form method="post" id="<?= $h($deleteFormId) ?>" data-app-confirm="Eliminar?" class="m-0">
                       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="delete">
                       <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
-                      <button class="btn-action btn-action-delete" type="submit" title="Eliminar"><i class="bi bi-trash"></i></button>
+                      <button class="btn-action btn-action-delete" type="submit" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>
                     </form>
                   </td>
               </tr>
@@ -1344,26 +837,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <label class="form-label">URL histórico CORE</label>
             <input name="core_historico_url" class="form-control" value="<?= $h($cfg['core_historico_url'] ?? 'https://www.hbvaldivia.cl/core/solicitudes/administrador/obtener_solicitudes_historicas') ?>">
           </div>
-          <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">OnlyOffice</h6></div>
-          <div class="col-12">
-            <label class="form-label">URL OnlyOffice Document Server</label>
-            <input name="onlyoffice_url" class="form-control" value="<?= $h($cfg['onlyoffice_url'] ?? '') ?>" placeholder="Ej: https://office.midominio.cl">
-          </div>
-          <div class="col-12">
-            <label class="form-label">URL de esta plataforma para OnlyOffice</label>
-            <input name="onlyoffice_app_url" class="form-control" value="<?= $h($cfg['onlyoffice_app_url'] ?? '') ?>" placeholder="Ej: http://10.63.123.250/redmine-mantencion">
-          </div>
-          <div class="col-12">
-            <label class="form-label">JWT secret OnlyOffice</label>
-            <input name="onlyoffice_jwt_secret" class="form-control" value="" autocomplete="off" placeholder="<?= !empty($cfg['onlyoffice_jwt_secret']) ? 'JWT configurado. Escribe uno nuevo para reemplazarlo.' : 'Opcional si tu Document Server no usa JWT' ?>">
-          </div>
-          <div class="col-12">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" role="switch" name="onlyoffice_disabled" id="oo-disabled-toggle" value="1" <?= !empty($cfg['onlyoffice_disabled']) ? 'checked' : '' ?>>
-              <label class="form-check-label" for="oo-disabled-toggle">Deshabilitar temporalmente OnlyOffice</label>
-            </div>
-            <div class="form-text">Si está marcado, no se realizará ninguna conexión a OnlyOffice y se mostrará como "deshabilitado".</div>
-          </div>
           <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">Redmine</h6></div>
           <div class="col-12">
             <label class="form-label">URL issues.json</label>
@@ -1374,8 +847,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <input name="categories_url" class="form-control" value="<?= $h($cfg['categories_url'] ?? '') ?>" placeholder="Ej: https://tu-host/projects/xxx/settings/categories">
           </div>
           <div class="col-12">
-            <label class="form-label">Token API (X-Redmine-API-Key)</label>
-            <input name="platform_token" class="form-control" value="" autocomplete="off" placeholder="<?= !empty($cfg['platform_token']) ? 'Token configurado. Escribe uno nuevo para reemplazarlo.' : 'Opcional, puede venir del usuario asignado' ?>">
+            <div class="nova-alert-card is-info mb-0">
+              <i class="bi bi-person-lock"></i>
+              La API de Redmine es personal por usuario y se configura en Cuentas conectadas.
+            </div>
           </div>
           <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">Campos personalizados</h6></div>
           <div class="col-md-4">
@@ -1612,31 +1087,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <label class="form-check-label" for="u_perm_historico_acciones_chk">Ver acciones en hist&oacute;rico <span class="permission-tag">Adicional</span><span class="permission-note">Depende de Hist&oacute;rico.</span></label>
                 </div>
               </div>
-              <div class="col-md-4 permission-related">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="u_perm_procedimientos" id="u_perm_procedimientos_chk" <?= $uHas('procedimientos') ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="u_perm_procedimientos_chk">Ver procedimientos</label>
-                </div>
-                <div class="form-check ms-3 mt-1 permission-child">
-                  <input class="form-check-input" type="checkbox" name="u_perm_procedimientos_editar" id="u_perm_procedimientos_editar_chk" <?= $uHas('procedimientos_editar') ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="u_perm_procedimientos_editar_chk">Editar y eliminar procedimientos <span class="permission-tag">Adicional</span><span class="permission-note">Depende de Ver procedimientos.</span></label>
-                </div>
-              </div>
               <div class="col-md-4">
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="u_perm_simulador" id="u_perm_simulador_chk" <?= $uHas('simulador') ? 'checked' : '' ?>>
                   <label class="form-check-label" for="u_perm_simulador_chk">Ingresar pendiente manual</label>
                 </div>
               </div>
-              <div class="col-md-4">
+              <div class="col-md-4 permission-related">
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="u_perm_actividad" id="u_perm_actividad_chk" <?= $uHas('actividad') ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="u_perm_actividad_chk">Actividad reciente</label>
+                  <label class="form-check-label" for="u_perm_actividad_chk">Ver bit&aacute;cora de actividad</label>
+                </div>
+                <div class="form-check ms-3 mt-1 permission-child">
+                  <input class="form-check-input" type="checkbox" name="u_perm_actividad_todos" id="u_perm_actividad_todos_chk" <?= $uHas('actividad_todos') ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="u_perm_actividad_todos_chk">Ver todos los registros <span class="permission-tag">Administrador</span><span class="permission-note">Sin este permiso solo ve sus eventos.</span></label>
+                </div>
+                <div class="form-check ms-3 mt-1 permission-child">
+                  <input class="form-check-input" type="checkbox" name="u_perm_actividad_eliminar" id="u_perm_actividad_eliminar_chk" <?= $uHas('actividad_eliminar') ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="u_perm_actividad_eliminar_chk">Eliminar bit&aacute;cora <span class="permission-tag">Adicional</span><span class="permission-note">Depende de Ver bit&aacute;cora.</span></label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" role="switch" type="checkbox" name="u_perm_mis_integraciones" id="u_perm_mis_integraciones" <?= $uHas('mis_integraciones') ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="u_perm_mis_integraciones">Mis integraciones</label>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="u_perm_configuracion" id="u_perm_configuracion_chk" <?= $uHas('configuracion') ? 'checked' : '' ?>>
+                  <input class="form-check-input" type="checkbox" name="u_perm_integraciones_nextcloud" id="u_perm_integraciones_nextcloud" <?= $uHas('integraciones_nextcloud') ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="u_perm_integraciones_nextcloud">Administrar integración Nextcloud</label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input type="hidden" name="u_perm_configuracion" value="0">
+                  <input class="form-check-input" type="checkbox" name="u_perm_configuracion" value="1" id="u_perm_configuracion_chk" <?= $uHas('configuracion') ? 'checked' : '' ?>>
                   <label class="form-check-label" for="u_perm_configuracion_chk">Configuraci&oacute;n</label>
                 </div>
               </div>
@@ -1646,6 +1132,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           <div class="col-12 permission-grid-section">
             <label class="form-label mb-1">Permisos de configuraci&oacute;n</label>
             <div class="row g-2">
+              <?php foreach ([
+                'resumen' => 'Resumen', 'categorias' => 'Categorías',
+                'mantencion' => 'Mantención', 'nextcloud' => 'Nextcloud',
+              ] as $cfgKey => $cfgLabel): ?>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="u_perm_cfg_<?= $h($cfgKey) ?>" id="u_perm_cfg_<?= $h($cfgKey) ?>" <?= $uHas('cfg_' . $cfgKey) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="u_perm_cfg_<?= $h($cfgKey) ?>"><?= $h($cfgLabel) ?></label>
+                </div>
+              </div>
+              <?php endforeach; ?>
               <div class="col-md-4">
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="u_perm_cfg_conexion" id="u_perm_cfg_conexion" <?= $uHas('cfg_conexion') ? 'checked' : '' ?>>
@@ -1662,12 +1159,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="u_perm_cfg_retencion" id="u_perm_cfg_retencion" <?= $uHas('cfg_retencion') ? 'checked' : '' ?>>
                   <label class="form-check-label" for="u_perm_cfg_retencion">Retenci&oacute;n</label>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="u_perm_cfg_sesion" id="u_perm_cfg_sesion" <?= $uHas('cfg_sesion') ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="u_perm_cfg_sesion">Sesi&oacute;n</label>
                 </div>
               </div>
               <div class="col-md-4">
@@ -1703,7 +1194,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             </div>
           </div>
 
-          <div class="col-12 text-end">
+          <div class="col-12 permission-form-actions">
+            <button class="btn-nova btn-nova-secondary" type="button" data-permission-cancel hidden>
+              <i class="bi bi-x-lg"></i>Cancelar
+            </button>
             <button class="btn-nova btn-nova-primary" type="submit" id="btn-save-user-perms">Guardar permisos</button>
           </div>
         </form>
@@ -1807,31 +1301,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <label class="form-check-label" for="permHistAcc">Ver acciones en hist&oacute;rico <span class="permission-tag">Adicional</span><span class="permission-note">Depende de Hist&oacute;rico.</span></label>
                 </div>
               </div>
-              <div class="col-md-4 permission-related">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="perm_procedimientos" id="permProc" <?= !empty($selCfg['procedimientos']) ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="permProc">Ver procedimientos</label>
-                </div>
-                <div class="form-check ms-3 mt-1 permission-child">
-                  <input class="form-check-input" type="checkbox" name="perm_procedimientos_editar" id="permProcEdit" <?= !empty($selCfg['procedimientos_editar']) ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="permProcEdit">Editar y eliminar procedimientos <span class="permission-tag">Adicional</span><span class="permission-note">Depende de Ver procedimientos.</span></label>
-                </div>
-              </div>
               <div class="col-md-4">
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="perm_simulador" id="permSim" <?= !empty($selCfg['simulador']) ? 'checked' : '' ?>>
                   <label class="form-check-label" for="permSim">Ingresar pendiente manual</label>
                 </div>
               </div>
-              <div class="col-md-4">
+              <div class="col-md-4 permission-related">
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="perm_actividad" id="permActividad" <?= !empty($selCfg['actividad']) ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="permActividad">Actividad reciente</label>
+                  <label class="form-check-label" for="permActividad">Ver bit&aacute;cora de actividad</label>
+                </div>
+                <div class="form-check ms-3 mt-1 permission-child">
+                  <input class="form-check-input" type="checkbox" name="perm_actividad_todos" id="permActividadTodos" <?= !empty($selCfg['actividad_todos']) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="permActividadTodos">Ver todos los registros <span class="permission-tag">Administrador</span><span class="permission-note">Sin este permiso solo ve sus eventos.</span></label>
+                </div>
+                <div class="form-check ms-3 mt-1 permission-child">
+                  <input class="form-check-input" type="checkbox" name="perm_actividad_eliminar" id="permActividadEliminar" <?= !empty($selCfg['actividad_eliminar']) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="permActividadEliminar">Eliminar bit&aacute;cora <span class="permission-tag">Adicional</span><span class="permission-note">Depende de Ver bit&aacute;cora.</span></label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" role="switch" type="checkbox" name="perm_mis_integraciones" id="permMisIntegraciones" <?= !empty($selCfg['mis_integraciones']) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="permMisIntegraciones">Mis integraciones</label>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="perm_configuracion" id="permCfg" <?= !empty($selCfg['configuracion']) ? 'checked' : '' ?>>
+                  <input class="form-check-input" type="checkbox" name="perm_integraciones_nextcloud" id="permIntegracionesNextcloud" <?= !empty($selCfg['integraciones_nextcloud']) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="permIntegracionesNextcloud">Administrar integración Nextcloud</label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input type="hidden" name="perm_configuracion" value="0">
+                  <input class="form-check-input" type="checkbox" name="perm_configuracion" value="1" id="permCfg" <?= !empty($selCfg['configuracion']) ? 'checked' : '' ?>>
                   <label class="form-check-label" for="permCfg">Configuraci&oacute;n</label>
                 </div>
               </div>
@@ -1841,6 +1346,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           <div class="col-12 permission-grid-section">
             <label class="form-label mb-1">Permisos de configuraci&oacute;n</label>
             <div class="row g-2">
+              <?php foreach ([
+                'resumen' => 'Resumen', 'categorias' => 'Categorías',
+                'mantencion' => 'Mantención', 'nextcloud' => 'Nextcloud',
+              ] as $cfgKey => $cfgLabel): ?>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="perm_cfg_<?= $h($cfgKey) ?>" id="permCfg<?= $h(ucfirst($cfgKey)) ?>" <?= !empty($selCfg['cfg_' . $cfgKey]) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="permCfg<?= $h(ucfirst($cfgKey)) ?>"><?= $h($cfgLabel) ?></label>
+                </div>
+              </div>
+              <?php endforeach; ?>
               <div class="col-md-4">
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="perm_cfg_conexion" id="permCfgConexion" <?= !empty($selCfg['cfg_conexion']) ? 'checked' : '' ?>>
@@ -1857,12 +1373,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="perm_cfg_retencion" id="permCfgRetencion" <?= !empty($selCfg['cfg_retencion']) ? 'checked' : '' ?>>
                   <label class="form-check-label" for="permCfgRetencion">Retenci&oacute;n</label>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="perm_cfg_sesion" id="permCfgSesion" <?= !empty($selCfg['cfg_sesion']) ? 'checked' : '' ?>>
-                  <label class="form-check-label" for="permCfgSesion">Sesi&oacute;n</label>
                 </div>
               </div>
               <div class="col-md-4">
@@ -1898,7 +1408,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             </div>
           </div>
 
-          <div class="col-12 text-end">
+          <div class="col-12 permission-form-actions">
+            <button class="btn-nova btn-nova-secondary" type="button" data-permission-cancel hidden>
+              <i class="bi bi-x-lg"></i>Cancelar
+            </button>
             <button class="btn-nova btn-nova-primary" type="submit" id="btn-save-roles">Guardar permisos</button>
          
           </div>
@@ -1911,6 +1424,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <?php endif; ?>
 <?php endif; ?>
 
+    </main>
+  </div>
+
 </div>
 </div><!-- #page-content -->
 
@@ -1922,7 +1438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('form').forEach(form => {
       const actionInput = form.querySelector('[name="action"]');
       const action = actionInput ? actionInput.value : '';
-      const allowed = form.closest('#maintenanceModal') && ['maintenance_settings', 'maintenance_export'].includes(action);
+      const allowed = form.closest('#maintenanceModal') && action === 'maintenance_settings';
       if (!allowed) {
         form.querySelectorAll('input, select, textarea, button').forEach(control => {
           const isModalClose = control.matches('[data-bs-dismiss="modal"]');
@@ -1996,7 +1512,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!parent.checked) {
         child.checked = false;
       }
-      child.disabled = !parent.checked;
+      child.disabled = child.hasAttribute('data-permission-locked') || !parent.checked;
       const wrapper = child.closest('.permission-child');
       if (wrapper) {
         wrapper.classList.toggle('d-none', !parent.checked);
@@ -2006,9 +1522,56 @@ document.addEventListener('DOMContentLoaded', () => {
     sync();
   };
   bindPermissionDependency('permHist', 'permHistAcc');
-  bindPermissionDependency('permProc', 'permProcEdit');
   bindPermissionDependency('u_perm_historico_chk', 'u_perm_historico_acciones_chk');
-  bindPermissionDependency('u_perm_procedimientos_chk', 'u_perm_procedimientos_editar_chk');
+  bindPermissionDependency('permActividad', 'permActividadEliminar');
+  bindPermissionDependency('permActividad', 'permActividadTodos');
+  bindPermissionDependency('u_perm_actividad_chk', 'u_perm_actividad_eliminar_chk');
+  bindPermissionDependency('u_perm_actividad_chk', 'u_perm_actividad_todos_chk');
+  const bindConfigPermissionGroup = (parentId, childIds) => {
+    const parent = document.getElementById(parentId);
+    const children = childIds.map(id => document.getElementById(id)).filter(Boolean);
+    if (!parent || children.length === 0) return;
+    const sync = () => {
+      children.forEach(child => {
+        if (!parent.checked) child.checked = false;
+        child.disabled = !parent.checked;
+      });
+    };
+    parent.addEventListener('change', sync);
+    sync();
+  };
+  bindConfigPermissionGroup('permCfg', [
+    'permCfgConexion', 'permCfgProyecto', 'permCfgRetencion', 'permCfgSesion',
+    'permCfgTrackers', 'permCfgPrioridades', 'permCfgEstados', 'permCfgRoles', 'permCfgUsuarios'
+  ]);
+  bindConfigPermissionGroup('u_perm_configuracion_chk', [
+    'u_perm_cfg_conexion', 'u_perm_cfg_proyecto', 'u_perm_cfg_retencion',
+    'u_perm_cfg_trackers', 'u_perm_cfg_prioridades', 'u_perm_cfg_estados', 'u_perm_cfg_roles', 'u_perm_cfg_usuarios',
+    'u_perm_cfg_resumen', 'u_perm_cfg_categorias', 'u_perm_cfg_mantencion', 'u_perm_cfg_nextcloud'
+  ]);
+  document.querySelectorAll('#rolesModal form.roles-modal-shell, #usuariosModal form.roles-modal-shell').forEach(form => {
+    const cancelButton = form.querySelector('[data-permission-cancel]');
+    if (!cancelButton) return;
+    const state = () => {
+      const data = new FormData(form);
+      data.delete('csrf_token');
+      data.delete('action');
+      return new URLSearchParams(data).toString();
+    };
+    const initialState = state();
+    const syncDirty = () => {
+      cancelButton.hidden = state() === initialState;
+    };
+    form.addEventListener('input', syncDirty);
+    form.addEventListener('change', syncDirty);
+    cancelButton.addEventListener('click', () => {
+      form.reset();
+      ['permHist', 'u_perm_historico_chk', 'permActividad', 'u_perm_actividad_chk', 'permCfg', 'u_perm_configuracion_chk'].forEach(id => {
+        document.getElementById(id)?.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      cancelButton.hidden = true;
+    });
+  });
   if (selRole && actRole && formRole) {
     selRole.addEventListener('change', () => {
       actRole.value = 'load_role';
@@ -2028,6 +1591,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const ensureCfgConexion = () => {
     if (!cfgConexion) return;
+    const configAccess = document.getElementById('permCfg');
+    if (configAccess && !configAccess.checked) {
+      cfgConexion.checked = false;
+      return;
+    }
     const anyCatUni = depInputs.some(el => el && el.checked);
     if (anyCatUni) cfgConexion.checked = true;
   };

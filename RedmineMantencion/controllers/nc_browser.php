@@ -11,6 +11,27 @@ require_once __DIR__ . '/core_credentials.php';
  */
 function nc_browser_user_cfg(): ?array
 {
+    if (defined('NOVA_PROCEDIMIENTOS_INDEPENDENT')) {
+        $sessionUser = function_exists('session') ? session('nova_user', []) : [];
+        $credential = is_array($sessionUser)
+            ? app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)->credentialForSession($sessionUser, 'nextcloud')
+            : ['user' => '', 'secret' => '', 'stored' => false];
+        if (empty($credential['stored'])) {
+            return null;
+        }
+        $baseCfg = nextcloud_config_load();
+        $url = trim((string) ($baseCfg['nextcloud_url'] ?? ''));
+        if ($url === '') {
+            return null;
+        }
+
+        return [
+            'url' => $url,
+            'admin_user' => trim((string) $credential['user']),
+            'admin_pass' => (string) $credential['secret'],
+        ];
+    }
+
     $userId = function_exists('auth_get_user_id') ? (string) auth_get_user_id() : '';
     if ($userId === '') {
         return null;
@@ -40,42 +61,6 @@ function nc_browser_safe_name(string $name): string
     $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
     $name = trim($name, " .-\t\n\r\0\x0B");
     return $name !== '' ? $name : 'archivo';
-}
-
-/**
- * Pings the configured OnlyOffice Document Server via its /healthcheck endpoint.
- * Returns ['available' => bool, 'configured' => bool, 'url' => string].
- * Timeout capped at 5 seconds as required.
- */
-function nc_browser_onlyoffice_ping(): array
-{
-    $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
-    $cfg  = ($repo !== null) ? $repo->loadAll() : [];
-    $url  = rtrim(trim((string) ($cfg['onlyoffice_url'] ?? '')), '/');
-    if ($url === '') {
-        return ['available' => false, 'configured' => false, 'url' => '', '_perf_ms' => 0];
-    }
-    if (!empty($cfg['onlyoffice_disabled'])) {
-        return ['available' => false, 'configured' => true, 'disabled' => true, 'url' => $url, '_perf_ms' => 0];
-    }
-    $parsedPath = (string) (parse_url($url, PHP_URL_PATH) ?? '');
-    if (preg_match('#/(redmine-mantencion|NOVA|nextcloud)(/|$)#i', $parsedPath)) {
-        return ['available' => false, 'configured' => true, 'invalid_url' => true, 'url' => $url, '_perf_ms' => 0];
-    }
-    $ch = curl_init($url . '/healthcheck');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 1,
-        CURLOPT_CONNECTTIMEOUT => 1,
-        CURLOPT_NOBODY         => true,
-    ]);
-    $_ncT0 = microtime(true);
-    curl_exec($ch);
-    $_ncMs = (int) round((microtime(true) - $_ncT0) * 1000);
-    $http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    error_log('[NC_PERF] PING url=' . $url . '/healthcheck ms=' . $_ncMs . ' http=' . $http . ' available=' . ($http >= 200 && $http < 400 ? 'yes' : 'no'));
-    return ['available' => ($http >= 200 && $http < 400), 'configured' => true, 'url' => $url, '_perf_ms' => $_ncMs];
 }
 
 function nc_browser_nextcloud_users(): array
@@ -135,133 +120,6 @@ function nc_browser_nextcloud_users(): array
     } catch (\Throwable) {
         return [];
     }
-}
-
-function nc_browser_register_office_procedure(array $cfg, string $path, string $userId): array
-{
-    if (!auth_can('procedimientos_editar')) {
-        return ['ok' => false, 'error' => 'Sin permisos para editar procedimientos.', 'status' => 403];
-    }
-
-    if (!function_exists('procedures_read_all')) {
-        require_once __DIR__ . '/procedimientos.php';
-    }
-
-    $path = nextcloud_path_safe($path);
-    $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-    if ($path === '/' || !in_array($extension, ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'], true)) {
-        return ['ok' => false, 'error' => 'OnlyOffice edita archivos Word, Excel y PowerPoint.', 'status' => 422];
-    }
-
-    $items = procedures_read_all();
-    $record = null;
-    foreach ($items as $item) {
-        if (($item['storage_driver'] ?? '') === 'nextcloud'
-            && (string)($item['nextcloud_path'] ?? '') === $path
-            && (string)($item['author_id'] ?? '') === $userId) {
-            $record = $item;
-            break;
-        }
-    }
-
-    $fileName = basename($path);
-    $normalizedType = match ($extension) {
-        'doc' => 'docx',
-        'xls' => 'xlsx',
-        'ppt' => 'pptx',
-        default => $extension,
-    };
-    $mime = nc_browser_office_mime($normalizedType);
-    $size = 0;
-
-    $now = date('c');
-    $sessionUser = is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
-    if (!$record) {
-        $recordId = procedures_generate_id();
-        $shareToken = bin2hex(random_bytes(16));
-        $record = procedures_normalize_record([
-            'id' => $recordId,
-            'record_type' => 'document',
-            'folder_id' => '',
-            'share_token' => $shareToken,
-            'title' => pathinfo($fileName, PATHINFO_FILENAME) ?: $fileName,
-            'content_html' => '',
-            'page_size' => 'letter',
-            'file_name' => $fileName,
-            'file_original_name' => $fileName,
-            'file_mime' => $mime,
-            'file_size' => $size,
-            'file_url' => procedures_build_download_url($recordId, $shareToken),
-            'storage_driver' => 'nextcloud',
-            'nextcloud_path' => $path,
-            'uploaded_at' => $now,
-            'draft_pending' => false,
-            'created_at' => $now,
-            'updated_at' => $now,
-            'author_id' => $userId,
-            'author_name' => trim((string)($sessionUser['nombre'] ?? '')),
-        ]);
-        $items[] = $record;
-    } else {
-        foreach ($items as $idx => $item) {
-            if ((string)($item['id'] ?? '') !== (string)($record['id'] ?? '')) {
-                continue;
-            }
-            $shareToken = trim((string)($item['share_token'] ?? ''));
-            if ($shareToken === '') {
-                $shareToken = bin2hex(random_bytes(16));
-            }
-            $items[$idx]['share_token'] = $shareToken;
-            $items[$idx]['file_name'] = (string)($item['file_name'] ?? '') !== '' ? (string)$item['file_name'] : $fileName;
-            $items[$idx]['file_original_name'] = $fileName;
-            $items[$idx]['file_mime'] = $mime;
-            $items[$idx]['file_size'] = $size > 0 ? $size : (int)($item['file_size'] ?? 0);
-            $items[$idx]['file_url'] = procedures_build_download_url((string)$item['id'], $shareToken);
-            $items[$idx]['nextcloud_path'] = $path;
-            $items[$idx]['updated_at'] = $now;
-            $items[$idx]['draft_pending'] = false;
-            $record = procedures_normalize_record($items[$idx]);
-            $items[$idx] = $record;
-            break;
-        }
-    }
-
-    if (!procedures_write_all($items)) {
-        return ['ok' => false, 'error' => 'No se pudo registrar el archivo para edición.', 'status' => 500];
-    }
-
-    $id = (string)($record['id'] ?? '');
-    return [
-        'ok' => true,
-        'id' => $id,
-        'edit_url' => legacy_app_url('views/Procedimientos/onlyoffice.php?id=' . rawurlencode($id) . '&mode=edit'),
-    ];
-}
-
-function nc_browser_office_mime(string $type): string
-{
-    if (!function_exists('procedures_office_mime')) {
-        require_once __DIR__ . '/procedimientos.php';
-    }
-
-    return function_exists('procedures_office_mime')
-        ? procedures_office_mime($type)
-        : match ($type) {
-            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            default => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        };
-}
-
-function nc_browser_blank_office_binary(string $type): string
-{
-    if (!function_exists('procedures_blank_template_base64')) {
-        require_once __DIR__ . '/procedimientos.php';
-    }
-
-    $binary = base64_decode(procedures_blank_template_base64($type), true);
-
-    return is_string($binary) ? $binary : '';
 }
 
 /** Emits a JSON response and exits. */
@@ -342,10 +200,15 @@ function nc_browser_invalidate_cache(string $userId): void
     }
 }
 
-function nc_browser_json_after_write(array $data, string $userId, int $status = 200): void
+function nc_browser_json_after_write(array $data, string $userId, int $status = 200, string $tag = '', string $details = ''): void
 {
     if (!empty($data['ok'])) {
         nc_browser_invalidate_cache($userId);
+    }
+    if ($tag !== '' && function_exists('nextcloud_log_action')) {
+        $result = !empty($data['ok']) ? 'OK' : 'FAIL';
+        $message = trim((string)($data['error'] ?? $data['message'] ?? ''));
+        nextcloud_log_action($tag, $result . ($details !== '' ? ' | ' . $details : '') . ($message !== '' ? ' | error ' . $message : ''));
     }
     nc_browser_json($data, $status);
 }
@@ -356,26 +219,23 @@ function nc_browser_json_after_write(array $data, string $userId, int $status = 
  */
 function nc_browser_handle(): void
 {
-    auth_require_login('/redmine-mantencion/login.php');
+    if (!defined('NOVA_PROCEDIMIENTOS_INDEPENDENT')) {
+        auth_require_login('/redmine-mantencion/login.php');
+    }
 
-    if (!auth_can('procedimientos')) {
+    if (!defined('NOVA_PROCEDIMIENTOS_INDEPENDENT') && !auth_can('procedimientos')) {
         nc_browser_json(['ok' => false, 'error' => 'Sin acceso al módulo de procedimientos.'], 403);
     }
 
     $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
     $action = trim((string) ($_REQUEST['action'] ?? ''));
-    $userId = function_exists('auth_get_user_id') ? (string) auth_get_user_id() : '';
+    $userId = defined('NOVA_PROCEDIMIENTOS_INDEPENDENT')
+        ? trim((string) data_get(session('nova_user', []), 'id', data_get(session('nova_user', []), 'username', '')))
+        : (function_exists('auth_get_user_id') ? (string) auth_get_user_id() : '');
 
     // CSRF protection for all state-changing requests
-    if ($method === 'POST' && function_exists('csrf_validate')) {
+    if ($method === 'POST' && !defined('NOVA_PROCEDIMIENTOS_INDEPENDENT') && function_exists('csrf_validate')) {
         csrf_validate();
-    }
-
-    // onlyoffice_status does not require Nextcloud credentials.
-    if ($action === 'onlyoffice_status') {
-        $_ncPing = nc_browser_onlyoffice_ping();
-        error_log('[NC_PERF] handle:onlyoffice_status configured=' . ($_ncPing['configured'] ? 'yes' : 'no') . ' available=' . ($_ncPing['available'] ? 'yes' : 'no') . ' ms=' . ($_ncPing['_perf_ms'] ?? '?'));
-        nc_browser_json($_ncPing);
     }
 
     $cfg = nc_browser_user_cfg();
@@ -439,10 +299,6 @@ function nc_browser_handle(): void
             echo (string) ($res['body'] ?? '');
             exit;
 
-        case 'open_office':
-            $result = nc_browser_register_office_procedure($cfg, trim((string)($_POST['path'] ?? '')), $userId);
-            nc_browser_json($result, (int)($result['status'] ?? 200));
-
         // ── Write ─────────────────────────────────────────────────────────────
 
         case 'mkdir':
@@ -457,7 +313,10 @@ function nc_browser_handle(): void
                 $res['ok']
                     ? ['ok' => true, 'path' => $fullPath]
                     : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo crear la carpeta.'],
-                $userId
+                $userId,
+                200,
+                'NEXTCLOUD_MKDIR',
+                'Crear carpeta | path ' . $fullPath
             );
 
         case 'rename':
@@ -477,7 +336,10 @@ function nc_browser_handle(): void
                 $res['ok']
                     ? ['ok' => true, 'path' => $toPath]
                     : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo renombrar.'],
-                $userId
+                $userId,
+                200,
+                'NEXTCLOUD_RENAME',
+                'Renombrar archivo/carpeta | origen ' . $fromPath . ' | destino ' . $toPath
             );
 
         case 'transfer':
@@ -502,7 +364,10 @@ function nc_browser_handle(): void
                 $res['ok']
                     ? ['ok' => true, 'path' => $toPath, 'operation' => $operation]
                     : ['ok' => false, 'error' => ($res['message'] ?? '') ?: ($operation === 'copy' ? 'No se pudo copiar.' : 'No se pudo mover.')],
-                $userId
+                $userId,
+                200,
+                $operation === 'copy' ? 'NEXTCLOUD_COPY' : 'NEXTCLOUD_MOVE',
+                ($operation === 'copy' ? 'Copiar' : 'Mover') . ' archivo/carpeta | origen ' . $fromPath . ' | destino ' . $toPath
             );
 
         case 'delete':
@@ -515,7 +380,10 @@ function nc_browser_handle(): void
                 $res['ok']
                     ? ['ok' => true]
                     : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo eliminar.'],
-                $userId
+                $userId,
+                200,
+                'NEXTCLOUD_DELETE',
+                'Eliminar archivo/carpeta | path ' . $path
             );
 
         case 'upload':
@@ -553,42 +421,13 @@ function nc_browser_handle(): void
                 $res['ok']
                     ? ['ok' => true, 'path' => $remotePath, 'name' => $fileName, 'size' => strlen($binary), 'mime' => $mime]
                     : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo subir el archivo.'],
-                $userId
+                $userId,
+                200,
+                'NEXTCLOUD_UPLOAD',
+                'Subir archivo | path ' . $remotePath . ' | bytes ' . strlen($binary) . ' | mime ' . $mime
             );
 
         // ── Sharing ────────────────────────────────────────────────────────────
-
-        case 'create_office':
-            $dirPath = nextcloud_path_safe(trim((string) ($_POST['path'] ?? '/')));
-            $type = strtolower(trim((string) ($_POST['document_type'] ?? 'docx')));
-            if (!in_array($type, ['docx', 'xlsx', 'pptx'], true)) {
-                nc_browser_json(['ok' => false, 'error' => 'Tipo de documento no valido.'], 422);
-            }
-
-            $title = nc_browser_safe_name(trim((string) ($_POST['title'] ?? '')));
-            if ($title === 'archivo') {
-                $title = match ($type) {
-                    'xlsx' => 'Nueva planilla',
-                    'pptx' => 'Nueva presentacion',
-                    default => 'Nuevo documento',
-                };
-            }
-
-            $baseName = preg_replace('/\.' . preg_quote($type, '/') . '$/i', '', $title) ?: $title;
-            $fileName = $baseName . '.' . $type;
-            $binary = nc_browser_blank_office_binary($type);
-            if ($binary === '') {
-                nc_browser_json(['ok' => false, 'error' => 'No se encontro la plantilla del documento.'], 500);
-            }
-
-            $remotePath = rtrim($dirPath, '/') . '/' . $fileName;
-            $res = nextcloud_webdav_request($cfg, 'PUT', $remotePath, $binary, ['Content-Type: ' . nc_browser_office_mime($type)]);
-            nc_browser_json_after_write(
-                $res['ok']
-                    ? ['ok' => true, 'path' => $remotePath, 'name' => $fileName]
-                    : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo crear el documento.'],
-                $userId
-            );
 
         case 'share_link':
             nc_browser_json(['ok' => false, 'error' => 'Los enlaces publicos estan deshabilitados. Comparta solo con usuarios Nextcloud registrados.'], 410);
@@ -614,16 +453,21 @@ function nc_browser_handle(): void
                 $res['ok']
                     ? ['ok' => true, 'data' => $res['data'] ?? null]
                     : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo compartir con el usuario.'],
-                $userId
+                $userId,
+                200,
+                'NEXTCLOUD_SHARE_USER',
+                'Compartir archivo/carpeta | path ' . $path . ' | destinatario ' . $shareWith
             );
 
         case 'share_delete':
             $shareId = trim((string) ($_POST['share_id'] ?? ''));
-            nc_browser_json_after_write(nextcloud_share_delete($cfg, $shareId), $userId);
-
-        // ── OnlyOffice status (no Nextcloud cfg needed) ───────────────────────
-        case 'onlyoffice_status':
-            nc_browser_json(nc_browser_onlyoffice_ping());
+            nc_browser_json_after_write(
+                nextcloud_share_delete($cfg, $shareId),
+                $userId,
+                200,
+                'NEXTCLOUD_SHARE_DELETE',
+                'Eliminar permiso/enlace compartido | share_id ' . $shareId
+            );
 
         default:
             nc_browser_json(['ok' => false, 'error' => 'Acción no reconocida.'], 400);

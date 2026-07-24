@@ -20,7 +20,7 @@ final class ModuleRegistry
             $module['enabled']   = (bool) ($moduleState['enabled'] ?? true);
             $module['label']     = trim((string) ($moduleState['label'] ?? ''));
             $module['order']     = (int) ($moduleState['order'] ?? 100);
-            $module['maintenance'] = $this->maintenanceState($module);
+            $module['maintenance'] = $this->maintenanceState($key, (bool) ($moduleState['maintenance'] ?? false));
             if ($module['label'] !== '') {
                 $module['name'] = $module['label'];
             }
@@ -163,6 +163,8 @@ final class ModuleRegistry
                         ->map(static fn (object $row): array => [
                             'enabled'     => (bool) ($row->habilitado ?? true),
                             'maintenance' => (bool) ($row->en_mantencion ?? false),
+                            'label'       => trim((string) ($row->nombre ?? '')),
+                            'order'       => (int) ($row->orden ?? 100),
                         ])
                         ->all();
                     return $rows;
@@ -190,6 +192,12 @@ final class ModuleRegistry
                 if (array_key_exists('maintenance', $moduleState)) {
                     $updates['en_mantencion'] = (bool) $moduleState['maintenance'] ? 1 : 0;
                 }
+                if (array_key_exists('label', $moduleState) && Schema::hasColumn('modulos_nova', 'nombre')) {
+                    $updates['nombre'] = trim((string) $moduleState['label']);
+                }
+                if (array_key_exists('order', $moduleState) && Schema::hasColumn('modulos_nova', 'orden')) {
+                    $updates['orden'] = (int) $moduleState['order'];
+                }
                 if ($updates !== []) {
                     try {
                         DB::table('modulos_nova')->where('clave_modulo', $key)->update($updates);
@@ -202,36 +210,38 @@ final class ModuleRegistry
     }
 
     /**
-     * @param array<string,mixed> $module
      * @return array{enabled:bool,until:string,until_text:string}
      */
-    private function maintenanceState(array $module): array
+    private function maintenanceState(string $moduleKey, bool $fallbackEnabled): array
     {
-        $modulePath = rtrim((string) ($module['path'] ?? ''), DIRECTORY_SEPARATOR);
-        if (str_contains(str_replace('\\', '/', $modulePath), 'redmine-mantencion')) {
-            try {
+        try {
+            if (Schema::hasTable('modulos_nova') && Schema::hasTable('configuraciones_modulo')) {
                 $moduleId = DB::table('modulos_nova')
-                    ->where('clave_modulo', 'redmine-mantencion')
+                    ->where('clave_modulo', $moduleKey)
                     ->value('id');
                 if ($moduleId !== null) {
-                    $rows    = DB::table('configuraciones_modulo')
+                    $rows = DB::table('configuraciones_modulo')
                         ->where('modulo_id', $moduleId)
                         ->whereIn('clave', ['maintenance_mode', 'maintenance_until'])
                         ->get(['clave', 'valor'])
                         ->pluck('valor', 'clave');
-                    $enabled = in_array(strtolower((string) ($rows['maintenance_mode'] ?? '')), ['1', 'true'], true);
-                    $until   = trim((string) ($rows['maintenance_until'] ?? ''));
-                    return [
-                        'enabled'    => $enabled,
-                        'until'      => $until,
-                        'until_text' => $this->formatMaintenanceUntil($until),
-                    ];
+
+                    if ($rows->has('maintenance_mode')) {
+                        $enabled = in_array(strtolower((string) $rows->get('maintenance_mode', '')), ['1', 'true', 'si', 'sí', 'yes'], true);
+                        $until = trim((string) $rows->get('maintenance_until', ''));
+
+                        return [
+                            'enabled' => $enabled,
+                            'until' => $until,
+                            'until_text' => $this->formatMaintenanceUntil($until),
+                        ];
+                    }
                 }
-            } catch (\Throwable) {
             }
+        } catch (\Throwable) {
         }
 
-        return ['enabled' => false, 'until' => '', 'until_text' => ''];
+        return ['enabled' => $fallbackEnabled, 'until' => '', 'until_text' => ''];
     }
 
     private function formatMaintenanceUntil(string $until): string

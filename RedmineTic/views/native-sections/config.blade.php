@@ -1,5 +1,5 @@
 @php
-    $activePanel = request('panel', 'resumen');
+    $activePanel = request('panel', ($allowedConfigPanels[0] ?? ''));
     $panels = [
         'resumen' => ['label' => 'Resumen', 'icon' => 'bi-speedometer2'],
         'conexion' => ['label' => 'Conexion', 'icon' => 'bi-plug'],
@@ -13,8 +13,9 @@
         'categorias' => ['label' => 'Categorias', 'icon' => 'bi-tags'],
         'unidades' => ['label' => 'Unidades', 'icon' => 'bi-building'],
     ];
+    $panels = array_intersect_key($panels, array_flip($allowedConfigPanels ?? []));
     if (!array_key_exists($activePanel, $panels)) {
-        $activePanel = 'resumen';
+        $activePanel = (string) (array_key_first($panels) ?? '');
     }
     $configRoute = static fn (string $panel) => $redmineRoute('redmine.native.section', ['section' => 'configuracion', 'panel' => $panel]);
     $scopePermissions = [
@@ -28,12 +29,12 @@
         'historico' => 'Historico',
         'historico_acciones' => 'Acciones historico',
         'estadisticas' => 'Estadisticas',
-        'estadisticas_manual' => 'Redmine API',
         'usuarios' => 'Usuarios',
-        'categorias' => 'Categorias',
-        'unidades' => 'Unidades',
         'simulador' => 'Webhook',
         'actividad' => 'Actividad',
+        'actividad_eliminar' => 'Eliminar bitácora',
+        'actividad_todos' => 'Ver todas las bitácoras',
+        'mis_integraciones' => 'Mis integraciones',
         'configuracion' => 'Configuracion',
     ];
     $dataActionPermissions = [
@@ -51,11 +52,7 @@
         'cfg_redmine' => 'Redmine',
         'cfg_campos' => 'Campos personalizados',
         'cfg_retencion' => 'Retencion',
-        'cfg_sesion' => 'Sesion',
         'cfg_mantencion' => 'Mantencion',
-        'cfg_trackers' => 'Trackers',
-        'cfg_prioridades' => 'Prioridades',
-        'cfg_estados' => 'Estados',
         'cfg_roles' => 'Roles y Permisos',
         'cfg_usuarios' => 'Usuarios y permisos',
         'cfg_categorias' => 'Categorias',
@@ -66,23 +63,35 @@
         ['label' => 'Horas extra', 'icon' => 'bi-clock-history', 'access' => 'horas_extra', 'edit' => 'horas_extra_editar', 'delete' => 'horas_extra_eliminar', 'scope' => 'horas_extra', 'scope_input' => 'horas'],
         ['label' => 'Historico', 'icon' => 'bi-archive', 'access' => 'historico', 'edit' => 'historico_acciones', 'delete' => null, 'scope' => 'historico_scope', 'scope_input' => 'historico'],
         ['label' => 'Estadisticas', 'icon' => 'bi-bar-chart-line', 'access' => 'estadisticas', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
-        ['label' => 'Redmine API', 'icon' => 'bi-cloud-arrow-down', 'access' => 'estadisticas_manual', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
         ['label' => 'Usuarios', 'icon' => 'bi-people', 'access' => 'usuarios', 'edit' => 'usuarios_editar', 'delete' => 'usuarios_eliminar', 'scope' => null, 'scope_input' => null],
-        ['label' => 'Categorias', 'icon' => 'bi-tags', 'access' => 'categorias', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
-        ['label' => 'Unidades', 'icon' => 'bi-building', 'access' => 'unidades', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
         ['label' => 'Webhook', 'icon' => 'bi-broadcast', 'access' => 'simulador', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
-        ['label' => 'Actividad', 'icon' => 'bi-activity', 'access' => 'actividad', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
+        ['label' => 'Bitácora de actividad', 'icon' => 'bi-activity', 'access' => 'actividad', 'edit' => 'actividad_todos', 'edit_label' => 'Ver todos', 'delete' => 'actividad_eliminar', 'scope' => null, 'scope_input' => null],
+        ['label' => 'Mis integraciones', 'icon' => 'bi-person-lock', 'access' => 'mis_integraciones', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
         ['label' => 'Configuracion', 'icon' => 'bi-sliders', 'access' => 'configuracion', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
     ];
 @endphp
 
-<nav class="rm-config-nav mb-4" aria-label="Opciones de configuracion">
-    @foreach ($panels as $key => $panel)
-        <a class="rm-config-nav-link {{ $activePanel === $key ? 'active' : '' }}" href="{{ $configRoute($key) }}">
-            <i class="bi {{ $panel['icon'] }}"></i>{{ $panel['label'] }}
-        </a>
-    @endforeach
-</nav>
+<div class="rm-config-shell">
+    <aside class="rm-config-rail">
+        <div class="rm-config-rail-head">
+            <span><i class="bi bi-sliders2"></i></span>
+            <div>
+                <small>Redmine TIC</small>
+                <strong>Configuración</strong>
+            </div>
+        </div>
+        <nav class="rm-config-nav" aria-label="Opciones de configuracion">
+            @foreach ($panels as $key => $panel)
+                <a class="rm-config-nav-link {{ $activePanel === $key ? 'active' : '' }}" href="{{ $configRoute($key) }}" @if ($activePanel === $key) aria-current="page" @endif>
+                    <i class="bi {{ $panel['icon'] }}"></i>
+                    <span>{{ $panel['label'] }}</span>
+                    <i class="bi bi-chevron-right rm-config-nav-chevron"></i>
+                </a>
+            @endforeach
+        </nav>
+        <!-- <p class="rm-config-rail-help"><i class="bi bi-info-circle"></i> Los cambios afectan solo al módulo TIC.</p> -->
+    </aside>
+    <main class="rm-config-content">
 
 @if ($activePanel === 'resumen')
     @php
@@ -126,7 +135,7 @@
                     <span><i class="bi bi-hdd-network"></i></span>
                     <div>
                         <h2>Conexion Redmine</h2>
-                        <p>Endpoints usados para enviar y sincronizar datos.</p>
+                        <p>Endpoints usados para enviar y sincronizar datos. La API Key se configura por usuario.</p>
                     </div>
                 </div>
                 <div class="rm-summary-list">
@@ -159,20 +168,18 @@
     @php
         $connectionCards = [
             'platform_url' => ['label' => 'URL issues', 'icon' => 'bi-link-45deg', 'hint' => 'Endpoint principal para crear y consultar tickets.'],
-            'platform_token' => ['label' => 'Token global', 'icon' => 'bi-key', 'hint' => 'Credencial usada por NOVA para comunicarse con Redmine.'],
             'categories_url' => ['label' => 'URL categorias', 'icon' => 'bi-tags', 'hint' => 'Fuente remota para sincronizar categorias del proyecto.'],
             'unidades_url' => ['label' => 'URL unidades', 'icon' => 'bi-building', 'hint' => 'Fuente remota para sincronizar unidades disponibles.'],
         ];
         $connectionFilled = collect($connectionCards)->keys()->filter(fn ($field) => trim((string) data_get($config, $field, '')) !== '')->count();
     @endphp
-    <form class="card nova-card rm-panel rm-config-feature-form" method="post" action="{{ $redmineRoute('redmine.native.config.action') }}">
-        @csrf
+    <section class="card nova-card rm-panel rm-config-feature-form">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-cyan"><i class="bi bi-plug"></i></span>
             <div>
                 <small>Integracion Redmine</small>
                 <h2>Conexion API</h2>
-                <p>Endpoints y token usados por NOVA para comunicarse con Redmine.</p>
+                <p>Endpoints usados por NOVA para comunicarse con Redmine. Cada usuario debe configurar su API Key personal.</p>
             </div>
             <div class="rm-feature-meter">
                 <strong>{{ $connectionFilled }}/{{ count($connectionCards) }}</strong>
@@ -181,20 +188,65 @@
         </div>
         <div class="rm-config-card-grid is-two">
             @foreach ($connectionCards as $field => $fieldCard)
-                <label class="rm-config-field-card {{ $field === 'platform_token' ? 'is-secret' : '' }}">
+                <article class="rm-config-field-card rm-config-readonly-card">
                     <span class="rm-config-field-icon"><i class="bi {{ $fieldCard['icon'] }}"></i></span>
                     <span class="rm-config-field-copy">
                         <strong>{{ $fieldCard['label'] }}</strong>
                         <small>{{ $fieldCard['hint'] }}</small>
                     </span>
-                    <input class="form-control" name="{{ $field }}" value="{{ data_get($config, $field, '') }}">
-                </label>
+                    <span class="rm-config-value">{{ data_get($config, $field, '') ?: 'Sin configurar' }}</span>
+                </article>
             @endforeach
         </div>
         <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar conexion</button>
+            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-config-drawer-conexion" aria-controls="rm-config-drawer-conexion">
+                <i class="bi bi-pencil-square"></i>Editar conexion
+            </button>
         </div>
-    </form>
+    </section>
+    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-config-drawer-conexion" aria-labelledby="rm-config-drawer-conexion-title">
+        <div class="offcanvas-header">
+            <div class="integration-drawer-title">
+                <span class="integration-icon"><i class="bi bi-plug"></i></span>
+                <div>
+                    <small>Integracion Redmine</small>
+                    <h2 class="offcanvas-title" id="rm-config-drawer-conexion-title">Editar conexion</h2>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rm-config-form-conexion" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'conexion']) }}" data-restore-on-close>
+                @csrf
+                <div class="rm-config-card-grid">
+                    @foreach ($connectionCards as $field => $fieldCard)
+                        <label class="rm-config-field-card">
+                            <span class="rm-config-field-icon"><i class="bi {{ $fieldCard['icon'] }}"></i></span>
+                            <span class="rm-config-field-copy">
+                                <strong>{{ $fieldCard['label'] }}</strong>
+                                <small>{{ $fieldCard['hint'] }}</small>
+                            </span>
+                            <input class="form-control" name="{{ $field }}" value="{{ data_get($config, $field, '') }}">
+                        </label>
+                    @endforeach
+                </div>
+            </form>
+        </div>
+        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+            <button class="btn-nova btn-nova-danger" type="button" data-clear-drawer-form="#rm-config-form-conexion" data-clear-confirm="Eliminar los valores de conexion?">
+                <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
+                <span>Eliminar</span>
+            </button>
+            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                <span>Cerrar</span>
+            </button>
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-conexion">
+                <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                <span>Guardar</span>
+            </button>
+        </div>
+    </div>
 @endif
 
 @if ($activePanel === 'proyecto')
@@ -208,8 +260,7 @@
         ];
         $projectFilled = collect($projectCards)->keys()->filter(fn ($field) => trim((string) data_get($config, $field, '')) !== '')->count();
     @endphp
-    <form class="card nova-card rm-panel rm-config-feature-form" method="post" action="{{ $redmineRoute('redmine.native.config.action') }}">
-        @csrf
+    <section class="card nova-card rm-panel rm-config-feature-form">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-blue"><i class="bi bi-kanban"></i></span>
             <div>
@@ -224,24 +275,69 @@
         </div>
         <div class="rm-config-card-grid is-project">
             @foreach ($projectCards as $field => $fieldCard)
-                <label class="rm-config-field-card">
+                <article class="rm-config-field-card rm-config-readonly-card">
                     <span class="rm-config-field-icon"><i class="bi {{ $fieldCard['icon'] }}"></i></span>
                     <span class="rm-config-field-copy">
                         <strong>{{ $fieldCard['label'] }}</strong>
                         <small>{{ $fieldCard['hint'] }}</small>
                     </span>
-                    <input class="form-control" name="{{ $field }}" value="{{ data_get($config, $field, '') }}">
-                </label>
+                    <span class="rm-config-value">{{ data_get($config, $field, '') ?: 'Sin configurar' }}</span>
+                </article>
             @endforeach
         </div>
         <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar proyecto</button>
+            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-config-drawer-proyecto" aria-controls="rm-config-drawer-proyecto">
+                <i class="bi bi-pencil-square"></i>Editar proyecto
+            </button>
         </div>
-    </form>
+    </section>
+    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-config-drawer-proyecto" aria-labelledby="rm-config-drawer-proyecto-title">
+        <div class="offcanvas-header">
+            <div class="integration-drawer-title">
+                <span class="integration-icon"><i class="bi bi-kanban"></i></span>
+                <div>
+                    <small>Destino de tickets</small>
+                    <h2 class="offcanvas-title" id="rm-config-drawer-proyecto-title">Editar proyecto</h2>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rm-config-form-proyecto" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'proyecto']) }}" data-restore-on-close>
+                @csrf
+                <div class="rm-config-card-grid">
+                    @foreach ($projectCards as $field => $fieldCard)
+                        <label class="rm-config-field-card">
+                            <span class="rm-config-field-icon"><i class="bi {{ $fieldCard['icon'] }}"></i></span>
+                            <span class="rm-config-field-copy">
+                                <strong>{{ $fieldCard['label'] }}</strong>
+                                <small>{{ $fieldCard['hint'] }}</small>
+                            </span>
+                            <input class="form-control" name="{{ $field }}" value="{{ data_get($config, $field, '') }}">
+                        </label>
+                    @endforeach
+                </div>
+            </form>
+        </div>
+        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+            <button class="btn-nova btn-nova-danger" type="button" data-clear-drawer-form="#rm-config-form-proyecto" data-clear-confirm="Eliminar los valores de proyecto?">
+                <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
+                <span>Eliminar</span>
+            </button>
+            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                <span>Cerrar</span>
+            </button>
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-proyecto">
+                <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                <span>Guardar</span>
+            </button>
+        </div>
+    </div>
 @endif
 
 @if ($activePanel === 'redmine')
-    <section class="rm-config-feature-form">
+    <section class="card nova-card rm-panel rm-config-feature-form rm-redmine-config-page">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-blue"><i class="bi bi-list-check"></i></span>
             <div>
@@ -259,16 +355,22 @@
             @php
                 $label = $optionGroup['label'];
                 $defaultKey = ['trackers' => 'tracker_id', 'prioridades' => 'priority_id', 'estados' => 'status_id'][$field];
+                $optionRows = data_get($config, $field, []);
+                $defaultValue = (string) data_get($config, $defaultKey, '');
             @endphp
             <div class="col-12 col-xl-4">
-                <article class="card nova-card rm-panel rm-option-panel h-100">
+                <article class="rm-config-catalog-card h-100">
                     <i class="bi {{ $optionGroup['icon'] }} rm-option-panel-icon" aria-hidden="true"></i>
-                    <div class="rm-section-head">
-                        <div>
-                            <h2>{{ $label }}</h2>
-                            <p>{{ count(data_get($config, $field, [])) }} opcion(es) configurada(s)</p>
-                        </div>
+                    <div class="rm-config-catalog-copy">
+                        <small>Catálogo Redmine</small>
+                        <h2>{{ $label }}</h2>
+                        <p>{{ count($optionRows) }} {{ count($optionRows) === 1 ? 'opción configurada' : 'opciones configuradas' }}</p>
                     </div>
+                    <div class="rm-config-catalog-default">
+                        <span>Predeterminada</span>
+                        <strong><i class="bi bi-star-fill"></i>{{ $defaultValue !== '' ? '#' . $defaultValue : 'Sin definir' }}</strong>
+                    </div>
+                    <span class="rm-config-catalog-action">Administrar <i class="bi bi-arrow-right"></i></span>
                     <button class="rm-redmine-card-hit" type="button" data-bs-toggle="modal" data-bs-target="#rm-options-{{ $field }}" aria-label="Abrir {{ $label }}"></button>
                     <div class="modal fade detail-drawer-modal" id="rm-options-{{ $field }}" tabindex="-1" aria-hidden="true">
                         <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
@@ -285,14 +387,14 @@
                                 </div>
                                 <div class="modal-body">
                                     <div class="detail-drawer-panel d-flex justify-content-end mb-3">
-                                        <button class="btn-nova btn-nova-success" type="button" data-bs-toggle="modal" data-bs-target="#rm-option-create-{{ $field }}">
+                                        <button class="btn-nova btn-nova-success" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-option-create-{{ $field }}" aria-controls="rm-option-create-{{ $field }}">
                                             <i class="bi bi-plus-lg"></i>Agregar
                                         </button>
                                     </div>
                     <div class="rm-option-list detail-drawer-panel">
                         @forelse (data_get($config, $field, []) as $option)
                             @php
-                                $modalId = 'rm-option-edit-' . $field . '-' . $loop->index;
+                                $drawerId = 'rm-option-edit-' . $field . '-' . $loop->index;
                             @endphp
                             <article class="rm-option-card">
                                 <div class="rm-option-card-main">
@@ -303,22 +405,16 @@
                                     </div>
                                 </div>
                                 <div class="rm-option-card-actions">
-                                    <button class="btn-action btn-action-edit" type="button" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}" title="Ver y editar" aria-label="Ver y editar">
+                                    <button class="btn-action btn-action-edit" type="button" data-bs-toggle="offcanvas" data-bs-target="#{{ $drawerId }}" aria-controls="{{ $drawerId }}" title="Ver y editar" aria-label="Ver y editar">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
                                     <button class="btn {{ !empty($option['default']) ? 'btn-warning' : 'btn-outline-secondary' }} nova-btn-icon rm-default-option" type="button" data-default-group="{{ $field }}" data-default-value="{{ $option['id'] ?? '' }}" data-default-target="rm-default-selected-{{ $field }}" title="Marcar default" aria-label="Marcar default">
                                         <i class="bi {{ !empty($option['default']) ? 'bi-star-fill' : 'bi-star' }}"></i>
                                     </button>
-                                    <form method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'redmine']) }}">
-                                        @csrf
-                                        <input type="hidden" name="opt_type" value="{{ $field }}">
-                                        <input type="hidden" name="opt_id" value="{{ $option['id'] ?? '' }}">
-                                        <button class="btn-action btn-action-delete" name="opt_action" value="delete" type="submit" title="Eliminar" aria-label="Eliminar" onclick="return confirm('Eliminar esta opcion?')"><i class="bi bi-trash"></i></button>
-                                    </form>
                                 </div>
                             </article>
                         @empty
-                            <div class="rm-empty-state">Sin opciones configuradas.</div>
+                            <div class="nova-empty-state">Sin opciones configuradas.</div>
                         @endforelse
                     </div>
                                 </div>
@@ -336,77 +432,116 @@
                     </div>
                     @foreach (data_get($config, $field, []) as $option)
                         @php
-                            $modalId = 'rm-option-edit-' . $field . '-' . $loop->index;
+                            $drawerId = 'rm-option-edit-' . $field . '-' . $loop->index;
+                            $editFormId = 'rm-option-edit-form-' . $field . '-' . $loop->index;
                         @endphp
-                        <div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog">
-                                <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'redmine']) }}">
+                        <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="{{ $drawerId }}" aria-labelledby="{{ $drawerId }}-title" data-bs-backdrop="false">
+                            <div class="offcanvas-header">
+                                <div class="integration-drawer-title">
+                                    <span class="integration-icon"><i class="bi {{ $optionGroup['icon'] }}"></i></span>
+                                    <div>
+                                        <small>Catalogo Redmine</small>
+                                        <h2 class="offcanvas-title" id="{{ $drawerId }}-title">Editar {{ strtolower($label) }}</h2>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="offcanvas-body">
+                                <form id="{{ $editFormId }}" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'redmine']) }}" data-restore-on-close>
                                     @csrf
                                     <input type="hidden" name="opt_type" value="{{ $field }}">
                                     <input type="hidden" name="opt_action" value="update">
-                                    <div class="modal-header">
-                                        <h2 class="modal-title fs-5">Editar {{ strtolower($label) }}</h2>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="row g-3">
-                                            <div class="col-12 col-md-4">
-                                                <label class="form-label">ID</label>
-                                                <input class="form-control" name="opt_id" value="{{ $option['id'] ?? '' }}" readonly>
-                                            </div>
-                                            <div class="col-12 col-md-8">
-                                                <label class="form-label">Nombre</label>
-                                                <input class="form-control" name="opt_nombre" value="{{ $option['nombre'] ?? '' }}" required>
-                                            </div>
-                                            <div class="col-12">
-                                                <label class="form-check rm-modal-check">
-                                                    <input class="form-check-input" type="checkbox" name="opt_default" value="1" @checked(!empty($option['default']))>
-                                                    <span class="form-check-label">Usar como opcion predeterminada</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-                                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    @endforeach
-                    <div class="modal fade" id="rm-option-create-{{ $field }}" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog">
-                            <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'redmine']) }}">
-                                @csrf
-                                <input type="hidden" name="opt_type" value="{{ $field }}">
-                                <input type="hidden" name="opt_action" value="create">
-                                <div class="modal-header">
-                                    <h2 class="modal-title fs-5">Agregar {{ strtolower($label) }}</h2>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                                </div>
-                                <div class="modal-body">
                                     <div class="row g-3">
                                         <div class="col-12 col-md-4">
                                             <label class="form-label">ID</label>
-                                            <input class="form-control" name="opt_id" required>
+                                            <input class="form-control" name="opt_id" value="{{ $option['id'] ?? '' }}" readonly>
                                         </div>
                                         <div class="col-12 col-md-8">
                                             <label class="form-label">Nombre</label>
-                                            <input class="form-control" name="opt_nombre" required>
+                                            <input class="form-control" name="opt_nombre" value="{{ $option['nombre'] ?? '' }}" required>
                                         </div>
                                         <div class="col-12">
                                             <label class="form-check rm-modal-check">
-                                                <input class="form-check-input" type="checkbox" name="opt_default" value="1">
+                                                <input class="form-check-input" type="checkbox" name="opt_default" value="1" @checked(!empty($option['default']))>
                                                 <span class="form-check-label">Usar como opcion predeterminada</span>
                                             </label>
                                         </div>
                                     </div>
+                                </form>
+                            </div>
+                            <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+                                <form
+                                    class="m-0"
+                                    method="post"
+                                    action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'redmine']) }}"
+                                    data-app-confirm="Eliminar esta opcion?"
+                                    @if ((string) data_get($config, $defaultKey, '') === (string) ($option['id'] ?? '') || !empty($option['default']))
+                                        data-app-block-message="Esta opcion esta definida como predeterminada. Antes de eliminarla, selecciona otro valor predeterminado para {{ strtolower($label) }}."
+                                    @endif
+                                >
+                                    @csrf
+                                    <input type="hidden" name="opt_type" value="{{ $field }}">
+                                    <input type="hidden" name="opt_id" value="{{ $option['id'] ?? '' }}">
+                                    <input type="hidden" name="opt_action" value="delete">
+                                    <button class="btn-nova btn-nova-danger" type="submit">
+                                        <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
+                                        <span>Eliminar</span>
+                                    </button>
+                                </form>
+                                <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                                    <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                                    <span>Cerrar</span>
+                                </button>
+                                <button class="btn-nova btn-nova-primary" type="submit" form="{{ $editFormId }}">
+                                    <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                                    <span>Guardar</span>
+                                </button>
+                            </div>
+                        </div>
+                    @endforeach
+                    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-option-create-{{ $field }}" aria-labelledby="rm-option-create-{{ $field }}-title" data-bs-backdrop="false">
+                        <div class="offcanvas-header">
+                            <div class="integration-drawer-title">
+                                <span class="integration-icon"><i class="bi {{ $optionGroup['icon'] }}"></i></span>
+                                <div>
+                                    <small>Catalogo Redmine</small>
+                                    <h2 class="offcanvas-title" id="rm-option-create-{{ $field }}-title">Agregar {{ strtolower($label) }}</h2>
                                 </div>
-                                <div class="modal-footer">
-                                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-                                    <button class="btn-nova btn-nova-success" type="submit"><i class="bi bi-plus-lg"></i>Agregar</button>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="offcanvas-body">
+                            <form id="rm-option-create-form-{{ $field }}" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'redmine']) }}" data-restore-on-close>
+                                @csrf
+                                <input type="hidden" name="opt_type" value="{{ $field }}">
+                                <input type="hidden" name="opt_action" value="create">
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">ID</label>
+                                        <input class="form-control" name="opt_id" required>
+                                    </div>
+                                    <div class="col-12 col-md-8">
+                                        <label class="form-label">Nombre</label>
+                                        <input class="form-control" name="opt_nombre" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-check rm-modal-check">
+                                            <input class="form-check-input" type="checkbox" name="opt_default" value="1">
+                                            <span class="form-check-label">Usar como opcion predeterminada</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </form>
+                        </div>
+                        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+                            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                                <span>Cerrar</span>
+                            </button>
+                            <button class="btn-nova btn-nova-success" type="submit" form="rm-option-create-form-{{ $field }}">
+                                <span class="btn-nova-icon"><i class="bi bi-plus-lg"></i></span>
+                                <span>Agregar</span>
+                            </button>
                         </div>
                     </div>
                 </article>
@@ -426,8 +561,7 @@
         ];
         $customFieldFilled = collect($customFieldCards)->keys()->filter(fn ($field) => trim((string) data_get($config, $field, '')) !== '')->count();
     @endphp
-    <form class="card nova-card rm-panel rm-config-feature-form" method="post" action="{{ $redmineRoute('redmine.native.config.action') }}">
-        @csrf
+    <section class="card nova-card rm-panel rm-config-feature-form">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-blue"><i class="bi bi-ui-checks-grid"></i></span>
             <div>
@@ -442,28 +576,68 @@
         </div>
         <div class="rm-config-card-grid">
             @foreach ($customFieldCards as $field => $fieldCard)
-                <label class="rm-config-field-card">
+                <article class="rm-config-field-card rm-config-readonly-card">
                     <span class="rm-config-field-icon"><i class="bi {{ $fieldCard['icon'] }}"></i></span>
                     <span class="rm-config-field-copy">
                         <strong>{{ $fieldCard['label'] }}</strong>
                         <small>{{ $fieldCard['hint'] }}</small>
                     </span>
-                    <input class="form-control" name="{{ $field }}" value="{{ data_get($config, $field, '') }}" placeholder="ID del campo">
-                </label>
+                    <span class="rm-config-value">{{ data_get($config, $field, '') ?: 'Sin configurar' }}</span>
+                </article>
             @endforeach
         </div>
         <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar campos</button>
+            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-config-drawer-campos" aria-controls="rm-config-drawer-campos">
+                <i class="bi bi-pencil-square"></i>Editar campos
+            </button>
         </div>
-    </form>
+    </section>
+    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-config-drawer-campos" aria-labelledby="rm-config-drawer-campos-title">
+        <div class="offcanvas-header">
+            <div class="integration-drawer-title">
+                <span class="integration-icon"><i class="bi bi-ui-checks-grid"></i></span>
+                <div>
+                    <small>Mapeo Redmine</small>
+                    <h2 class="offcanvas-title" id="rm-config-drawer-campos-title">Editar campos</h2>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rm-config-form-campos" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'campos']) }}" data-restore-on-close>
+                @csrf
+                <div class="rm-config-card-grid">
+                    @foreach ($customFieldCards as $field => $fieldCard)
+                        <label class="rm-config-field-card">
+                            <span class="rm-config-field-icon"><i class="bi {{ $fieldCard['icon'] }}"></i></span>
+                            <span class="rm-config-field-copy">
+                                <strong>{{ $fieldCard['label'] }}</strong>
+                                <small>{{ $fieldCard['hint'] }}</small>
+                            </span>
+                            <input class="form-control" name="{{ $field }}" value="{{ data_get($config, $field, '') }}" placeholder="ID del campo">
+                        </label>
+                    @endforeach
+                </div>
+            </form>
+        </div>
+        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                <span>Cerrar</span>
+            </button>
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-campos">
+                <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                <span>Guardar</span>
+            </button>
+        </div>
+    </div>
 @endif
 
 @if ($activePanel === 'retencion')
     @php
         $retentionHours = (int) data_get($config, 'retencion_horas', 24);
     @endphp
-    <form class="card nova-card rm-panel rm-config-feature-form" method="post" action="{{ $redmineRoute('redmine.native.config.action') }}">
-        @csrf
+    <section class="card nova-card rm-panel rm-config-feature-form">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-cyan"><i class="bi bi-stopwatch"></i></span>
             <div>
@@ -477,17 +651,14 @@
             </div>
         </div>
         <div class="rm-retention-layout">
-            <label class="rm-config-field-card rm-retention-control">
+            <article class="rm-config-field-card rm-retention-control rm-config-readonly-card">
                 <span class="rm-config-field-icon"><i class="bi bi-hourglass-split"></i></span>
                 <span class="rm-config-field-copy">
                     <strong>Horas antes de archivar procesados</strong>
                     <small>La sesion la administra NOVA; este valor solo afecta reportes ya procesados.</small>
                 </span>
-                <div class="rm-number-field">
-                    <input class="form-control" type="number" min="1" name="retencion_horas" value="{{ $retentionHours }}">
-                    <span>horas</span>
-                </div>
-            </label>
+                <span class="rm-config-value">{{ $retentionHours }} horas</span>
+            </article>
             <aside class="rm-config-side-card">
                 <i class="bi bi-archive"></i>
                 <strong>Historico limpio</strong>
@@ -495,9 +666,53 @@
             </aside>
         </div>
         <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar retencion</button>
+            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-config-drawer-retencion" aria-controls="rm-config-drawer-retencion">
+                <i class="bi bi-pencil-square"></i>Editar retencion
+            </button>
         </div>
-    </form>
+    </section>
+    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-config-drawer-retencion" aria-labelledby="rm-config-drawer-retencion-title">
+        <div class="offcanvas-header">
+            <div class="integration-drawer-title">
+                <span class="integration-icon"><i class="bi bi-stopwatch"></i></span>
+                <div>
+                    <small>Archivado automatico</small>
+                    <h2 class="offcanvas-title" id="rm-config-drawer-retencion-title">Editar retencion</h2>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rm-config-form-retencion" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'retencion']) }}" data-restore-on-close>
+                @csrf
+                <label class="rm-config-field-card rm-retention-control">
+                    <span class="rm-config-field-icon"><i class="bi bi-hourglass-split"></i></span>
+                    <span class="rm-config-field-copy">
+                        <strong>Horas antes de archivar procesados</strong>
+                        <small>La sesion la administra NOVA; este valor solo afecta reportes ya procesados.</small>
+                    </span>
+                    <div class="rm-number-field">
+                        <input class="form-control" type="number" min="1" name="retencion_horas" value="{{ $retentionHours }}">
+                        <span>horas</span>
+                    </div>
+                </label>
+            </form>
+        </div>
+        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+            <button class="btn-nova btn-nova-danger" type="button" data-clear-drawer-form="#rm-config-form-retencion" data-clear-confirm="Eliminar el valor de retencion?">
+                <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
+                <span>Eliminar</span>
+            </button>
+            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                <span>Cerrar</span>
+            </button>
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-retencion">
+                <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                <span>Guardar</span>
+            </button>
+        </div>
+    </div>
 @endif
 
 @if ($activePanel === 'mantencion')
@@ -505,8 +720,7 @@
         $maintenanceEnabled = !empty($config['maintenance_mode']);
         $maintenanceUntil = data_get($config, 'maintenance_until', '');
     @endphp
-    <form class="card nova-card rm-panel rm-config-feature-form" method="post" action="{{ $redmineRoute('redmine.native.config.action') }}" data-maintenance-allowed="1">
-        @csrf
+    <section class="card nova-card rm-panel rm-config-feature-form">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon {{ $maintenanceEnabled ? 'is-orange' : 'is-green' }}"><i class="bi {{ $maintenanceEnabled ? 'bi-tools' : 'bi-check2-circle' }}"></i></span>
             <div>
@@ -521,25 +735,22 @@
         </div>
         <div class="rm-maintenance-layout">
             <div class="rm-maintenance-control-card">
-                <input type="hidden" name="maintenance_mode" value="0">
-                <label class="rm-maintenance-switch">
+                <article class="rm-maintenance-switch rm-config-readonly-card">
                     <span>
                         <i class="bi bi-power"></i>
                         <strong>Modo mantenimiento</strong>
                         <small>{{ !empty($config['maintenance_mode']) ? 'Activo: la edicion esta bloqueada.' : 'Inactivo: el modulo opera normalmente.' }}</small>
                     </span>
-                    <span class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" value="1" @checked(!empty($config['maintenance_mode'])) aria-label="Activar modo mantenimiento" data-maintenance-mode-switch>
-                    </span>
-                </label>
-                <label class="rm-config-field-card rm-maintenance-date">
+                    <span class="nova-status-badge {{ $maintenanceEnabled ? 'is-warning' : 'is-success' }}">{{ $maintenanceEnabled ? 'Activa' : 'Inactiva' }}</span>
+                </article>
+                <article class="rm-config-field-card rm-maintenance-date rm-config-readonly-card">
                     <span class="rm-config-field-icon"><i class="bi bi-calendar2-check"></i></span>
                     <span class="rm-config-field-copy">
                         <strong>Mantencion hasta</strong>
                         <small>Define la fecha de termino visible para usuarios del modulo.</small>
                     </span>
-                    <input class="form-control" type="datetime-local" name="maintenance_until" min="{{ now('America/Santiago')->format('Y-m-d\TH:i') }}" value="{{ old('maintenance_until', $maintenanceUntil) }}" data-maintenance-until>
-                </label>
+                    <span class="rm-config-value">{{ $maintenanceUntil ?: 'Sin fecha definida' }}</span>
+                </article>
             </div>
             <aside class="rm-config-side-card {{ $maintenanceEnabled ? 'is-warning' : 'is-ok' }}">
                 <i class="bi {{ $maintenanceEnabled ? 'bi-shield-lock' : 'bi-shield-check' }}"></i>
@@ -548,26 +759,77 @@
             </aside>
         </div>
         <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar mantencion</button>
+            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-config-drawer-mantencion" aria-controls="rm-config-drawer-mantencion">
+                <i class="bi bi-pencil-square"></i>Editar mantencion
+            </button>
         </div>
-    </form>
+    </section>
+    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-config-drawer-mantencion" aria-labelledby="rm-config-drawer-mantencion-title">
+        <div class="offcanvas-header">
+            <div class="integration-drawer-title">
+                <span class="integration-icon"><i class="bi bi-tools"></i></span>
+                <div>
+                    <small>Disponibilidad del modulo</small>
+                    <h2 class="offcanvas-title" id="rm-config-drawer-mantencion-title">Editar mantencion</h2>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rm-config-form-mantencion" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'mantencion']) }}" data-maintenance-allowed="1" data-restore-on-close>
+                @csrf
+                <div class="rm-maintenance-control-card">
+                    <input type="hidden" name="maintenance_mode" value="0">
+                    <label class="rm-maintenance-switch">
+                        <span>
+                            <i class="bi bi-power"></i>
+                            <strong>Modo mantenimiento</strong>
+                            <small>{{ !empty($config['maintenance_mode']) ? 'Activo: la edicion esta bloqueada.' : 'Inactivo: el modulo opera normalmente.' }}</small>
+                        </span>
+                        <span class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" value="1" @checked(!empty($config['maintenance_mode'])) aria-label="Activar modo mantenimiento" data-maintenance-mode-switch>
+                        </span>
+                    </label>
+                    <label class="rm-config-field-card rm-maintenance-date">
+                        <span class="rm-config-field-icon"><i class="bi bi-calendar2-check"></i></span>
+                        <span class="rm-config-field-copy">
+                            <strong>Mantencion hasta</strong>
+                            <small>Define la fecha de termino visible para usuarios del modulo.</small>
+                        </span>
+                        <input class="form-control" type="datetime-local" name="maintenance_until" min="{{ now('America/Santiago')->format('Y-m-d\TH:i') }}" value="{{ old('maintenance_until', $maintenanceUntil) }}" data-maintenance-until>
+                    </label>
+                </div>
+            </form>
+        </div>
+        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+            <button class="btn-nova btn-nova-danger" type="button" data-clear-drawer-form="#rm-config-form-mantencion" data-clear-confirm="Eliminar los valores de mantencion?">
+                <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
+                <span>Eliminar</span>
+            </button>
+            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
+                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                <span>Cerrar</span>
+            </button>
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-mantencion">
+                <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                <span>Guardar</span>
+            </button>
+        </div>
+    </div>
 @endif
 
 @if ($activePanel === 'roles')
     @php
         $roleNames = array_keys($roles);
-        $selectedRole = request('role', $roleNames[0] ?? 'usuario');
+        $selectedRole = request('role', session('redmine_selected_role', $roleNames[0] ?? 'usuario'));
         if (!array_key_exists($selectedRole, $roles) && $roleNames !== []) {
             $selectedRole = $roleNames[0];
         }
         $selectedPermissions = is_array($roles[$selectedRole] ?? null) ? $roles[$selectedRole] : [];
         $roleFormAction = $redmineRoute('redmine.native.config.action', ['panel' => 'roles', 'role' => $selectedRole]);
-        $selectedRoleHasUsers = collect($users ?? [])->contains(fn ($user) => (string) ($user['rol'] ?? '') === (string) $selectedRole);
-        $protectedRoles = ['root', 'administrador', 'gestor', 'usuario'];
-        $selectedRoleCanDelete = $selectedRole !== '' && !$selectedRoleHasUsers && !in_array($selectedRole, $protectedRoles, true);
         $selectedRoleActiveCount = collect($selectedPermissions)->filter(fn ($value, $key) => is_string($key) && !in_array($key, ['mensajes', 'horas_extra', 'historico_scope'], true) && $value === true)->count();
     @endphp
-    <section class="card nova-card rm-panel rm-config-feature-form">
+    <section class="card nova-card rm-panel rm-config-feature-form rm-permissions-page">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-green"><i class="bi bi-shield-check"></i></span>
             <div>
@@ -580,121 +842,156 @@
                 <span>roles</span>
             </div>
         </div>
-        <div class="rm-role-toolbar">
-            <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-role-select-form">
-                <input type="hidden" name="panel" value="roles">
-                <label class="form-label" for="rm-role-select">Rol seleccionado</label>
-                <div class="rm-role-select-row">
-                    <select class="form-select" id="rm-role-select" name="role" onchange="this.form.submit()">
+
+        <div class="rm-permissions-layout">
+            <aside class="rm-permissions-list-panel">
+                <div class="rm-permissions-list-head">
+                    <div>
+                        <h3>Roles</h3>
+                        <p>{{ count($roleNames) }} perfil(es) configurado(s)</p>
+                    </div>
+                    <span>{{ $selectedRoleActiveCount }} activos</span>
+                </div>
+                <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-role-dropdown-card">
+                    <input type="hidden" name="panel" value="roles">
+                    <span class="rm-permission-selector-icon"><i class="bi bi-shield-check"></i></span>
+                    <span class="rm-permission-selector-copy">
+                        <strong>Rol seleccionado</strong>
+                        <small>{{ $selectedRoleActiveCount }} permiso(s) activo(s)</small>
+                    </span>
+                    <select class="form-select" name="role" aria-label="Seleccionar rol" onchange="this.form.submit()">
                         @foreach ($roleNames as $roleName)
                             <option value="{{ $roleName }}" @selected($selectedRole === $roleName)>{{ $roleName }}</option>
                         @endforeach
                     </select>
+                </form>
+                <form class="rm-create-role-form rm-create-role-card" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'roles']) }}">
+                    @csrf
+                    <input type="hidden" name="config_action" value="save_role_permissions">
+                    <span class="rm-permission-selector-icon"><i class="bi bi-plus-lg"></i></span>
+                    <span class="rm-permission-selector-copy">
+                        <strong>Crear rol</strong>
+                        <small>Agrega un nuevo perfil a la lista.</small>
+                    </span>
+                    <div class="rm-create-role-row">
+                        <input class="form-control" id="rm-new-role" name="role_name" placeholder="Nombre del rol" aria-label="Nombre del rol" autocomplete="off" required>
+                        <button class="btn-nova btn-nova-success" type="submit" title="Crear rol" aria-label="Crear rol"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                </form>
+            </aside>
+
+            <div class="rm-permissions-editor-panel">
+                <div class="rm-permissions-editor-head">
+                    <div>
+                        <small>Matriz de acceso</small>
+                        <h3>{{ $selectedRole ?: 'Sin rol seleccionado' }}</h3>
+                        <p>Activa vistas y define las acciones disponibles para este rol.</p>
+                    </div>
                     <div class="rm-role-summary">
                         <strong>{{ $selectedRoleActiveCount }}</strong>
                         <span>activos</span>
                     </div>
                 </div>
-            </form>
-            @if ($selectedRoleCanDelete)
-                <form class="rm-delete-role-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'roles']) }}">
+
+                <form id="rm-config-form-roles" class="rm-permissions-inline-form" method="post" action="{{ $roleFormAction }}" data-inline-restore-form>
                     @csrf
-                    <input type="hidden" name="config_action" value="delete_role">
+                    <input type="hidden" name="config_action" value="save_role_permissions">
                     <input type="hidden" name="role_name" value="{{ $selectedRole }}">
-                    <button class="btn-action btn-action-delete" type="submit" title="Eliminar rol" aria-label="Eliminar rol" onclick="return confirm('Eliminar este rol?')">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </form>
-            @endif
-            <form class="rm-create-role-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'roles']) }}">
-                @csrf
-                <input type="hidden" name="config_action" value="save_role_permissions">
-                <label class="form-label" for="rm-new-role">Crear rol</label>
-                <div class="input-group">
-                    <input class="form-control" id="rm-new-role" name="role_name" placeholder="Nombre del rol">
-                    <button class="btn-nova btn-nova-success" type="submit"><i class="bi bi-plus-lg"></i>Crear</button>
-                </div>
-            </form>
-        </div>
 
-        <form method="post" action="{{ $roleFormAction }}">
-            @csrf
-            <input type="hidden" name="config_action" value="save_role_permissions">
-            <input type="hidden" name="role_name" value="{{ $selectedRole }}">
-            <div class="rm-section-head mt-3">
-                <div><h2>Roles y Permisos</h2><p>Activa vistas y define si el rol puede editar o eliminar datos.</p></div>
-                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
-            </div>
-            <div class="rm-scope-panel">
-                <h3 class="rm-permission-title">Alcance</h3>
-                <div class="rm-scope-grid">
-                    @foreach ($rolePermissionRows as $permissionRow)
-                        @if ($permissionRow['scope'])
-                            <label class="rm-scope-card">
-                                <span>{{ $permissionRow['label'] }}</span>
-                                <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
-                                    <option value="todos" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
-                                    <option value="asignados" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Asignados</option>
-                                </select>
-                            </label>
-                        @endif
-                    @endforeach
-                </div>
-            </div>
-            <div class="rm-role-permission-list">
-                    @foreach ($rolePermissionRows as $permissionRow)
-                        <section class="rm-role-permission-item">
-                            <div class="rm-role-permission-main">
-                            <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
-                            <label class="rm-toggle-line">
-                                <span>Ver</span>
-                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedPermissions[$permissionRow['access']] ))>
-                            </label>
+                    <div class="rm-scope-panel">
+                        <h3 class="rm-permission-title">Alcance</h3>
+                        <div class="rm-scope-grid">
+                            @foreach ($rolePermissionRows as $permissionRow)
+                                @if ($permissionRow['scope'])
+                                    <label class="rm-scope-card">
+                                        <span>{{ $permissionRow['label'] }}</span>
+                                        <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
+                                            <option value="todos" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
+                                            <option value="asignados" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Asignados</option>
+                                        </select>
+                                    </label>
+                                @endif
+                            @endforeach
                         </div>
+                    </div>
 
-                        @if ($permissionRow['edit'] || $permissionRow['delete'])
-                            <div class="rm-role-permission-children" data-role-dependent-actions>
-                                @if ($permissionRow['edit'])
-                                    <label class="rm-toggle-line rm-role-permission-child">
-                                        <span>Editar</span>
-                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['edit']]))>
+                    <div class="rm-role-permission-list">
+                        @foreach ($rolePermissionRows as $permissionRow)
+                            <section class="rm-role-permission-item">
+                                <div class="rm-role-permission-main">
+                                    <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
+                                    <label class="rm-toggle-line">
+                                        <span>Ver</span>
+                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedPermissions[$permissionRow['access']] ))>
                                     </label>
+                                </div>
+
+                                @if ($permissionRow['edit'] || $permissionRow['delete'])
+                                    <div class="rm-role-permission-children" data-role-dependent-actions>
+                                        @if ($permissionRow['edit'])
+                                            <label class="rm-toggle-line rm-role-permission-child">
+                                                <span>{{ $permissionRow['edit_label'] ?? 'Editar' }}</span>
+                                                <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['edit']]))>
+                                            </label>
+                                        @endif
+                                        @if ($permissionRow['delete'])
+                                            <label class="rm-toggle-line rm-role-permission-child">
+                                                <span>Eliminar</span>
+                                                <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['delete']]))>
+                                            </label>
+                                        @endif
+                                    </div>
                                 @endif
-                                @if ($permissionRow['delete'])
-                                    <label class="rm-toggle-line rm-role-permission-child">
-                                        <span>Eliminar</span>
-                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['delete']]))>
-                                    </label>
-                                @endif
-                            </div>
-                        @endif
-                    </section>
-                @endforeach
-            </div>
-            <div class="rm-config-permission-panel" data-config-dependent-panel>
-                <h3 class="rm-permission-title">Configuracion y subcategorias</h3>
-                <div class="rm-permission-grid">
-                    @foreach ($configPermissions as $permissionKey => $permissionLabel)
-                        <label class="form-check rm-modal-check">
-                            <input class="form-check-input" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedPermissions[$permissionKey]))>
-                            <span class="form-check-label">{{ $permissionLabel }}</span>
-                        </label>
-                    @endforeach
+                            </section>
+                        @endforeach
+                    </div>
+
+                    <div class="rm-config-permission-panel" data-config-dependent-panel>
+                        <h3 class="rm-permission-title">Configuracion y subcategorias</h3>
+                        <div class="rm-permission-grid">
+                            @foreach ($configPermissions as $permissionKey => $permissionLabel)
+                                <label class="rm-toggle-line rm-config-permission-switch">
+                                    <span>{{ $permissionLabel }}</span>
+                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedPermissions[$permissionKey]))>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                </form>
+
+                <div class="rm-inline-actions">
+                    <button class="btn-nova btn-nova-secondary" type="button" data-role-cancel hidden>
+                        <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                        <span>Cancelar</span>
+                    </button>
+                    <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-roles">
+                        <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                        <span>Guardar</span>
+                    </button>
                 </div>
             </div>
-        </form>
+        </div>
     </section>
 @endif
 
 @if ($activePanel === 'usuarios-permisos')
     @php
         $userOptions = collect($users ?? [])
-            ->filter(fn ($user) => strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo'))) === 'activo')
+            ->filter(function ($user) {
+                $ticStatus = strtolower(trim((string) ($user['estado_usuario'] ?? 'activo')));
+                $novaStatus = strtolower(trim((string) ($user['estado_nova'] ?? $user['estado'] ?? 'activo')));
+
+                return $ticStatus === 'activo' && $novaStatus === 'activo';
+            })
             ->sortBy(fn ($user) => trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: ($user['id'] ?? ''))
             ->values();
         $firstUser = $userOptions->first();
-        $selectedUserId = (string) request('user_id', (string) ($firstUser['id'] ?? ''));
+        $selectedUserId = (string) request('user_id', session('redmine_selected_user_permissions', (string) ($firstUser['id'] ?? '')));
         $selectedUser = $userOptions->first(fn ($user) => (string) ($user['id'] ?? '') === $selectedUserId);
+        if (!$selectedUser && $firstUser) {
+            $selectedUser = $firstUser;
+            $selectedUserId = (string) ($firstUser['id'] ?? '');
+        }
         $selectedUserRole = (string) ($selectedUser['rol'] ?? 'usuario');
         $selectedUserPermissions = is_array($selectedUser['permisos'] ?? null)
             ? $selectedUser['permisos']
@@ -705,7 +1002,7 @@
             : '';
         $userPermissionFormAction = $redmineRoute('redmine.native.config.action', ['panel' => 'usuarios-permisos', 'user_id' => $selectedUserId]);
     @endphp
-    <section class="card nova-card rm-panel rm-config-feature-form">
+    <section class="card nova-card rm-panel rm-config-feature-form rm-permissions-page">
         <div class="rm-feature-head">
             <span class="rm-feature-head-icon is-orange"><i class="bi bi-person-lock"></i></span>
             <div>
@@ -719,120 +1016,160 @@
             </div>
         </div>
         @if ($selectedUser)
-            <div class="rm-role-toolbar rm-user-permission-toolbar">
-                <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-role-select-form">
-                    <input type="hidden" name="panel" value="usuarios-permisos">
-                    <label class="form-label" for="rm-user-permission-select">Usuario activo</label>
-                    <div class="rm-role-select-row">
-                        <select class="form-select" id="rm-user-permission-select" name="user_id" onchange="this.form.submit()">
+            <div class="rm-permissions-layout">
+                <aside class="rm-permissions-list-panel">
+                    <div class="rm-permissions-list-head">
+                        <div>
+                            <h3>Usuarios activos</h3>
+                            <p>{{ $userOptions->count() }} usuario(s) disponible(s)</p>
+                        </div>
+                        <span>{{ $selectedUserActiveCount }} activos</span>
+                    </div>
+                    <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-role-dropdown-card" data-user-permission-picker>
+                        <input type="hidden" name="panel" value="usuarios-permisos">
+                        <input type="hidden" name="user_id" value="{{ $selectedUserId }}" data-user-permission-id>
+                        <span class="rm-permission-selector-icon"><i class="bi bi-person"></i></span>
+                        <span class="rm-permission-selector-copy">
+                            <strong>Usuario seleccionado</strong>
+                            <small>{{ $selectedUserName }} · {{ $selectedUserRole }}</small>
+                        </span>
+                        <div class="rm-user-search-row">
+                            <input
+                                class="form-control"
+                                type="search"
+                                list="rm-user-permission-options"
+                                value="{{ $selectedUserName }} · {{ $selectedUserRole }} · ID {{ $selectedUserId }}"
+                                placeholder="Buscar usuario por nombre, rol o ID"
+                                aria-label="Buscar usuario"
+                                autocomplete="off"
+                                data-user-permission-search
+                            >
+                            <button class="btn-nova btn-nova-primary" type="submit" title="Cargar usuario" aria-label="Cargar usuario"><i class="bi bi-search"></i></button>
+                        </div>
+                        <datalist id="rm-user-permission-options">
                             @foreach ($userOptions as $userOption)
                                 @php
                                     $userOptionId = (string) ($userOption['id'] ?? '');
                                     $userOptionName = trim(($userOption['nombre'] ?? '') . ' ' . ($userOption['apellido'] ?? '')) ?: $userOptionId;
+                                    $userOptionRole = (string) ($userOption['rol'] ?? 'usuario');
                                 @endphp
-                                <option value="{{ $userOptionId }}" @selected($selectedUserId === $userOptionId)>{{ $userOptionName }}</option>
+                                <option value="{{ $userOptionName }} · {{ $userOptionRole }} · ID {{ $userOptionId }}" data-user-id="{{ $userOptionId }}"></option>
                             @endforeach
-                        </select>
+                        </datalist>
+                    </form>
+                </aside>
+
+                <div class="rm-permissions-editor-panel">
+                    <div class="rm-permissions-editor-head">
+                        <div>
+                            <small>Permisos por usuario</small>
+                            <h3>{{ $selectedUserName }}</h3>
+                            <p>ID {{ $selectedUser['id'] ?? '-' }} · Rol actual: {{ $selectedUserRole }}</p>
+                        </div>
                         <div class="rm-role-summary">
                             <strong data-user-active-count>{{ $selectedUserActiveCount }}</strong>
                             <span>activos</span>
                         </div>
                     </div>
-                </form>
-                <div class="rm-user-permission-meta">
-                    <span><i class="bi bi-person-badge"></i> ID {{ $selectedUser['id'] ?? '-' }}</span>
-                    <span><i class="bi bi-shield-check"></i> Rol actual: {{ $selectedUserRole }}</span>
-                    <span><i class="bi bi-circle-fill"></i> Activo</span>
+
+                    <form id="rm-config-form-usuarios-permisos" class="rm-permissions-inline-form" method="post" action="{{ $userPermissionFormAction }}" data-user-permission-form data-inline-restore-form>
+                        @csrf
+                        <input type="hidden" name="config_action" value="save_user_permissions">
+                        <input type="hidden" name="user_id" value="{{ $selectedUserId }}">
+                        <input type="hidden" name="apply_role_permissions" value="0" data-apply-role-permissions>
+
+                        <div class="rm-user-permission-actions">
+                            <label class="rm-inline-field">
+                                <span>Rol asignado</span>
+                                <select class="form-select" name="user_role" aria-label="Rol asignado" data-user-role-select data-current-user-role="{{ $selectedUserRole }}">
+                                    @foreach (array_unique(array_merge(array_keys($roles), [$selectedUserRole])) as $roleOption)
+                                        <option value="{{ $roleOption }}" @selected($selectedUserRole === $roleOption)>{{ $roleOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <button class="btn-nova btn-nova-info" type="button" data-load-role-permissions>
+                                <i class="bi bi-arrow-repeat"></i>Cargar permisos del rol
+                            </button>
+                            <button class="btn-nova btn-nova-secondary" type="button" data-reset-user-permissions>
+                                <i class="bi bi-eraser"></i>Restaurar
+                            </button>
+                        </div>
+
+                        <div class="rm-scope-panel">
+                            <h3 class="rm-permission-title">Alcance</h3>
+                            <div class="rm-scope-grid">
+                                @foreach ($rolePermissionRows as $permissionRow)
+                                    @if ($permissionRow['scope'])
+                                        <label class="rm-scope-card">
+                                            <span>{{ $permissionRow['label'] }}</span>
+                                            <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
+                                                <option value="todos" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
+                                                <option value="asignados" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Asignados</option>
+                                            </select>
+                                        </label>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="rm-role-permission-list">
+                            @foreach ($rolePermissionRows as $permissionRow)
+                                <section class="rm-role-permission-item">
+                                    <div class="rm-role-permission-main">
+                                        <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
+                                        <label class="rm-toggle-line">
+                                            <span>Ver</span>
+                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedUserPermissions[$permissionRow['access']] ))>
+                                        </label>
+                                    </div>
+
+                                    @if ($permissionRow['edit'] || $permissionRow['delete'])
+                                        <div class="rm-role-permission-children" data-role-dependent-actions>
+                                            @if ($permissionRow['edit'])
+                                                <label class="rm-toggle-line rm-role-permission-child">
+                                                    <span>{{ $permissionRow['edit_label'] ?? 'Editar' }}</span>
+                                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['edit']]))>
+                                                </label>
+                                            @endif
+                                            @if ($permissionRow['delete'])
+                                                <label class="rm-toggle-line rm-role-permission-child">
+                                                    <span>Eliminar</span>
+                                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['delete']]))>
+                                                </label>
+                                            @endif
+                                        </div>
+                                    @endif
+                                </section>
+                            @endforeach
+                        </div>
+
+                        <div class="rm-config-permission-panel" data-config-dependent-panel>
+                            <h3 class="rm-permission-title">Configuracion y subcategorias</h3>
+                            <div class="rm-permission-grid">
+                                @foreach ($configPermissions as $permissionKey => $permissionLabel)
+                                    <label class="rm-toggle-line rm-config-permission-switch">
+                                        <span>{{ $permissionLabel }}</span>
+                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedUserPermissions[$permissionKey]))>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="rm-inline-actions is-two">
+                        <button class="btn-nova btn-nova-secondary" type="button" data-user-permission-cancel hidden>
+                            <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                            <span>Cancelar</span>
+                        </button>
+                        <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-usuarios-permisos">
+                            <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
+                            <span>Guardar</span>
+                        </button>
+                    </div>
                 </div>
             </div>
-
-            <form method="post" action="{{ $userPermissionFormAction }}" data-user-permission-form>
-                @csrf
-                <input type="hidden" name="config_action" value="save_user_permissions">
-                <input type="hidden" name="user_id" value="{{ $selectedUserId }}">
-                <div class="rm-section-head mt-3">
-                    <div>
-                        <h2>Usuarios y permisos</h2>
-                        <p>{{ $selectedUserName }}. Permisos personalizados para este usuario activo.</p>
-                    </div>
-                    <div class="rm-user-permission-actions">
-                        <label class="rm-inline-field">
-                            <span>Rol asignado</span>
-                            <select class="form-select" name="user_role" aria-label="Rol asignado" data-user-role-select data-current-user-role="{{ $selectedUserRole }}">
-                                @foreach (array_unique(array_merge(array_keys($roles), [$selectedUserRole])) as $roleOption)
-                                    <option value="{{ $roleOption }}" @selected($selectedUserRole === $roleOption)>{{ $roleOption }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                        <button class="btn-nova btn-nova-info" type="button" data-load-role-permissions>
-                            <i class="bi bi-arrow-repeat"></i>Cargar permisos del rol
-                        </button>
-                        <button class="btn-nova btn-nova-secondary" type="button" data-reset-user-permissions>
-                            <i class="bi bi-eraser"></i>Limpiar
-                        </button>
-                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
-                    </div>
-                </div>
-                <div class="rm-scope-panel">
-                    <h3 class="rm-permission-title">Alcance</h3>
-                    <div class="rm-scope-grid">
-                        @foreach ($rolePermissionRows as $permissionRow)
-                            @if ($permissionRow['scope'])
-                                <label class="rm-scope-card">
-                                    <span>{{ $permissionRow['label'] }}</span>
-                                    <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
-                                        <option value="todos" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
-                                        <option value="asignados" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Asignados</option>
-                                    </select>
-                                </label>
-                            @endif
-                        @endforeach
-                    </div>
-                </div>
-                <div class="rm-role-permission-list">
-                    @foreach ($rolePermissionRows as $permissionRow)
-                        <section class="rm-role-permission-item">
-                            <div class="rm-role-permission-main">
-                                <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
-                                <label class="rm-toggle-line">
-                                    <span>Ver</span>
-                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedUserPermissions[$permissionRow['access']] ))>
-                                </label>
-                            </div>
-
-                            @if ($permissionRow['edit'] || $permissionRow['delete'])
-                                <div class="rm-role-permission-children" data-role-dependent-actions>
-                                    @if ($permissionRow['edit'])
-                                        <label class="rm-toggle-line rm-role-permission-child">
-                                            <span>Editar</span>
-                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['edit']]))>
-                                        </label>
-                                    @endif
-                                    @if ($permissionRow['delete'])
-                                        <label class="rm-toggle-line rm-role-permission-child">
-                                            <span>Eliminar</span>
-                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['delete']]))>
-                                        </label>
-                                    @endif
-                                </div>
-                            @endif
-                        </section>
-                    @endforeach
-                </div>
-                <div class="rm-config-permission-panel" data-config-dependent-panel>
-                    <h3 class="rm-permission-title">Configuracion y subcategorias</h3>
-                    <div class="rm-permission-grid">
-                        @foreach ($configPermissions as $permissionKey => $permissionLabel)
-                            <label class="form-check rm-modal-check">
-                                <input class="form-check-input" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedUserPermissions[$permissionKey]))>
-                                <span class="form-check-label">{{ $permissionLabel }}</span>
-                            </label>
-                        @endforeach
-                    </div>
-                </div>
-            </form>
         @else
-            <div class="rm-empty-state">Sin usuarios activos registrados.</div>
+            <div class="nova-empty-state">Sin usuarios activos registrados.</div>
         @endif
     </section>
 @endif
@@ -872,6 +1209,132 @@
         @include('redmine_tic::native-sections.units', ['units' => $units ?? []])
     </section>
 @endif
+
+    </main>
+</div>
+
+<script>
+    const closeConfigDrawer = (drawer) => {
+        if (!drawer) return;
+
+        const instance = window.bootstrap?.Offcanvas?.getInstance(drawer);
+        if (instance) {
+            try { instance.hide(); } catch (error) {}
+        }
+
+        window.setTimeout(() => {
+            drawer.classList.remove('show', 'showing', 'hiding');
+            drawer.setAttribute('aria-hidden', 'true');
+            drawer.removeAttribute('aria-modal');
+            drawer.removeAttribute('role');
+            drawer.style.visibility = '';
+            drawer.style.transform = '';
+            drawer.style.zIndex = drawer.dataset.previousZIndex || '';
+            delete drawer.dataset.previousZIndex;
+
+            document.querySelectorAll('.offcanvas-backdrop').forEach((backdrop) => backdrop.remove());
+            if (!document.querySelector('.modal.show')) {
+                document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
+                document.body.classList.remove('modal-open', 'rm-confirm-open');
+            }
+            if (!document.querySelector('.offcanvas.show')) {
+                document.body.classList.remove('offcanvas-backdrop');
+            }
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+
+            drawer.dispatchEvent(new Event('hidden.bs.offcanvas'));
+        }, 0);
+    };
+
+    document.addEventListener('click', (event) => {
+        const closeButton = event.target.closest('.rm-config-edit-drawer .btn-close');
+        if (!closeButton) return;
+
+        const drawer = closeButton.closest('.rm-config-edit-drawer');
+        if (!drawer) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeConfigDrawer(drawer);
+    }, true);
+
+    document.querySelectorAll('.rm-config-edit-drawer').forEach((drawer) => {
+        const forms = Array.from(drawer.querySelectorAll('[data-restore-on-close]'));
+        const fieldsFor = (form) => Array.from(form.querySelectorAll('input:not([type="hidden"]), textarea, select'));
+        const snapshot = () => {
+            forms.forEach((form) => {
+                fieldsFor(form).forEach((field) => {
+                    if (field.type === 'checkbox' || field.type === 'radio') {
+                        field.dataset.originalChecked = field.checked ? '1' : '0';
+                    } else {
+                        field.dataset.originalValue = field.value;
+                    }
+                });
+            });
+        };
+        const restore = () => {
+            forms.forEach((form) => {
+                fieldsFor(form).forEach((field) => {
+                    if (field.type === 'checkbox' || field.type === 'radio') {
+                        field.checked = field.dataset.originalChecked === '1';
+                    } else {
+                        field.value = Object.prototype.hasOwnProperty.call(field.dataset, 'originalValue') ? field.dataset.originalValue : '';
+                    }
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        };
+
+        drawer.addEventListener('show.bs.offcanvas', snapshot);
+        drawer.addEventListener('hidden.bs.offcanvas', restore);
+    });
+
+    document.querySelectorAll('[data-clear-drawer-form]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const form = document.querySelector(button.dataset.clearDrawerForm || '');
+            if (!form) return;
+
+            const clearForm = () => {
+                const preserveNames = (button.dataset.clearPreserve || '').split(',').map((name) => name.trim()).filter(Boolean);
+                const preservedValues = {};
+                preserveNames.forEach((name) => {
+                    const field = form.elements[name];
+                    if (field) preservedValues[name] = field.value;
+                });
+
+                form.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach((field) => {
+                    if (preserveNames.includes(field.name)) {
+                        return;
+                    }
+                    if (field.type === 'checkbox' || field.type === 'radio') {
+                        field.checked = false;
+                    } else if (field.tagName === 'SELECT') {
+                        field.selectedIndex = 0;
+                    } else {
+                        field.value = '';
+                    }
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                Object.entries(preservedValues).forEach(([name, value]) => {
+                    const field = form.elements[name];
+                    if (!field) return;
+                    field.value = value;
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            };
+
+            const message = button.dataset.clearConfirm || 'Eliminar los valores de este formulario?';
+            if (window.appUi?.confirmAction) {
+                window.appUi.confirmAction(message, clearForm, { title: 'Confirmar eliminacion' });
+                return;
+            }
+
+            if (!window.confirm(message)) return;
+            clearForm();
+        });
+    });
+</script>
 
 @if ($activePanel === 'redmine')
     <script>
@@ -943,12 +1406,28 @@
     <script>
         const rolePermissionPayloads = @json($roles);
         const currentUserPermissionPayload = @json($selectedUserPermissions);
+        const userPermissionForm = document.querySelector('[data-user-permission-form]');
+        const applyRolePermissionsInput = document.querySelector('[data-apply-role-permissions]');
+        const userPermissionCancel = document.querySelector('[data-user-permission-cancel]');
         const rolePermissionScopes = [
             { input: 'perm_mensajes_scope', key: 'mensajes' },
             { input: 'perm_horas_scope', key: 'horas_extra' },
             { input: 'perm_historico_scope', key: 'historico_scope' },
         ];
         const ignoredActivePermissionKeys = ['mensajes', 'horas_extra', 'historico_scope'];
+        const userPermissionState = () => {
+            if (!userPermissionForm) return '';
+            const data = new FormData(userPermissionForm);
+            data.delete('_token');
+            data.delete('config_action');
+            return new URLSearchParams(data).toString();
+        };
+        const initialUserPermissionState = userPermissionState();
+        const syncUserPermissionDirty = () => {
+            if (userPermissionCancel) {
+                userPermissionCancel.hidden = userPermissionState() === initialUserPermissionState;
+            }
+        };
 
         const applyPermissionPayload = (permissions) => {
             const form = document.querySelector('[data-user-permission-form]');
@@ -968,8 +1447,9 @@
             const count = Object.entries(permissions).filter(([key, value]) => {
                 return !ignoredActivePermissionKeys.includes(key) && value === true;
             }).length;
-            const countTarget = document.querySelector('[data-user-active-count]');
-            if (countTarget) countTarget.textContent = String(count);
+            document.querySelectorAll('[data-user-active-count]').forEach((countTarget) => {
+                countTarget.textContent = String(count);
+            });
 
             document.querySelectorAll('.rm-role-permission-item').forEach((item) => {
                 syncRoleDependentActions(item);
@@ -982,6 +1462,17 @@
             const roleName = roleSelect?.value || '';
             if (rolePermissionPayloads[roleName]) {
                 applyPermissionPayload(rolePermissionPayloads[roleName]);
+                if (applyRolePermissionsInput) applyRolePermissionsInput.value = '1';
+                syncUserPermissionDirty();
+            }
+        });
+
+        document.querySelector('[data-user-role-select]')?.addEventListener('change', (event) => {
+            const roleName = event.target?.value || '';
+            if (rolePermissionPayloads[roleName]) {
+                applyPermissionPayload(rolePermissionPayloads[roleName]);
+                if (applyRolePermissionsInput) applyRolePermissionsInput.value = '1';
+                syncUserPermissionDirty();
             }
         });
 
@@ -991,24 +1482,60 @@
                 roleSelect.value = roleSelect.dataset.currentUserRole || roleSelect.value;
             }
             applyPermissionPayload(currentUserPermissionPayload);
+            if (applyRolePermissionsInput) applyRolePermissionsInput.value = '0';
+            syncUserPermissionDirty();
         });
 
-        const openUserPermissions = @json(session('redmine_open_user_permissions'));
-        if (openUserPermissions) {
-            const trigger = Array.from(document.querySelectorAll('[data-user-permissions-id]')).find((button) => button.dataset.userPermissionsId === openUserPermissions);
-            const modal = trigger ? document.querySelector(trigger.dataset.bsTarget || '') : null;
-            if (modal) {
-                if (window.bootstrap?.Modal) {
-                    window.bootstrap.Modal.getOrCreateInstance(modal).show();
-                } else {
-                    modal.classList.add('show');
-                    modal.removeAttribute('aria-hidden');
-                    modal.setAttribute('aria-modal', 'true');
-                    modal.style.display = 'block';
-                    document.body.classList.add('modal-open');
-                }
+        userPermissionForm?.querySelectorAll('input, select').forEach((field) => {
+            field.addEventListener('change', () => {
+                if (field.name.startsWith('perm_') && applyRolePermissionsInput) applyRolePermissionsInput.value = '0';
+                syncUserPermissionDirty();
+            });
+        });
+        userPermissionForm?.addEventListener('input', syncUserPermissionDirty);
+        userPermissionCancel?.addEventListener('click', () => {
+            const roleSelect = document.querySelector('[data-user-role-select]');
+            if (roleSelect) roleSelect.value = roleSelect.dataset.currentUserRole || roleSelect.value;
+            applyPermissionPayload(currentUserPermissionPayload);
+            if (applyRolePermissionsInput) applyRolePermissionsInput.value = '0';
+            syncUserPermissionDirty();
+        });
+
+        const userPicker = document.querySelector('[data-user-permission-picker]');
+        const userSearch = userPicker?.querySelector('[data-user-permission-search]');
+        const userIdInput = userPicker?.querySelector('[data-user-permission-id]');
+        const userOptions = Array.from(document.querySelectorAll('#rm-user-permission-options option'));
+        const selectedUserId = @json($selectedUserId);
+        const findUserOption = () => userOptions.find((option) => option.value === userSearch?.value);
+        const syncUserPicker = () => {
+            if (!userSearch || !userIdInput) return null;
+            const option = findUserOption();
+            userSearch.setCustomValidity('');
+            if (option) {
+                userIdInput.value = option.dataset.userId || '';
             }
-        }
+            return option;
+        };
+
+        userSearch?.addEventListener('input', syncUserPicker);
+        userSearch?.addEventListener('change', () => {
+            const option = syncUserPicker();
+            const nextUserId = option?.dataset.userId || '';
+            if (nextUserId !== '' && nextUserId !== selectedUserId) {
+                userPicker?.requestSubmit();
+            }
+        });
+        userPicker?.addEventListener('submit', (event) => {
+            const option = syncUserPicker();
+            if (!option || !userSearch || !userIdInput) {
+                event.preventDefault();
+                userSearch?.setCustomValidity('Selecciona un usuario de la lista.');
+                userSearch?.reportValidity();
+                return;
+            }
+            userIdInput.value = option.dataset.userId || '';
+        });
+
     </script>
 @endif
 
@@ -1020,7 +1547,7 @@
             if (!access || !dependents) return;
             dependents.hidden = !access.checked;
             dependents.querySelectorAll('input, select, button').forEach((control) => {
-                control.disabled = !access.checked;
+                control.disabled = control.hasAttribute('data-permission-locked') || !access.checked;
             });
         };
 
@@ -1033,12 +1560,38 @@
             const access = document.querySelector('[data-config-access-toggle]');
             const panel = document.querySelector('[data-config-dependent-panel]');
             if (!access || !panel) return;
-            panel.hidden = !access.checked;
+            panel.classList.toggle('is-disabled', !access.checked);
+            panel.setAttribute('aria-disabled', access.checked ? 'false' : 'true');
             panel.querySelectorAll('input, select, button').forEach((control) => {
+                if (!access.checked && control instanceof HTMLInputElement && control.type === 'checkbox') {
+                    control.checked = false;
+                }
                 control.disabled = !access.checked;
             });
         };
         syncConfigDependentPanel();
+        const roleForm = document.getElementById('rm-config-form-roles');
+        const roleCancel = document.querySelector('[data-role-cancel]');
+        if (roleForm && roleCancel) {
+            const roleState = () => {
+                const data = new FormData(roleForm);
+                data.delete('_token');
+                data.delete('config_action');
+                return new URLSearchParams(data).toString();
+            };
+            const initialRoleState = roleState();
+            const syncRoleDirty = () => {
+                roleCancel.hidden = roleState() === initialRoleState;
+            };
+            roleForm.addEventListener('input', syncRoleDirty);
+            roleForm.addEventListener('change', syncRoleDirty);
+            roleCancel.addEventListener('click', () => {
+                roleForm.reset();
+                document.querySelectorAll('.rm-role-permission-item').forEach(syncRoleDependentActions);
+                syncConfigDependentPanel();
+                roleCancel.hidden = true;
+            });
+        }
         document.querySelector('[data-config-access-toggle]')?.addEventListener('change', syncConfigDependentPanel);
 
         document.querySelectorAll('[data-nova-modal-close]').forEach((button) => {
@@ -1076,205 +1629,5 @@
     </script>
 @endif
 
-<style>
-    .rm-config-nav { display: flex; gap: 8px; flex-wrap: wrap; }
-    .rm-config-nav-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; border: 1px solid var(--nova-line); border-radius: 10px; background: #fff; color: var(--nova-text); font-weight: 800; text-decoration: none; }
-    .rm-config-nav-link.active { background: var(--nova-primary); border-color: var(--nova-primary); color: #fff; }
-    .rm-panel { border: 1px solid #d8e3f4; border-radius: 16px; background: linear-gradient(180deg, #fff 0%, #fbfdff 100%); box-shadow: 0 14px 30px rgba(15, 23, 42, .055); }
-    .rm-panel > .rm-section-head { align-items: center; margin: -2px 0 16px; padding: 0 0 14px; border-bottom: 1px solid var(--nova-line); }
-    .rm-panel > .rm-section-head h2 { color: #0f172a; font-size: 1.08rem; font-weight: 900; }
-    .rm-panel > .rm-section-head p { color: var(--nova-muted); font-weight: 700; }
-    .rm-panel > .row.g-3,
-    .rm-panel form > .row.g-3 { padding: 2px; }
-    .rm-panel .form-label { margin-bottom: 6px; color: #334155; font-size: .86rem; font-weight: 900; }
-    .rm-panel .form-control,
-    .rm-panel .form-select { min-height: 42px; border-color: #d8e3f4; border-radius: 12px; background-color: #fff; font-weight: 700; box-shadow: 0 8px 18px rgba(15, 23, 42, .025); }
-    .rm-panel .form-control:focus,
-    .rm-panel .form-select:focus { border-color: var(--nova-primary); box-shadow: var(--nova-focus); }
-    .rm-panel .form-text { color: var(--nova-muted); }
-    .rm-panel .alert { border: 0; border-radius: 13px; padding: 13px 16px; }
-    .rm-panel .btn { min-height: 40px; border-radius: 11px; font-weight: 900; }
-    .rm-panel > .row.g-3 > .col-12:last-child .btn[type="submit"],
-    .rm-panel > .row.g-3 > .col-12:last-child > .btn-primary,
-    .rm-panel form > .row.g-3 > .col-12:last-child .btn[type="submit"] { min-width: 190px; }
-    .modal-content { border: 0; border-radius: 18px; box-shadow: 0 28px 70px rgba(15, 23, 42, .28); overflow: hidden; }
-    .modal-header { background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%); border-bottom: 1px solid #d8e3f4; }
-    .modal-title { color: #0f172a; font-weight: 900; }
-    .modal-body { background: #fff; }
-    .modal-footer { background: #f8fbff; border-top: 1px solid #d8e3f4; }
-    .rm-config-summary { display: grid; gap: 16px; }
-    .rm-config-summary-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-    .rm-summary-kpi { display: flex; align-items: center; gap: 12px; min-height: 92px; padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #fff; box-shadow: 0 12px 26px rgba(15, 23, 42, .05); }
-    .rm-summary-kpi > span { display: grid; width: 46px; height: 46px; place-items: center; flex: 0 0 auto; border-radius: 14px; color: #fff; font-size: 1.25rem; }
-    .rm-summary-kpi > span.is-blue { background: linear-gradient(135deg, #2563eb, #4f86f7); }
-    .rm-summary-kpi > span.is-cyan { background: linear-gradient(135deg, #0ea5e9, #14b8a6); }
-    .rm-summary-kpi > span.is-green { background: linear-gradient(135deg, #10b981, #22c55e); }
-    .rm-summary-kpi > span.is-orange { background: linear-gradient(135deg, #f97316, #f59e0b); }
-    .rm-summary-kpi > span.is-slate { background: linear-gradient(135deg, #64748b, #94a3b8); }
-    .rm-summary-kpi small { display: block; color: var(--nova-muted); font-size: .8rem; font-weight: 900; }
-    .rm-summary-kpi strong { display: block; color: #0f172a; font-size: 1.45rem; line-height: 1.1; font-weight: 900; overflow-wrap: anywhere; }
-    .rm-config-summary-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 16px; align-items: stretch; }
-    .rm-summary-card { min-width: 0; }
-    .rm-summary-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--nova-line); }
-    .rm-summary-card-head > span { display: grid; width: 44px; height: 44px; place-items: center; flex: 0 0 auto; border-radius: 14px; background: #eef6ff; color: var(--nova-primary); border: 1px solid #d4e4f7; font-size: 1.2rem; }
-    .rm-summary-card-head h2 { margin: 0; color: #0f172a; font-size: 1.05rem; font-weight: 900; }
-    .rm-summary-card-head p { margin: 3px 0 0; color: var(--nova-muted); font-weight: 700; }
-    .rm-summary-list,
-    .rm-summary-operation-grid { display: grid; gap: 10px; }
-    .rm-summary-operation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .rm-summary-list div,
-    .rm-summary-operation-grid div { min-width: 0; padding: 12px; border: 1px solid #d8e3f4; border-radius: 12px; background: #f8fbff; }
-    .rm-summary-list span,
-    .rm-summary-operation-grid span { display: block; margin-bottom: 4px; color: var(--nova-muted); font-size: .78rem; font-weight: 900; text-transform: uppercase; }
-    .rm-summary-list strong,
-    .rm-summary-operation-grid strong { display: block; min-width: 0; color: #0f172a; font-size: .95rem; line-height: 1.25; font-weight: 900; overflow-wrap: anywhere; word-break: break-word; }
-    .rm-config-feature-form { display: grid; gap: 16px; padding: 18px; }
-    .rm-feature-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 16px; border: 1px solid #d8e3f4; border-radius: 14px; background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); }
-    .rm-feature-head-icon { display: grid; width: 54px; height: 54px; place-items: center; border-radius: 16px; color: #fff; font-size: 1.45rem; box-shadow: 0 16px 32px rgba(15, 23, 42, .14); }
-    .rm-feature-head-icon.is-blue { background: linear-gradient(135deg, #2563eb, #0ea5e9); }
-    .rm-feature-head-icon.is-cyan { background: linear-gradient(135deg, #0891b2, #14b8a6); }
-    .rm-feature-head-icon.is-green { background: linear-gradient(135deg, #16a34a, #22c55e); }
-    .rm-feature-head-icon.is-orange { background: linear-gradient(135deg, #f59e0b, #f97316); }
-    .rm-feature-head small { display: block; margin-bottom: 2px; color: var(--nova-primary); font-size: .72rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .rm-feature-head h2 { margin: 0; color: #0f172a; font-size: 1.2rem; font-weight: 900; }
-    .rm-feature-head p { margin: 4px 0 0; color: var(--nova-muted); font-weight: 700; }
-    .rm-feature-meter { display: grid; min-width: 128px; justify-items: center; gap: 2px; padding: 10px 12px; border: 1px solid #d4e4f7; border-radius: 14px; background: #fff; color: #0f315f; }
-    .rm-feature-meter strong { color: #0f172a; font-size: 1.35rem; line-height: 1; font-weight: 900; }
-    .rm-feature-meter span { color: var(--nova-muted); font-size: .72rem; font-weight: 900; text-transform: uppercase; }
-    .rm-feature-meter.is-ok strong { color: #15803d; }
-    .rm-feature-meter.is-warning strong { color: #b45309; }
-    .rm-config-card-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-    .rm-config-card-grid.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .rm-config-card-grid.is-project { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-    .rm-config-card-grid.is-project .rm-config-field-card { grid-column: span 2; }
-    .rm-config-card-grid.is-project .rm-config-field-card:first-child,
-    .rm-config-card-grid.is-project .rm-config-field-card:nth-child(2) { grid-column: span 3; }
-    .rm-config-field-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 11px; align-items: start; min-height: 154px; padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #fff; box-shadow: 0 10px 24px rgba(15, 23, 42, .045); }
-    .rm-config-field-card.is-secret { background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }
-    .rm-config-field-card .form-control { grid-column: 1 / -1; }
-    .rm-config-field-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 13px; background: #eef6ff; color: var(--nova-primary); border: 1px solid #d4e4f7; font-size: 1.1rem; }
-    .rm-config-field-copy { display: grid; gap: 3px; min-width: 0; }
-    .rm-config-field-copy strong { color: #0f172a; font-size: .96rem; font-weight: 900; line-height: 1.18; }
-    .rm-config-field-copy small { color: var(--nova-muted); font-size: .78rem; font-weight: 700; line-height: 1.35; }
-    .rm-feature-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 2px; }
-    .rm-retention-layout,
-    .rm-maintenance-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .42fr); gap: 14px; align-items: stretch; }
-    .rm-retention-control { min-height: 170px; }
-    .rm-number-field { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(120px, 180px) auto; gap: 10px; align-items: center; }
-    .rm-number-field span { color: var(--nova-muted); font-weight: 900; }
-    .rm-config-side-card { display: grid; align-content: center; gap: 8px; min-height: 170px; padding: 18px; border: 1px solid #d8e3f4; border-radius: 14px; background: linear-gradient(145deg, #0f315f, #1d4ed8); color: #fff; box-shadow: 0 18px 36px rgba(37, 99, 235, .16); }
-    .rm-config-side-card i { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 14px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.24); font-size: 1.28rem; }
-    .rm-config-side-card strong { font-size: 1.05rem; font-weight: 900; }
-    .rm-config-side-card span { color: rgba(255,255,255,.78); font-weight: 700; line-height: 1.45; }
-    .rm-config-side-card.is-ok { background: linear-gradient(145deg, #14532d, #16a34a); }
-    .rm-config-side-card.is-warning { background: linear-gradient(145deg, #7c2d12, #f97316); }
-    .rm-maintenance-control-card { display: grid; gap: 12px; }
-    .rm-maintenance-date { min-height: 128px; }
-    .rm-maintenance-box { border: 1px solid #d8e3f4; border-radius: 14px; padding: 16px; background: #f8fbff; box-shadow: 0 10px 22px rgba(15, 23, 42, .035); }
-    .rm-maintenance-box h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 1rem; font-weight: 900; }
-    .rm-maintenance-box p { min-height: 42px; margin: 0 0 12px; color: var(--nova-muted); }
-    .rm-maintenance-box .form-check { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-weight: 700; }
-    .rm-maintenance-switch { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; padding: 14px 16px; border: 1px solid #d8e3f4; border-radius: 14px; background: #f8fbff; cursor: pointer; box-shadow: 0 10px 22px rgba(15, 23, 42, .035); }
-    .rm-maintenance-switch strong { display: block; color: #0f172a; font-weight: 900; }
-    .rm-maintenance-switch i { display: inline-grid; width: 32px; height: 32px; margin-right: 8px; place-items: center; border-radius: 10px; background: #eef6ff; color: var(--nova-primary); border: 1px solid #d4e4f7; }
-    .rm-maintenance-switch small { display: block; margin-top: 3px; color: var(--nova-muted); font-weight: 700; }
-    .rm-maintenance-switch .form-switch { margin: 0; padding-left: 0; }
-    .rm-maintenance-switch .form-check-input { width: 3.4rem; height: 1.75rem; margin: 0; cursor: pointer; }
-    .rm-option-panel { position: relative; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 16px; min-height: 150px; transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease; }
-    .rm-option-panel::after { content: "Abrir"; position: absolute; right: 16px; bottom: 14px; padding: 5px 9px; border-radius: 999px; background: #eef6ff; color: var(--nova-primary); border: 1px solid #d4e4f7; font-size: .72rem; font-weight: 900; pointer-events: none; }
-    .rm-option-panel:hover { border-color: var(--nova-primary); box-shadow: 0 18px 34px rgba(37, 99, 235, .14); }
-    .rm-option-panel-icon { position: relative; z-index: 2; display: grid; flex: 0 0 58px; width: 58px; height: 58px; place-items: center; border-radius: 16px; background: #eef6ff; color: var(--nova-primary); border: 1px solid #d4e4f7; font-size: 1.8rem; pointer-events: none; }
-    .rm-option-panel .rm-section-head { position: relative; z-index: 2; margin-bottom: 0; pointer-events: none; }
-    .rm-redmine-card-hit { position: absolute; inset: 0; z-index: 3; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
-    .rm-option-panel .modal { z-index: 1055; text-align: left; }
-    .rm-option-list { display: grid; gap: 10px; }
-    .rm-option-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px; border: 1px solid #d8e3f4; border-radius: 14px; background: linear-gradient(180deg, #fff 0%, #f9fbff 100%); box-shadow: 0 10px 22px rgba(15, 23, 42, .045); }
-    .rm-option-card-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .rm-option-code { display: inline-grid; min-width: 52px; height: 40px; place-items: center; padding: 0 10px; border-radius: 11px; background: #eef6ff; color: #0f315f; border: 1px solid #d4e4f7; font-weight: 900; }
-    .rm-option-copy { min-width: 0; }
-    .rm-option-copy strong { display: block; color: #0f172a; font-size: 1rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rm-option-copy span { display: block; margin-top: 3px; color: var(--nova-muted); font-size: .82rem; font-weight: 700; }
-    .rm-option-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
-    .rm-option-card-actions form { margin: 0; }
-    .rm-modal-check { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #d8e3f4; border-radius: 12px; background: #f8fbff; font-weight: 800; }
-    .rm-modal-check .form-check-input { margin: 0; }
-    .rm-permission-title { margin: 0 0 10px; color: #0f172a; font-size: .95rem; font-weight: 900; }
-    .rm-permission-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .rm-role-toolbar { display: grid; grid-template-columns: minmax(230px, 360px) auto minmax(240px, 1fr); gap: 12px; align-items: end; margin-bottom: 16px; padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #f8fbff; box-shadow: 0 10px 22px rgba(15, 23, 42, .035); }
-    .rm-role-select-form,
-    .rm-create-role-form,
-    .rm-delete-role-form { margin: 0; }
-    .rm-role-select-row { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 8px; align-items: center; }
-    .rm-role-summary { display: flex; align-items: baseline; gap: 5px; padding: 8px 10px; border: 1px solid #d8e3f4; border-radius: 10px; background: #fff; white-space: nowrap; }
-    .rm-role-summary strong { color: var(--nova-primary); font-size: 1.05rem; line-height: 1; }
-    .rm-role-summary span { color: var(--nova-muted); font-weight: 800; }
-    .rm-user-permission-toolbar { grid-template-columns: minmax(260px, 420px) 1fr; }
-    .rm-user-permission-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; align-self: end; }
-    .rm-user-permission-meta span { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 6px 12px; border: 1px solid #d4e4f7; border-radius: 10px; background: #eef6ff; color: #0f172a; font-weight: 800; }
-    .rm-user-permission-meta i { color: var(--nova-primary); font-size: .82rem; }
-    .rm-user-permission-actions { display: grid; grid-template-columns: minmax(150px, 220px) auto auto auto; gap: 10px; align-items: end; }
-    .rm-inline-field { display: grid; gap: 4px; margin: 0; }
-    .rm-inline-field span { color: var(--nova-muted); font-size: .82rem; font-weight: 900; }
-    .rm-inline-field .form-select { border-color: #d4e4f7; background-color: #f8fbff; color: #0f172a; font-weight: 800; }
-    .rm-catalog-action-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #fff; box-shadow: 0 10px 24px rgba(15, 23, 42, .045); }
-    .rm-catalog-action-head strong { display: flex; align-items: center; gap: 8px; color: #0f172a; font-weight: 900; }
-    .rm-catalog-action-head strong i { color: var(--nova-primary); }
-    .rm-catalog-action-head span { display: block; margin-top: 3px; color: var(--nova-muted); font-weight: 700; }
-    .rm-catalog-action-head form { margin: 0; }
-    .rm-catalog-panel { padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #f8fbff; }
-    .rm-catalog-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #d8e3f4; color: var(--nova-muted); flex-wrap: wrap; }
-    .rm-catalog-search { position: relative; flex: 0 1 360px; margin: 0; }
-    .rm-catalog-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--nova-muted); pointer-events: none; }
-    .rm-catalog-search .form-control { min-height: 40px; padding-left: 36px; border-radius: 999px; }
-    .rm-catalog-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #d8e3f4; border-radius: 10px; overflow: hidden; }
-    .rm-catalog-cols .rm-catalog-table:first-child { border-right: 1px solid #d8e3f4; }
-    .rm-catalog-table { width: 100%; border-collapse: collapse; font-size: .92rem; table-layout: fixed; }
-    .rm-catalog-table thead tr { background: #eef6ff; }
-    .rm-catalog-table th { padding: 10px 14px; text-align: left; color: var(--nova-muted); font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; border-bottom: 2px solid #d4e4f7; white-space: nowrap; }
-    .rm-catalog-table td { padding: 9px 14px; border-bottom: 1px solid #e8eef8; color: #0f172a; font-weight: 700; background: #fff; vertical-align: middle; }
-    .rm-catalog-table td:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rm-catalog-table tbody tr:last-child td { border-bottom: 0; }
-    .rm-catalog-table tbody tr:hover td { background: #f8fbff; }
-    .rm-ct-num { width: 44px; padding-left: 6px !important; padding-right: 6px !important; color: var(--nova-muted) !important; font-weight: 800 !important; font-size: .8rem !important; }
-    .rm-ct-id { width: 340px; overflow: hidden; }
-    .rm-ct-id span { display: inline-block; min-width: 44px; max-width: 100%; height: 26px; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; border-radius: 8px; background: #eef6ff; border: 1px solid #d4e4f7; color: var(--nova-primary); font-size: .78rem; font-weight: 900; }
-    .rm-scope-panel { margin-bottom: 14px; padding: 14px; border: 1px solid #d8e3f4; border-radius: 14px; background: #f8fbff; }
-    .rm-scope-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .rm-scope-card { display: grid; gap: 6px; margin: 0; padding: 12px; border: 1px solid #d8e3f4; border-radius: 12px; background: #fff; }
-    .rm-scope-card span { color: #0f172a; font-weight: 900; }
-    .rm-role-permission-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .rm-role-permission-item { display: grid; gap: 10px; min-height: 126px; padding: 12px; border: 1px solid #d8e3f4; border-radius: 14px; background: #fff; box-shadow: 0 8px 18px rgba(15, 23, 42, .025); }
-    .rm-role-permission-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .rm-role-permission-main strong { display: inline-flex; align-items: center; gap: 8px; color: #0f172a; font-size: 1rem; font-weight: 900; line-height: 1.15; }
-    .rm-role-permission-main strong i { display: inline-grid; width: 32px; height: 32px; place-items: center; flex: 0 0 auto; border-radius: 10px; background: #eef6ff; color: var(--nova-primary); border: 1px solid #d4e4f7; font-size: .92rem; }
-    .rm-toggle-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; color: #334155; font-weight: 800; }
-    .rm-role-permission-children { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid #d8e3f4; }
-    .rm-role-permission-child { min-height: 30px; }
-    .rm-switch { appearance: none; flex: 0 0 auto; width: 46px; height: 26px; border: 0; border-radius: 999px; background: #cbd5e1; cursor: pointer; position: relative; transition: background .16s ease; }
-    .rm-switch::after { content: ""; position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 3px rgba(15,23,42,.24); transition: transform .16s ease; }
-    .rm-switch:checked { background: var(--nova-primary); }
-    .rm-switch:checked::after { transform: translateX(20px); }
-    .rm-switch:focus-visible { outline: none; box-shadow: var(--nova-focus); }
-    .rm-config-permission-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--nova-line); }
-    .rm-empty-state { padding: 14px; border: 1px dashed #b7c7df; border-radius: 12px; color: var(--nova-muted); font-weight: 800; background: #f8fbff; }
-    @media (max-width: 575.98px) {
-        .rm-option-card { align-items: flex-start; flex-direction: column; }
-        .rm-option-card-actions { justify-content: flex-start; }
-        .rm-permission-grid { grid-template-columns: 1fr; }
-        .rm-scope-grid { grid-template-columns: 1fr; }
-        .rm-role-permission-list { grid-template-columns: 1fr; }
-        .rm-role-toolbar,
-        .rm-user-permission-toolbar,
-        .rm-user-permission-actions,
-        .rm-role-select-row { grid-template-columns: 1fr; }
-        .rm-feature-head,
-        .rm-retention-layout,
-        .rm-maintenance-layout { grid-template-columns: 1fr; }
-        .rm-feature-meter { justify-items: start; }
-        .rm-config-card-grid { grid-template-columns: 1fr; }
-        .rm-number-field { grid-template-columns: 1fr; }
-        .rm-config-summary-kpis,
-        .rm-config-summary-grid,
-        .rm-summary-operation-grid { grid-template-columns: 1fr; }
-    }
-</style>
+@php $redmineTicConfigCssVersion = @filemtime(public_path('assets/redmine-tic-config.css')) ?: '1'; @endphp
+<link href="{{ asset('assets/redmine-tic-config.css') }}?v={{ $redmineTicConfigCssVersion }}" rel="stylesheet">

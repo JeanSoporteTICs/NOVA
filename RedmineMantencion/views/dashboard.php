@@ -58,6 +58,32 @@ function resolve_assigned_name($value, $lookup) {
     return '';
 }
 
+if (!function_exists('dashboard_format_date_display')) {
+    function dashboard_format_date_display($dateValue, $timeValue = '') {
+        $value = trim((string)($dateValue ?? ''));
+        $time = trim((string)($timeValue ?? ''));
+        if ($value === '') {
+            return $time !== '' ? $time : '-';
+        }
+
+        if (preg_match('/^(.+?)\s+(\d{1,2}:\d{2}(?::\d{2})?)/', $value, $matches)) {
+            $value = trim($matches[1]);
+            if ($time === '') {
+                $time = substr($matches[2], 0, 5);
+            }
+        }
+
+        foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'] as $format) {
+            $date = DateTimeImmutable::createFromFormat($format, $value);
+            if ($date instanceof DateTimeImmutable) {
+                return trim($date->format('d-m-Y') . ' ' . $time);
+            }
+        }
+
+        return trim($value . ' ' . $time);
+    }
+}
+
 $retencionHoras = get_retencion_horas();
 
 
@@ -101,15 +127,7 @@ $prioridadOptions = [];
 $estadoOptions = ['pendiente', 'procesado', 'error']; // estados locales (dashboard)
 $estadoRedmineId = null;
 $estadoRedmineNombre = null;
-$logsByMessage = [];
-$logPath = __DIR__ . '/../../data/envio_errores.log';
-foreach (preg_split('/\R+/', trim(storage_read_text($logPath, ''))) ?: [] as $line) {
-        $decoded = json_decode($line, true);
-        if (!is_array($decoded)) continue;
-        $mid = $decoded['message_id'] ?? '';
-        if ($mid === '') continue;
-        $logsByMessage[$mid][] = $line;
-}
+$logsByMessage = function_exists('load_redmine_logs_by_message') ? load_redmine_logs_by_message() : [];
 $cfgData = function_exists('load_platform_config') ? load_platform_config() : [];
     if (is_array($cfgData)) {
         foreach (($cfgData['trackers'] ?? []) as $t) {
@@ -259,7 +277,7 @@ $csrf = legacy_csrf_token();
 
               <td><?= $h($m['unidad_solicitante'] ?? '') ?></td>
 
-              <td><?= $h($m['fecha_inicio'] ?? '') ?></td>
+              <td><?= $h(dashboard_format_date_display($m['fecha_inicio'] ?? ($m['fecha'] ?? ''), $m['hora'] ?? '')) ?></td>
 
               <?php
                 $badge = $estado === 'pendiente' ? 'warning' : ($estado === 'procesado' ? 'success' : 'danger');
@@ -320,7 +338,7 @@ $csrf = legacy_csrf_token();
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="delete">
-                  <button class="btn btn-sm btn-danger">Eliminar</button>
+                  <button type="submit" class="btn-action btn-action-delete" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash3"></i></button>
                 </form>
 
               </td>
@@ -831,8 +849,5 @@ if (logModal) {
 </body>
 
 </html>
-
-
-
 
 

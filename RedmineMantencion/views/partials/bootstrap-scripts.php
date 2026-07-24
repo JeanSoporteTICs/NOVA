@@ -25,9 +25,5 @@
     $mantencionBaseUrl = function_exists('url') ? rtrim(url('/redmine-mantencion'), '/') : '/redmine-mantencion';
     $appModalPath = __DIR__ . '/../../assets/js/app-modal.js';
     $appModalVersion = @filemtime($appModalPath) ?: time();
-    $novaUiJsPath = function_exists('base_path') ? base_path('public/assets/nova-ui.js') : __DIR__ . '/../../../../public/assets/nova-ui.js';
-    $novaUiJsVersion = @filemtime($novaUiJsPath) ?: time();
   ?>
   <script src="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/js/app-modal.js?v=<?= (int)$appModalVersion ?>"></script>
-  <script src="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-ui.js') : '/NOVA/public/assets/nova-ui.js', ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaUiJsVersion ?>"></script>
-

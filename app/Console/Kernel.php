@@ -16,6 +16,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('redmine:archive-processed')->hourly();
+        $schedule->command('nova:health-alerts')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**

@@ -9,175 +9,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
-    <style>
-        body { margin: 0; min-height: 100vh; background: #eef3fb; color: #0f172a; }
-        .rm-shell { min-height: 100vh; }
-        .rm-navbar { min-height: 68px; background: linear-gradient(115deg, #1f2f56 0%, #314ed8 62%, #4966ff 100%); box-shadow: 0 16px 36px rgba(31, 47, 86, .22); }
-        .rm-brand-mark { display: inline-grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.24); color: #fff; }
-        .rm-top-actions { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-        .rm-main { min-width: 0; }
-        .rm-hero { border: 0; border-radius: 18px; color: #fff; background: linear-gradient(130deg, #2563eb 0%, #0891b2 58%, #059669 100%); box-shadow: 0 18px 34px rgba(49, 91, 170, .14); overflow: hidden; }
-        .rm-hero-icon { display: grid; width: 46px; height: 46px; place-items: center; flex: 0 0 auto; border-radius: 14px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); font-size: 1.25rem; }
-        .rm-page-title { margin: 0; color: #fff; font-size: clamp(1.55rem, 3vw, 2.25rem); font-weight: 800; }
-        .rm-page-subtitle { margin: 4px 0 0; color: rgba(255,255,255,.84); font-size: .94rem; font-weight: 750; }
-        .rm-hero-retention { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; min-height: 36px; padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.14); color: #fff; font-size: .86rem; font-weight: 900; white-space: nowrap; }
-        .rm-work-panel { border-radius: 14px; overflow: hidden; }
-        .rm-panel { padding: 16px; }
-        .nova-card, .platform-card, .control-card { border-color: #dbe4f0; box-shadow: 0 12px 28px rgba(15, 23, 42, .05); }
-        .rm-table-wrap .table thead th { background: #eaf8fd; color: #435061; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
-        .rm-table-wrap .table tbody tr { transition: background .14s ease; }
-        .rm-table-wrap .table tbody tr:hover { background: #f8fafc; }
-        .rm-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-        .rm-section-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
-        .rm-section-head p { margin: 4px 0 0; color: var(--nova-muted); }
-        .admin-empty-row { padding: 18px; color: #64748b; font-weight: 800; }
-        .user-grid { display: block; }
-        .form-panel { display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
-        .form-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
-        .form-title h2 { margin: 0; font-size: 1.08rem; font-weight: 900; color: #0f172a; }
-        .form-section { display: grid; gap: 12px; margin-bottom: 14px; }
-        .form-section.is-two { grid-template-columns: 1fr 1fr; }
-        .form-section-title { margin: 16px 0 10px; color: #64748b; font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-        .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-        .config-grid .is-wide { grid-column: 1 / -1; }
-        .config-status { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: .78rem; font-weight: 900; }
-        .config-status.is-ok { background: #dcfce7; color: #166534; }
-        .config-status.is-warn { background: #fef3c7; color: #92400e; }
-        .config-code { display: grid; gap: 6px; margin-top: 12px; padding: 12px; border-radius: 10px; background: #0f172a; color: #86efac; font-size: .82rem; font-weight: 800; word-break: break-word; }
-        .config-code code { white-space: pre-wrap; }
-        .platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-        .platform-card { padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; }
-        .platform-card h3 { margin: 0; font-size: 1rem; font-weight: 900; color: #0f172a; }
-        .platform-metric { margin-top: 10px; font-size: 1.85rem; font-weight: 950; color: #1d4ed8; }
-        .control-grid { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)); gap: 14px; margin-bottom: 16px; }
-        .control-card { display: grid; gap: 8px; min-height: 132px; padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgba(15, 23, 42, .04); }
-        .control-card:hover, .platform-card:hover { transform: translateY(-1px); box-shadow: 0 16px 34px rgba(15, 23, 42, .07); }
-        .control-card h3 { margin: 0; color: #334155; font-size: .82rem; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
-        .control-card strong { color: #0f172a; font-size: 1.8rem; line-height: 1; font-weight: 950; }
-        .control-card span { color: #64748b; font-size: .85rem; font-weight: 800; }
-        .control-card i { color: #2563eb; font-size: 1.2rem; }
-        .control-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .command-list { display: grid; gap: 10px; }
-        .command-row { display: grid; grid-template-columns: 160px 1fr; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4f0; border-radius: 12px; background: #fff; }
-        .command-row code { color: #1d4ed8; font-weight: 950; }
-        .command-alias { display: inline-flex; min-height: 22px; align-items: center; margin-right: 4px; padding: 2px 7px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: .72rem; font-weight: 900; }
-        .health-dot { display: inline-flex; align-items: center; gap: 7px; min-height: 26px; padding: 3px 8px; border-radius: 999px; font-size: .75rem; font-weight: 900; }
-        .health-dot.is-ok { background: #dcfce7; color: #166534; }
-        .health-dot.is-warn { background: #fef3c7; color: #92400e; }
-        .health-dot.is-error { background: #fee2e2; color: #991b1b; }
-        .telegram-admin-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, .72fr); gap: 16px; align-items: start; }
-        .telegram-listener-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-        .telegram-listener-metric { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 12px; border: 1px solid #d7e2ef; border-radius: 12px; background: #f8fafc; }
-        .telegram-listener-metric i { display: grid; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border-radius: 12px; background: #e0f2fe; color: #0369a1; }
-        .telegram-listener-metric strong { display: block; color: #111827; font-size: 1rem; line-height: 1.1; }
-        .telegram-listener-metric span { color: #64748b; font-size: .74rem; font-weight: 900; text-transform: uppercase; }
-        .telegram-listener-metric.is-ok i { background: #dcfce7; color: #15803d; }
-        .telegram-listener-metric.is-warn i { background: #fef3c7; color: #b45309; }
-        .telegram-listener-metric.is-bad i { background: #fee2e2; color: #dc2626; }
-        .telegram-listener-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-        .telegram-log-tail { min-height: 150px; max-height: 260px; overflow: auto; padding: 12px; border-radius: 12px; background: #020617; color: #86efac; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; white-space: pre-wrap; }
-        .telegram-message-grid { display: grid; gap: 16px; align-items: start; }
-        .telegram-message-editor-layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
-        .telegram-message-picker { display: grid; gap: 8px; padding: 10px; border: 1px solid #dbe4f0; border-radius: 14px; background: #f8fafc; }
-        .telegram-message-picker-title { margin: 0 0 2px; color: #0f172a; font-size: .9rem; font-weight: 950; }
-        .telegram-message-option { width: 100%; display: grid; gap: 4px; padding: 10px 11px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #334155; text-align: left; }
-        .telegram-message-option:hover { background: #fff; border-color: #dbe4f0; }
-        .telegram-message-option.is-active { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
-        .telegram-message-option strong { display: flex; align-items: center; gap: 7px; font-size: .86rem; font-weight: 950; }
-        .telegram-message-option span { color: #64748b; font-size: .74rem; font-weight: 800; }
-        .telegram-message-option code { color: inherit; font-size: .78rem; font-weight: 950; }
-        .telegram-message-editor { display: none; padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; }
-        .telegram-message-editor.is-active { display: block; }
-        .telegram-message-editor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
-        .telegram-message-editor-head h3 { margin: 0; color: #0f172a; font-size: 1.05rem; font-weight: 950; }
-        .telegram-message-editor-head p { margin: 4px 0 0; color: #64748b; font-size: .84rem; font-weight: 750; }
-        .telegram-message-command { display: inline-flex; min-height: 30px; align-items: center; padding: 3px 9px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: .9rem; font-weight: 950; }
-        .telegram-message-editor label { color: #334155; font-size: .78rem; font-weight: 950; text-transform: uppercase; letter-spacing: .03em; }
-        .telegram-message-editor textarea { min-height: 260px; margin-top: 7px; font-weight: 750; resize: vertical; }
-        .telegram-command-message-toggle { display: inline-flex; align-items: center; gap: 9px; color: #334155; font-size: .82rem; font-weight: 950; }
-        .telegram-command-message-toggle .form-check-input { width: 2.4rem; height: 1.25rem; margin: 0; }
-        .telegram-edit-help { margin: 8px 0 0; color: #64748b; font-size: .8rem; font-weight: 750; }
-        .telegram-placeholder-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-        .telegram-placeholder-list code { display: inline-flex; min-height: 23px; align-items: center; padding: 2px 7px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: .72rem; font-weight: 950; }
-        .telegram-placeholder-list span { align-self: center; color: #64748b; font-size: .74rem; font-weight: 900; }
-        .telegram-save-bar { position: sticky; bottom: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding: 12px 14px; border: 1px solid #bfdbfe; border-radius: 14px; background: rgba(239, 246, 255, .96); box-shadow: 0 14px 30px rgba(15, 23, 42, .12); }
-        .telegram-save-bar strong { display: block; color: #0f172a; font-size: .9rem; font-weight: 950; }
-        .telegram-save-bar span { color: #475569; font-size: .8rem; font-weight: 800; }
-        .telegram-command-toggle { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4f0; border-radius: 12px; background: #fff; }
-        .telegram-command-toggle code { color: #1d4ed8; font-weight: 950; }
-        .telegram-command-toggle .form-check-input { width: 2.4rem; height: 1.25rem; margin: 0; }
-        .field { margin-bottom: 12px; }
-        .field label { display: block; margin-bottom: 6px; color: #334155; font-size: .86rem; font-weight: 800; }
-        .field-help { display: none; margin-top: 6px; color: #b91c1c; font-size: .78rem; font-weight: 800; }
-        .form-control.is-invalid + .field-help { display: block; }
-        .table td, .table th { vertical-align: middle; }
-        .table-panel-head { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(360px, 720px) auto; align-items: center; gap: 14px; padding: 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
-        .table-panel-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a; }
-        .user-filters { display: grid; grid-template-columns: minmax(260px, 1fr) 150px 150px 42px; gap: 10px; align-items: center; justify-content: end; }
-        .user-search { width: 100%; position: relative; }
-        .user-search i { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #64748b; }
-        .user-search input { padding-left: 38px; }
-        .column-filter { width: 100%; }
-        .user-primary-action { justify-self: end; }
-        .access-panel-head { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 460px) auto; align-items: center; gap: 14px; padding: 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
-        .access-panel-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a; }
-        .access-help { margin: 4px 0 0; color: var(--nova-muted); font-size: .84rem; font-weight: 700; }
-        .access-tools { display: grid; grid-template-columns: minmax(240px, 1fr); gap: 10px; align-items: center; }
-        .access-list { display: grid; gap: 14px; padding: 16px; }
-        .access-user-panel { display: none; gap: 14px; }
-        .access-user-panel.is-active { display: grid; }
-        .access-user-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid #dbe4f0; border-radius: 14px; background: #f8fafc; }
-        .access-user-summary h3 { margin: 0; color: #0f172a; font-size: 1rem; font-weight: 900; }
-        .access-module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-        .access-view-card { display: grid; gap: 14px; padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgba(15, 23, 42, .04); }
-        .access-view-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-        .access-view-title { margin: 0; font-size: 1rem; font-weight: 900; color: #0f172a; }
-        .access-view-meta { margin-top: 3px; color: #64748b; font-size: .8rem; font-weight: 700; }
-        .access-user-option { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 0; border-radius: 10px; cursor: pointer; }
-        .access-user-option:hover { background: #f1f5f9; }
-        .access-user-option .form-check-input { margin: 0; width: 1.05rem; height: 1.05rem; }
-        .access-user-name { color: #0f172a; font-size: .86rem; font-weight: 900; }
-        .access-user-meta { color: #64748b; font-size: .74rem; font-weight: 700; }
-        .access-source { display: inline-flex; min-height: 20px; align-items: center; padding: 2px 6px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: .68rem; font-weight: 900; }
-        .access-source.is-default { background: #dcfce7; color: #166534; }
-        .access-source.is-manual { background: #dbeafe; color: #1d4ed8; }
-        .emach-credential-badge, .telegram-user-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .72rem; font-weight: 900; white-space: nowrap; }
-        .emach-credential-badge.is-missing, .telegram-user-badge.is-missing { background: #fee2e2; color: #991b1b; }
-        .nova-user-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
-        .nova-user-page-actions { display: flex; align-items: center; gap: 8px; }
-        .row-actions { display: flex; gap: 7px; justify-content: flex-end; }
-        .nova-modal-backdrop { position: fixed; inset: 0; z-index: 1070; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(15, 23, 42, .54); }
-        .nova-modal-backdrop.is-open { display: flex; }
-        .nova-confirm { width: min(460px, 100%); border-radius: 18px; border: 0; background: #fff; box-shadow: 0 28px 70px rgba(15, 23, 42, .28); overflow: hidden; }
-        .nova-user-form { width: min(760px, 100%); overflow: hidden; }
-        .nova-user-form__body { overflow: auto; padding: 22px; }
-        .nova-user-form__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-        .modal-close { border: 0; background: transparent; color: #64748b; font-size: 1.45rem; line-height: 1; padding: 0; }
-        .nova-confirm__body { padding: 22px; }
-        .nova-confirm__body h2 { margin: 0 0 8px; font-size: 1.1rem; font-weight: 900; }
-        .nova-confirm__body p { margin: 0; color: #475569; }
-        .nova-confirm__actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-        @media (max-width: 900px) {
-            .rm-layout { padding: 14px 12px 32px; }
-            .user-grid { grid-template-columns: 1fr; }
-            .control-grid { grid-template-columns: 1fr; }
-            .command-row { grid-template-columns: 1fr; }
-            .config-grid { grid-template-columns: 1fr; }
-            .telegram-admin-grid { grid-template-columns: 1fr; }
-            .telegram-message-grid { grid-template-columns: 1fr; }
-            .telegram-message-editor-layout { grid-template-columns: 1fr; }
-            .telegram-listener-grid { grid-template-columns: 1fr; }
-            .form-section.is-two { grid-template-columns: 1fr; }
-            .table-panel-head { grid-template-columns: 1fr; align-items: stretch; }
-            .user-filters { grid-template-columns: 1fr; }
-            .user-search, .column-filter, .user-filters { width: 100%; }
-            .user-primary-action { justify-self: stretch; }
-            .access-panel-head { grid-template-columns: 1fr; align-items: stretch; }
-            .access-tools { grid-template-columns: 1fr; }
-            .access-list { grid-template-columns: 1fr; }
-            .access-user-summary { align-items: flex-start; flex-direction: column; }
-        }
-    </style>
+    @php $novaAdminCssVersion = @filemtime(public_path('assets/nova-admin.css')) ?: '1'; @endphp
+    <link href="{{ asset('assets/nova-admin.css') }}?v={{ $novaAdminCssVersion }}" rel="stylesheet">
 </head>
 <body class="nova-page">
     <div class="rm-shell">
@@ -211,10 +44,9 @@
             $adminSections = [
                 'centro' => ['label' => 'Centro', 'icon' => 'bi-speedometer2', 'description' => 'Resumen rapido de usuarios, salud, accesos y Telegram.'],
                 'configuracion' => ['label' => 'Configuracion', 'icon' => 'bi-sliders', 'description' => 'Ajustes globales de sesion, salud y notificaciones administrativas.'],
-                'plataforma' => ['label' => 'Plataforma', 'icon' => 'bi-diagram-3', 'description' => 'Vista general de usuarios NOVA, fuentes y estado de la plataforma.'],
+                'onlyoffice' => ['label' => 'OnlyOffice', 'icon' => 'bi-file-earmark-word', 'description' => 'Configura el editor en linea utilizado por Procedimientos.'],
                 'salud' => ['label' => 'Salud', 'icon' => 'bi-activity', 'description' => 'Chequeos de servicios y dependencias criticas.'],
                 'auditoria' => ['label' => 'Auditoria', 'icon' => 'bi-journal-text', 'description' => 'Eventos recientes y acciones registradas en administracion.'],
-                'respaldos' => ['label' => 'Respaldos', 'icon' => 'bi-archive', 'description' => 'Crea y revisa copias de archivos criticos.'],
                 'telegram' => ['label' => 'Telegram', 'icon' => 'bi-telegram', 'description' => 'Configura el bot global y revisa el estado del servicio.'],
                 'telegram-mensajes' => ['label' => 'Mensajes Telegram', 'icon' => 'bi-chat-square-text', 'description' => 'Edita las respuestas programadas que envia el bot.'],
                 'usuarios' => ['label' => 'Usuarios', 'icon' => 'bi-people', 'description' => 'Crea usuarios, revisa integraciones personales y administra estados.'],
@@ -301,7 +133,6 @@
                         <div class="control-actions">
                             <a class="btn btn-outline-primary fw-bold" href="{{ route('administracion.section', 'salud') }}"><i class="bi bi-activity"></i>Ver salud</a>
                             <a class="btn btn-outline-primary fw-bold" href="{{ route('administracion.section', 'auditoria') }}"><i class="bi bi-journal-text"></i>Ver auditoria</a>
-                            <a class="btn btn-outline-primary fw-bold" href="{{ route('administracion.section', 'respaldos') }}"><i class="bi bi-archive"></i>Crear respaldo</a>
                             <a class="btn btn-outline-primary fw-bold" href="{{ route('administracion.section', 'telegram') }}"><i class="bi bi-telegram"></i>Configurar Telegram</a>
                             <a class="btn btn-outline-primary fw-bold" href="{{ route('administracion.section', 'accesos') }}"><i class="bi bi-shield-lock"></i>Revisar accesos</a>
                         </div>
@@ -345,21 +176,23 @@
                                     </div>
                                     <a class="btn btn-sm btn-outline-secondary fw-bold" href="{{ route('administracion.section', 'auditoria') }}"><i class="bi bi-clock-history"></i>Ver todo</a>
                                 </div>
-                                <div class="table-responsive rm-table-wrap">
-                                    <table class="table mb-0">
+                                <div class="security-console-wrap">
+                                    <div class="security-console-toolbar"><span class="security-console-dot" aria-hidden="true"></span><span>Auditoría NOVA :: eventos recientes</span></div>
+                                    <div class="table-responsive">
+                                    <table class="table security-console mb-0">
                                         <thead><tr><th>Fecha</th><th>Evento</th><th>Usuario</th></tr></thead>
                                         <tbody>
                                             @forelse ($auditItems as $item)
                                                 <tr>
-                                                    <td>{{ $item['at'] ?? '' }}</td>
-                                                    <td><span class="nova-badge">{{ $item['event'] ?? '' }}</span></td>
-                                                    <td>{{ $item['user_name'] ?? '-' }}</td>
+                                                    <td class="console-time">{{ $item['at'] ?? '' }}</td>
+                                                    <td><span class="console-tag">{{ strtoupper((string) ($item['event'] ?? '')) }}</span></td>
+                                                    <td class="console-details">{{ $item['user_name'] ?? '-' }}</td>
                                                 </tr>
                                             @empty
                                                 <tr><td colspan="3">No hay eventos registrados.</td></tr>
                                             @endforelse
                                         </tbody>
-                                    </table>
+                                    </table></div>
                                 </div>
                             </section>
                         </div>
@@ -384,15 +217,11 @@
                                         <input class="form-control" id="session_timeout" name="session_timeout" type="number" min="60" step="1" value="{{ $settings['session_timeout'] ?? 3600 }}">
                                         <div class="form-text fw-semibold">Tiempo en segundos antes de pedir reautenticacion.</div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label" for="health_warning_threshold">Umbral de alertas salud</label>
-                                        <input class="form-control" id="health_warning_threshold" name="health_warning_threshold" type="number" min="1" step="1" value="{{ $settings['health_warning_threshold'] ?? 1 }}">
-                                        <div class="form-text fw-semibold">Cantidad de avisos necesarios para marcar alerta.</div>
-                                    </div>
-                                    <div class="col-md-6 d-flex align-items-end">
+                                    <div class="col-12 d-flex align-items-end">
                                         <div class="form-check form-switch fw-bold">
                                             <input class="form-check-input" type="checkbox" role="switch" id="notification_enabled" name="notification_enabled" value="1" @checked(!empty($settings['notification_enabled']))>
-                                            <label class="form-check-label" for="notification_enabled">Notificaciones Telegram administrativas</label>
+                                            <label class="form-check-label" for="notification_enabled">Notificar administradores por Telegram</label>
+                                            <div class="form-text fw-semibold">Envia avisos a usuarios con rol admin y Chat ID configurado.</div>
                                         </div>
                                     </div>
                                     <div class="col-12">
@@ -404,52 +233,48 @@
                     </div>
                 @endif
 
-                @if ($section === 'plataforma')
-                    @php
-                        $activeUsers = collect($users)->where('status', 'activo')->count();
-                        $bannedUsers = collect($users)->where('status', 'baneado')->count();
-                        $adminUsers = collect($users)->filter(fn ($u) => in_array($u['role'] ?? 'usuario', ['admin', 'root', 'gestor', 'administrador'], true))->count();
-                        $projectRows = $accessMatrix['matrix'] ?? [];
-                    @endphp
-                    <div class="platform-grid">
-                        <section class="platform-card">
-                            <h3>Usuarios NOVA</h3>
-                            <div class="platform-metric">{{ count($users) }}</div>
-                            <div class="nova-muted fw-semibold">{{ $activeUsers }} activos / {{ $bannedUsers }} baneados</div>
-                        </section>
-                        <section class="platform-card">
-                            <h3>Administradores</h3>
-                            <div class="platform-metric">{{ $adminUsers }}</div>
-                        </section>
-                        <section class="platform-card">
-                            <h3>Matriz de accesos</h3>
-                            <div class="platform-metric">{{ count($projectRows) }}</div>
-                        </section>
-                    </div>
-                    <section class="card nova-card rm-work-panel rm-panel mt-3">
+                @if ($section === 'onlyoffice')
+                    <section class="card nova-card rm-work-panel rm-panel">
                         <div class="rm-section-head">
-                            <div>
-                                <h2>Fuente principal de usuarios</h2>
-                                <p>Usuarios normalizados que NOVA usa para accesos e integraciones.</p>
-                            </div>
+                            <div><h2>Editor OnlyOffice</h2><p>Conexion global del modulo Procedimientos. El secreto JWT se almacena cifrado y nunca vuelve a mostrarse.</p></div>
+                            <span class="nova-badge {{ empty($onlyOffice['enabled']) ? 'is-neutral' : (!empty($onlyOffice['configured']) ? 'is-success' : 'is-warning') }}">{{ empty($onlyOffice['enabled']) ? 'Desactivado' : (!empty($onlyOffice['configured']) ? 'Operativo' : 'Pendiente') }}</span>
                         </div>
-                        <div class="table-responsive rm-table-wrap">
-                            <table class="table mb-0">
-                                <thead><tr><th>Usuario</th><th>Nombre</th><th>Fuente</th><th>Proyectos</th><th>Estado</th></tr></thead>
-                                <tbody>
-                                    @foreach ($users as $user)
-                                        <tr>
-                                            <td><strong>{{ $user['username'] ?? '' }}</strong></td>
-                                            <td>{{ trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</td>
-                                            <td>{{ $user['source'] ?? 'nova' }}</td>
-                                            <td>{{ implode(', ', array_keys(is_array($user['projects'] ?? null) ? $user['projects'] : [])) ?: '-' }}</td>
-                                            <td><span class="nova-badge {{ ($user['status'] ?? 'activo') === 'baneado' ? 'is-danger' : 'is-success' }}">{{ $user['status'] ?? 'activo' }}</span></td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
+                        <div class="integration-meta mb-3">
+                            <div><dt>Servidor</dt><dd>{{ $onlyOffice['url'] ?: 'Sin configurar' }}</dd></div>
+                            <div><dt>JWT</dt><dd>{{ !empty($onlyOffice['secret_configured']) ? 'Configurado y cifrado' : 'Pendiente' }}</dd></div>
+                        </div>
+                        <div class="onlyoffice-action-row">
+                            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#onlyOfficeDrawer" aria-controls="onlyOfficeDrawer"><i class="bi bi-pencil-square"></i>Editar</button>
+                            <form method="post" action="{{ route('administracion.onlyoffice.test') }}">
+                                @csrf
+                                <button class="btn-nova btn-nova-info" type="submit" {{ empty($onlyOffice['enabled']) ? 'disabled' : '' }}><i class="bi bi-shield-check"></i>Probar servidor y clave</button>
+                            </form>
+                            <form class="onlyoffice-toggle-form" method="post" action="{{ route('administracion.config.update') }}">
+                                @csrf
+                                <input type="hidden" name="action" value="onlyoffice_toggle">
+                                <label class="form-check form-switch onlyoffice-enabled-switch" for="onlyoffice_enabled">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="onlyoffice_enabled" name="onlyoffice_enabled" value="1" @checked(!empty($onlyOffice['enabled'])) onchange="this.form.submit()">
+                                    <span>Servicio {{ !empty($onlyOffice['enabled']) ? 'activo' : 'desactivado' }}</span>
+                                </label>
+                            </form>
                         </div>
                     </section>
+
+                    <div class="offcanvas offcanvas-end integration-drawer" tabindex="-1" id="onlyOfficeDrawer" aria-labelledby="onlyOfficeDrawerTitle">
+                        <div class="offcanvas-header">
+                            <div class="integration-drawer-title"><span class="integration-icon"><i class="bi bi-file-earmark-word"></i></span><div><h2 class="offcanvas-title" id="onlyOfficeDrawerTitle">Editar OnlyOffice</h2><span class="integration-status {{ !empty($onlyOffice['configured']) ? 'is-ready' : 'is-empty' }}"><i class="bi bi-circle-fill"></i>{{ !empty($onlyOffice['configured']) ? 'Configurado' : 'Pendiente' }}</span></div></div>
+                            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="offcanvas-body">
+                            <form id="onlyOfficeForm" method="post" action="{{ route('administracion.config.update') }}" class="integration-form">
+                                @csrf
+                                <input type="hidden" name="action" value="onlyoffice">
+                                <div><label class="form-label" for="onlyoffice_url">Servidor OnlyOffice</label><input class="form-control" id="onlyoffice_url" name="onlyoffice_url" type="url" value="{{ $onlyOffice['url'] ?? '' }}" placeholder="https://onlyoffice.ejemplo.cl" required><div class="form-text">URL base del Document Server, sin rutas internas.</div></div>
+                                <div><label class="form-label" for="onlyoffice_jwt_secret">Secreto JWT</label><input class="form-control" id="onlyoffice_jwt_secret" name="onlyoffice_jwt_secret" type="password" autocomplete="new-password" placeholder="{{ !empty($onlyOffice['secret_configured']) ? 'Configurado; deja vacío para conservarlo' : 'Ingresa el secreto compartido' }}"><div class="form-text">{{ !empty($onlyOffice['secret_configured']) ? 'Solo escribe un valor para reemplazar el secreto cifrado.' : 'Aún no existe un secreto configurado.' }}</div></div>
+                            </form>
+                        </div>
+                        <div class="offcanvas-footer nova-drawer-actions"><button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg"></i>Cancelar</button><button class="btn-nova btn-nova-primary" type="submit" form="onlyOfficeForm"><i class="bi bi-shield-lock"></i>Guardar</button></div>
+                    </div>
                 @endif
 
                 @if ($section === 'salud')
@@ -457,8 +282,14 @@
                         <div class="rm-section-head">
                             <div>
                                 <h2>Estado de servicios</h2>
-                                <p>Revisa primero cualquier estado distinto de OK.</p>
+                                <p>Se recalcula al cargar la pagina. Las alertas automaticas corren cada 5 minutos si el scheduler esta activo.</p>
                             </div>
+                            <form method="post" action="{{ route('administracion.health.notify') }}">
+                                @csrf
+                                <button class="btn-nova btn-nova-primary" type="submit">
+                                    <i class="bi bi-send"></i>Enviar estado principal
+                                </button>
+                            </form>
                         </div>
                         <div class="table-responsive rm-table-wrap">
                             <table class="table mb-0">
@@ -492,63 +323,17 @@
                                 <tbody>
                                     @forelse ($auditItems as $item)
                                         <tr>
-                                            <td>{{ $item['at'] ?? '' }}</td>
-                                            <td><span class="nova-badge">{{ $item['event'] ?? '' }}</span></td>
-                                            <td>{{ $item['user_name'] ?? '-' }}</td>
-                                            <td>{{ $item['message'] ?? '' }}</td>
-                                            <td>{{ $item['ip'] ?? '' }}</td>
+                                            <td class="console-time">{{ $item['at'] ?? '' }}</td>
+                                            <td><span class="console-tag">{{ strtoupper((string) ($item['event'] ?? '')) }}</span></td>
+                                            <td class="console-details">{{ $item['user_name'] ?? '-' }}</td>
+                                            <td class="console-details">{{ $item['message'] ?? '' }}</td>
+                                            <td class="console-details">{{ $item['ip'] ?? '' }}</td>
                                         </tr>
                                     @empty
                                         <tr><td colspan="5">No hay eventos registrados.</td></tr>
                                     @endforelse
                                 </tbody>
-                            </table>
-                        </div>
-                    </section>
-                @endif
-
-                @if ($section === 'respaldos')
-                    <section class="card nova-card rm-work-panel rm-panel mb-3">
-                        <div class="rm-section-head">
-                            <div>
-                                <h2>Crear respaldo</h2>
-                                <p>Genera una copia inmediata de archivos criticos.</p>
-                            </div>
-                        </div>
-                        <form method="post" action="{{ route('administracion.backups.create') }}" class="row g-3 align-items-end">
-                            @csrf
-                            <div class="col-md-8">
-                                <label class="form-label">Archivo</label>
-                                <select class="form-select" name="target">
-                                    <option value="all">Todos los archivos criticos</option>
-                                    @foreach ($backupTargets as $target)
-                                        <option value="{{ $target['key'] }}">{{ $target['label'] }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <button class="btn-nova btn-nova-info w-100" type="submit"><i class="bi bi-archive"></i>Crear respaldo</button>
-                            </div>
-                        </form>
-                    </section>
-                    <section class="card nova-card rm-work-panel rm-panel">
-                        <div class="rm-section-head"><div><h2>Respaldos recientes</h2><p>Ultimas copias creadas desde administracion.</p></div></div>
-                        <div class="table-responsive rm-table-wrap">
-                            <table class="table mb-0">
-                                <thead><tr><th>Fecha</th><th>Archivo</th><th>Tamano</th><th>Ruta</th></tr></thead>
-                                <tbody>
-                                    @forelse ($backupItems as $item)
-                                        <tr>
-                                            <td>{{ $item['created_at'] }}</td>
-                                            <td>{{ $item['name'] }}</td>
-                                            <td>{{ number_format(((int) $item['size']) / 1024, 1) }} KB</td>
-                                            <td><code>{{ $item['path'] }}</code></td>
-                                        </tr>
-                                    @empty
-                                        <tr><td colspan="4">No hay respaldos recientes.</td></tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
+                            </table></div>
                         </div>
                     </section>
                 @endif
@@ -668,9 +453,9 @@
                             'tic_success' => 'Reporte TIC creado',
                             'tic_unavailable' => 'TIC no disponible',
                             'tic_error' => 'Error TIC',
-                            'emach_success' => 'Marcacion EMACH',
+                            'emach_success' => 'Marcación EMACH',
                             'emach_missing_chat_id' => 'EMACH sin Chat ID',
-                            'emach_user_lookup_error' => 'EMACH sin conexion NOVA',
+                            'emach_user_lookup_error' => 'EMACH sin conexión NOVA',
                             'emach_missing_credentials' => 'EMACH sin credenciales',
                             'emach_empty' => 'EMACH sin marcaciones',
                             'emach_error' => 'Error EMACH',
@@ -685,17 +470,17 @@
                             'test' => 'test',
                         ];
                         $messageHelp = [
-                            'help_header' => 'Primera linea que aparece cuando alguien pide ayuda.',
+                            'help_header' => 'Primera línea que aparece cuando alguien solicita ayuda.',
                             'status' => 'Confirma que el bot esta activo y responde.',
                             'test' => 'Mensaje simple para probar que Telegram responde.',
-                            'tic_success' => 'Confirmacion cuando se crea un reporte TIC pendiente.',
-                            'tic_unavailable' => 'Se muestra si NOVA no puede cargar el modulo TIC.',
-                            'tic_error' => 'Se muestra si falla la creacion del reporte TIC.',
-                            'emach_success' => 'Respuesta con la ultima marcacion encontrada.',
+                            'tic_success' => 'Confirmación cuando se crea un reporte TIC pendiente.',
+                            'tic_unavailable' => 'Se muestra si NOVA no puede cargar el módulo TIC.',
+                            'tic_error' => 'Se muestra si falla la creación del reporte TIC.',
+                            'emach_success' => 'Respuesta con la última marcación encontrada.',
                             'emach_missing_chat_id' => 'Se muestra si el Chat ID que escribio al bot no esta asociado a un usuario NOVA.',
-                            'emach_user_lookup_error' => 'Se muestra si el listener Docker no puede consultar usuarios NOVA en la base de datos.',
+                            'emach_user_lookup_error' => 'Se muestra si el listener de Docker no puede consultar usuarios NOVA en la base de datos.',
                             'emach_missing_credentials' => 'Se muestra si el usuario no tiene credenciales EMACH guardadas.',
-                            'emach_empty' => 'Se muestra si no hay marcaciones en el mes actual.',
+                            'emach_empty' => 'Se muestra si no hay marcaciones durante el mes actual.',
                             'emach_error' => 'Se muestra si la consulta EMACH falla.',
                             'disabled' => 'Se muestra cuando el comando existe pero esta apagado.',
                             'unknown' => 'Se muestra cuando el bot no reconoce lo que escribieron.',
@@ -703,9 +488,9 @@
                         $messagePlaceholdersMap = [
                             'status' => ['{fecha}' => 'Fecha y hora actual'],
                             'test' => ['{fecha}' => 'Fecha y hora actual'],
-                            'tic_success' => ['{asunto}' => 'Problema reportado', '{categoria}' => 'Categoria detectada', '{unidad}' => 'Ubicacion o unidad'],
+                            'tic_success' => ['{asunto}' => 'Problema reportado', '{categoria}' => 'Categoría detectada', '{unidad}' => 'Ubicación o unidad'],
                             'tic_error' => ['{error}' => 'Detalle del error'],
-                            'emach_success' => ['{fecha}' => 'Fecha de marcacion', '{hora}' => 'Hora de marcacion', '{tipo}' => 'Entrada o salida', '{reloj}' => 'Reloj usado'],
+                            'emach_success' => ['{fecha}' => 'Fecha de marcación', '{hora}' => 'Hora de marcación', '{tipo}' => 'Entrada o salida', '{reloj}' => 'Reloj utilizado'],
                             'emach_error' => ['{error}' => 'Detalle del error'],
                         ];
                         $systemMessageKeys = array_diff(array_keys($messageLabels), array_values($commandMessageMap));
@@ -755,15 +540,18 @@
                             <section class="card nova-card rm-work-panel rm-panel">
                             <div class="rm-section-head">
                                 <div>
-                                    <h2>Mensajes programados Telegram</h2>
-                                    <p>Selecciona un mensaje de la lista para cargarlo y editar su respuesta.</p>
+                                    <h2>Mensajes de Telegram</h2>
+                                    <p>Selecciona una respuesta, revisa su contenido y guarda todos los cambios al finalizar.</p>
                                     </div>
                                     <span class="config-status is-ok"><i class="bi bi-pencil-square"></i>Editables</span>
                                 </div>
 
                                 <div class="telegram-message-editor-layout" data-telegram-message-editor>
                                     <aside class="telegram-message-picker" aria-label="Mensajes programados">
-                                        <h3 class="telegram-message-picker-title">Lista de mensajes</h3>
+                                        <div class="telegram-message-picker-head">
+                                            <div><h3 class="telegram-message-picker-title">Respuestas disponibles</h3><p>Comandos y mensajes automáticos</p></div>
+                                            <span>{{ count($messageRows) }}</span>
+                                        </div>
                                         @foreach ($messageRows as $row)
                                             <button class="telegram-message-option {{ $row['key'] === $firstMessageKey ? 'is-active' : '' }}" type="button" data-telegram-message-option="{{ $row['key'] }}">
                                                 <strong>
@@ -772,7 +560,7 @@
                                                 </strong>
                                                 <span>
                                                     @if ($row['type'] === 'command')
-                                                        <code>{{ $row['command'] }}</code> Â· {{ $row['module'] }}
+                                                        <code>{{ $row['command'] }}</code> <span aria-hidden="true">·</span> {{ $row['module'] }}
                                                     @else
                                                         Sistema
                                                     @endif
@@ -802,24 +590,24 @@
                                                 </div>
 
                                                 @if ($row['type'] === 'command')
-                                                    <div class="mb-3">
-                                                        <div class="telegram-edit-help">{{ $row['description'] }}</div>
-                                                        <div class="telegram-edit-help">Formato: {{ $row['input'] }}</div>
+                                                    <div class="telegram-message-context">
+                                                        <div><span>Descripción</span><strong>{{ $row['description'] }}</strong></div>
+                                                        <div><span>Formato esperado</span><strong>{{ $row['input'] }}</strong></div>
                                                         @foreach (($row['aliases'] ?? []) as $alias)
                                                             <span class="command-alias">{{ $alias }}</span>
                                                         @endforeach
                                                     </div>
-                                                    <label class="telegram-command-message-toggle mb-3" for="telegram-command-{{ $row['command_key'] }}">
+                                                    <label class="form-check form-switch telegram-command-message-toggle" for="telegram-command-{{ $row['command_key'] }}">
                                                         <input type="hidden" name="commands[{{ $row['command_key'] }}][enabled]" value="0">
-                                                        <input class="form-check-input" id="telegram-command-{{ $row['command_key'] }}" type="checkbox" name="commands[{{ $row['command_key'] }}][enabled]" value="1" @checked($row['enabled'])>
+                                                        <input class="form-check-input" id="telegram-command-{{ $row['command_key'] }}" type="checkbox" role="switch" name="commands[{{ $row['command_key'] }}][enabled]" value="1" @checked($row['enabled'])>
                                                         <span>Comando activo</span>
                                                     </label>
                                                 @endif
 
                                                 <div>
                                                     <label for="telegram-message-{{ $messageKey }}">Mensaje programado</label>
-                                                    <textarea class="form-control" id="telegram-message-{{ $messageKey }}" name="messages[{{ $messageKey }}]" rows="4">{{ $messageValue }}</textarea>
-                                                    <p class="telegram-edit-help">Los campos entre llaves, como <code>{fecha}</code>, son datos que NOVA completa automaticamente.</p>
+                                                    <textarea class="form-control" id="telegram-message-{{ $messageKey }}" name="messages[{{ $messageKey }}]" rows="7" spellcheck="true">{{ $messageValue }}</textarea>
+                                                    <p class="telegram-edit-help"><i class="bi bi-info-circle"></i> Los campos entre llaves, como <code>{fecha}</code>, son completados automáticamente por NOVA.</p>
                                                     @if ($messagePlaceholders !== [])
                                                         <div class="telegram-placeholder-list" aria-label="Campos disponibles">
                                                             <span>Datos disponibles:</span>
@@ -837,7 +625,7 @@
                             <div class="telegram-save-bar">
                                 <div>
                                     <strong>Guardar cambios</strong>
-                                    <span>Se actualizaran respuestas y comandos activos para el bot Telegram.</span>
+                                    <span>Se actualizarán las respuestas y los comandos activos del bot.</span>
                                 </div>
                                 <button class="btn-nova btn-nova-primary fw-bold" type="submit"><i class="bi bi-save"></i>Guardar mensajes</button>
                             </div>
@@ -952,7 +740,7 @@
                         <option value="25">25 filas</option>
                         <option value="50">50 filas</option>
                     </select>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" data-user-filter-clear title="Limpiar filtros"><i class="bi bi-x-circle"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-user-filter-clear title="Limpiar filtros" aria-label="Limpiar filtros"><i class="bi bi-x-circle"></i></button>
                     <span class="ms-auto nova-user-meta"><span data-user-count>{{ count($users) }}</span> visible(s)</span>
                     <button class="btn-nova btn-nova-primary" type="button" data-user-new><i class="bi bi-plus-circle"></i>Nuevo</button>
                 </div>
@@ -967,7 +755,7 @@
                                 <th>Rol</th>
                                 <th>Estado</th>
                                 <th class="nova-col-hide-md">Ultimo ingreso</th>
-                                <th></th>
+                                <th class="nova-col-actions">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -977,6 +765,8 @@
                                 $userStatus = $user['status'] ?? 'activo';
                                 $emachCredentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
                                 $hasEmachCredentials = trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '';
+                                $nextcloudCredentials = is_array($user['nextcloud_credentials'] ?? null) ? $user['nextcloud_credentials'] : [];
+                                $hasNextcloudCredentials = trim((string) ($nextcloudCredentials['user'] ?? '')) !== '' && trim((string) ($nextcloudCredentials['password'] ?? '')) !== '';
                                 $telegramSettings = is_array($user['telegram_settings'] ?? null) ? $user['telegram_settings'] : [];
                                 $telegramChatId = trim((string) ($user['telegram_id_chat'] ?? ($telegramSettings['chat_id'] ?? '')));
                                 $hasTelegramSettings = preg_match('/^-?[1-9]\d{4,}$/', $telegramChatId) === 1;
@@ -1012,16 +802,19 @@
                                 <td><span class="nova-user-meta">{{ $userRutDisplay !== '' ? $userRutDisplay : '-' }}</span></td>
                                 <td>
                                     <div class="d-flex gap-1 flex-wrap">
-                                        <span class="emach-credential-badge {{ $hasEmachCredentials ? '' : 'is-missing' }}" title="{{ $hasEmachCredentials ? 'EMACH configurado' : 'Sin credenciales EMACH' }}">
+                                        <span class="integration-user-badge emach-credential-badge {{ $hasEmachCredentials ? '' : 'is-missing' }}" title="{{ $hasEmachCredentials ? 'EMACH configurado' : 'Sin credenciales EMACH' }}">
                                             <i class="bi {{ $hasEmachCredentials ? 'bi-key-fill' : 'bi-key' }}"></i>EMACH
                                         </span>
-                                        <span class="telegram-user-badge {{ $hasTelegramSettings ? '' : 'is-missing' }}" title="{{ $hasTelegramSettings ? 'Telegram vinculado' : 'Sin Telegram' }}">
+                                        <span class="integration-user-badge telegram-user-badge {{ $hasTelegramSettings ? '' : 'is-missing' }}" title="{{ $hasTelegramSettings ? 'Telegram vinculado' : 'Sin Telegram' }}">
                                             <i class="bi {{ $hasTelegramSettings ? 'bi-telegram' : 'bi-chat' }}"></i>TG
+                                        </span>
+                                        <span class="integration-user-badge nextcloud-user-badge {{ $hasNextcloudCredentials ? '' : 'is-missing' }}" title="{{ $hasNextcloudCredentials ? 'Nextcloud configurado' : 'Sin credenciales Nextcloud' }}">
+                                            <i class="bi {{ $hasNextcloudCredentials ? 'bi-cloud-fill' : 'bi-cloud-slash' }}"></i>NC
                                         </span>
                                     </div>
                                 </td>
                                 <td><span class="nova-badge {{ $novaRole === 'admin' ? 'is-admin' : 'is-usuario' }}">{{ $novaRole === 'admin' ? 'Admin' : 'Usuario' }}</span></td>
-                                <td><span class="nova-badge {{ $userStatus === 'baneado' ? 'is-baneado' : 'is-activo' }}">{{ $userStatus }}</span></td>
+                                <td><span class="nova-badge {{ $userStatus === 'baneado' ? 'is-baneado' : 'is-activo' }}" data-user-status-badge>{{ $userStatus }}</span></td>
                                 <td class="nova-col-hide-md">
                                     @if ($ultimoLogin !== '')
                                         <span class="nova-date-meta">{{ \Carbon\Carbon::parse($ultimoLogin)->format('d/m/Y H:i') }}</span>
@@ -1031,7 +824,7 @@
                                 </td>
                                 <td>
                                     <div class="nova-table-actions">
-                                        <button class="btn-action is-edit" type="button"
+                                        <button class="btn-action btn-action-edit" type="button"
                                             data-user-edit
                                             data-id="{{ $user['id'] ?? '' }}"
                                             data-redmine-id="{{ $user['redmine_id'] ?? '' }}"
@@ -1045,7 +838,7 @@
                                             aria-label="Editar usuario">
                                             <i class="bi bi-pencil"></i>
                                         </button>
-                                        <button class="btn-action is-password" type="button"
+                                        <button class="btn-action btn-action-password" type="button"
                                             title="Cambiar contrasena"
                                             data-password-open
                                             data-id="{{ $user['id'] ?? '' }}"
@@ -1054,14 +847,14 @@
                                             aria-label="Cambiar contrasena">
                                             <i class="bi bi-key"></i>
                                         </button>
-                                        <form method="post" action="{{ route('administracion.users.update') }}" data-confirm-form data-confirm-message="{{ $userStatus === 'baneado' ? 'Activar este usuario?' : 'Marcar usuario como baneado?' }}">
+                                        <form method="post" action="{{ route('administracion.users.update') }}" data-confirm-form data-user-status-toggle data-confirm-message="{{ $userStatus === 'baneado' ? 'Activar este usuario?' : 'Marcar usuario como baneado?' }}">
                                             @csrf
                                             <input type="hidden" name="action" value="{{ $userStatus === 'baneado' ? 'activate' : 'delete' }}">
                                             <input type="hidden" name="id" value="{{ $user['id'] ?? '' }}">
                                             @if ($userStatus === 'baneado')
-                                                <button class="btn-action is-activate" type="submit" title="Activar" aria-label="Activar usuario"><i class="bi bi-check-circle"></i></button>
+                                                <button class="btn-action btn-action-activate" type="submit" title="Activar" aria-label="Activar usuario"><i class="bi bi-check-circle"></i></button>
                                             @else
-                                                <button class="btn-action is-ban" type="submit" title="Banear" aria-label="Banear usuario"><i class="bi bi-slash-circle"></i></button>
+                                                <button class="btn-action btn-action-ban" type="submit" title="Banear" aria-label="Banear usuario"><i class="bi bi-slash-circle"></i></button>
                                             @endif
                                         </form>
                                     </div>
@@ -1092,32 +885,43 @@
                     @php
                         $accessModules = $accessMatrix['modules'] ?? [];
                         $accessRows = $accessMatrix['matrix'] ?? [];
-                        $firstIdentity = (string) ($accessRows[0]['identity'] ?? '');
+                        $savedIdentity = (string) session('access_selected_identity', '');
+                        $availableIdentities = collect($accessRows)->pluck('identity')->map(static fn ($identity) => (string) $identity);
+                        $firstIdentity = $savedIdentity !== '' && $availableIdentities->contains($savedIdentity)
+                            ? $savedIdentity
+                            : (string) ($accessRows[0]['identity'] ?? '');
+                        $accessSearchOptions = collect($accessRows)->map(function ($row) {
+                            $user = $row['user'] ?? [];
+                            $identity = (string) ($row['identity'] ?? '');
+                            $displayName = trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: ($user['username'] ?? '');
+                            $account = trim((string) ($user['username'] ?? $user['rut_sin_dv'] ?? ''));
+                            $redmineId = trim((string) ($user['redmine_id'] ?? ''));
+                            $visibleId = $redmineId !== '' ? $redmineId : ($account !== '' ? $account : $identity);
+
+                            return [
+                                'label' => 'ID ' . $visibleId . ' · ' . $displayName,
+                                'value' => $identity,
+                                'search' => implode(' ', array_filter([$displayName, $account, $redmineId])),
+                            ];
+                        })->values()->all();
                     @endphp
                     <form method="post" action="{{ route('administracion.access.update') }}">
                         @csrf
-                        <input type="hidden" name="selected_identity" value="{{ $firstIdentity }}" data-access-selected-identity>
-                        <section class="card nova-card rm-work-panel">
+                        <input id="access-selected-identity" type="hidden" name="selected_identity" value="{{ $firstIdentity }}" data-access-selected-identity>
+                        <section class="card nova-card rm-work-panel access-management-panel">
                             <div class="access-panel-head">
                                 <div>
                                     <h2>Accesos a vistas NOVA</h2>
                                     <p class="access-help">Selecciona un usuario y marca las vistas que puede usar.</p>
                                 </div>
                                 <div class="access-tools">
-                                    <input class="form-control" type="search" list="access-user-list" placeholder="Escribir para buscar usuario" data-access-user-combobox aria-label="Seleccionar usuario">
-                                    <datalist id="access-user-list">
-                                        @foreach ($accessRows as $row)
-                                            @php
-                                                $user = $row['user'] ?? [];
-                                                $identity = (string) ($row['identity'] ?? '');
-                                                $displayName = trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: ($user['username'] ?? '');
-                                                $optionLabel = $displayName;
-                                            @endphp
-                                            <option value="{{ $optionLabel }}" data-identity="{{ $identity }}"></option>
-                                        @endforeach
-                                    </datalist>
+                                    <div class="nova-search-select" data-search-select data-preserve-value-on-clear data-options="{{ json_encode($accessSearchOptions, JSON_UNESCAPED_UNICODE) }}" data-value-input="#access-selected-identity">
+                                        <input class="form-control" type="search" placeholder="Buscar por nombre, cuenta o ID Redmine" data-search-select-input data-access-user-combobox aria-label="Seleccionar usuario" autocomplete="off">
+                                        <button class="nova-search-select__clear" type="button" data-search-select-clear aria-label="Limpiar usuario" title="Limpiar usuario"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                                        <div class="nova-search-select__menu" data-search-select-menu role="listbox" hidden></div>
+                                    </div>
                                 </div>
-                                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar accesos</button>
+                                <button class="btn-nova btn-nova-primary" type="submit" data-access-save><i class="bi bi-save"></i>Guardar accesos</button>
                             </div>
                             <div class="access-list">
                                 @forelse ($accessRows as $row)
@@ -1125,9 +929,13 @@
                                         $user = $row['user'] ?? [];
                                         $identity = (string) ($row['identity'] ?? '');
                                         $displayName = trim(($user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')) ?: ($user['username'] ?? '');
+                                        $account = trim((string) ($user['username'] ?? $user['rut_sin_dv'] ?? ''));
+                                        $redmineId = trim((string) ($user['redmine_id'] ?? ''));
+                                        $visibleId = $redmineId !== '' ? $redmineId : ($account !== '' ? $account : $identity);
+                                        $accessSearchLabel = 'ID ' . $visibleId . ' · ' . $displayName;
                                         $selectedCount = collect($row['access'] ?? [])->filter(fn ($item) => $item['allowed'] ?? false)->count();
                                     @endphp
-                                    <article class="access-user-panel {{ $loop->first ? 'is-active' : '' }}" data-access-user-panel="{{ $identity }}">
+                                    <article class="access-user-panel {{ $identity === $firstIdentity ? 'is-active' : '' }}" data-access-user-panel="{{ $identity }}" data-access-user-label="{{ $accessSearchLabel }}">
                                         <div class="access-user-summary">
                                             <div>
                                                 <h3>{{ $displayName }}</h3>
@@ -1223,6 +1031,7 @@
         </form>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}"></script>
     <script>
         const form = document.querySelector('.form-panel');
         const formTitle = document.querySelector('[data-user-form-title]');
@@ -1490,15 +1299,17 @@
         applyUserFilters();
 
         const accessUserCombobox = document.querySelector('[data-access-user-combobox]');
-        const accessUserOptions = Array.from(document.querySelectorAll('#access-user-list option'));
         const accessIdentityField = document.querySelector('[data-access-selected-identity]');
+        const accessSaveButton = document.querySelector('[data-access-save]');
         const accessPanels = Array.from(document.querySelectorAll('[data-access-user-panel]'));
-        const accessLabelByIdentity = new Map(accessUserOptions.map((option) => [option.dataset.identity, option.value]));
+        const accessLabelByIdentity = new Map(accessPanels.map((panel) => [panel.dataset.accessUserPanel, panel.dataset.accessUserLabel || '']));
+        let activeAccessIdentity = String(accessIdentityField?.value || accessPanels[0]?.dataset.accessUserPanel || '').trim();
         const setActiveAccessUser = (identity) => {
-            if (accessIdentityField) accessIdentityField.value = identity || '';
-            if (accessUserCombobox && accessLabelByIdentity.has(identity)) {
-                accessUserCombobox.value = accessLabelByIdentity.get(identity);
-            }
+            if (!accessLabelByIdentity.has(identity)) return;
+            activeAccessIdentity = identity;
+            if (accessIdentityField) accessIdentityField.value = identity;
+            if (accessUserCombobox) accessUserCombobox.value = '';
+            if (accessSaveButton) accessSaveButton.disabled = false;
 
             accessPanels.forEach((panel) => {
                 const active = panel.dataset.accessUserPanel === identity;
@@ -1508,10 +1319,12 @@
                 });
             });
         };
+        const preserveActiveAccessUser = () => {
+            if (accessIdentityField) accessIdentityField.value = activeAccessIdentity;
+            if (accessSaveButton) accessSaveButton.disabled = !activeAccessIdentity;
+        };
         const identityFromCombobox = () => {
-            const typed = String(accessUserCombobox?.value || '').trim();
-            const option = accessUserOptions.find((item) => item.value === typed);
-            return option?.dataset.identity || '';
+            return String(accessIdentityField?.value || '').trim();
         };
         const updateUserAccessCount = (identity) => {
             const counter = document.querySelector(`[data-user-access-count="${identity}"]`);
@@ -1522,20 +1335,17 @@
         };
         accessUserCombobox?.addEventListener('input', () => {
             const identity = identityFromCombobox();
-            if (identity !== '') {
-                setActiveAccessUser(identity);
-            }
+            if (identity !== '') setActiveAccessUser(identity);
         });
         accessUserCombobox?.addEventListener('change', () => {
             const identity = identityFromCombobox();
-            if (identity !== '') {
-                setActiveAccessUser(identity);
-            }
+            if (identity !== '') setActiveAccessUser(identity);
         });
+        accessUserCombobox?.addEventListener('nova:search-select-clear', preserveActiveAccessUser);
         document.querySelectorAll('[data-access-user-checkbox]').forEach((checkbox) => {
             checkbox.addEventListener('change', () => updateUserAccessCount(checkbox.dataset.accessUserCheckbox));
         });
-        setActiveAccessUser(accessIdentityField?.value || accessUserOptions[0]?.dataset.identity || '');
+        setActiveAccessUser(activeAccessIdentity);
 
         const telegramMessageOptions = Array.from(document.querySelectorAll('[data-telegram-message-option]'));
         const telegramMessagePanels = Array.from(document.querySelectorAll('[data-telegram-message-panel]'));
@@ -1554,6 +1364,69 @@
         });
 
         document.querySelector('.nova-sidebar .nova-sidebar-link.active')?.scrollIntoView({ block: 'nearest' });
+
+        const applyUserStatusState = (form, status) => {
+            const row = form.closest('[data-user-row]');
+            const badge = row?.querySelector('[data-user-status-badge]');
+            const button = form.querySelector('button[type="submit"]');
+            const icon = button?.querySelector('i.bi');
+            const action = form.querySelector('input[name="action"]');
+            const banned = status === 'baneado';
+
+            if (row) row.dataset.userRowStatus = status;
+            if (badge) {
+                badge.textContent = status;
+                badge.classList.toggle('is-baneado', banned);
+                badge.classList.toggle('is-activo', !banned);
+            }
+            if (action) action.value = banned ? 'activate' : 'delete';
+            if (button) {
+                button.classList.toggle('is-activate', banned);
+                button.classList.toggle('is-ban', !banned);
+                button.title = banned ? 'Activar' : 'Banear';
+                button.setAttribute('aria-label', button.title);
+            }
+            if (icon) icon.className = `bi ${banned ? 'bi-check-circle' : 'bi-slash-circle'}`;
+            form.dataset.confirmMessage = banned ? 'Activar este usuario?' : 'Marcar usuario como baneado?';
+        };
+
+        const submitUserStatusAction = async (form) => {
+            const row = form.closest('[data-user-row]');
+            const button = form.querySelector('button[type="submit"]');
+            const previousStatus = row?.dataset.userRowStatus === 'baneado' ? 'baneado' : 'activo';
+            const nextStatus = previousStatus === 'baneado' ? 'activo' : 'baneado';
+            const data = new FormData(form);
+
+            applyUserStatusState(form, nextStatus);
+            if (button) {
+                button.disabled = true;
+                button.setAttribute('aria-busy', 'true');
+                button.classList.add('is-submitting');
+            }
+
+            try {
+                const response = await fetch(form.getAttribute('action') || window.location.href, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    body: data,
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.ok === false) {
+                    throw new Error(payload.message || 'No se pudo actualizar el usuario.');
+                }
+                window.NovaToast?.success(payload.message || 'Estado del usuario actualizado.');
+                applyUserFilters();
+            } catch (error) {
+                applyUserStatusState(form, previousStatus);
+                window.NovaToast?.error(error.message || 'No se pudo actualizar el usuario.');
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.removeAttribute('aria-busy');
+                    button.classList.remove('is-submitting');
+                }
+            }
+        };
 
 
         const confirmModal = document.querySelector('[data-confirm-modal]');
@@ -1585,7 +1458,11 @@
             pendingForm = null;
             confirmModal?.classList.remove('is-open');
             confirmModal?.setAttribute('aria-hidden', 'true');
-            submitForm?.submit();
+            if (submitForm?.matches('[data-user-status-toggle]')) {
+                void submitUserStatusAction(submitForm);
+            } else {
+                submitForm?.submit();
+            }
         });
     </script>
 </body>

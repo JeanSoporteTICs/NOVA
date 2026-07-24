@@ -4,7 +4,6 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/lib/telegram.php';
-require_once dirname(__DIR__, 2) . '/emach/lib/client.php';
 telegram_bootstrap_laravel();
 
 $once = in_array('--once', $argv, true);
@@ -47,6 +46,7 @@ $state = is_array($state) ? $state : [];
 $offset = (int) ($state['offset'] ?? 0);
 
 do {
+    telegram_listener_touch_heartbeat();
     $outbox = telegram_process_outbox();
     if (((int) ($outbox['sent'] ?? 0)) > 0 || ((int) ($outbox['failed'] ?? 0)) > 0) {
         fwrite(STDOUT, sprintf(
@@ -280,6 +280,10 @@ function telegram_user_lookup_by_chat_id(string $chatId): array
 
 function telegram_emach_last_mark_reply(array $user): string
 {
+    if (!telegram_emach_client_available()) {
+        return telegram_command_settings()->render('emach_error', ['error' => 'Modulo EMACH no disponible en este despliegue.']);
+    }
+
     $credentials = telegram_emach_credentials($user);
     if ($credentials['user'] === '' || $credentials['password'] === '') {
         return telegram_command_settings()->message('emach_missing_credentials');
@@ -309,6 +313,30 @@ function telegram_emach_last_mark_reply(array $user): string
     ]);
 }
 
+function telegram_emach_client_available(): bool
+{
+    if (function_exists('emach_client_fetch_planilla_rows') && function_exists('emach_client_normalize_mark')) {
+        return true;
+    }
+
+    $basePath = dirname(__DIR__, 2);
+    $clientPath = null;
+    foreach ([$basePath . '/Emach/lib/client.php', $basePath . '/emach/lib/client.php'] as $candidate) {
+        if (is_file($candidate)) {
+            $clientPath = $candidate;
+            break;
+        }
+    }
+
+    if ($clientPath === null) {
+        return false;
+    }
+
+    require_once $clientPath;
+
+    return function_exists('emach_client_fetch_planilla_rows') && function_exists('emach_client_normalize_mark');
+}
+
 function telegram_emach_credentials(array $user): array
 {
     $credentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
@@ -320,16 +348,7 @@ function telegram_emach_credentials(array $user): array
 
 function telegram_decrypt_secret(string $secret): string
 {
-    if ($secret === '') {
-        return '';
-    }
-    if (function_exists('decrypt')) {
-        try {
-            return (string) decrypt($secret);
-        } catch (Throwable) {
-        }
-    }
-    return $secret;
+    return \App\Modulos\Nova\Support\SecretValue::decryptSecret($secret) ?? '';
 }
 
 function telegram_emach_mark_sort_key(array $mark): string

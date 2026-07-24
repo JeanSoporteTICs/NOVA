@@ -11,7 +11,7 @@ $subtitle = $heroSubtitle ?? '';
       <i class="bi <?= $esc($icon) ?>"></i>
     </div>
     <div class="hero-copy">
-      <h2><?= $esc($title) ?></h2>
+      <h1 class="rm-page-title"><?= $esc($title) ?></h1>
       <?php if ($subtitle): ?><div class="hero-subtitle"><?= $esc($subtitle) ?></div><?php endif; ?>
     </div>
     <?php if (!empty($heroExtras)): ?>

@@ -184,24 +184,6 @@ Artisan::command('nova:consolidate-users', function () {
     }
 
     $mantencion = 0;
-    $storageRow = \Illuminate\Support\Facades\Schema::hasTable('redmine_mantencion_storage')
-        ? DB::table('redmine_mantencion_storage')->where('path', 'usuarios.json')->first()
-        : null;
-    $mantencionUsers = $storageRow ? json_decode((string) $storageRow->payload_json, true) : [];
-    if (is_array($mantencionUsers)) {
-        foreach ($mantencionUsers as $user) {
-            if (!is_array($user)) {
-                continue;
-            }
-            $userId = $upsertNova($user, 'redmine_mantencion');
-            if ($userId !== null) {
-                $redmineId = trim((string) ($user['id'] ?? $user['redmine_id'] ?? ''));
-                $saveIntegration($userId, 'redmine_mantencion', trim((string) ($user['api'] ?? '')), $redmineId);
-                $grantAccess($userId, 'redmine-mantencion');
-                $mantencion++;
-            }
-        }
-    }
 
     $this->info('Usuarios TIC consolidados: ' . $tic);
     $this->info('Usuarios Mantencion consolidados: ' . $mantencion);
@@ -346,37 +328,6 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
     }
 
     $mantUpdated = 0;
-    $row = DB::table('redmine_mantencion_storage')->where('path', 'usuarios.json')->first();
-    if ($row) {
-        $users = json_decode((string) $row->payload_json, true);
-        if (is_array($users)) {
-            foreach ($users as &$user) {
-                if (!is_array($user)) {
-                    continue;
-                }
-                $id = trim((string) ($user['id'] ?? ''));
-                if ($id !== '' && isset($historicalByRedmineId[$id])) {
-                    [$name, $lastName] = $splitFullName($historicalByRedmineId[$id]);
-                } else {
-                    $knownLastName = $lastNameByRedmineId[$id] ?? (string) ($user['apellido'] ?? '');
-                    [$name, $lastName] = $repairPerson((string) ($user['nombre'] ?? ''), $knownLastName);
-                }
-                if (($user['nombre'] ?? '') !== $name || ($user['apellido'] ?? '') !== $lastName) {
-                    $user['nombre'] = $name;
-                    $user['apellido'] = $lastName;
-                    $mantUpdated++;
-                }
-            }
-            unset($user);
-            $payload = json_encode(array_values($users), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            DB::table('redmine_mantencion_storage')->where('path', 'usuarios.json')->update([
-                'payload_json' => $payload,
-                'bytes' => strlen((string) $payload),
-                'checksum' => hash('sha256', (string) $payload),
-                'updated_at' => now(),
-            ]);
-        }
-    }
 
     $this->info('usuarios_nova reparados: ' . $novaUpdated);
     $this->info('usuarios Mantencion reparados: ' . $mantUpdated);

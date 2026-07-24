@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Schema;
 class RedmineConfigRepository
 {
     private ?array $cache = null;
+    private ?bool $configTableAvailableCache = null;
+    private ?bool $optionsTableAvailableCache = null;
 
     public function __construct(
         private string $projectKey,
@@ -136,19 +138,25 @@ class RedmineConfigRepository
 
     public function configTableAvailable(): bool
     {
+        if ($this->configTableAvailableCache !== null) {
+            return $this->configTableAvailableCache;
+        }
         try {
-            return Schema::hasTable('modulos_nova') && Schema::hasTable('configuraciones_modulo');
+            return $this->configTableAvailableCache = Schema::hasTable('modulos_nova') && Schema::hasTable('configuraciones_modulo');
         } catch (\Throwable) {
-            return false;
+            return $this->configTableAvailableCache = false;
         }
     }
 
     public function optionsTableAvailable(): bool
     {
+        if ($this->optionsTableAvailableCache !== null) {
+            return $this->optionsTableAvailableCache;
+        }
         try {
-            return Schema::hasTable('modulo_opciones');
+            return $this->optionsTableAvailableCache = Schema::hasTable('modulo_opciones');
         } catch (\Throwable) {
-            return false;
+            return $this->optionsTableAvailableCache = false;
         }
     }
 
@@ -237,6 +245,148 @@ class RedmineConfigRepository
         }
     }
 
+    public function createOption(string $tipo, string $idExterno, string $nombre, bool $predeterminado = false): bool
+    {
+        if (!$this->optionsTableAvailable() || trim($idExterno) === '' || trim($nombre) === '') {
+            return false;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return false;
+        }
+
+        try {
+            $orden = (int) DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->max('orden') + 1;
+
+            DB::table('modulo_opciones')->updateOrInsert(
+                ['modulo_id' => $moduleId, 'tipo' => $tipo, 'id_externo' => $idExterno],
+                [
+                    'nombre' => trim($nombre),
+                    'predeterminado' => 0,
+                    'activo' => 1,
+                    'orden' => max(1, $orden),
+                    'actualizado_at' => now(),
+                ]
+            );
+            $this->cache = null;
+
+            return !$predeterminado || $this->setDefaultOption($tipo, $idExterno);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function updateOption(string $tipo, string $idExterno, string $nombre, bool $predeterminado = false): bool
+    {
+        if (!$this->optionsTableAvailable() || trim($idExterno) === '' || trim($nombre) === '') {
+            return false;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return false;
+        }
+
+        try {
+            $updated = DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->where('id_externo', $idExterno)
+                ->update([
+                    'nombre' => trim($nombre),
+                    'predeterminado' => $predeterminado ? 1 : 0,
+                    'activo' => 1,
+                    'actualizado_at' => now(),
+                ]);
+            if ($updated < 1) {
+                return false;
+            }
+            $this->cache = null;
+
+            return !$predeterminado || $this->setDefaultOption($tipo, $idExterno);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function deleteOption(string $tipo, string $idExterno): bool
+    {
+        if (!$this->optionsTableAvailable() || trim($idExterno) === '') {
+            return false;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return false;
+        }
+
+        try {
+            $deleted = DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->where('id_externo', $idExterno)
+                ->delete();
+            if ($deleted > 0) {
+                $this->cache = null;
+            }
+
+            return $deleted > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function setDefaultOption(string $tipo, string $idExterno): bool
+    {
+        $configKey = [
+            'tracker' => 'tracker_id',
+            'prioridad' => 'priority_id',
+            'estado' => 'status_id',
+        ][$tipo] ?? null;
+        if (!$this->optionsTableAvailable() || $configKey === null || trim($idExterno) === '') {
+            return false;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return false;
+        }
+
+        try {
+            $exists = DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->where('id_externo', $idExterno)
+                ->exists();
+            if (!$exists) {
+                return false;
+            }
+
+            DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->where('predeterminado', 1)
+                ->update(['predeterminado' => 0, 'actualizado_at' => now()]);
+            DB::table('modulo_opciones')
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $tipo)
+                ->where('id_externo', $idExterno)
+                ->update(['predeterminado' => 1, 'actualizado_at' => now()]);
+            $this->saveToDatabase([
+                $configKey => is_numeric($idExterno) ? (int) $idExterno : $idExterno,
+            ]);
+            $this->cache = null;
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function configType(mixed $value): string
     {
         if (is_array($value)) {
@@ -257,12 +407,11 @@ class RedmineConfigRepository
     {
         return [
             'platform_url'       => '',
-            'platform_token'     => '',
             'categories_url'     => '',
             'unidades_url'       => '',
             'webhook_url'        => '',
             'project_id'         => '',
-            'project_name'       => 'Redmine TICS',
+            'project_name'       => 'Backlog Soporte TI',
             'tracker_id'         => '',
             'priority_id'        => '',
             'status_id'          => '',

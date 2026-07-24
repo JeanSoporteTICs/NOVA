@@ -19,13 +19,18 @@ final class MantencionConfigRepository
 
     private ?int $moduleId = null;
     private bool $moduleIdResolved = false;
+    private ?bool $tableReadyCache = null;
+    private ?bool $optionsTableReadyCache = null;
 
     public function tableReady(): bool
     {
+        if ($this->tableReadyCache !== null) {
+            return $this->tableReadyCache;
+        }
         try {
-            return Schema::hasTable(self::CONFIG_TABLE) && Schema::hasTable(self::MODULES_TABLE);
+            return $this->tableReadyCache = Schema::hasTable(self::CONFIG_TABLE) && Schema::hasTable(self::MODULES_TABLE);
         } catch (\Throwable) {
-            return false;
+            return $this->tableReadyCache = false;
         }
     }
 
@@ -137,6 +142,174 @@ final class MantencionConfigRepository
         return '';
     }
 
+    public function createOption(string $type, string $externalId, string $name, bool $default = false): bool
+    {
+        $moduleId = $this->resolveModuleId();
+        if (!$this->optionsTableReady() || $moduleId === null || trim($externalId) === '' || trim($name) === '') {
+            return false;
+        }
+
+        try {
+            $exists = DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $externalId)
+                ->exists();
+            if ($exists) {
+                return false;
+            }
+
+            $order = (int) DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->max('orden') + 1;
+            DB::table(self::OPTIONS_TABLE)->insert([
+                'modulo_id' => $moduleId,
+                'tipo' => $type,
+                'id_externo' => $externalId,
+                'nombre' => trim($name),
+                'predeterminado' => 0,
+                'activo' => 1,
+                'orden' => max(1, $order),
+                'actualizado_at' => now(),
+            ]);
+
+            return !$default || $this->setDefaultOption($type, $externalId);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function updateOption(string $type, string $originalId, string $externalId, string $name, bool $default = false): bool
+    {
+        $moduleId = $this->resolveModuleId();
+        if (!$this->optionsTableReady() || $moduleId === null || trim($originalId) === '' || trim($externalId) === '' || trim($name) === '') {
+            return false;
+        }
+
+        try {
+            $row = DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $originalId)
+                ->first(['predeterminado']);
+            if ($row === null) {
+                return false;
+            }
+
+            if ($externalId !== $originalId) {
+                $conflict = DB::table(self::OPTIONS_TABLE)
+                    ->where('modulo_id', $moduleId)
+                    ->where('tipo', $type)
+                    ->where('id_externo', $externalId)
+                    ->exists();
+                if ($conflict) {
+                    return false;
+                }
+            }
+
+            DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $originalId)
+                ->update([
+                    'id_externo' => $externalId,
+                    'nombre' => trim($name),
+                    'predeterminado' => $default ? 1 : 0,
+                    'activo' => 1,
+                    'actualizado_at' => now(),
+                ]);
+
+            if ($default) {
+                return $this->setDefaultOption($type, $externalId);
+            }
+            if (!empty($row->predeterminado)) {
+                $this->saveDefaultOptionId($type, $this->defaultOptionId($type));
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function deleteOption(string $type, string $externalId): bool
+    {
+        $moduleId = $this->resolveModuleId();
+        if (!$this->optionsTableReady() || $moduleId === null || trim($externalId) === '') {
+            return false;
+        }
+
+        try {
+            $row = DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $externalId)
+                ->first(['predeterminado']);
+            if ($row === null) {
+                return false;
+            }
+
+            DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $externalId)
+                ->delete();
+
+            if (!empty($row->predeterminado)) {
+                $replacement = DB::table(self::OPTIONS_TABLE)
+                    ->where('modulo_id', $moduleId)
+                    ->where('tipo', $type)
+                    ->where('activo', 1)
+                    ->orderBy('orden')
+                    ->value('id_externo');
+                if ($replacement !== null && trim((string) $replacement) !== '') {
+                    return $this->setDefaultOption($type, (string) $replacement);
+                }
+                $this->saveDefaultOptionId($type, '');
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function setDefaultOption(string $type, string $externalId): bool
+    {
+        $moduleId = $this->resolveModuleId();
+        if (!$this->optionsTableReady() || $moduleId === null || trim($externalId) === '') {
+            return false;
+        }
+
+        try {
+            $exists = DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $externalId)
+                ->exists();
+            if (!$exists) {
+                return false;
+            }
+
+            DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('predeterminado', 1)
+                ->update(['predeterminado' => 0, 'actualizado_at' => now()]);
+            DB::table(self::OPTIONS_TABLE)
+                ->where('modulo_id', $moduleId)
+                ->where('tipo', $type)
+                ->where('id_externo', $externalId)
+                ->update(['predeterminado' => 1, 'actualizado_at' => now()]);
+            $this->saveDefaultOptionId($type, $externalId);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function resolveModuleId(): ?int
     {
         if ($this->moduleIdResolved) {
@@ -194,12 +367,38 @@ final class MantencionConfigRepository
         };
     }
 
+    private function saveDefaultOptionId(string $type, string $externalId): void
+    {
+        $configKey = [
+            'tracker' => 'tracker_id',
+            'prioridad' => 'priority_id',
+            'estado' => 'status_id',
+        ][$type] ?? null;
+        $moduleId = $this->resolveModuleId();
+        if ($configKey === null || $moduleId === null) {
+            return;
+        }
+
+        $value = $externalId === '' ? null : $externalId;
+        DB::table(self::CONFIG_TABLE)->updateOrInsert(
+            ['modulo_id' => $moduleId, 'clave' => $configKey],
+            [
+                'valor' => $value,
+                'tipo' => $value !== null && is_numeric($value) ? 'int' : 'string',
+                'actualizado_at' => now(),
+            ]
+        );
+    }
+
     private function optionsTableReady(): bool
     {
+        if ($this->optionsTableReadyCache !== null) {
+            return $this->optionsTableReadyCache;
+        }
         try {
-            return Schema::hasTable(self::OPTIONS_TABLE);
+            return $this->optionsTableReadyCache = Schema::hasTable(self::OPTIONS_TABLE);
         } catch (\Throwable) {
-            return false;
+            return $this->optionsTableReadyCache = false;
         }
     }
 

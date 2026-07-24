@@ -3,6 +3,7 @@
     $months = $meta['months'] ?? [];
     $selectedMonth = (string) ($meta['selectedMonth'] ?? '');
     $selectedYear = (string) ($meta['selectedYear'] ?? '');
+    $emachSuggestions = $meta['emachSuggestions'] ?? [];
     $fmtDate = static function ($value): string {
         $value = trim((string) $value);
         foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'] as $format) {
@@ -10,6 +11,14 @@
             if ($date) return $date->format('d-m-Y');
         }
         return $value ?: '-';
+    };
+    $dateKey = static function ($value): string {
+        $value = trim((string) $value);
+        foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'] as $format) {
+            $date = DateTimeImmutable::createFromFormat($format, $value);
+            if ($date) return $date->format('Y-m-d');
+        }
+        return '';
     };
     $fmtTime = static fn ($value): string => trim((string) $value) !== '' ? substr((string) $value, 0, 5) : '-';
     $minutesDiff = static function ($start, $end): ?int {
@@ -33,7 +42,6 @@
     </div>
     <div class="rm-module-meter">
         <strong>{{ $meta['totalHours'] ?? '00:00' }}</strong>
-        <span>total</span>
     </div>
 </section>
 
@@ -98,6 +106,8 @@
                     @forelse ($rows as $row)
                         @php
                             $groupTotal = $fmtMinutes($minutesDiff($row['hora_inicio'] ?? '', $row['hora_fin'] ?? ''));
+                            $groupDateKey = $dateKey($row['fecha'] ?? '');
+                            $emachSuggestion = $groupDateKey !== '' ? ($emachSuggestions[$groupDateKey] ?? []) : [];
                         @endphp
                         <tr class="rm-hours-group">
                             <td colspan="3">
@@ -116,7 +126,12 @@
                                         data-fecha="{{ $row['fecha'] ?? '' }}"
                                         data-display-fecha="{{ $fmtDate($row['fecha'] ?? '') }}"
                                         data-hora-inicio="{{ substr((string) ($row['hora_inicio'] ?? ''), 0, 5) }}"
-                                        data-hora-fin="{{ substr((string) ($row['hora_fin'] ?? ''), 0, 5) }}">
+                                        data-hora-fin="{{ substr((string) ($row['hora_fin'] ?? ''), 0, 5) }}"
+                                        data-emach-ok="{{ !empty($emachSuggestion['ok']) ? '1' : '0' }}"
+                                        data-emach-hora-inicio="{{ $emachSuggestion['hora_inicio'] ?? '' }}"
+                                        data-emach-hora-fin="{{ $emachSuggestion['hora_fin'] ?? '' }}"
+                                        data-emach-total="{{ $emachSuggestion['total'] ?? '' }}"
+                                        data-emach-status="{{ $emachSuggestion['status'] ?? 'Sin datos EMACH para calcular esta fecha.' }}">
                                         <i class="bi bi-pencil-square"></i>Editar horas
                                     </button>
                                 </div>
@@ -168,6 +183,12 @@
                         <label class="form-label">Hora de termino</label>
                         <input class="form-control" type="time" name="hora_fin">
                     </div>
+                    <div class="col-12">
+                        <button class="btn btn-outline-primary" type="button" data-emach-hours-calculate>
+                            <i class="bi bi-calculator"></i>Calcular desde EMACH
+                        </button>
+                        <div class="form-text fw-semibold" data-emach-hours-status></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -189,6 +210,16 @@
             form.elements.fecha_display.value = button.dataset.displayFecha || '';
             form.elements.hora_inicio.value = button.dataset.horaInicio || '';
             form.elements.hora_fin.value = button.dataset.horaFin || '';
+            modal.dataset.emachOk = button.dataset.emachOk || '0';
+            modal.dataset.emachHoraInicio = button.dataset.emachHoraInicio || '';
+            modal.dataset.emachHoraFin = button.dataset.emachHoraFin || '';
+            modal.dataset.emachTotal = button.dataset.emachTotal || '';
+            modal.dataset.emachStatus = button.dataset.emachStatus || '';
+            const status = modal.querySelector('[data-emach-hours-status]');
+            if (status) {
+                status.classList.remove('text-success', 'text-danger');
+                status.textContent = '';
+            }
             modal.classList.add('show');
             modal.removeAttribute('aria-hidden');
             modal.setAttribute('aria-modal', 'true');
@@ -196,6 +227,66 @@
             document.body.classList.add('modal-open');
         });
     });
+
+    (() => {
+        const modal = document.getElementById('editar-horas');
+        const button = modal?.querySelector('[data-emach-hours-calculate]');
+        const status = modal?.querySelector('[data-emach-hours-status]');
+        const form = modal?.querySelector('form');
+        const endpoint = @json(route('emach.overtime-suggestion'));
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        if (!modal || !button || !status || !form) return;
+
+        const applySuggestion = (suggestion, message) => {
+            form.elements.hora_inicio.value = suggestion.hora_inicio || '';
+            form.elements.hora_fin.value = suggestion.hora_fin || '';
+            status.classList.remove('text-danger');
+            status.classList.add('text-success');
+            status.textContent = message || `Inicio desde tu salida programada y termino desde EMACH. Total: ${suggestion.total || '00:00'}.`;
+        };
+
+        button.addEventListener('click', async () => {
+            status.classList.remove('text-success', 'text-danger');
+            if (modal.dataset.emachOk === '1') {
+                applySuggestion({
+                    hora_inicio: modal.dataset.emachHoraInicio || '',
+                    hora_fin: modal.dataset.emachHoraFin || '',
+                    total: modal.dataset.emachTotal || '00:00',
+                });
+                return;
+            }
+
+            button.disabled = true;
+            status.textContent = 'Consultando EMACH...';
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({ fecha: form.elements.fecha.value || form.elements.fecha_display.value || '' }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || modal.dataset.emachStatus || 'Sin datos EMACH para calcular esta fecha.');
+                }
+
+                modal.dataset.emachOk = '1';
+                modal.dataset.emachHoraInicio = payload.hora_inicio || '';
+                modal.dataset.emachHoraFin = payload.hora_fin || '';
+                modal.dataset.emachTotal = payload.total || '00:00';
+                modal.dataset.emachStatus = payload.message || '';
+                applySuggestion(payload, `${payload.message || 'Calculado desde EMACH.'} Total: ${payload.total || '00:00'}.`);
+            } catch (error) {
+                status.classList.add('text-danger');
+                status.textContent = error?.message || 'No se pudo consultar EMACH.';
+            } finally {
+                button.disabled = false;
+            }
+        });
+    })();
 
     (() => {
         const copyButton = document.getElementById('copy-hours-table');

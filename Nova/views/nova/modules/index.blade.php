@@ -8,19 +8,22 @@
     @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
+    @php
+        $novaUiVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1';
+    @endphp
+    <link href="{{ asset('assets/nova-ui.css') }}?v={{ $novaUiVersion }}" rel="stylesheet">
 </head>
 <body class="nova-page">
     <main class="shell nova-shell">
         <nav class="navbar navbar-expand-lg navbar-dark rm-navbar">
-            <div class="container-fluid px-0">
+            <div class="container-fluid px-4">
                 <a class="navbar-brand d-flex align-items-center gap-3 fw-bold" href="{{ route('modules.index') }}">
                     <span class="rm-brand-mark"><i class="bi bi-sliders"></i></span>
                     <span>Modulos NOVA</span>
                 </a>
                 <div class="rm-top-actions">
                     @include('nova.partials.session-control')
-                    <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                    <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
                     <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
                     <form method="POST" action="{{ route('logout') }}" style="display:inline">
                         @csrf
@@ -56,47 +59,128 @@
             <span class="nova-system-meter"><strong>{{ count($modules) }}</strong><span>modulos</span></span>
         </section>
 
-        <form method="post" action="{{ route('modules.update') }}">
+        <form method="post" action="{{ route('modules.update') }}" data-modules-form>
             @csrf
-            <div class="card nova-card nova-system-card nova-table-wrap rm-table-wrap">
-                <table class="table modules-table mb-0">
-                    <thead>
-                        <tr>
-                            <th>Activo</th>
-                            <th>Modulo</th>
-                            <th>Tipo</th>
-                            <th>Nombre visible</th>
-                            <th>Orden</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($modules as $key => $module)
-                            @php($moduleState = $state[$key] ?? [])
-                            <tr>
-                                <td>
-                                    <input type="checkbox" name="enabled[]" value="{{ $key }}" @checked($module['enabled'] ?? true)>
-                                </td>
-                                <td>
-                                    <div class="module-name">{{ $module['name'] }}</div>
-                                    <div class="module-key">{{ $key }}</div>
-                                </td>
-                                <td><span class="nova-badge">{{ $module['type'] ?? 'legacy' }}</span></td>
-                                <td>
-                                    <input type="text" name="labels[{{ $key }}]" value="{{ $moduleState['label'] ?? '' }}" placeholder="{{ $module['name'] }}">
-                                </td>
-                                <td>
-                                    <input type="number" name="order[{{ $key }}]" value="{{ $module['order'] ?? 100 }}" min="0" step="1">
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-            <div class="actions nova-system-toolbar">
-                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
-            </div>
+            <section class="nova-card module-order-panel">
+                <div class="nova-system-toolbar is-between module-toolbar">
+                    <div class="module-toolbar-summary">
+                        <strong>{{ count($modules) }} modulo(s)</strong>
+                        <span>Orden de aparicion en el inicio NOVA.</span>
+                    </div>
+                    <div class="module-toolbar-actions">
+                        <button class="btn-nova btn-nova-secondary" type="button" data-module-sort-alpha>
+                            <i class="bi bi-sort-alpha-down"></i>Orden A-Z
+                        </button>
+                        <button class="btn-nova btn-nova-secondary" type="button" data-module-reset-order>
+                            <i class="bi bi-arrow-counterclockwise"></i>Restaurar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="module-order-list" data-module-list>
+                    @foreach ($modules as $key => $module)
+                    @php
+                        $moduleState = $state[$key] ?? [];
+                    @endphp
+                        <article class="module-order-item" data-module-item data-module-key="{{ $key }}" data-module-name="{{ $module['name'] }}">
+                            <div class="module-order-rank" data-module-rank>{{ $loop->iteration }}</div>
+                            <div class="module-order-main">
+                                <div class="module-order-head">
+                                    <div>
+                                        <div class="module-name">{{ $module['name'] }}</div>
+                                        <div class="module-key">{{ $key }}</div>
+                                    </div>
+                                    <span class="nova-badge">{{ $module['type'] ?? 'legacy' }}</span>
+                                </div>
+                                <label class="module-label-field">
+                                    <span>Nombre visible</span>
+                                    <input class="form-control" type="text" name="labels[{{ $key }}]" value="{{ $moduleState['label'] ?? '' }}" placeholder="{{ $module['name'] }}">
+                                </label>
+                            </div>
+                            <div class="module-order-state">
+                                <label class="module-switch">
+                                    <input class="form-check-input" type="checkbox" name="enabled[]" value="{{ $key }}" @checked($module['enabled'] ?? true)>
+                                    <span>Activo</span>
+                                </label>
+                                <input type="hidden" name="order[{{ $key }}]" value="{{ $module['order'] ?? ($loop->iteration * 10) }}" data-module-order>
+                                <div class="module-order-controls">
+                                    <button class="module-icon-btn" type="button" data-module-up title="Subir" aria-label="Subir {{ $module['name'] }}">
+                                        <i class="bi bi-arrow-up"></i>
+                                    </button>
+                                    <button class="module-icon-btn" type="button" data-module-down title="Bajar" aria-label="Bajar {{ $module['name'] }}">
+                                        <i class="bi bi-arrow-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+                <div class="actions nova-system-toolbar">
+                    <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar cambios</button>
+                </div>
+            </section>
         </form>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script>
+        (() => {
+            const list = document.querySelector('[data-module-list]');
+            const form = document.querySelector('[data-modules-form]');
+            if (!list || !form) return;
+
+            const originalOrder = Array.from(list.querySelectorAll('[data-module-item]')).map((item) => item.dataset.moduleKey || '');
+            const items = () => Array.from(list.querySelectorAll('[data-module-item]'));
+
+            const refresh = () => {
+                items().forEach((item, index, all) => {
+                    const rank = item.querySelector('[data-module-rank]');
+                    const order = item.querySelector('[data-module-order]');
+                    const up = item.querySelector('[data-module-up]');
+                    const down = item.querySelector('[data-module-down]');
+                    if (rank) rank.textContent = String(index + 1);
+                    if (order) order.value = String((index + 1) * 10);
+                    if (up) up.disabled = index === 0;
+                    if (down) down.disabled = index === all.length - 1;
+                });
+            };
+
+            const move = (item, direction) => {
+                if (direction < 0 && item.previousElementSibling) {
+                    list.insertBefore(item, item.previousElementSibling);
+                }
+                if (direction > 0 && item.nextElementSibling) {
+                    list.insertBefore(item.nextElementSibling, item);
+                }
+                refresh();
+            };
+
+            list.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-module-up], [data-module-down]');
+                if (!button) return;
+                const item = button.closest('[data-module-item]');
+                if (!item) return;
+                move(item, button.hasAttribute('data-module-up') ? -1 : 1);
+            });
+
+            document.querySelector('[data-module-sort-alpha]')?.addEventListener('click', () => {
+                items()
+                    .sort((a, b) => (a.dataset.moduleName || '').localeCompare(b.dataset.moduleName || '', 'es'))
+                    .forEach((item) => list.appendChild(item));
+                refresh();
+            });
+
+            document.querySelector('[data-module-reset-order]')?.addEventListener('click', () => {
+                originalOrder.forEach((key) => {
+                    const item = items().find((candidate) => candidate.dataset.moduleKey === key);
+                    if (item) list.appendChild(item);
+                });
+                refresh();
+            });
+
+            form.addEventListener('submit', refresh);
+            refresh();
+        })();
+    </script>
 </body>
 </html>

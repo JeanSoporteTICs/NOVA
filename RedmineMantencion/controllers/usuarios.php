@@ -372,23 +372,40 @@ function usuarios_central_integration_external(int $userId, string $type): strin
     }
 }
 
-function usuarios_central_save_integration(int $userId, string $type, string $secret = '', string $externalUser = ''): void {
+function usuarios_central_integration_has_secret(int $userId, string $type): bool {
+    if ($userId <= 0 || !class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return false;
+    }
+    try {
+        $secret = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+            ->where('usuario_id', $userId)
+            ->where('tipo', $type)
+            ->value('valor_secreto');
+
+        return trim((string)$secret) !== '';
+    } catch (\Throwable) {
+        return false;
+    }
+}
+
+/**
+ * Low-level writer: persists $secretValue verbatim (no encryption applied
+ * here). Callers are responsible for handing it an already-safe value
+ * (either freshly encrypted, or an untouched already-encrypted ciphertext).
+ */
+function usuarios_central_write_integration(int $userId, string $type, ?string $secretValue, string $externalUser = ''): void {
     if ($userId <= 0 || !class_exists(\Illuminate\Support\Facades\DB::class)) {
         return;
     }
-    if ($secret === '' && $externalUser === '') {
+    if (($secretValue === null || $secretValue === '') && $externalUser === '') {
         return;
     }
     $values = [
         'usuario_externo' => $externalUser !== '' ? $externalUser : null,
         'actualizado_at' => now(),
     ];
-    if ($secret !== '') {
-        try {
-            $values['valor_secreto'] = encrypt($secret);
-        } catch (\Throwable) {
-            $values['valor_secreto'] = $secret;
-        }
+    if ($secretValue !== null && $secretValue !== '') {
+        $values['valor_secreto'] = $secretValue;
     }
     try {
         \Illuminate\Support\Facades\DB::table('integraciones_usuario')->updateOrInsert(
@@ -399,12 +416,46 @@ function usuarios_central_save_integration(int $userId, string $type, string $se
     }
 }
 
-function usuarios_central_save_integration_encrypted(int $userId, string $type, string $encryptedSecret = '', string $externalUser = ''): void {
-    $secret = '';
-    if ($encryptedSecret !== '' && function_exists('core_credentials_decrypt')) {
-        $secret = core_credentials_decrypt($encryptedSecret);
+function usuarios_central_save_integration(int $userId, string $type, string $secret = '', string $externalUser = ''): void {
+    $encrypted = null;
+    if ($secret !== '') {
+        try {
+            $encrypted = \App\Modulos\Nova\Support\SecretValue::encryptSecret($secret);
+        } catch (\Throwable) {
+            // Never persist plaintext nor touch the previous credential on a real encryption failure.
+            return;
+        }
     }
-    usuarios_central_save_integration($userId, $type, $secret, $externalUser);
+    usuarios_central_write_integration($userId, $type, $encrypted, $externalUser);
+}
+
+/**
+ * Round-trips whatever is currently stored in valor_secreto (used by the
+ * admin "usuarios" form, which has no editable password field and only
+ * resaves the value it just read). Detects the actual format via
+ * SecretValue instead of assuming enc:v1 — an already Laravel-encrypted
+ * value is passed through unchanged (no double-encrypt), a decodable
+ * legacy value gets re-encrypted, and an invalid value is left untouched.
+ */
+function usuarios_central_save_integration_encrypted(int $userId, string $type, string $storedSecret = '', string $externalUser = ''): void {
+    if ($storedSecret === '') {
+        usuarios_central_write_integration($userId, $type, null, $externalUser);
+        return;
+    }
+
+    $inspection = \App\Modulos\Nova\Support\SecretValue::inspect($storedSecret);
+    if ($inspection['status'] === 'invalid') {
+        usuarios_central_write_integration($userId, $type, null, $externalUser);
+        return;
+    }
+
+    if (!$inspection['needs_rewrite']) {
+        usuarios_central_write_integration($userId, $type, $storedSecret, $externalUser);
+        return;
+    }
+
+    $plaintext = \App\Modulos\Nova\Support\SecretValue::decryptSecret($storedSecret);
+    usuarios_central_save_integration($userId, $type, (string) $plaintext, $externalUser);
 }
 
 function usuarios_central_grant_access(int $userId, string $moduleKey = 'redmine-mantencion'): void {
@@ -437,7 +488,7 @@ function usuarios_central_revoke_access(int $userId, string $moduleKey = 'redmin
 }
 
 function usuarios_central_id_for_project_user(array $user): ?int {
-    if (!class_exists(\App\Modulos\Nova\Models\NovaUser::class)) {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class)) {
         return null;
     }
     $redmineId = trim((string)($user['redmine_id'] ?? ''));
@@ -451,24 +502,24 @@ function usuarios_central_id_for_project_user(array $user): ?int {
     $username = trim((string)($user['rut_sin_dv'] ?? $user['username'] ?? ''));
 
     try {
-        $model = null;
+        $id = null;
         if ($redmineId !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+            $id = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('redmine_id', $redmineId)->value('id');
         }
-        if (!$model && $uuid !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('uuid', $uuid)->first();
+        if (!$id && $uuid !== '') {
+            $id = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('uuid', $uuid)->value('id');
         }
-        if (!$model && $username !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('usuario', $username)->first();
+        if (!$id && $username !== '') {
+            $id = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('usuario', $username)->value('id');
         }
-        return $model ? (int)$model->id : null;
+        return $id ? (int)$id : null;
     } catch (\Throwable) {
         return null;
     }
 }
 
 function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mantencion'): ?int {
-    if (!class_exists(\App\Modulos\Nova\Models\NovaUser::class)) {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class)) {
         return null;
     }
     $redmineId = trim((string)($user['redmine_id'] ?? ''));
@@ -501,46 +552,53 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
     $roleRaw = strtolower(trim((string)($user['rol'] ?? 'usuario')));
     $role = in_array($roleRaw, ['administrador', 'gestor', 'root'], true) ? $roleRaw : 'usuario';
     try {
-        $model = null;
+        $row = null;
         if ($redmineId !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('redmine_id', $redmineId)->first();
+            $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('redmine_id', $redmineId)->first();
         }
-        if (!$model && $uuid !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('uuid', $uuid)->first();
+        if (!$row && $uuid !== '') {
+            $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('uuid', $uuid)->first();
         }
-        if (!$model && $rut !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('rut', $rut)->first();
+        if (!$row && $rut !== '') {
+            $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('rut', $rut)->first();
         }
-        if (!$model && $username !== '') {
-            $model = \App\Modulos\Nova\Models\NovaUser::query()->where('usuario', $username)->first();
+        if (!$row && $username !== '') {
+            $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('usuario', $username)->first();
         }
-        if ($model && !empty($user['_preserve_existing_status'])) {
+        if ($row && !empty($user['_preserve_existing_status'])) {
             $status = '';
         }
-        if ($model && $rawUsername === '') {
-            $username = trim((string)$model->usuario) ?: $username;
+        if ($row && $rawUsername === '') {
+            $username = trim((string)$row->usuario) ?: $username;
         }
-        if (!$model) {
-            $model = new \App\Modulos\Nova\Models\NovaUser();
-            $model->uuid = (string)\Illuminate\Support\Str::uuid();
-            $model->password = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
-            if ($status === '') {
-                $status = 'activo';
-            }
+        if (!$row && $status === '') {
+            $status = 'activo';
         }
-        $model->usuario = $username;
-        $model->rut = $rut !== '' ? $rut : null;
+
+        $values = [
+            'usuario'        => $username,
+            'rut'            => $rut !== '' ? $rut : null,
+            'nombre'         => $name,
+            'apellido'       => $lastName,
+            'rol'            => $role,
+            'actualizado_at' => now(),
+        ];
         if ($redmineId !== '') {
-            $model->redmine_id = $redmineId;
+            $values['redmine_id'] = $redmineId;
         }
-        $model->nombre = $name;
-        $model->apellido = $lastName;
-        $model->rol = $role;
         if ($status !== '') {
-            $model->estado = $status;
+            $values['estado'] = $status;
         }
-        $model->save();
-        $userId = (int)$model->id;
+
+        if ($row) {
+            \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('id', $row->id)->update($values);
+            $userId = (int)$row->id;
+        } else {
+            $values['uuid']      = (string)\Illuminate\Support\Str::uuid();
+            $values['password']  = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
+            $values['creado_at'] = now();
+            $userId = (int)\Illuminate\Support\Facades\DB::table('usuarios_nova')->insertGetId($values);
+        }
         usuarios_central_save_integration($userId, 'redmine_mantencion', trim((string)($user['api'] ?? '')), $redmineId);
         usuarios_central_save_integration_encrypted($userId, 'core', trim((string)($user['core_pass_enc'] ?? '')), trim((string)($user['core_user'] ?? '')));
         usuarios_central_save_integration_encrypted($userId, 'nextcloud', trim((string)($user['nextcloud_pass_enc'] ?? '')), trim((string)($user['nextcloud_user'] ?? '')));
@@ -572,12 +630,49 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
     } catch (\Throwable) {
         return $rows;
     }
+
+    // Prefetch: one query for integraciones_usuario covering every user in $central,
+    // instead of the 4-5 per-user queries (usuarios_central_user_api/_integration_external/
+    // _integration_has_secret) this loop used to run — see Fase 4 lote 1.
+    $centralIds = [];
+    foreach ($central as $user) {
+        $id = (int)($user->id ?? 0);
+        if ($id > 0) {
+            $centralIds[] = $id;
+        }
+    }
+    $integrationsByUser = [];
+    if ($centralIds !== []) {
+        try {
+            $integrationRows = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+                ->whereIn('usuario_id', $centralIds)
+                ->whereIn('tipo', ['redmine_mantencion', 'core', 'nextcloud'])
+                ->get(['usuario_id', 'tipo', 'usuario_externo', 'valor_secreto']);
+            foreach ($integrationRows as $integrationRow) {
+                $integrationsByUser[(int)$integrationRow->usuario_id][(string)$integrationRow->tipo] = [
+                    'usuario_externo' => (string)($integrationRow->usuario_externo ?? ''),
+                    'valor_secreto' => (string)($integrationRow->valor_secreto ?? ''),
+                ];
+            }
+        } catch (\Throwable) {
+            $integrationsByUser = [];
+        }
+    }
+
     foreach ($central as $user) {
         $redmineId = trim((string)($user->redmine_id ?? ''));
         $rowId = $redmineId !== '' ? $redmineId : trim((string)($user->uuid ?? $user->usuario ?? ''));
         if ($rowId === '') {
             continue;
         }
+        $userIntegrations = $integrationsByUser[(int)($user->id ?? 0)] ?? [];
+        // usuarios_central_user_api() returned '' immediately when $redmineId === '';
+        // preserved here so central-only users keep the exact same 'api' value.
+        $apiSecret = $redmineId !== '' ? (string)($userIntegrations['redmine_mantencion']['valor_secreto'] ?? '') : '';
+        $coreExternal = trim((string)($userIntegrations['core']['usuario_externo'] ?? ''));
+        $coreSecret = trim((string)($userIntegrations['core']['valor_secreto'] ?? ''));
+        $nextcloudExternal = trim((string)($userIntegrations['nextcloud']['usuario_externo'] ?? ''));
+        $nextcloudSecret = trim((string)($userIntegrations['nextcloud']['valor_secreto'] ?? ''));
         $row = [
             'id' => $rowId,
             'redmine_id' => $redmineId,
@@ -587,11 +682,13 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
             'rut' => trim((string)($user->rut ?? '')),
             'numero_celular' => '',
             'estamento' => '',
-            'api' => usuarios_central_user_api($redmineId, 'redmine_mantencion'),
-            'core_user' => trim((string)($user->usuario_core ?? '')) ?: usuarios_central_integration_external((int)($user->id ?? 0), 'core'),
+            'api' => usuarios_central_decrypt_secret($apiSecret),
+            'core_user' => trim((string)($user->usuario_core ?? '')) ?: $coreExternal,
             'core_pass_enc' => '',
-            'nextcloud_user' => usuarios_central_integration_external((int)($user->id ?? 0), 'nextcloud'),
+            'has_core_credentials' => $coreSecret !== '',
+            'nextcloud_user' => $nextcloudExternal,
             'nextcloud_pass_enc' => '',
+            'has_nextcloud_credentials' => $nextcloudSecret !== '',
             'rol' => trim((string)($user->rol ?? 'usuario')) === 'admin' ? 'administrador' : 'usuario',
             'estado' => trim((string)($user->estado ?? 'activo')),
             'password' => (string)($user->password ?? ''),
@@ -859,12 +956,9 @@ function usuarios_redmine_person_name(array $user, string $apiKey = '', string $
 function usuarios_remote_connection(): array {
     $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
     $cfg = $repo !== null ? $repo->loadAll() : [];
-    $apiKey = is_array($cfg) ? trim((string)($cfg['platform_token'] ?? '')) : '';
+    $apiKey = usuarios_user_api_token();
     if ($apiKey === '') {
-        $apiKey = usuarios_user_api_token();
-    }
-    if ($apiKey === '') {
-        return ['error' => 'Falta token API para importar usuarios. Configura el Token API en Configuracion > Conexion API o agrega la API al usuario actual en Usuarios.'];
+        return ['error' => 'Falta token API para importar usuarios. Agrega tu API personal en Cuentas conectadas.'];
     }
     $url = usuarios_members_api_url(usuarios_members_url_from_config());
     if ($url === '') {
@@ -1140,8 +1234,11 @@ function handle_usuarios() {
                 'permisos' => $rolePerms,
             ];
             $rows[] = $newRow;
+            // Punctual create: usuarios_central_upsert() already persists this one
+            // record. save_usuarios($DATA_FILE, $rows) would loop and re-upsert
+            // every user in $rows for no additional effect (same antipattern fixed
+            // in dashboard.php's 'update' case) — removed.
             usuarios_central_upsert($newRow);
-            save_usuarios($DATA_FILE, $rows);
             usuarios_set_flash('Usuario creado');
             usuarios_redirect_back();
         } elseif ($action === 'update') {
@@ -1151,9 +1248,11 @@ function handle_usuarios() {
             $current = &$rows[$index];
             $current['rol'] = sanitize_input($_POST['rol'] ?? ($current['rol'] ?? 'usuario'));
             $current['_preserve_existing_status'] = true;
+            // Punctual update: usuarios_central_upsert() already persists this one
+            // record; save_usuarios($DATA_FILE, $rows) was a redundant full re-upsert
+            // of every user (see note in the 'create' branch above) — removed.
             usuarios_central_upsert($current);
             unset($current['_preserve_existing_status']);
-            save_usuarios($DATA_FILE, $rows);
             usuarios_set_flash('Rol de proyecto actualizado');
             usuarios_redirect_back();
         } elseif ($action === 'delete') {

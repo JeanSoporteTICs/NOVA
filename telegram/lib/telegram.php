@@ -22,6 +22,15 @@ function telegram_read_config(?string $path = null): array
     $config = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
     $config = is_array($config) ? $config : [];
 
+    // bot_token is the only secret field in this file. It may be stored
+    // Laravel-encrypted (current format going forward), plaintext (legacy,
+    // read transparently and upgraded on the next telegram_save_config()
+    // call — never rewritten here on a hot read path), or absent.
+    $storedToken = (string) ($config['bot_token'] ?? '');
+    $config['bot_token'] = $storedToken !== ''
+        ? (\App\Modulos\Nova\Support\SecretValue::decryptSecret($storedToken) ?? '')
+        : '';
+
     $envToken = trim((string) getenv('TELEGRAM_BOT_TOKEN'));
     $envChatId = trim((string) getenv('TELEGRAM_CHAT_ID'));
     if ($envToken !== '') {
@@ -46,8 +55,15 @@ function telegram_save_config(array $config, ?string $path = null): bool
         return false;
     }
 
+    try {
+        $encryptedToken = \App\Modulos\Nova\Support\SecretValue::encryptSecret((string) ($config['bot_token'] ?? ''));
+    } catch (\Throwable) {
+        // Never persist plaintext nor touch the file on a real encryption failure.
+        return false;
+    }
+
     $payload = [
-        'bot_token' => (string) ($config['bot_token'] ?? ''),
+        'bot_token' => $encryptedToken,
         'chat_id' => (string) ($config['chat_id'] ?? ''),
         'proxy_url' => (string) ($config['proxy_url'] ?? ''),
         'default_parse_mode' => '',
@@ -59,6 +75,10 @@ function telegram_save_config(array $config, ?string $path = null): bool
         return false;
     }
 
+    // NOTE (Lote A6): still 0666 here — see delivery notes. Apache (daemon)
+    // and this file's CLI/Docker owners share no common group today, so a
+    // tighter mode would need an explicit chown first or it silently locks
+    // Apache out on the very next save. Not applied without confirmation.
     @chmod($path, 0666);
     return true;
 }
@@ -347,6 +367,26 @@ function telegram_listener_log_path(): string
     return telegram_storage_path('listener.log');
 }
 
+function telegram_listener_heartbeat_path(): string
+{
+    return telegram_storage_path('listener.heartbeat.json');
+}
+
+function telegram_listener_touch_heartbeat(): void
+{
+    $path = telegram_listener_heartbeat_path();
+    $directory = dirname($path);
+    if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
+        return;
+    }
+
+    @file_put_contents($path, json_encode([
+        'updated_at' => date(DATE_ATOM),
+        'pid' => getmypid(),
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
+    @chmod($path, 0666);
+}
+
 function telegram_listener_status(?string $botToken = null): array
 {
     $pid = telegram_listener_pid();
@@ -377,6 +417,7 @@ function telegram_listener_status(?string $botToken = null): array
         'running' => $running,
         'pid' => $pid,
         'pid_path' => telegram_listener_pid_path(),
+        'heartbeat_path' => telegram_listener_heartbeat_path(),
         'log_path' => telegram_listener_log_path(),
         'php_binary' => telegram_listener_php_binary(),
         'queue' => telegram_queue_status(),

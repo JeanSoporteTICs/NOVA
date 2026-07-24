@@ -127,22 +127,38 @@ final class NovaUserService
      */
     public function verifyCredentials(array $user, string $password, bool $allowApiToken): bool
     {
-        $hash = (string) ($user['password'] ?? '');
-        $api  = (string) ($user['api']      ?? '');
-
-        if ($hash !== '' && strlen($hash) > 20 && password_verify($password, $hash)) {
+        if ($this->verifyPassword($user, $password)) {
             return true;
         }
 
-        if ($hash !== '' && strlen($hash) <= 20 && hash_equals($hash, $password)) {
-            return true;
-        }
+        $api = (string) ($user['api'] ?? '');
 
         if ($allowApiToken && $api !== '' && hash_equals($api, $password)) {
             return true;
         }
 
         return false;
+    }
+
+    public function verifyPassword(array $user, string $password): bool
+    {
+        $hash = (string) ($user['password'] ?? '');
+        if ($hash === '') {
+            return false;
+        }
+
+        if (strlen($hash) > 20) {
+            return password_verify($password, $hash);
+        }
+
+        return hash_equals($hash, $password);
+    }
+
+    public function passwordNeedsRehash(array $user): bool
+    {
+        $hash = (string) ($user['password'] ?? '');
+
+        return $hash !== '' && (strlen($hash) <= 20 || password_needs_rehash($hash, PASSWORD_DEFAULT));
     }
 
     public function hashPassword(string $password): string

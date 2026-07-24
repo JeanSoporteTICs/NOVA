@@ -6,8 +6,22 @@ $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 
 $user = $_SESSION['user'] ?? [];
 $currentYear = (int) date('Y');
 $currentMonth = (int) date('n');
-$requestData = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' ? $_POST : $_GET;
-$submitted = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+$isPost = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+
+if ($isPost) {
+  $expectedCsrfToken = function_exists('csrf_token') ? (string) csrf_token() : '';
+  $submittedCsrfToken = trim((string) ($_POST['_token'] ?? ''));
+  if ($expectedCsrfToken === '' || $submittedCsrfToken === '' || !hash_equals($expectedCsrfToken, $submittedCsrfToken)) {
+    if (function_exists('abort')) {
+      abort(419, 'Token CSRF invalido.');
+    }
+    http_response_code(419);
+    exit('Token CSRF invalido.');
+  }
+}
+
+$requestData = $isPost ? $_POST : $_GET;
+$submitted = $isPost;
 $selectedYear = max(2020, min(2100, (int) ($requestData['ano'] ?? $currentYear)));
 $selectedMonth = max(1, min(12, (int) ($requestData['mes'] ?? $currentMonth)));
 $emachUsername = trim((string) ($requestData['emach_usuario'] ?? ''));
@@ -75,6 +89,78 @@ function emach_save_current_user_credentials(string $username, string $password)
   return false;
 }
 
+function emach_log_event(string $event, string $detail = '', array $context = []): void {
+  if (!function_exists('app')) {
+    return;
+  }
+  $user = emach_session_user();
+  app(\App\Modulos\Shared\Repositories\ModuleLogRepository::class)->append(
+    'emach',
+    $event,
+    (string) ($user['id'] ?? $user['uuid'] ?? ''),
+    $detail,
+    $context
+  );
+}
+
+function emach_store_last_query(array $payload): void {
+  if (function_exists('request')) {
+    request()->session()->put('emach.last_query', $payload);
+    return;
+  }
+  $_SESSION['emach.last_query'] = $payload;
+}
+
+function emach_forget_last_query(): void {
+  if (function_exists('request')) {
+    request()->session()->forget('emach.last_query');
+    return;
+  }
+  unset($_SESSION['emach.last_query']);
+  unset($_SESSION['emach.last_query_flash']);
+}
+
+function emach_last_query(): array {
+  if (function_exists('request')) {
+    $payload = request()->session()->get('emach.last_query', []);
+    request()->session()->forget('emach.last_query');
+    return is_array($payload) ? $payload : [];
+  }
+
+  $payload = is_array($_SESSION['emach.last_query'] ?? null) ? $_SESSION['emach.last_query'] : [];
+  unset($_SESSION['emach.last_query']);
+  return $payload;
+}
+
+function emach_flash_query_error(array $planilla): void {
+  if (function_exists('request')) {
+    request()->session()->flash('emach.query_error', $planilla);
+    return;
+  }
+  $_SESSION['emach.query_error'] = $planilla;
+}
+
+function emach_flashed_query_error(): array {
+  if (function_exists('request')) {
+    $payload = request()->session()->get('emach.query_error', []);
+    return is_array($payload) ? $payload : [];
+  }
+
+  $payload = is_array($_SESSION['emach.query_error'] ?? null) ? $_SESSION['emach.query_error'] : [];
+  unset($_SESSION['emach.query_error']);
+  return $payload;
+}
+
+function emach_redirect_after_query(int $year, int $month): void {
+  $baseUrl = function_exists('url') ? url('/emach') : '/emach';
+  if (function_exists('request') && method_exists(request()->session(), 'save')) {
+    request()->session()->save();
+  } elseif (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+  }
+  header('Location: ' . $baseUrl, true, 303);
+}
+
 $storedEmachCredentials = emach_current_user_credentials();
 if ($emachUsername === '' && (string) ($storedEmachCredentials['user'] ?? '') !== '') {
   $emachUsername = (string) $storedEmachCredentials['user'];
@@ -116,8 +202,8 @@ function emach_curl_request(string $url, string $cookieFile, string $username = 
   }
   curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_CONNECTTIMEOUT => 4,
-    CURLOPT_TIMEOUT => 12,
+    CURLOPT_CONNECTTIMEOUT => (int) ($options['connect_timeout'] ?? 3),
+    CURLOPT_TIMEOUT => (int) ($options['timeout'] ?? 8),
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_COOKIEJAR => $cookieFile,
     CURLOPT_COOKIEFILE => $cookieFile,
@@ -158,6 +244,65 @@ function emach_curl_request(string $url, string $cookieFile, string $username = 
     'effective_url' => $effectiveUrl,
     'error' => $curlError,
   ];
+}
+
+function emach_server_availability(): array {
+  if (!function_exists('curl_init')) {
+    return [
+      'ok' => false,
+      'error' => 'Extension cURL no disponible.',
+      'diagnostics' => [],
+    ];
+  }
+
+  $url = 'http://10.6.206.19/index.php';
+  $ch = curl_init($url);
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CONNECTTIMEOUT => 2,
+    CURLOPT_TIMEOUT => 3,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_NOBODY => false,
+    CURLOPT_RANGE => '0-512',
+    CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml,application/json'],
+    CURLOPT_USERAGENT => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+  ]);
+
+  $body = curl_exec($ch);
+  $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $effectiveUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+  $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+  $curlError = (string) curl_error($ch);
+  $curlErrno = (int) curl_errno($ch);
+  curl_close($ch);
+
+  if ($curlErrno !== 0 || $body === false || $httpCode === 0) {
+    return [
+      'ok' => false,
+      'error' => 'Servidor EMACH no disponible. No se pudo conectar con 10.6.206.19.',
+      'diagnostics' => [
+        'effective_url' => $effectiveUrl !== '' ? $effectiveUrl : $url,
+        'content_type' => $contentType,
+        'http_code' => (string) $httpCode,
+        'curl_errno' => (string) $curlErrno,
+        'curl_error' => $curlError,
+      ],
+    ];
+  }
+
+  if ($httpCode >= 500) {
+    return [
+      'ok' => false,
+      'error' => 'Servidor EMACH responde con error HTTP ' . $httpCode . '.',
+      'diagnostics' => [
+        'effective_url' => $effectiveUrl !== '' ? $effectiveUrl : $url,
+        'content_type' => $contentType,
+        'http_code' => (string) $httpCode,
+      ],
+    ];
+  }
+
+  return ['ok' => true, 'error' => '', 'diagnostics' => []];
 }
 
 function emach_absolute_url(string $url, string $baseUrl): string {
@@ -341,6 +486,16 @@ function emach_login_from_html(string $html, string $pageUrl, string $cookieFile
   return false;
 }
 
+function emach_is_login_page(string $html): bool {
+  if ($html === '') {
+    return false;
+  }
+
+  return stripos($html, 'frmTrabajador') !== false
+    || stripos($html, 'id="frmUsuario"') !== false
+    || stripos($html, "id='frmUsuario'") !== false;
+}
+
 function emach_prime_session(string $cookieFile, string $username, string $password): void {
   $base = 'http://10.6.206.19/index.php';
   $landingUrl = $base . '/autoconsulta/marcas/';
@@ -423,10 +578,14 @@ function emach_prime_session(string $cookieFile, string $username, string $passw
     }
   }
 
-  emach_curl_request($landingUrl, $cookieFile, '', '', [
+  $afterLanding = emach_curl_request($landingUrl, $cookieFile, '', '', [
     'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
     'referer' => $base . '/site/login',
   ]);
+  if (emach_is_login_page($afterLanding['body'])) {
+    throw new RuntimeException('Credenciales EMACH incorrectas o no aceptadas. Revisa usuario y contrasena; si estan correctas, verifica si EMACH solicita token/captcha adicional.');
+  }
+
   emach_curl_request($base . '/reportes/planilla', $cookieFile, '', '', [
     'headers' => ['Accept: text/html,application/xhtml+xml,application/json'],
     'referer' => $landingUrl,
@@ -443,13 +602,35 @@ function emach_fetch_planilla(int $year, int $month, string $username, string $p
     return ['ok' => false, 'url' => $url, 'rows' => [], 'error' => 'Ingresa usuario y contrasena para consultar EMACH.'];
   }
 
+  if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+  }
+
+  $availability = emach_server_availability();
+  if (empty($availability['ok'])) {
+    return [
+      'ok' => false,
+      'url' => $url,
+      'rows' => [],
+      'error' => (string) ($availability['error'] ?? 'Servidor EMACH no disponible.'),
+      'diagnostics' => is_array($availability['diagnostics'] ?? null) ? $availability['diagnostics'] : [],
+    ];
+  }
+
   $cookieFile = tempnam(sys_get_temp_dir(), 'emach-cookie-');
   if (!is_string($cookieFile) || $cookieFile === '') {
     return ['ok' => false, 'url' => $url, 'rows' => [], 'error' => 'No se pudo crear la sesion temporal.'];
   }
 
-  emach_prime_session($cookieFile, $username, $password);
+  try {
+    emach_prime_session($cookieFile, $username, $password);
+  } catch (Throwable $e) {
+    @unlink($cookieFile);
+    return ['ok' => false, 'url' => $url, 'rows' => [], 'error' => $e->getMessage()];
+  }
+
   $responses = [];
+  $emptyJsonResponse = null;
   foreach (emach_planilla_urls($year, $month) as $candidateUrl) {
     $referer = str_contains($candidateUrl, '/reportes/')
       ? 'http://10.6.206.19/index.php/reportes/planilla'
@@ -464,9 +645,12 @@ function emach_fetch_planilla(int $year, int $month, string $username, string $p
     $response['requested_url'] = $candidateUrl;
     $responses[] = $response;
 
+    if ($response['error'] !== '') {
+      continue;
+    }
+
     $payload = json_decode((string) $response['body'], true);
     if (is_array($payload) && is_array($payload['data'] ?? null)) {
-      @unlink($cookieFile);
       $rows = [];
       foreach ($payload['data'] as $row) {
         if (!is_array($row)) {
@@ -474,10 +658,40 @@ function emach_fetch_planilla(int $year, int $month, string $username, string $p
         }
         $rows[] = array_pad(array_values($row), 10, '');
       }
-      return ['ok' => true, 'url' => $candidateUrl, 'rows' => $rows, 'error' => ''];
+
+      if (!empty($rows)) {
+        @unlink($cookieFile);
+        return ['ok' => true, 'url' => $candidateUrl, 'rows' => $rows, 'error' => ''];
+      }
+
+      $emptyJsonResponse = [
+        'requested_url' => $candidateUrl,
+        'effective_url' => (string) ($response['effective_url'] ?? ''),
+        'content_type' => (string) ($response['content_type'] ?? ''),
+        'http_code' => (int) ($response['http_code'] ?? 0),
+        'payload_keys' => implode(', ', array_keys($payload)),
+      ];
+      continue;
     }
   }
   @unlink($cookieFile);
+
+  if (is_array($emptyJsonResponse)) {
+    return [
+      'ok' => true,
+      'url' => (string) ($emptyJsonResponse['requested_url'] ?? $url),
+      'rows' => [],
+      'error' => '',
+      'empty_result' => true,
+      'diagnostics' => [
+        'message' => 'EMACH devolvio JSON valido, pero sin filas en data. Se probaron los endpoints disponibles para la planilla mensual.',
+        'effective_url' => (string) ($emptyJsonResponse['effective_url'] ?? ''),
+        'content_type' => (string) ($emptyJsonResponse['content_type'] ?? ''),
+        'http_code' => (string) ($emptyJsonResponse['http_code'] ?? ''),
+        'payload_keys' => (string) ($emptyJsonResponse['payload_keys'] ?? ''),
+      ],
+    ];
+  }
 
   $response = end($responses);
   if (!is_array($response)) {
@@ -507,6 +721,7 @@ function emach_fetch_planilla(int $year, int $month, string $username, string $p
       'diagnostics' => emach_html_diagnostics((string) $body, $response),
     ];
   }
+
   return [
     'ok' => false,
     'url' => $url,
@@ -519,11 +734,53 @@ function emach_fetch_planilla(int $year, int $month, string $username, string $p
   ];
 }
 
-$planilla = $submitted
-  ? emach_fetch_planilla($selectedYear, $selectedMonth, $emachUsername, $emachPassword)
-  : ['ok' => false, 'url' => emach_planilla_url($selectedYear, $selectedMonth), 'rows' => [], 'error' => ''];
+if ($isPost) {
+  $planilla = emach_fetch_planilla($selectedYear, $selectedMonth, $emachUsername, $emachPassword);
+  if (!empty($planilla['ok'])) {
+    emach_log_event('planilla_consultada', '', ['ano' => $selectedYear, 'mes' => $selectedMonth, 'filas' => count($planilla['rows'] ?? [])]);
+    emach_store_last_query([
+      'year' => $selectedYear,
+      'month' => $selectedMonth,
+      'username' => $emachUsername,
+      'credential_message' => $credentialMessage,
+      'planilla' => $planilla,
+    ]);
+  } else {
+    emach_log_event('planilla_error', (string) ($planilla['error'] ?? 'Error de consulta'), ['ano' => $selectedYear, 'mes' => $selectedMonth]);
+    emach_forget_last_query();
+    emach_flash_query_error($planilla);
+  }
+  emach_redirect_after_query($selectedYear, $selectedMonth);
+  return;
+}
+
+$queryError = emach_flashed_query_error();
+$lastQuery = emach_last_query();
+if (is_array($queryError) && $queryError !== []) {
+  $submitted = true;
+  $planilla = $queryError;
+} elseif (
+  is_array($lastQuery)
+  && is_array($lastQuery['planilla'] ?? null)
+  && !empty($lastQuery['planilla']['ok'])
+) {
+  $submitted = true;
+  $selectedYear = max(2020, min(2100, (int) ($lastQuery['year'] ?? $selectedYear)));
+  $selectedMonth = max(1, min(12, (int) ($lastQuery['month'] ?? $selectedMonth)));
+  $selectedMonthName = $monthNames[$selectedMonth] ?? (string) $selectedMonth;
+  $credentialMessage = (string) ($lastQuery['credential_message'] ?? '');
+  if ($emachUsername === '' && (string) ($lastQuery['username'] ?? '') !== '') {
+    $emachUsername = (string) $lastQuery['username'];
+  }
+  $planilla = $lastQuery['planilla'];
+} else {
+  if (is_array($lastQuery) && is_array($lastQuery['planilla'] ?? null) && empty($lastQuery['planilla']['ok'])) {
+    emach_forget_last_query();
+  }
+  $submitted = false;
+  $planilla = ['ok' => false, 'url' => emach_planilla_url($selectedYear, $selectedMonth), 'rows' => [], 'error' => ''];
+}
 $rows = $planilla['rows'];
-$employeeCount = count(array_unique(array_filter(array_map(static fn($row): string => (string) ($row[1] ?? ''), $rows))));
 $entryCount = count(array_filter($rows, static fn($row): bool => strtoupper((string) ($row[5] ?? '')) === 'ENTRADA'));
 $exitCount = count(array_filter($rows, static fn($row): bool => strtoupper((string) ($row[5] ?? '')) === 'SALIDA'));
 $clockCount = count(array_unique(array_filter(array_map(static fn($row): string => (string) ($row[6] ?? ''), $rows))));
@@ -574,7 +831,7 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
             <span><?= $h($credentialMessage) ?></span>
           </div>
         <?php endif; ?>
-        <form class="row g-3 align-items-end" method="post" action="<?= $h(function_exists('url') ? url('/emach/index.php') : '/emach/index.php') ?>" data-emach-query-form data-has-saved-credentials="<?= $hasSavedEmachCredentials ? '1' : '0' ?>">
+        <form class="row g-3 align-items-end" method="post" action="<?= $h(function_exists('url') ? url('/emach') : '/emach') ?>" data-emach-query-form data-has-saved-credentials="<?= $hasSavedEmachCredentials ? '1' : '0' ?>">
           <?php if (function_exists('csrf_token')): ?>
             <input type="hidden" name="_token" value="<?= $h(csrf_token()) ?>">
           <?php endif; ?>
@@ -603,12 +860,12 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
           <div class="col-12 col-md-3">
             <button class="btn btn-primary w-100 emach-submit-button" type="submit"><i class="bi bi-arrow-repeat"></i>Consultar</button>
           </div>
-          <div class="col-12">
+          <!-- <div class="col-12">
             <div class="emach-endpoint text-truncate" title="<?= $h($planilla['url']) ?>">
               <?= $h($planilla['url']) ?>
             </div>
             <div class="form-text fw-semibold">Puedes usar las credenciales guardadas o ingresarlas al consultar. Si marcas recordar, quedan asociadas a tu usuario NOVA.</div>
-          </div>
+          </div> -->
         </form>
       </div>
     </section>
@@ -627,6 +884,15 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
               <?php endif; ?>
               <?php if (!empty($diagnostics['content_type'])): ?>
                 <div><strong>Contenido:</strong> <?= $h($diagnostics['content_type']) ?></div>
+              <?php endif; ?>
+              <?php if (!empty($diagnostics['http_code'])): ?>
+                <div><strong>HTTP:</strong> <?= $h($diagnostics['http_code']) ?></div>
+              <?php endif; ?>
+              <?php if (!empty($diagnostics['curl_errno'])): ?>
+                <div><strong>cURL:</strong> <?= $h($diagnostics['curl_errno']) ?></div>
+              <?php endif; ?>
+              <?php if (!empty($diagnostics['curl_error'])): ?>
+                <div><strong>Error conexion:</strong> <?= $h($diagnostics['curl_error']) ?></div>
               <?php endif; ?>
               <?php if (!empty($diagnostics['title'])): ?>
                 <div><strong>Titulo HTML:</strong> <?= $h($diagnostics['title']) ?></div>
@@ -649,6 +915,37 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
           </details>
         <?php endif; ?>
       </div>
+    <?php elseif ($submitted && !empty($planilla['ok']) && empty($rows)): ?>
+      <div class="nova-alert-card is-warning" role="status">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div>
+          <strong>EMACH respondio sin marcaciones para <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?>.</strong>
+          <div class="mt-1">La consulta termino, pero el servicio devolvio 0 filas. Revisa que el mes tenga registros y que las credenciales correspondan al usuario consultado.</div>
+          <?php $diagnostics = is_array($planilla['diagnostics'] ?? null) ? $planilla['diagnostics'] : []; ?>
+          <?php if (!empty($diagnostics)): ?>
+            <details class="mt-2">
+              <summary>Ver diagnostico de respuesta EMACH</summary>
+              <div class="mt-2 small">
+                <?php if (!empty($diagnostics['message'])): ?>
+                  <div><?= $h($diagnostics['message']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($diagnostics['effective_url'])): ?>
+                  <div><strong>URL final:</strong> <?= $h($diagnostics['effective_url']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($diagnostics['http_code'])): ?>
+                  <div><strong>HTTP:</strong> <?= $h($diagnostics['http_code']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($diagnostics['content_type'])): ?>
+                  <div><strong>Contenido:</strong> <?= $h($diagnostics['content_type']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($diagnostics['payload_keys'])): ?>
+                  <div><strong>Claves JSON:</strong> <?= $h($diagnostics['payload_keys']) ?></div>
+                <?php endif; ?>
+              </div>
+            </details>
+          <?php endif; ?>
+        </div>
+      </div>
     <?php elseif (!$submitted): ?>
       <div class="nova-alert-card is-info" role="status">
         <i class="bi bi-shield-lock"></i>
@@ -662,29 +959,23 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
     <?php endif; ?>
 
     <section class="row g-3 mb-4">
-      <div class="col-12 col-md-6 col-xl-3">
-        <article class="emach-stat-card">
+      <div class="col-12 col-md-4">
+        <button class="emach-stat-card is-active" type="button" data-emach-filter="todos" aria-pressed="true">
           <span class="emach-stat-icon"><i class="bi bi-list-check"></i></span>
           <div><strong><?= count($rows) ?></strong><span>Total de marcaciones</span></div>
-        </article>
+        </button>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <article class="emach-stat-card">
-          <span class="emach-stat-icon is-success"><i class="bi bi-people"></i></span>
-          <div><strong><?= $employeeCount ?></strong><span>Personas registradas</span></div>
-        </article>
-      </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <article class="emach-stat-card">
+      <div class="col-12 col-md-4">
+        <button class="emach-stat-card" type="button" data-emach-filter="entrada" aria-pressed="false">
           <span class="emach-stat-icon is-entry"><i class="bi bi-box-arrow-in-right"></i></span>
           <div><strong><?= $entryCount ?></strong><span>Entradas</span></div>
-        </article>
+        </button>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <article class="emach-stat-card">
+      <div class="col-12 col-md-4">
+        <button class="emach-stat-card" type="button" data-emach-filter="salida" aria-pressed="false">
           <span class="emach-stat-icon is-exit"><i class="bi bi-box-arrow-right"></i></span>
           <div><strong><?= $exitCount ?></strong><span>Salidas</span></div>
-        </article>
+        </button>
       </div>
     </section>
 
@@ -694,7 +985,7 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
           <h2 class="h5 fw-black mb-1">Planilla de <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?></h2>
           <p class="text-muted fw-semibold mb-0"><?= $clockCount ?> reloj(es) con registros.</p>
         </div>
-        <span class="emach-count-pill"><i class="bi bi-table"></i><?= $h(count($rows)) ?> filas</span>
+        <span class="emach-count-pill"><i class="bi bi-table"></i><span data-emach-visible-count><?= $h(count($rows)) ?></span> filas</span>
       </div>
       <div class="table-responsive">
         <table class="table table-hover align-middle emach-table mb-0">
@@ -709,17 +1000,17 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
             <?php if (empty($rows)): ?>
               <tr>
                 <td colspan="<?= count($columns) ?>">
-                  <div class="emach-empty-state">
-                    <i class="bi bi-calendar-x"></i>
-                    <strong>Sin marcaciones para <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?></strong>
-                    <span>Prueba otro mes o revisa la consulta directamente en EMACH.</span>
+                  <div class="nova-empty-state">
+                    <div class="nova-empty-state-icon"><i class="bi bi-calendar-x"></i></div>
+                    <h3>Sin marcaciones para <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?></h3>
+                    <p>Prueba otro mes o revisa la consulta directamente en EMACH.</p>
                   </div>
                 </td>
               </tr>
             <?php else: ?>
               <?php foreach ($rows as $row): ?>
                 <?php $rowType = strtoupper((string) ($row[5] ?? '')); ?>
-                <tr class="<?= $rowType === 'ENTRADA' ? 'is-entry-row' : ($rowType === 'SALIDA' ? 'is-exit-row' : '') ?>">
+                <tr class="<?= $rowType === 'ENTRADA' ? 'is-entry-row' : ($rowType === 'SALIDA' ? 'is-exit-row' : '') ?>" data-emach-row-type="<?= $h(strtolower($rowType)) ?>">
                   <?php foreach ($row as $index => $value): ?>
                     <?php if ($index === 5): ?>
                       <?php $type = strtoupper((string) $value); ?>
@@ -790,9 +1081,34 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
     const modalRemember = document.querySelector('[data-emach-modal-remember]');
     const modalError = document.querySelector('[data-emach-modal-error]');
     const modalSubmit = document.querySelector('[data-emach-modal-submit]');
+    const filterCards = Array.from(document.querySelectorAll('[data-emach-filter]'));
+    const tableRows = Array.from(document.querySelectorAll('[data-emach-row-type]'));
+    const visibleCount = document.querySelector('[data-emach-visible-count]');
     const hasSavedCredentials = form?.dataset.hasSavedCredentials === '1';
     const submitButtonDefaultHtml = modalSubmit?.innerHTML || '';
     let submitFromModal = false;
+
+    const applyTableFilter = (filter) => {
+      let visibleRows = 0;
+      tableRows.forEach((row) => {
+        const rowType = row.dataset.emachRowType || '';
+        const show = filter === 'todos' || rowType === filter;
+        row.hidden = !show;
+        if (show) visibleRows += 1;
+      });
+      filterCards.forEach((card) => {
+        const active = card.dataset.emachFilter === filter;
+        card.classList.toggle('is-active', active);
+        card.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      if (visibleCount) visibleCount.textContent = String(visibleRows);
+    };
+
+    filterCards.forEach((card) => {
+      card.addEventListener('click', () => {
+        applyTableFilter(card.dataset.emachFilter || 'todos');
+      });
+    });
 
     form?.addEventListener('submit', (event) => {
       if (submitFromModal || hasSavedCredentials) {

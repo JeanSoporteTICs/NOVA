@@ -23,7 +23,25 @@
     }) ?? [];
     $currentAssigneeId = trim((string) ($currentAssignee['redmine_id'] ?? $currentAssignee['id'] ?? $sessionUser['redmine_id'] ?? ''));
     $currentAssigneeId = ctype_digit($currentAssigneeId) ? $currentAssigneeId : '';
-    $currentAssigneeName = trim((string) (($currentAssignee['nombre'] ?? $sessionUser['nombre'] ?? '') . ' ' . ($currentAssignee['apellido'] ?? $sessionUser['apellido'] ?? '')));
+    $currentAssigneeName = trim((string) ($currentAssignee['nombre_completo'] ?? ''));
+    if ($currentAssigneeName === '') {
+        $currentAssigneeName = trim((string) (($currentAssignee['nombre'] ?? $sessionUser['nombre'] ?? $sessionUser['name'] ?? '') . ' ' . ($currentAssignee['apellido'] ?? $sessionUser['apellido'] ?? '')));
+    }
+    $assigneeOptions = $activeUsers->map(function ($user) {
+        $userId = trim((string) ($user['redmine_id'] ?? $user['id'] ?? ''));
+        if (!ctype_digit($userId)) {
+            return null;
+        }
+        $displayName = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')));
+        if ($displayName === '') {
+            $displayName = trim((string) ($user['usuario'] ?? $user['username'] ?? $userId));
+        }
+
+        return [
+            'label' => $displayName,
+            'value' => $userId,
+        ];
+    })->filter()->unique('value')->values();
     $today = now('America/Santiago')->format('Y-m-d');
     $timeNow = now('America/Santiago')->format('H:i');
 @endphp
@@ -35,10 +53,10 @@
         <h2>Reporte manual</h2>
         <p>Crea un pendiente con datos completos para revisar y enviar a Redmine.</p>
     </div>
-    <div class="rm-module-meter">
-        <strong>{{ $activeUsers->count() }}</strong>
-        <span>asignables</span>
-    </div>
+    <!-- <div class="rm-module-meter">
+         <strong>{{ $activeUsers->count() }}</strong>
+        <span>asignables</span> 
+    </div> -->
 </section>
 
 <section class="row g-3 align-items-start rm-manual-view">
@@ -54,34 +72,11 @@
             </div>
 
             <div class="row g-3">
-                <div class="col-12">
-                    <label class="form-label" for="manual-asunto">Problema</label>
-                    <input class="form-control" id="manual-asunto" name="asunto" maxlength="220" required placeholder="Ej: Impresora no imprime">
-                </div>
-
                 <div class="col-md-6">
-                    <label class="form-label" for="manual-unidad">Ubicacion</label>
-                    <input class="form-control" id="manual-unidad" name="unidad" maxlength="180" placeholder="Ej: SOME HBV">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label" for="manual-unidad-solicitante">Unidad solicitante</label>
-                    <input class="form-control" id="manual-unidad-solicitante" name="unidad_solicitante" list="manual-units" maxlength="180" placeholder="Ej: SOME HBV">
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label" for="manual-solicitante">Solicitante</label>
-                    <input class="form-control" id="manual-solicitante" name="solicitante" maxlength="160" placeholder="Nombre de quien solicita">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label" for="manual-categoria">Categoria</label>
-                    <input class="form-control" id="manual-categoria" name="categoria" list="manual-categories" maxlength="180" placeholder="Ej: Equipos">
-                </div>
-
-                <div class="col-md-4">
                     <label class="form-label" for="manual-tipo">Tipo</label>
                     <input class="form-control" id="manual-tipo" name="tipo" value="Soporte" maxlength="80">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label" for="manual-prioridad">Prioridad</label>
                     <select class="form-select" id="manual-prioridad" name="prioridad">
                         <option value="NORMAL">NORMAL</option>
@@ -90,65 +85,105 @@
                         <option value="URGENTE">URGENTE</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label" for="manual-asignado">Asignar a</label>
-                    <select class="form-select" id="manual-asignado" name="asignado_a">
-                        <option value="{{ $currentAssigneeId }}">Mi usuario{{ $currentAssigneeName !== '' ? ': ' . $currentAssigneeName : '' }}</option>
-                        @foreach ($activeUsers as $user)
-                            @php($displayName = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? ''))) ?: (string) ($user['id'] ?? ''))
-                            @php($userId = trim((string) ($user['redmine_id'] ?? $user['id'] ?? '')))
-                            @if (ctype_digit($userId))
-                                <option value="{{ $userId }}" @selected($userId !== '' && $userId === $currentAssigneeId)>{{ $displayName }}</option>
-                            @endif
-                        @endforeach
-                    </select>
-                </div>
 
-                <div class="col-md-3">
-                    <label class="form-label" for="manual-fecha-inicio">Fecha inicio</label>
-                    <input class="form-control" id="manual-fecha-inicio" type="date" name="fecha_inicio" value="{{ $today }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label" for="manual-fecha-fin">Fecha fin</label>
-                    <input class="form-control" id="manual-fecha-fin" type="date" name="fecha_fin" value="{{ $today }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label" for="manual-fecha">Fecha reporte</label>
-                    <input class="form-control" id="manual-fecha" type="date" name="fecha" value="{{ $today }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label" for="manual-hora">Hora</label>
-                    <input class="form-control" id="manual-hora" type="time" name="hora" value="{{ $timeNow }}">
+                <div class="col-12">
+                    <label class="form-label" for="manual-asunto">Problema</label>
+                    <input class="form-control" id="manual-asunto" name="asunto" maxlength="220" required placeholder="Ej: Impresora no imprime">
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label" for="manual-descripcion">Descripcion</label>
-                    <textarea class="form-control" id="manual-descripcion" name="descripcion" rows="5" maxlength="4000" placeholder="Detalle breve del problema, contacto, equipo afectado u observaciones"></textarea>
+                    <div class="nova-description-tabs" role="tablist" aria-label="Vista de descripción">
+                        <button type="button" class="nova-description-tab is-active" id="tic-manual-description-edit-tab" role="tab" aria-selected="true"><i class="bi bi-pencil"></i>Modificar</button>
+                        <button type="button" class="nova-description-tab" id="tic-manual-description-preview-tab" role="tab" aria-selected="false"><i class="bi bi-table"></i>Previsualizar</button>
+                    </div>
+                    <div id="tic-manual-description-edit-panel" role="tabpanel" aria-labelledby="tic-manual-description-edit-tab">
+                        <label class="form-label" for="manual-descripcion">Descripcion</label>
+                        <textarea class="form-control nova-description-editor" id="manual-descripcion" name="descripcion" rows="5" maxlength="4000" placeholder="Detalle breve del problema, contacto, equipo afectado u observaciones"></textarea>
+                        <div class="form-text">Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div>
+                    </div>
+                    <div class="nova-description-preview" id="tic-manual-description-preview" role="tabpanel" aria-labelledby="tic-manual-description-preview-tab" hidden></div>
                 </div>
 
-                <div class="col-12">
-                    <div class="manual-extra-row">
-                        <label class="form-check form-switch manual-switch" for="manual-hora-extra">
-                            <input class="form-check-input" type="checkbox" id="manual-hora-extra" name="hora_extra" value="SI" data-manual-extra-toggle>
-                            <span>Hora extra</span>
-                        </label>
-                        <div class="manual-extra-time" data-manual-extra-time hidden>
-                            <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" aria-label="Tiempo estimado">
+                <div class="col-lg-7">
+                    <div class="rm-manual-field-stack">
+                        <div>
+                            <label class="form-label" for="manual-asignado">Asignar a</label>
+                            <div class="rm-assignee-row">
+                                <div class="nova-search-select" data-search-select data-options='@json($assigneeOptions)' data-value-input="#manual-asignado">
+                                    <input class="form-control" id="manual-asignado-search" value="{{ $currentAssigneeName }}" autocomplete="off" placeholder="Buscar usuario activo" data-search-select-input>
+                                    <input type="hidden" id="manual-asignado" name="asignado_a" value="{{ $currentAssigneeId }}">
+                                    <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
+                                </div>
+                                <button type="button"
+                                    class="btn btn-outline-secondary rm-assign-me-btn"
+                                    data-assign-me-tic
+                                    data-assign-me-id="{{ $currentAssigneeId }}"
+                                    data-assign-me-name="{{ $currentAssigneeName }}"
+                                    @disabled($currentAssigneeId === '' && $currentAssigneeName === '')>
+                                    <i class="bi bi-person-check"></i> Autoasignarme
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="manual-categoria">Categoria</label>
+                            <div class="nova-search-select" data-search-select data-options='@json($categoryOptions)'>
+                                <input class="form-control" id="manual-categoria" name="categoria" maxlength="180" autocomplete="off" placeholder="Buscar categoria" data-search-select-input>
+                                <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="manual-solicitante">Solicitante</label>
+                            <input class="form-control" id="manual-solicitante" name="solicitante" maxlength="160" placeholder="Nombre de quien solicita">
+                        </div>
+
+                        <div class="rm-manual-inline-grid">
+                            <div>
+                                <label class="form-label" for="manual-unidad">Ubicacion</label>
+                                <input class="form-control" id="manual-unidad" name="unidad" maxlength="180" placeholder="Ej: SOME HBV">
+                            </div>
+                            <div>
+                                <label class="form-label" for="manual-unidad-solicitante">Unidad solicitante</label>
+                                <div class="nova-search-select" data-search-select data-options='@json($unitOptions)'>
+                                    <input class="form-control" id="manual-unidad-solicitante" name="unidad_solicitante" maxlength="180" autocomplete="off" placeholder="Buscar unidad solicitante" data-search-select-input>
+                                    <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="rm-manual-date-stack">
+                        <div>
+                            <label class="form-label" for="manual-fecha-inicio">Fecha inicio</label>
+                            <input class="form-control" id="manual-fecha-inicio" type="date" name="fecha_inicio" value="{{ $today }}">
+                        </div>
+                        <div>
+                            <label class="form-label" for="manual-fecha-fin">Fecha fin</label>
+                            <input class="form-control" id="manual-fecha-fin" type="date" name="fecha_fin" value="{{ $today }}">
+                        </div>
+                        <div>
+                            <label class="form-label" for="manual-fecha">Fecha reporte</label>
+                            <input class="form-control" id="manual-fecha" type="date" name="fecha" value="{{ $today }}">
+                        </div>
+                        <div>
+                            <label class="form-label" for="manual-hora">Hora</label>
+                            <input class="form-control" id="manual-hora" type="time" name="hora" value="{{ $timeNow }}">
+                        </div>
+                        <div class="manual-extra-row">
+                            <label class="form-check form-switch manual-switch" for="manual-hora-extra">
+                                <input class="form-check-input" type="checkbox" id="manual-hora-extra" name="hora_extra" value="SI" data-manual-extra-toggle>
+                                <span>Hora extra</span>
+                            </label>
+                            <div class="manual-extra-time" data-manual-extra-time hidden>
+                                <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" aria-label="Tiempo estimado">
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <datalist id="manual-categories">
-                @foreach ($categoryOptions as $option)
-                    <option value="{{ $option }}"></option>
-                @endforeach
-            </datalist>
-            <datalist id="manual-units">
-                @foreach ($unitOptions as $option)
-                    <option value="{{ $option }}"></option>
-                @endforeach
-            </datalist>
 
             <div class="rm-manual-actions">
                 <button class="btn-nova btn-nova-success" type="submit"><i class="bi bi-plus-circle"></i>Crear pendiente</button>
@@ -159,23 +194,25 @@
 
 </section>
 
-<style>
-    .rm-manual-view .rm-panel { padding: 14px; }
-    .rm-manual-view .rm-section-head { margin-bottom: 10px; }
-    .rm-manual-view .rm-section-head p { margin-top: 2px; }
-    .rm-manual-view .rm-kv { grid-template-columns: 92px minmax(0, 1fr); padding: 7px 0; }
-    .rm-manual-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-    .manual-extra-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 2px; }
-    .manual-switch { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; margin: 0; font-weight: 800; color: #334155; white-space: nowrap; }
-    .manual-switch .form-check-input { width: 2.6rem; height: 1.35rem; margin: 0; }
-    .manual-extra-time { flex: 0 1 260px; min-width: 220px; }
-    @media (max-width: 575.98px) {
-        .manual-extra-row { align-items: stretch; }
-        .manual-extra-time { flex-basis: 100%; min-width: 0; }
-    }
-</style>
+@php $redmineTicWebhookCssVersion = @filemtime(public_path('assets/redmine-tic-webhook.css')) ?: '1'; @endphp
+<link href="{{ asset('assets/redmine-tic-webhook.css') }}?v={{ $redmineTicWebhookCssVersion }}" rel="stylesheet">
 
 <script>
+    const initTicManualDescription = () => {
+        window.NovaDescriptionTables?.bind({
+            input: document.getElementById('manual-descripcion'),
+            editTab: document.getElementById('tic-manual-description-edit-tab'),
+            previewTab: document.getElementById('tic-manual-description-preview-tab'),
+            editPanel: document.getElementById('tic-manual-description-edit-panel'),
+            previewPanel: document.getElementById('tic-manual-description-preview'),
+        });
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTicManualDescription, { once: true });
+    } else {
+        initTicManualDescription();
+    }
+
     (() => {
         const toggle = document.querySelector('[data-manual-extra-toggle]');
         const timeField = document.querySelector('[data-manual-extra-time]');
@@ -185,5 +222,43 @@
         };
         toggle?.addEventListener('change', sync);
         sync();
+    })();
+
+    (() => {
+        const button = document.querySelector('[data-assign-me-tic]');
+        const searchInput = document.getElementById('manual-asignado-search');
+        const hiddenInput = document.getElementById('manual-asignado');
+        const wrapper = searchInput?.closest('[data-search-select]');
+        if (!button || !searchInput || !hiddenInput || !wrapper) return;
+
+        let options = [];
+        try {
+            options = JSON.parse(wrapper.dataset.options || '[]');
+        } catch (error) {
+            options = [];
+        }
+
+        const normalize = value => String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+
+        button.addEventListener('click', () => {
+            const assigneeId = button.dataset.assignMeId || '';
+            const assigneeName = button.dataset.assignMeName || '';
+            const match = options.find(option => String(option.value || '') === assigneeId)
+                || options.find(option => normalize(option.label) === normalize(assigneeName));
+
+            if (!match) {
+                window.NovaToast?.warning?.('No se encontró tu usuario activo en TIC.');
+                return;
+            }
+
+            searchInput.value = match.label || assigneeName;
+            hiddenInput.value = match.value || assigneeId;
+            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+            hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
     })();
 </script>

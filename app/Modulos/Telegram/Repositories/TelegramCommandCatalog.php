@@ -53,7 +53,7 @@ class TelegramCommandCatalog
                 'key'         => 'tic',
                 'command'     => '/tic',
                 'aliases'     => ['/reporte'],
-                'module'      => 'Redmine TICS',
+                'module'      => 'Backlog Soporte TI',
                 'description' => 'Crea un reporte TIC pendiente desde un mensaje separado por comas.',
                 'input'       => '/tic problema, unidad, solicitante',
                 'response'    => $this->settings->render('tic_success', [

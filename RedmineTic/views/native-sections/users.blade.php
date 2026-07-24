@@ -2,6 +2,7 @@
     $activeUsers = collect($users)->filter(fn ($user) => (($user['estado_usuario'] ?? $user['estado'] ?? 'activo') === 'activo'))->count();
     $bannedUsers = collect($users)->filter(fn ($user) => (($user['estado_usuario'] ?? $user['estado'] ?? '') === 'baneado'))->count();
     $importPreview = session('redmine_import_preview');
+    $usersMaintenanceLocked = !empty($redmineMaintenance['enabled']);
 @endphp
 
 <section class="rm-module-head">
@@ -45,9 +46,9 @@
         <form method="post" action="{{ $redmineRoute('redmine.native.users.action') }}">
             @csrf
             <input type="hidden" name="action" value="preview_redmine">
-            <button class="btn-nova btn-nova-info" type="submit"><i class="bi bi-cloud-download"></i>Importar Redmine</button>
+            <button class="btn-nova btn-nova-info" type="submit" @disabled($usersMaintenanceLocked) title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Importar usuarios desde Redmine' }}"><i class="bi bi-cloud-download"></i>Importar Redmine</button>
         </form>
-        <button class="btn-nova btn-nova-success" type="button" id="new-user-button"><i class="bi bi-plus-circle"></i>Nuevo</button>
+        <button class="btn-nova btn-nova-success" type="button" id="new-user-button" @disabled($usersMaintenanceLocked) title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Nuevo usuario' }}"><i class="bi bi-plus-circle"></i>Nuevo</button>
     </div>
     <div class="table-responsive">
         <table id="tic-user-table" class="nova-user-table">
@@ -58,7 +59,7 @@
                     <th>Rol</th>
                     <th>Estado TIC</th>
                     <th class="nova-col-hide-md">Ultimo ingreso</th>
-                    <th class="text-center">Acciones</th>
+                    <th class="nova-col-actions text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -100,7 +101,7 @@
                     </td>
                     <td>
                         <div class="nova-table-actions justify-content-center">
-                            <button class="btn-action is-edit" type="button"
+                            <button class="btn-action btn-action-edit" type="button"
                                 data-user-edit
                                 data-id="{{ $user['id'] ?? '' }}"
                                 data-rut="{{ $user['rut'] ?? '' }}"
@@ -110,16 +111,18 @@
                                 data-rol="{{ $user['rol'] ?? 'usuario' }}"
                                 data-estado="{{ $state }}"
                                 data-api="{{ $user['api'] ?? '' }}"
-                                title="Editar usuario"
+                                @disabled($usersMaintenanceLocked)
+                                title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Editar usuario' }}"
                                 aria-label="Editar usuario">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn-action is-delete"
+                            <button class="btn-action btn-action-delete"
                                 type="button"
                                 data-delete-user
                                 data-id="{{ $user['id'] ?? '' }}"
                                 data-nombre="{{ $name }}"
-                                title="Quitar acceso al proyecto"
+                                @disabled($usersMaintenanceLocked)
+                                title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Quitar acceso al proyecto' }}"
                                 aria-label="Quitar acceso al proyecto">
                                 <i class="bi bi-person-x"></i>
                             </button>
@@ -202,7 +205,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i>Cancelar</button>
-                <button type="submit" class="btn-nova btn-nova-primary" {{ empty($importPreview) ? 'disabled' : '' }}>
+                <button type="submit" class="btn-nova btn-nova-primary" {{ empty($importPreview) || $usersMaintenanceLocked ? 'disabled' : '' }}>
                     <i class="bi bi-cloud-download"></i>Importar seleccionados
                 </button>
             </div>
@@ -228,7 +231,7 @@
                     @csrf
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="id" id="delete-user-id" value="">
-                    <button type="submit" class="btn-nova btn-nova-danger"><i class="bi bi-person-x"></i>Quitar acceso</button>
+                    <button type="submit" class="btn-nova btn-nova-danger" @disabled($usersMaintenanceLocked)><i class="bi bi-person-x"></i>Quitar acceso</button>
                 </form>
             </div>
         </div>
@@ -302,7 +305,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i>Cancelar</button>
-                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar usuario</button>
+                <button class="btn-nova btn-nova-primary" type="submit" @disabled($usersMaintenanceLocked)><i class="bi bi-save"></i>Guardar usuario</button>
             </div>
         </form>
     </div>
@@ -315,6 +318,7 @@
         const modal = document.getElementById('usuario-modal');
         const newButton = document.getElementById('new-user-button');
         const hasImportPreview = @json(is_array($importPreview));
+        const usersMaintenanceLocked = @json($usersMaintenanceLocked);
         if (!form) return;
 
         const setValue = (name, value) => {
@@ -370,6 +374,7 @@
         };
 
         newButton?.addEventListener('click', () => {
+            if (usersMaintenanceLocked) return;
             resetForm();
             openModal();
         });
@@ -381,6 +386,7 @@
 
         document.querySelectorAll('[data-delete-user]').forEach((button) => {
             button.addEventListener('click', () => {
+                if (usersMaintenanceLocked) return;
                 if (deleteNameEl) deleteNameEl.textContent = button.dataset.nombre || 'este usuario';
                 if (deleteIdEl) deleteIdEl.value = button.dataset.id || '';
                 if (deleteModal && window.appUi?.openModal) {
@@ -397,6 +403,7 @@
 
     document.querySelectorAll('[data-user-edit]').forEach((button) => {
             button.addEventListener('click', () => {
+                if (usersMaintenanceLocked) return;
                 setValue('id', button.dataset.id);
                 setValue('rut', button.dataset.rut);
                 setValue('nombre', button.dataset.nombre);

@@ -2,32 +2,36 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use RedmineTic\Repositories\RedmineDataRepository;
 use Tests\TestCase;
 
 /**
- * Validates the Phase 3a relational permissions system against the live DB.
+ * Validates the Phase 3a relational permissions system against MariaDB.
  *
- * These tests do NOT use RefreshDatabase — they verify real data in the
- * MariaDB database and are intentionally idempotent (read-only or upsert-only).
+ * Tests that need a profile create their own fixture inside a rolled-back
+ * transaction so the suite also represents a clean installation.
  *
  * Run: php artisan test --filter=Phase3aPermissionsTest
  */
 class Phase3aPermissionsTest extends TestCase
 {
-    private const EXPECTED_KEY_COUNT = 37;
+    use DatabaseTransactions;
+
+    private const EXPECTED_KEY_COUNT = 31;
 
     private const ALL_KEYS = [
         'mensajes', 'mensajes_acceso', 'horas_extra', 'historico', 'historico_acciones',
-        'historico_scope', 'configuracion', 'estadisticas', 'estadisticas_manual', 'usuarios',
-        'categorias', 'unidades', 'simulador', 'actividad', 'reportes_editar',
+        'historico_scope', 'configuracion', 'estadisticas', 'usuarios',
+        'simulador', 'actividad', 'actividad_eliminar',
+        'actividad_todos', 'reportes_editar',
         'reportes_eliminar', 'horas_extra_editar', 'horas_extra_eliminar', 'usuarios_editar',
         'usuarios_eliminar', 'cfg_resumen', 'cfg_conexion', 'cfg_proyecto', 'cfg_redmine',
-        'cfg_campos', 'cfg_retencion', 'cfg_webhook', 'cfg_sesion', 'cfg_mantencion',
-        'cfg_trackers', 'cfg_prioridades', 'cfg_estados', 'cfg_roles', 'cfg_usuarios',
-        'cfg_catalogos', 'cfg_categorias', 'cfg_unidades',
+        'cfg_campos', 'cfg_retencion', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
+        'cfg_categorias', 'cfg_unidades', 'mis_integraciones',
     ];
 
     private const SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
@@ -56,7 +60,7 @@ class Phase3aPermissionsTest extends TestCase
     // Catálogo
     // -------------------------------------------------------------------------
 
-    public function test_permisos_catalogo_has_37_entries(): void
+    public function test_permisos_catalogo_has_expected_entries(): void
     {
         $this->skipIfTableMissing('redmine_tic_permisos_catalogo');
 
@@ -64,7 +68,7 @@ class Phase3aPermissionsTest extends TestCase
         $this->assertEquals(
             self::EXPECTED_KEY_COUNT,
             $count,
-            "El catálogo debe tener exactamente 37 filas, tiene {$count}"
+            "El catálogo debe tener exactamente " . self::EXPECTED_KEY_COUNT . " filas, tiene {$count}"
         );
     }
 
@@ -135,7 +139,7 @@ class Phase3aPermissionsTest extends TestCase
         );
     }
 
-    public function test_every_profile_has_exactly_37_permission_keys(): void
+    public function test_every_profile_has_all_expected_permission_keys(): void
     {
         $this->skipIfTableMissing('redmine_tic_permisos_usuario');
         $this->skipIfTableMissing('redmine_tic_perfiles_usuario');
@@ -154,14 +158,15 @@ class Phase3aPermissionsTest extends TestCase
 
         $this->assertEmpty(
             $bad,
-            count($bad) . ' perfil(es) tienen menos de 37 claves: ' .
+            count($bad) . ' perfil(es) tienen menos de ' . self::EXPECTED_KEY_COUNT . ' claves: ' .
             implode(', ', array_map(fn($p, $c) => "perfil_{$p}={$c}", array_keys($bad), $bad))
         );
     }
 
-    public function test_all_37_canonical_keys_appear_in_permisos_usuario(): void
+    public function test_all_canonical_keys_appear_in_permisos_usuario(): void
     {
         $this->skipIfTableMissing('redmine_tic_permisos_usuario');
+        $this->createPermissionFixture();
 
         $storedKeys = DB::table('redmine_tic_permisos_usuario')
             ->distinct()
@@ -188,7 +193,7 @@ class Phase3aPermissionsTest extends TestCase
         $this->assertGreaterThanOrEqual(
             $expectedMin,
             $totalRows,
-            "Se esperan al menos {$expectedMin} filas ({$totalPerfiles} perfiles × 37), hay {$totalRows}"
+            "Se esperan al menos {$expectedMin} filas ({$totalPerfiles} perfiles × " . self::EXPECTED_KEY_COUNT . "), hay {$totalRows}"
         );
     }
 
@@ -218,7 +223,7 @@ class Phase3aPermissionsTest extends TestCase
         );
     }
 
-    public function test_every_role_has_37_permission_keys(): void
+    public function test_every_role_has_all_expected_permission_keys(): void
     {
         $this->skipIfTableMissing('redmine_tic_permisos_rol');
         $this->skipIfTableMissing('modulos_nova');
@@ -243,7 +248,7 @@ class Phase3aPermissionsTest extends TestCase
 
         $this->assertEmpty(
             $bad,
-            'Roles con menos de 37 claves: ' .
+            'Roles con menos de ' . self::EXPECTED_KEY_COUNT . ' claves: ' .
             implode(', ', array_map(fn($r, $c) => "{$r}={$c}", array_keys($bad), $bad))
         );
     }
@@ -312,6 +317,7 @@ class Phase3aPermissionsTest extends TestCase
     public function test_repository_reads_from_relational_table(): void
     {
         $this->skipIfTableMissing('redmine_tic_permisos_usuario');
+        $this->createPermissionFixture();
 
         $repo   = new RedmineDataRepository();
         $ref    = new \ReflectionClass($repo);
@@ -354,7 +360,7 @@ class Phase3aPermissionsTest extends TestCase
         );
     }
 
-    public function test_repository_returns_37_keys_per_profile(): void
+    public function test_repository_returns_all_expected_keys_per_profile(): void
     {
         $this->skipIfTableMissing('redmine_tic_permisos_usuario');
 
@@ -428,6 +434,26 @@ class Phase3aPermissionsTest extends TestCase
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private function createPermissionFixture(): int
+    {
+        $redmineId = (string) random_int(90000000, 99999999);
+        $repo = (new RedmineDataRepository())->forProject('redmine_tic');
+        $result = $repo->saveUser([
+            '_creating' => true,
+            'id' => $redmineId,
+            'rut_sin_dv' => 'phase3a' . $redmineId,
+            'nombre' => 'Phase3a',
+            'apellido' => Str::random(8),
+            'rol' => 'usuario',
+        ]);
+
+        $this->assertTrue($result['ok'] ?? false, $result['error'] ?? 'No se pudo crear el fixture de permisos');
+
+        $novaId = DB::table('usuarios_nova')->where('redmine_id', $redmineId)->value('id');
+
+        return (int) DB::table('redmine_tic_perfiles_usuario')->where('usuario_id', $novaId)->value('id');
+    }
 
     private function skipIfTableMissing(string $table): void
     {

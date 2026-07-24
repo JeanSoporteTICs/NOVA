@@ -1,0 +1,55 @@
+    .historico-filter-card { border: 1px solid rgba(215,226,239,.95); background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,255,.92)); }
+    .historico-filter-card .btn { min-height: 48px; white-space: nowrap; }
+    .historico-summary { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.08); background: rgba(248,250,255,.9); }
+    .historico-count { display: inline-flex; align-items: center; gap: .5rem; color: #0f172a; font-weight: 900; }
+    .historico-summary__tools { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; justify-content: flex-end; }
+    .historico-filter-chips { display: flex; flex-wrap: wrap; gap: .5rem; padding: .85rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.06); background: rgba(255,255,255,.72); }
+    .historico-filter-chip { display: inline-flex; align-items: center; gap: .38rem; min-height: 32px; padding: .36rem .62rem; border-radius: 999px; border: 1px solid rgba(37,99,235,.18); background: rgba(37,99,235,.08); color: #1d4ed8; font-size: .82rem; font-weight: 900; text-decoration: none; }
+    .historico-filter-chip:hover { background: #2563eb; color: #fff; }
+    .historico-redmine-sync { padding: .9rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.08); background: #eff6ff; }
+    .historico-redmine-sync__header { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .55rem; color: #1d4ed8; font-weight: 900; }
+    .historico-table-card { overflow: hidden; }
+    .historico-table-card.is-compact .historico-table { font-size: .84rem; }
+    .historico-table-card.is-compact .historico-table th,
+    .historico-table-card.is-compact .historico-table td { padding-top: .45rem; padding-bottom: .45rem; }
+    .historico-table { width: 100%; min-width: 0; table-layout: fixed; }
+    .historico-table th { white-space: nowrap; vertical-align: middle; overflow: visible; text-overflow: clip; font-size: .7rem; }
+    .historico-table td { vertical-align: middle; font-weight: 650; overflow: visible; text-overflow: clip; }
+    .historico-table .historico-col-fecha { width: 8%; }
+    .historico-table .historico-col-redmine { width: 8%; }
+    .historico-table .historico-col-estado { width: 13%; }
+    .historico-table .historico-col-solicitante { width: 11%; }
+    .historico-table .historico-col-categoria { width: 13%; }
+    .historico-table .historico-col-asunto { width: 22%; }
+    .historico-table .historico-col-fuente { width: 12%; }
+    .historico-table .historico-col-detalle { width: 6%; }
+    .historico-table .historico-col-acciones { width: 7%; }
+    .historico-table td.historico-cell-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .historico-date { display: inline-flex; align-items: center; gap: .35rem; min-width: 88px; color: #1e3a8a; font-weight: 900; white-space: nowrap; }
+    .historico-redmine-link { display: inline-flex; align-items: center; gap: .35rem; min-height: 30px; padding: .28rem .62rem; border-radius: 999px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; font-weight: 900; text-decoration: none; white-space: nowrap; }
+    .historico-redmine-link:hover { background: #2563eb; color: #fff; }
+    .historico-source-badge { display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; border-radius: 999px; padding: .4rem .7rem; background: rgba(56,189,248,.14); color: #075985; border: 1px solid rgba(56,189,248,.22); font-weight: 900; white-space: nowrap; }
+    .historico-source-badge.is-manual { background: rgba(245,158,11,.14); color: #92400e; border-color: rgba(245,158,11,.28); }
+    .historico-source-badge.is-telegram { background: #e9f5ff; color: #176b9b; border-color: rgba(14,165,233,.28); }
+    .historico-status { display: inline-flex; align-items: center; gap: .35rem; max-width: 150px; border-radius: 999px; padding: .35rem .65rem; font-size: .78rem; font-weight: 900; }
+    .historico-status--manual { background: #fff7ed; color: #9a3412; border: 1px solid rgba(249,115,22,.24); }
+    .historico-status--managed { background: #ecfdf5; color: #047857; border: 1px solid rgba(16,185,129,.24); }
+    .historico-status--danger { background: #fef2f2; color: #b91c1c; border: 1px solid rgba(239,68,68,.24); }
+    .historico-status--neutral { background: #f8fafc; color: #334155; border: 1px solid #d7e2ef; }
+    .historico-redmine-status { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px; padding: .32rem .62rem; border-radius: 999px; font-size: .78rem; font-weight: 900; white-space: nowrap; }
+    .historico-redmine-status small { opacity: .8; font-weight: 800; }
+    .historico-redmine-status--syncing { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .historico-redmine-status--closed { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+    .historico-redmine-status--open,
+    .historico-redmine-status--new,
+    .historico-redmine-status--progress { background: #ecfdf5; color: #166534; border: 1px solid rgba(34,197,94,.24); }
+    .historico-redmine-status--resolved { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .historico-redmine-status--rejected,
+    .historico-redmine-status--unknown { background: #f8fafc; color: #475569; border: 1px solid #d7e2ef; }
+    .historico-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .9rem 1.1rem; border-top: 1px solid #d7e2ef; background: #f8fafc; }
+    .historico-pagination__left,
+    .historico-page-size-form { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+    .historico-page-size-form .form-select { width: 86px; }
+    .historico-pagination .page-link { min-width: 34px; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 900; }
+    .historico-pagination .page-item.active .page-link { background: #2563eb; border-color: #2563eb; color: #fff; box-shadow: 0 10px 18px rgba(37,99,235,.2); }
+    .loader-overlay { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: rgba(248,250,252,.74); backdrop-filter: blur(2px); }

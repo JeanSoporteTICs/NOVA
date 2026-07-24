@@ -44,8 +44,10 @@ return new class extends Migration
                 $table->id();
                 $table->foreignId('modulo_id')->nullable()->constrained('modulos_nova')->nullOnDelete();
                 $table->string('legacy_id', 32)->unique();
-                $table->timestamp('created_at_cl')->index();
-                $table->timestamp('expires_at')->index();
+                // Business datetimes are always supplied by the application; using DATETIME
+                // avoids MariaDB's legacy implicit TIMESTAMP defaults when that mode is disabled.
+                $table->dateTime('created_at_cl')->index();
+                $table->dateTime('expires_at')->index();
                 $table->timestamps();
             });
         }

@@ -2,6 +2,10 @@
 
 require_once __DIR__ . '/../../controllers/auth.php';
 auth_require_login('/redmine-mantencion/login.php');
+if (!auth_can('mensajes_acceso')) {
+    http_response_code(403);
+    exit('No tienes permiso para ver Reportes.');
+}
 require_once __DIR__ . '/../../controllers/dashboard.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -9,8 +13,10 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 $flashSession = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
-$toastSession = $_SESSION['dashboard_toast'] ?? null;
-unset($_SESSION['dashboard_toast']);
+$openCoreCredentialsModal = !empty($_SESSION['dashboard_open_core_credentials_modal']);
+unset($_SESSION['dashboard_open_core_credentials_modal']);
+$coreRuntimeUserSession = trim((string)($_SESSION['dashboard_core_runtime_user'] ?? ''));
+unset($_SESSION['dashboard_core_runtime_user']);
 
 list($messages, $flash, $securityLog) = handle_request();
 if ($flashSession) {
@@ -73,6 +79,30 @@ function resolve_assigned_name($value, $lookup) {
         return $lookup[$rutKey];
     }
     return '';
+}
+
+function dashboard_format_date_display($dateValue, $timeValue = '') {
+    $value = trim((string)($dateValue ?? ''));
+    $time = trim((string)($timeValue ?? ''));
+    if ($value === '') {
+        return $time !== '' ? $time : '-';
+    }
+
+    if (preg_match('/^(.+?)\s+(\d{1,2}:\d{2}(?::\d{2})?)/', $value, $matches)) {
+        $value = trim($matches[1]);
+        if ($time === '') {
+            $time = substr($matches[2], 0, 5);
+        }
+    }
+
+    foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'] as $format) {
+        $date = DateTimeImmutable::createFromFormat($format, $value);
+        if ($date instanceof DateTimeImmutable) {
+            return trim($date->format('d-m-Y') . ' ' . $time);
+        }
+    }
+
+    return trim($value . ' ' . $time);
 }
 
 $retencionHoras = get_retencion_horas();
@@ -164,456 +194,8 @@ $csrf = legacy_csrf_token();
 <?php $activeNav = 'mensajes'; include __DIR__ . '/../partials/navbar.php'; ?>
 
 <div id="page-content">
-<style>
-  .dashboard-shell { display: grid; gap: 1.25rem; }
-  .dashboard-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; width: 100%; }
-  .dashboard-stat {
-    position: relative;
-    padding: 1.2rem 1.35rem;
-    min-height: 128px;
-    border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,255,.88));
-    border: 1px solid rgba(15, 23, 42, .08);
-    box-shadow: 0 20px 40px rgba(15, 23, 42, .08);
-    overflow: hidden;
-  }
-  .dashboard-stat[data-filter] { cursor: pointer; }
-  .dashboard-stat[data-filter].is-active {
-    border-color: rgba(37, 99, 235, .28);
-    box-shadow: 0 26px 54px rgba(37, 99, 235, .18);
-    transform: translateY(-2px);
-  }
-  .dashboard-stat::after {
-    content: '';
-    position: absolute;
-    width: 88px;
-    height: 88px;
-    border-radius: 50%;
-    right: -24px;
-    top: -24px;
-    background: rgba(255,255,255,.75);
-  }
-  .dashboard-stat__top { display: flex; justify-content: flex-start; align-items: center; gap: 1rem; margin-bottom: 0; position: relative; z-index: 1; }
-  .dashboard-stat__icon {
-    width: 72px;
-    height: 72px;
-    border-radius: 22px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 1.7rem;
-    box-shadow: 0 14px 28px rgba(15, 23, 42, .14);
-    flex: 0 0 auto;
-  }
-  .dashboard-stat__value { font-size: 2.2rem; font-weight: 700; line-height: 1; margin-bottom: .3rem; position: relative; z-index: 1; }
-  .dashboard-stat__label { color: var(--text-muted); font-weight: 600; font-size: 1rem; position: relative; z-index: 1; }
-  .dashboard-stat__content { display: flex; flex-direction: column; justify-content: center; }
-  .dashboard-stat--pending .dashboard-stat__icon { background: linear-gradient(135deg, #f59e0b, #f97316); }
-  .dashboard-stat--processed .dashboard-stat__icon { background: linear-gradient(135deg, #10b981, #22c55e); }
-  .dashboard-stat--error .dashboard-stat__icon { background: linear-gradient(135deg, #ef4444, #fb7185); }
-  .dashboard-stat--total .dashboard-stat__icon { background: linear-gradient(135deg, #0ea5e9, #8b5cf6); }
-  .dashboard-panel { padding: 1.15rem; border-radius: 24px; background: rgba(255,255,255,.88); border: 1px solid rgba(255,255,255,.6); box-shadow: 0 22px 55px rgba(15, 23, 42, .09); }
-  .dashboard-panel__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-  .dashboard-panel__title { margin: 0; font-size: 1.05rem; font-weight: 700; }
-  .dashboard-panel__desc { margin: .25rem 0 0; color: var(--text-muted); font-size: .92rem; }
-  .dashboard-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
-  .dashboard-toolbar__actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
-  .dashboard-selection,
-  .dashboard-table-count {
-    display: inline-flex;
-    align-items: center;
-    gap: .45rem;
-    padding: .55rem .9rem;
-    border-radius: 999px;
-    font-weight: 700;
-  }
-  .dashboard-selection { background: rgba(15,23,42,.06); color: var(--text-primary); }
-  .dashboard-table-count { background: rgba(56,189,248,.12); color: #0f4c81; }
-  .dashboard-import-grid { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end; }
-  .dashboard-import-button { min-width: 220px; min-height: 52px; font-weight: 700; }
-  .dashboard-table-card .card-body { padding: 0; }
-  .dashboard-table-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.05rem 1.2rem 0; }
-  .dashboard-table-header__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .65rem; }
-  .dashboard-table-header h3 { margin: 0; font-size: 1.05rem; font-weight: 700; }
-  .dashboard-table-subtitle { color: var(--text-muted); font-size: .9rem; margin-top: .2rem; }
-  .dashboard-active-chips { display: flex; flex-wrap: wrap; gap: .45rem; padding: .85rem 1.2rem 0; }
-  .dashboard-filter-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .35rem;
-    min-height: 32px;
-    padding: .35rem .65rem;
-    border-radius: 999px;
-    border: 1px solid rgba(37, 99, 235, .2);
-    background: rgba(37, 99, 235, .08);
-    color: #1d4ed8;
-    font-size: .82rem;
-    font-weight: 800;
-  }
-  .dashboard-table { margin-top: 1rem; }
-  .dashboard-table__subject { font-weight: 600; color: var(--text-primary); min-width: 0; max-width: none; }
-  .dashboard-table__meta { display: block; color: var(--text-muted); font-size: .78rem; margin-top: .2rem; }
-  .dashboard-status-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: .9rem;
-    box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
-  }
-  .dashboard-status-icon--pending { background: linear-gradient(135deg, #f59e0b, #f97316); }
-  .dashboard-status-icon--processed { background: linear-gradient(135deg, #10b981, #22c55e); }
-  .dashboard-status-icon--error { background: linear-gradient(135deg, #ef4444, #fb7185); }
-  .dashboard-row-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: .35rem; white-space: nowrap; }
-  .dashboard-row-actions form { margin: 0; display: inline-flex; }
-  .dashboard-row-actions .btn { min-height: 30px; width: 30px; padding: 0; border-radius: 10px; font-size: .9rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
-  .dashboard-row-actions .btn i { margin-right: 0; }
-  .dashboard-row-actions .btn-hora-extra--on { color: #fff; background: linear-gradient(135deg, #16a34a, #22c55e); border-color: transparent; }
-  .dashboard-row-actions .btn-hora-extra--off { color: #64748b; background: #f8fafc; border-color: #cbd5e1; }
-  .dashboard-row-actions .btn-hora-extra--off:hover { color: #0f172a; background: #e0f2fe; border-color: #7dd3fc; }
-  .dashboard-table tbody tr.is-row-updating { opacity: .58; pointer-events: none; }
-  .dashboard-table-card.is-compact .dashboard-table {
-    font-size: .84rem;
-  }
-  .dashboard-table-card.is-compact .dashboard-table th,
-  .dashboard-table-card.is-compact .dashboard-table td {
-    padding-top: .45rem;
-    padding-bottom: .45rem;
-  }
-  .dashboard-table-card.is-compact .dashboard-table__subject { min-width: 0; }
-  .dashboard-scroll-top {
-    position: fixed !important;
-    right: 28px !important;
-    bottom: 28px !important;
-    width: 44px;
-    height: 44px;
-    min-height: 44px !important;
-    border: 0;
-    border-radius: 50% !important;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    font-size: 1.25rem;
-    color: #fff;
-    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(14px);
-    transition: opacity .2s ease, transform .2s ease, visibility .2s ease;
-    z-index: 1050;
-  }
-  .dashboard-scroll-top.is-visible {
-    display: inline-flex;
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-  }
-  #detalleModal {
-    --drawer-width: min(1280px, calc(100vw - 12px));
-  }
-  #detalleModal .detail-drawer-dialog {
-    width: var(--drawer-width);
-    max-width: var(--drawer-width);
-    min-height: 100vh;
-    margin: 0 0 0 auto;
-  }
-  #detalleModal.fade .detail-drawer-dialog {
-    transform: translateX(100%);
-    transition: transform .28s cubic-bezier(.22, 1, .36, 1);
-  }
-  #detalleModal.show .detail-drawer-dialog {
-    transform: translateX(0);
-  }
-  #detalleModal .modal-content {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    max-height: 100vh;
-    border: 0;
-    border-radius: 18px 0 0 18px;
-    box-shadow: -24px 0 64px rgba(15, 23, 42, .2);
-    overflow: hidden;
-  }
-  #detalleModal .modal-content > form {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-  }
-  #detalleModal .modal-header {
-    align-items: flex-start;
-    padding: 1.15rem 1.25rem;
-    background:
-      linear-gradient(135deg, rgba(37, 99, 235, .12), rgba(20, 184, 166, .1)),
-      #fff;
-    border-bottom: 1px solid rgba(15, 23, 42, .08);
-  }
-  #detalleModal .modal-title {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    margin: 0;
-    color: #0f172a;
-    font-size: 1.12rem;
-    font-weight: 800;
-  }
-  .detail-drawer-kicker {
-    margin: 0 0 .25rem;
-    color: #2563eb;
-    font-size: .76rem;
-    font-weight: 800;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-  }
-  .detail-drawer-subtitle {
-    margin: .25rem 0 0;
-    color: #64748b;
-    font-size: .88rem;
-  }
-  .detail-drawer-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    background: linear-gradient(135deg, #2563eb, #14b8a6);
-    box-shadow: 0 12px 24px rgba(37, 99, 235, .24);
-  }
-  #detalleModal .modal-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 1.2rem 1.25rem 2rem;
-    background: #f8fafc;
-  }
-  #detalleModal .modal-body .row {
-    --bs-gutter-x: 1rem;
-    --bs-gutter-y: 1rem;
-    padding: 1rem;
-    border: 1px solid rgba(148, 163, 184, .24);
-    border-radius: 16px;
-    background: #fff;
-    box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
-  }
-  #detalleModal .form-control,
-  #detalleModal .form-select {
-    min-height: 44px;
-    font-weight: 800;
-    text-overflow: ellipsis;
-  }
-  #detalleModal .form-control:disabled,
-  #detalleModal .form-select:disabled {
-    color: #475569;
-    background: #f1f5f9;
-    border-color: #d8e3f4;
-    opacity: 1;
-    cursor: not-allowed;
-  }
-  #detalleModal textarea.form-control {
-    min-height: 76px;
-    line-height: 1.45;
-    resize: vertical;
-  }
-  #detalleModal .modal-footer {
-    flex-shrink: 0;
-    gap: .65rem;
-    padding: 1rem 1.25rem;
-    background: rgba(255, 255, 255, .96);
-    border-top: 1px solid rgba(15, 23, 42, .08);
-    box-shadow: 0 -16px 30px rgba(15, 23, 42, .06);
-    z-index: 2;
-  }
-  #detalleModal .modal-footer .btn {
-    min-width: 142px;
-  }
-  @media (max-width: 575.98px) {
-    #detalleModal {
-      --drawer-width: 100vw;
-    }
-    #detalleModal .modal-content {
-      border-radius: 0;
-    }
-    #detalleModal .modal-footer .btn {
-      width: 100%;
-    }
-  }
-  .detail-drawer-view {
-    display: none;
-  }
-  .detail-drawer-view.is-active {
-    display: block;
-  }
-  .detail-drawer-table-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    padding: 1rem;
-    border: 1px solid rgba(148, 163, 184, .24);
-    border-radius: 16px;
-    background: #fff;
-    box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
-  }
-  .detail-drawer-table-title {
-    margin: 0;
-    color: #0f172a;
-    font-size: 1rem;
-    font-weight: 800;
-  }
-  .detail-drawer-table-subtitle {
-    margin: .2rem 0 0;
-    color: #64748b;
-    font-size: .88rem;
-  }
-  .detail-preview-wrap {
-    max-height: calc(100vh - 245px);
-    overflow: auto;
-    border: 1px solid rgba(148, 163, 184, .24);
-    border-radius: 16px;
-    background: #fff;
-    box-shadow: 0 12px 32px rgba(15, 23, 42, .06);
-  }
-  .detail-preview-wrap .table {
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
-    font-size: .82rem;
-  }
-  .detail-preview-wrap thead th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: #eef4ff;
-    color: #1e3a8a;
-    padding: .55rem .6rem;
-    white-space: nowrap;
-    overflow-wrap: normal;
-  }
-  .detail-preview-wrap tbody td {
-    min-width: 90px;
-    max-width: 240px;
-    padding: .58rem .6rem;
-    vertical-align: top;
-    white-space: normal;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    word-break: normal;
-    hyphens: none;
-    line-height: 1.28;
-  }
-  .detail-preview-wrap th:nth-child(1),
-  .detail-preview-wrap td:nth-child(1) { min-width: 128px; }
-  .detail-preview-wrap th:nth-child(2),
-  .detail-preview-wrap td:nth-child(2) { min-width: 84px; }
-  .detail-preview-wrap th:nth-child(3),
-  .detail-preview-wrap td:nth-child(3) { min-width: 170px; }
-  .detail-preview-wrap th:nth-child(4),
-  .detail-preview-wrap td:nth-child(4) { min-width: 150px; }
-  .detail-preview-wrap th:nth-child(5),
-  .detail-preview-wrap td:nth-child(5) { min-width: 190px; }
-  .detail-preview-wrap th:nth-child(6),
-  .detail-preview-wrap td:nth-child(6) { min-width: 190px; }
-  .detail-preview-wrap th:nth-child(7),
-  .detail-preview-wrap td:nth-child(7) { min-width: 120px; }
-  .detail-preview-wrap th:nth-child(8),
-  .detail-preview-wrap td:nth-child(8) { min-width: 150px; }
-  .detail-preview-wrap td:nth-child(2),
-  .detail-preview-wrap td:nth-child(4) {
-    white-space: nowrap;
-  }
-  .detail-preview-wrap td:nth-child(4):last-child,
-  .detail-preview-wrap td:nth-child(5):last-child,
-  .detail-preview-wrap td:nth-child(6):last-child {
-    white-space: normal;
-  }
-  .core-import-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 2050;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem;
-    background: rgba(15, 23, 42, .48);
-    backdrop-filter: blur(7px);
-  }
-  .core-import-overlay.is-visible { display: flex; }
-  .core-import-card {
-    width: min(520px, 100%);
-    border-radius: 24px;
-    padding: 1.35rem;
-    background: rgba(255,255,255,.96);
-    border: 1px solid rgba(255,255,255,.78);
-    box-shadow: 0 28px 70px rgba(15, 23, 42, .28);
-  }
-  .core-import-card__media {
-    display: flex;
-    justify-content: center;
-    margin-bottom: .95rem;
-  }
-  .core-import-card__gif {
-    width: min(220px, 70vw);
-    max-height: 150px;
-    object-fit: contain;
-  }
-  .core-import-card__header { display: flex; gap: .9rem; align-items: center; margin-bottom: 1rem; }
-  .core-import-card__icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 1.25rem;
-    background: linear-gradient(135deg, #38bdf8, #8b5cf6);
-    box-shadow: 0 16px 30px rgba(59, 130, 246, .28);
-  }
-  .core-import-card__title { margin: 0; font-size: 1.1rem; font-weight: 800; color: #0f172a; }
-  .core-import-card__text { margin: .15rem 0 0; color: #64748b; font-size: .92rem; }
-  .core-import-progress {
-    height: 12px;
-    border-radius: 999px;
-    overflow: hidden;
-    background: #e5edf7;
-  }
-  .core-import-progress__bar {
-    width: 0%;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #38bdf8, #2563eb, #8b5cf6);
-    transition: width .35s ease;
-  }
-  .core-import-card__meta {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-top: .7rem;
-    color: #475569;
-    font-size: .85rem;
-    font-weight: 700;
-  }
-  @media (max-width: 1200px) { .dashboard-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 991px) {
-    .dashboard-import-grid { grid-template-columns: 1fr; }
-    .dashboard-import-button { width: 100%; min-width: 0; }
-  }
-  @media (max-width: 767px) {
-    .dashboard-stats { grid-template-columns: 1fr; }
-    .dashboard-toolbar, .dashboard-panel__header, .dashboard-table-header { flex-direction: column; align-items: stretch; }
-    .dashboard-table-header__meta { justify-content: flex-start; }
-    .dashboard-toolbar__actions { width: 100%; }
-    .dashboard-toolbar__actions .btn { flex: 1 1 100%; }
-  }
-</style>
+<?php $dashboardCssVersion = @filemtime(__DIR__ . '/../../assets/css/dashboard.css') ?: time(); ?>
+<link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/dashboard.css?v=<?= (int)$dashboardCssVersion ?>">
 <div class="container-fluid py-4">
 <div class="dashboard-shell">
 
@@ -629,11 +211,8 @@ $csrf = legacy_csrf_token();
   <?php if ($flash): ?>
     <div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div>
   <?php endif; ?>
-  <?php if ($toastSession): ?>
-    <div data-nova-flash="success" data-nova-flash-message="<?= $h($toastSession) ?>" hidden></div>
-  <?php endif; ?>
 
-  <form method="post" class="dashboard-panel" id="core-import-form">
+  <form method="post" class="dashboard-panel" id="core-import-form" data-app-no-loading="1" data-no-page-loader="true">
     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
     <input type="hidden" name="action" value="import_core_history">
     <input type="hidden" name="core_runtime_user" id="core-runtime-user-hidden" value="">
@@ -676,6 +255,14 @@ $csrf = legacy_csrf_token();
       <button type="<?= $hasSavedCoreCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-primary dashboard-import-button" <?= $hasSavedCoreCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"' ?> <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
         <i class="bi bi-cloud-download"></i> Importar desde CORE
       </button>
+    </div>
+    <div class="dashboard-core-loading" id="dashboard-core-loading" role="status" aria-live="polite" aria-hidden="true">
+      <img src="<?= $h($mantencionBaseUrl) ?>/assets/img/animacion-carga.gif" alt="">
+      <div class="dashboard-core-loading__body">
+        <strong>Importando solicitudes desde CORE</strong>
+        <span>Validando credenciales y consultando registros...</span>
+        <div class="dashboard-core-loading__bar" aria-hidden="true"><span></span></div>
+      </div>
     </div>
   </form>
 
@@ -724,7 +311,6 @@ $csrf = legacy_csrf_token();
             <input class="form-check-input" type="checkbox" role="switch" id="dashboard-compact-toggle">
             <span class="form-check-label fw-semibold">Modo compacto</span>
           </label>
-          <div class="dashboard-table-count"><i class="bi bi-table"></i> Filas visibles: <span id="visible-count">0</span></div>
         </div>
       </div>
 
@@ -733,18 +319,23 @@ $csrf = legacy_csrf_token();
       <div class="dashboard-toolbar px-3 pt-3">
         <div class="dashboard-toolbar__actions">
           <span class="dashboard-selection"><i class="bi bi-check2-square"></i> Seleccionados: <strong id="selection-count">0</strong></span>
-          <button type="button" id="process-btn" class="btn-nova btn-nova-success btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
-            <i class="bi bi-check2-circle"></i> Enviar reportes a Redmine
-          </button>
-          <button type="button" id="archive-btn" class="btn-nova btn-nova-warning btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
-            <i class="bi bi-archive"></i> Archivar
-          </button>
-          <button type="button" id="delete-selected-btn" class="btn-nova btn-nova-danger btn-icon" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
-            <i class="bi bi-trash3"></i> Eliminar seleccionados
-          </button>
-          <button type="button" id="reset-errors-btn" class="btn-nova btn-nova-secondary btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
-            <i class="bi bi-arrow-counterclockwise"></i> Reintentar errores (marcar pendientes)
-          </button>
+          <div class="dashboard-toolbar__button-group">
+            <button type="button" id="processed-edit-toggle" class="btn-nova btn-nova-primary btn-icon d-none" aria-pressed="false" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+              <i class="bi bi-unlock"></i> Habilitar edición
+            </button>
+            <button type="button" id="process-btn" class="btn-nova btn-nova-success btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+              <i class="bi bi-check2-circle"></i> Enviar reportes a Redmine
+            </button>
+            <button type="button" id="archive-btn" class="btn-nova btn-nova-warning btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+              <i class="bi bi-archive"></i> Archivar
+            </button>
+            <button type="button" id="delete-selected-btn" class="btn-nova btn-nova-danger btn-icon" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+              <i class="bi bi-trash3"></i> Eliminar seleccionados
+            </button>
+            <button type="button" id="reset-errors-btn" class="btn-nova btn-nova-secondary btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+              <i class="bi bi-arrow-counterclockwise"></i> Reintentar errores (marcar pendientes)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -765,15 +356,13 @@ $csrf = legacy_csrf_token();
 
               <th>Fecha creación</th>
 
-              <th>Tipo solicitud</th>
-
-              <th>Establecimiento</th>
+              <th>Categoría</th>
 
               <th>Departamento</th>
 
               <th>Estado local</th>
 
-              <th>Acciones</th>
+              <th class="nova-col-actions">Acciones</th>
 
             </tr>
 
@@ -782,7 +371,7 @@ $csrf = legacy_csrf_token();
           <tbody>
 
           <?php if (!$messages): ?>
-            <tr id="dashboard-empty-row"><td colspan="10" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes. Usa el formulario de importación para traer datos desde CORE.</td></tr>
+            <tr id="dashboard-empty-row"><td colspan="9" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes. Usa el formulario de importación para traer datos desde CORE.</td></tr>
           <?php endif; ?>
           <?php foreach ($messages as $m): ?>
 
@@ -794,6 +383,7 @@ $csrf = legacy_csrf_token();
               $asignadoNombre = $m['asignado_nombre'] ?? $assignFromMap ?: $idAsignado;
               $displayAsignado = $asignadoNombre;
               $displayDepartamento = dashboard_resolve_department_value($m);
+              $coreStatusIndicator = dashboard_core_status_indicator($m);
             ?>
 
             <tr
@@ -806,20 +396,30 @@ $csrf = legacy_csrf_token();
               data-text="<?= $h(strtolower($asunto . ' ' . ($m['solicitante'] ?? '') . ' ' . ($m['numero'] ?? ''))) ?>"
             >
 
-              <td><input type="checkbox" class="msg-check" value="<?= $h($m['id'] ?? '') ?>"></td>
+              <td>
+                <div class="d-inline-flex align-items-center gap-2">
+                  <input type="checkbox" class="msg-check" value="<?= $h($m['id'] ?? '') ?>">
+                  <?php if ($coreStatusIndicator): ?>
+                    <span class="badge rounded-circle text-bg-<?= $h($coreStatusIndicator['badge']) ?> p-2 action-tooltip"
+                          data-bs-placement="top"
+                          title="CORE: <?= $h($coreStatusIndicator['label']) ?>"
+                          aria-label="CORE: <?= $h($coreStatusIndicator['label']) ?>">
+                      <i class="bi <?= $h($coreStatusIndicator['icon']) ?>"></i>
+                    </span>
+                  <?php endif; ?>
+                </div>
+              </td>
               <td><?= $h($m['redmine_id'] ?? '') ?></td>
 
               <td>
-                <div class="dashboard-table__subject"><?= $h($asunto) ?></div>
+                <div class="dashboard-table__subject" title="<?= $h($asunto) ?>"><?= $h($asunto) ?></div>
               </td>
 
               <td><?= $h($m['solicitante'] ?? '') ?></td>
 
-              <td><?= $h($m['core_fecha_creacion'] ?? (($m['fecha'] ?? '') . ' ' . ($m['hora'] ?? ''))) ?></td>
+              <td><?= $h(dashboard_format_date_display($m['core_fecha_creacion'] ?? ($m['fecha'] ?? ''), $m['hora'] ?? '')) ?></td>
 
-              <td><?= $h($m['core_tipo_solicitud'] ?? $asunto) ?></td>
-
-              <td><?= $h($m['core_establecimiento'] ?? ($m['unidad_solicitante'] ?? '')) ?></td>
+              <td><?= $h($m['categoria'] ?? '-') ?></td>
 
               <td><?= $h($displayDepartamento) ?></td>
 
@@ -841,7 +441,7 @@ $csrf = legacy_csrf_token();
                   $previewRowsJson = $h((string)json_encode(array_values($previewRows), JSON_UNESCAPED_UNICODE));
                   $previewColumnsJson = $h((string)json_encode(dashboard_core_detail_table_schema($m), JSON_UNESCAPED_UNICODE));
                 ?>
-                <button type="button" class="btn-action btn-action-view action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="Detalle"
+                <button type="button" class="btn-action btn-action-view action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="Detalle" aria-label="Detalle" data-processed-action
 
                   data-id="<?= $h($m['id'] ?? '') ?>"
 
@@ -896,15 +496,21 @@ $csrf = legacy_csrf_token();
                 <?php
                   $hasHoraExtra = function_exists('normalize_hour_extra_value') && normalize_hour_extra_value($m['hora_extra'] ?? '') === '1';
                 ?>
-                <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-dashboard-ajax="row" data-app-no-loading="1">
+                <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-no-loading="1" data-no-page-loader="true"
+                      data-optimistic-toggle
+                      data-toggle-active-icon="bi-clock-fill" data-toggle-inactive-icon="bi-clock"
+                      data-toggle-active-class="btn-hora-extra--on" data-toggle-inactive-class="btn-hora-extra--off"
+                      data-toggle-active-title="Hora extra: Sí. Cambiar a No" data-toggle-inactive-title="Hora extra: No. Cambiar a Sí">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="toggle_hora_extra">
                   <button
                     class="btn-action btn-action-sync action-tooltip <?= $hasHoraExtra ? 'btn-hora-extra--on' : 'btn-hora-extra--off' ?>"
                     type="submit"
+                    data-processed-action
                     data-bs-placement="top"
                     title="<?= $maintenanceMode ? 'Plataforma en mantención' : ($hasHoraExtra ? 'Hora extra: Sí. Cambiar a No' : 'Hora extra: No. Cambiar a Sí') ?>"
+                    aria-label="<?= $maintenanceMode ? 'Plataforma en mantención' : ($hasHoraExtra ? 'Hora extra: Sí. Cambiar a No' : 'Hora extra: No. Cambiar a Sí') ?>"
                     <?= $maintenanceMode ? 'disabled' : '' ?>
                   >
                     <i class="bi <?= $hasHoraExtra ? 'bi-clock-fill' : 'bi-clock' ?>"></i>
@@ -917,14 +523,14 @@ $csrf = legacy_csrf_token();
                         $logText = (string)$logsByMessage[$m['id']];
                     }
                   ?>
-                  <button type="button" class="btn-action btn-action-view log-btn action-tooltip" data-log="<?= $h($logText) ?>" data-bs-toggle="modal" data-bs-target="#logModal" data-bs-placement="top" title="Log"><i class="bi bi-journal-text"></i></button>
+                  <button type="button" class="btn-action btn-action-view log-btn action-tooltip" data-log="<?= $h($logText) ?>" data-bs-toggle="modal" data-bs-target="#logModal" data-bs-placement="top" title="Log" aria-label="Log"><i class="bi bi-journal-text"></i></button>
                 <?php endif; ?>
 
                 <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-confirm="¿Eliminar este mensaje?" data-dashboard-ajax="row" data-app-no-loading="1">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="delete">
-                  <button class="btn-action btn-action-delete action-tooltip" type="submit" data-bs-placement="top" title="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-trash3"></i></button>
+                  <button class="btn-action btn-action-delete action-tooltip" type="submit" data-processed-action data-bs-placement="top" title="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" aria-label="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-trash3"></i></button>
                 </form>
                 </div>
               </td>
@@ -1035,22 +641,30 @@ $csrf = legacy_csrf_token();
 
 
 
-<div class="modal fade detail-drawer-modal" id="coreCredentialsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog detail-drawer-dialog">
+<div class="modal fade" id="coreCredentialsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Credenciales CORE</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div class="core-credentials-animation" aria-hidden="true">
+          <img src="<?= $h($mantencionBaseUrl) ?>/assets/img/animacion-carga.gif" alt="">
+        </div>
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label">Usuario CORE</label>
-            <input type="text" class="form-control" id="core-runtime-user-input" placeholder="RUT sin DV o email" autocomplete="username">
+            <input type="text" class="form-control" id="core-runtime-user-input" placeholder="RUT sin DV o email" autocomplete="username" value="<?= $h($coreRuntimeUserSession) ?>">
           </div>
           <div class="col-12">
             <label class="form-label">Contraseña CORE</label>
-            <input type="password" class="form-control" id="core-runtime-pass-input" placeholder="Solo se usa para esta consulta" autocomplete="current-password">
+            <div class="input-group">
+              <input type="password" class="form-control" id="core-runtime-pass-input" placeholder="Solo se usa para esta consulta" autocomplete="current-password">
+              <button class="btn btn-outline-secondary" type="button" id="core-toggle-password" aria-label="Ver contraseña" title="Ver contraseña">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
           </div>
           <div class="col-12">
             <div class="form-check">
@@ -1062,12 +676,32 @@ $csrf = legacy_csrf_token();
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn-nova btn-nova-primary" form="core-import-form">Consultar CORE</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-nova btn-nova-primary" id="core-credentials-submit-btn">Consultar CORE</button>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const button = document.getElementById('core-toggle-password');
+  const input = document.getElementById('core-runtime-pass-input');
+  if (!button || !input) return;
+
+  button.addEventListener('click', function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    button.setAttribute('aria-label', showing ? 'Ver contraseña' : 'Ocultar contraseña');
+    button.setAttribute('title', showing ? 'Ver contraseña' : 'Ocultar contraseña');
+    button.innerHTML = showing ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+    input.focus();
+  });
+})();
+</script>
 
 <div class="modal fade detail-drawer-modal" id="detalleModal" tabindex="-1" aria-hidden="true">
 
@@ -1243,11 +877,18 @@ $csrf = legacy_csrf_token();
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <label class="form-label" for="md-descripcion-editor">Descripción</label>
-        <textarea id="md-descripcion-editor" class="form-control" rows="10"></textarea>
+        <div class="nova-description-tabs" role="tablist" aria-label="Vista de descripción">
+          <button type="button" class="nova-description-tab is-active" id="dashboard-description-edit-tab" role="tab" aria-selected="true"><i class="bi bi-pencil"></i> Modificar</button>
+          <button type="button" class="nova-description-tab" id="dashboard-description-preview-tab" role="tab" aria-selected="false"><i class="bi bi-table"></i> Previsualizar</button>
+        </div>
+        <div id="dashboard-description-edit-panel" role="tabpanel" aria-labelledby="dashboard-description-edit-tab">
+          <label class="form-label" for="md-descripcion-editor">Descripción</label>
+          <textarea id="md-descripcion-editor" class="form-control nova-description-editor" rows="10"></textarea>
+        </div>
+        <div class="nova-description-preview" id="dashboard-description-preview" role="tabpanel" aria-labelledby="dashboard-description-preview-tab" hidden></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
         <button type="button" class="btn-nova btn-nova-primary" id="save-descripcion-btn" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>Guardar descripción</button>
       </div>
     </div>
@@ -1265,7 +906,7 @@ $csrf = legacy_csrf_token();
         <pre class="small bg-light p-3 border rounded" style="white-space: pre-wrap;" id="logModalContent"></pre>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
       </div>
     </div>
   </div>
@@ -1282,7 +923,7 @@ $csrf = legacy_csrf_token();
         <p class="mb-0">Se eliminarán <strong id="delete-selected-count">0</strong> mensaje(s) seleccionados. Esta acción no se puede deshacer.</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn-nova btn-nova-danger" id="confirm-delete-selected-btn">
           <i class="bi bi-trash3"></i> Eliminar seleccionados
         </button>
@@ -1300,12 +941,22 @@ $csrf = legacy_csrf_token();
 <script>
 
   const dashboardMaintenanceMode = <?= $maintenanceMode ? 'true' : 'false' ?>;
-  const dashboardScrollKey = 'dashboard-scroll-y';
+  const dashboardScrollKey = 'nova:mantencion-dashboard:scroll-y';
+  const dashboardProcessedEditKey = 'nova:mantencion-dashboard:processed-edit';
 
   const savedDashboardScroll = Number(sessionStorage.getItem(dashboardScrollKey) || '');
-  if (Number.isFinite(savedDashboardScroll) && savedDashboardScroll > 0) {
+  if (Number.isFinite(savedDashboardScroll) && savedDashboardScroll >= 0) {
     sessionStorage.removeItem(dashboardScrollKey);
-    requestAnimationFrame(() => window.scrollTo({ top: savedDashboardScroll, behavior: 'auto' }));
+    const restoreDashboardScroll = () => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.scrollTo({ top: savedDashboardScroll, behavior: 'auto' });
+      }));
+    };
+    if (document.readyState === 'complete') {
+      restoreDashboardScroll();
+    } else {
+      window.addEventListener('load', restoreDashboardScroll, { once: true });
+    }
   }
 
   document.addEventListener('submit', event => {
@@ -1330,7 +981,80 @@ $csrf = legacy_csrf_token();
   const descripcionEditor = document.getElementById('md-descripcion-editor');
   const descripcionHidden = document.getElementById('md-descripcion');
   const saveDescripcionBtn = document.getElementById('save-descripcion-btn');
+  const descripcionEditTab = document.getElementById('dashboard-description-edit-tab');
+  const descripcionPreviewTab = document.getElementById('dashboard-description-preview-tab');
+  const descripcionEditPanel = document.getElementById('dashboard-description-edit-panel');
+  const descripcionPreview = document.getElementById('dashboard-description-preview');
   let reopenDetalleModalAfterDescripcion = false;
+
+  const descriptionTableCells = line => line.trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map(cell => cell.trim().replace(/<br\s*\/?>/gi, '\n').replace(/\\\|/g, '|'));
+
+  const renderDescriptionPreview = () => {
+    if (!descripcionPreview || !descripcionEditor) return;
+    descripcionPreview.replaceChildren();
+    const value = descripcionEditor.value.trim();
+    if (!value) {
+      const empty = document.createElement('div');
+      empty.className = 'nova-empty-state';
+      empty.innerHTML = '<i class="bi bi-text-paragraph"></i><strong>Sin descripción</strong><p>No hay contenido para previsualizar.</p>';
+      descripcionPreview.appendChild(empty);
+      return;
+    }
+
+    const lines = value.split(/\r?\n/).filter(line => line.trim() !== '');
+    const tableLines = lines.filter(line => line.includes('|'));
+    if (tableLines.length !== lines.length) {
+      const text = document.createElement('div');
+      text.className = 'nova-description-preview__text';
+      text.textContent = value;
+      descripcionPreview.appendChild(text);
+      return;
+    }
+
+    const separatorPattern = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
+    const hasHeader = lines.length > 1 && separatorPattern.test(lines[1]);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-responsive';
+    const table = document.createElement('table');
+    table.className = 'table table-sm table-bordered align-middle mb-0 nova-description-table';
+    const tbody = document.createElement('tbody');
+    const appendRow = (target, line, cellTag) => {
+      const row = document.createElement('tr');
+      descriptionTableCells(line).forEach(value => {
+        const cell = document.createElement(cellTag);
+        cell.textContent = value;
+        row.appendChild(cell);
+      });
+      target.appendChild(row);
+    };
+    if (hasHeader) {
+      const thead = document.createElement('thead');
+      appendRow(thead, lines[0], 'th');
+      table.appendChild(thead);
+      lines.slice(2).forEach(line => appendRow(tbody, line, 'td'));
+    } else {
+      lines.forEach(line => appendRow(tbody, line, 'td'));
+    }
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    descripcionPreview.appendChild(wrapper);
+  };
+
+  const setDescriptionView = preview => {
+    if (!descripcionEditPanel || !descripcionPreview) return;
+    if (preview) renderDescriptionPreview();
+    descripcionEditPanel.hidden = preview;
+    descripcionPreview.hidden = !preview;
+    descripcionEditTab?.classList.toggle('is-active', !preview);
+    descripcionPreviewTab?.classList.toggle('is-active', preview);
+    descripcionEditTab?.setAttribute('aria-selected', preview ? 'false' : 'true');
+    descripcionPreviewTab?.setAttribute('aria-selected', preview ? 'true' : 'false');
+  };
+  descripcionEditTab?.addEventListener('click', () => setDescriptionView(false));
+  descripcionPreviewTab?.addEventListener('click', () => setDescriptionView(true));
 
   const setDrawerView = view => {
     const showTable = view === 'table';
@@ -1351,11 +1075,13 @@ $csrf = legacy_csrf_token();
     }
   };
 
+  if (detalleModal) {
   detalleModal.addEventListener('show.bs.modal', event => {
 
   setDrawerView('detail');
 
   const btn = event.relatedTarget;
+  if (!btn) return;
 
   const normalizeDateForInput = value => {
     const raw = String(value || '').trim();
@@ -1577,6 +1303,7 @@ $csrf = legacy_csrf_token();
   }
 
 });
+  }
 
   if (openPreviewModalBtn) {
     openPreviewModalBtn.addEventListener('click', event => {
@@ -1594,6 +1321,7 @@ $csrf = legacy_csrf_token();
   if (descripcionModal) {
     descripcionModal.addEventListener('show.bs.modal', () => {
       reopenDetalleModalAfterDescripcion = true;
+      setDescriptionView(false);
       if (descripcionEditor) {
         descripcionEditor.value = descripcionHidden ? (descripcionHidden.value || '') : '';
       }
@@ -1622,25 +1350,63 @@ $csrf = legacy_csrf_token();
 
 
 
-function setAllChecks(checked) {
-
-  document.querySelectorAll('.msg-check').forEach(cb => { cb.checked = checked; });
-
-}
-
 function getVisibleRows() {
   return Array.from(document.querySelectorAll('table tbody tr')).filter(tr => tr.style.display !== 'none');
 }
 
 function getSelectedVisibleChecks() {
   return Array.from(document.querySelectorAll('.msg-check')).filter(cb => {
-    if (!cb.checked || !cb.value) return false;
+    if (cb.disabled || !cb.checked || !cb.value) return false;
     const row = cb.closest('tr');
     return !!row && row.style.display !== 'none';
   });
 }
 
+const filterNav = document.getElementById('status-filters');
+const processedEditToggleBtn = document.getElementById('processed-edit-toggle');
+let currentDashboardFilter = filterNav?.querySelector('[data-filter].is-active')?.getAttribute('data-filter') || 'pendiente';
+let processedEditEnabled = sessionStorage.getItem(dashboardProcessedEditKey) === '1';
+
+function processedActionsLocked() {
+  return currentDashboardFilter === 'procesado' && !processedEditEnabled;
+}
+
+function syncProcessedActionControls() {
+  const locked = processedActionsLocked();
+  document.getElementById('dashboard-table-card')?.classList.toggle('is-processed-locked', locked);
+  document.querySelectorAll('[data-processed-action]').forEach(control => {
+    control.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    if (locked) {
+      control.disabled = true;
+      if (control.matches('input[type="checkbox"]')) {
+        control.checked = false;
+      }
+      return;
+    }
+    control.removeAttribute('aria-disabled');
+    if (!dashboardMaintenanceMode && !control.matches('#archive-btn, #delete-selected-btn')) {
+      control.disabled = false;
+    }
+  });
+  if (processedEditToggleBtn) {
+    processedEditToggleBtn.classList.toggle('d-none', currentDashboardFilter !== 'procesado');
+    processedEditToggleBtn.setAttribute('aria-pressed', processedEditEnabled ? 'true' : 'false');
+    processedEditToggleBtn.innerHTML = processedEditEnabled
+      ? '<i class="bi bi-lock"></i> Desactivar edición'
+      : '<i class="bi bi-unlock"></i> Habilitar edición';
+  }
+}
+
+function setAllChecks(checked) {
+  document.querySelectorAll('.msg-check').forEach(cb => {
+    if (!cb.disabled) {
+      cb.checked = checked;
+    }
+  });
+}
+
   function refreshDashboardCounters() {
+  syncProcessedActionControls();
   const visibleCount = document.getElementById('visible-count');
   const selectionCount = document.getElementById('selection-count');
   const visibleRows = getVisibleRows();
@@ -1655,6 +1421,35 @@ function getSelectedVisibleChecks() {
   if (archiveBtn) archiveBtn.disabled = dashboardMaintenanceMode || selectedChecks.length === 0;
   if (deleteSelectedBtn) deleteSelectedBtn.disabled = dashboardMaintenanceMode || selectedChecks.length === 0;
   if (resetErrorsBtn) resetErrorsBtn.disabled = dashboardMaintenanceMode || selectedChecks.length === 0;
+}
+
+if (processedEditToggleBtn && processedEditToggleBtn.dataset.processedToggleReady !== 'true') {
+  processedEditToggleBtn.dataset.processedToggleReady = 'true';
+  processedEditToggleBtn.addEventListener('click', () => {
+    processedEditEnabled = !processedEditEnabled;
+    sessionStorage.setItem(dashboardProcessedEditKey, processedEditEnabled ? '1' : '0');
+    refreshDashboardCounters();
+  });
+}
+
+const processedWorkPanel = document.getElementById('dashboard-table-card');
+if (processedWorkPanel && processedWorkPanel.dataset.processedLockGuardReady !== 'true') {
+  processedWorkPanel.dataset.processedLockGuardReady = 'true';
+  processedWorkPanel.addEventListener('click', event => {
+    if (!processedWorkPanel.classList.contains('is-processed-locked')) return;
+    if (!event.target.closest('[data-processed-action]')) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+  processedWorkPanel.addEventListener('change', event => {
+    if (!processedWorkPanel.classList.contains('is-processed-locked')) return;
+    const checkbox = event.target.closest('input[type="checkbox"][data-processed-action]');
+    if (!checkbox) return;
+    checkbox.checked = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    refreshDashboardCounters();
+  }, true);
 }
 
 const selAllTop = document.getElementById('sel-all-top');
@@ -1700,7 +1495,7 @@ if (processForm && processIds) {
     const ids = Array.from(document.querySelectorAll('.msg-check'))
 
       .filter(cb => {
-        if (!cb.checked || !cb.value) return false;
+        if (cb.disabled || !cb.checked || !cb.value) return false;
         const row = cb.closest('tr');
         if (!row) return false;
         // Solo tomar los visibles (segun filtro activo)
@@ -1743,8 +1538,6 @@ if (processForm && processIds) {
 
 }
 
-const filterNav = document.getElementById('status-filters');
-
 function filterRows(filter) {
   document.querySelectorAll('table tbody tr').forEach(tr => {
     const status = (tr.getAttribute('data-status') || '').toLowerCase();
@@ -1754,6 +1547,12 @@ function filterRows(filter) {
 }
 
 function applyFilterButtons(filter) {
+  const previousFilter = currentDashboardFilter;
+  currentDashboardFilter = filter;
+  if (filter !== 'procesado' || previousFilter !== 'procesado') {
+    processedEditEnabled = false;
+    sessionStorage.setItem(dashboardProcessedEditKey, '0');
+  }
   const chips = document.getElementById('dashboard-active-chips');
   if (chips) {
     const labels = {
@@ -1780,6 +1579,7 @@ function applyFilterButtons(filter) {
   if (resetErrorsBtn) {
     resetErrorsBtn.classList.toggle('d-none', filter !== 'error');
   }
+  syncProcessedActionControls();
   refreshDashboardCounters();
 }
 
@@ -1807,7 +1607,20 @@ function escapeDashboardId(value) {
 
 function showDashboardToast(message, tone = 'success') {
   if (!message) return;
-  window.NovaToast?.show({ type: tone === 'danger' ? 'error' : tone, message });
+  const type = tone === 'danger' ? 'error' : tone;
+  if (window.NovaToast?.show) {
+    window.NovaToast.show({ type, message });
+    return;
+  }
+  if (window.appUi?.toast) {
+    window.appUi.toast(message, type);
+    return;
+  }
+  window.appModal?.show({
+    title: type === 'success' ? 'Listo' : 'Aviso',
+    message,
+    tone: type === 'error' ? 'danger' : type
+  });
 }
 
 function updateDashboardStatusCards(counts) {
@@ -1876,28 +1689,9 @@ async function submitDashboardBulkAction(form) {
 function applyDashboardActionResult(payload, form, row) {
   const action = payload.action || form.querySelector('[name="action"]')?.value || '';
   updateDashboardStatusCards(payload.counts);
-  if (action === 'toggle_hora_extra') {
-    const btn = form.querySelector('button[type="submit"]');
-    const info = payload.row || {};
-    const enabled = String(info.hora_extra || '') === '1';
-    row?.setAttribute('data-horaextra', enabled ? '1' : '0');
-    const detailBtn = row?.querySelector('[data-bs-target="#detalleModal"]');
-    if (detailBtn) {
-      detailBtn.setAttribute('data-hora_extra', enabled ? '1' : '0');
-      detailBtn.setAttribute('data-tiempo_estimado', info.tiempo_estimado || '');
-    }
-    if (btn) {
-      btn.classList.remove('is-submitting');
-      btn.classList.toggle('btn-hora-extra--on', enabled);
-      btn.classList.toggle('btn-hora-extra--off', !enabled);
-      btn.setAttribute('title', info.title || (enabled ? 'Hora extra: Sí. Cambiar a No' : 'Hora extra: No. Cambiar a Sí'));
-      btn.querySelector('i')?.classList.toggle('bi-clock-fill', enabled);
-      btn.querySelector('i')?.classList.toggle('bi-clock', !enabled);
-      bootstrap.Tooltip.getInstance(btn)?.dispose();
-      new bootstrap.Tooltip(btn);
-    }
-    row?.classList.remove('is-row-updating');
-  } else if (['delete', 'archive_selected', 'delete_selected'].includes(action)) {
+  // toggle_hora_extra is handled by NovaOptimisticToggle (nova-ui.js) instead of this
+  // generic dispatcher — see the nova-optimistic-toggle:change listener below.
+  if (['delete', 'archive_selected', 'delete_selected'].includes(action)) {
     (payload.ids || []).forEach(id => {
       document.querySelector(`tr[data-id="${escapeDashboardId(id)}"]`)?.remove();
     });
@@ -1937,6 +1731,18 @@ document.querySelectorAll('form[data-dashboard-ajax="row"]').forEach(form => {
     event.preventDefault();
     submitDashboardAction(form);
   });
+});
+
+// Keep the row's "detalle" button in sync with the Hora Extra toggle so opening
+// the detail modal right after toggling doesn't show the pre-toggle value.
+// Note: the estimated-time default assigned server-side on activation is not
+// re-synced here (the optimistic toggle intentionally doesn't wait on/depend on
+// server-computed values) — it will show its previous value until the next page load.
+document.addEventListener('nova-optimistic-toggle:change', (event) => {
+  const row = event.target.closest('tr');
+  row?.setAttribute('data-horaextra', event.detail.active ? '1' : '0');
+  const detailBtn = row?.querySelector('[data-bs-target="#detalleModal"]');
+  detailBtn?.setAttribute('data-hora_extra', event.detail.active ? '1' : '0');
 });
 
 if (filterNav) {
@@ -2033,8 +1839,6 @@ if (resetErrorsBtn && processForm && processAction) {
   });
 }
 
-}
-
 const logModal = document.getElementById('logModal');
 
 if (logModal) {
@@ -2071,10 +1875,33 @@ const coreImportProgressPercent = document.getElementById('core-import-progress-
 const coreImportProgressText = document.getElementById('core-import-progress-text');
 const coreImportProgressStep = document.getElementById('core-import-progress-step');
 const dashboardProgressGif = document.getElementById('dashboard-progress-gif');
+const dashboardCoreLoading = document.getElementById('dashboard-core-loading');
 const hasSavedCoreCredentials = <?= $hasSavedCoreCredentials ? 'true' : 'false' ?>;
+const shouldOpenCoreCredentialsModal = <?= $openCoreCredentialsModal ? 'true' : 'false' ?>;
 let coreImportProgressTimer = null;
 
+if (coreImportOverlay && coreImportOverlay.parentElement !== document.body) {
+  document.body.appendChild(coreImportOverlay);
+}
+
+function resetDashboardProgressViewport() {
+  const scrollingElement = document.scrollingElement || document.documentElement;
+  scrollingElement?.scrollTo({ top: 0, behavior: 'auto' });
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  document.querySelector('.dashboard-table-wrap')?.scrollTo({ top: 0, behavior: 'auto' });
+}
+
 function showDashboardProgress(mode = 'core') {
+  resetDashboardProgressViewport();
+  if (mode === 'core' && dashboardCoreLoading) {
+    dashboardCoreLoading.classList.add('is-visible');
+    dashboardCoreLoading.setAttribute('aria-hidden', 'false');
+    coreImportForm?.classList.add('nova-card-loading');
+    coreImportForm?.querySelectorAll('button[type="submit"]').forEach(button => {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+    });
+  }
   if (!coreImportOverlay || !coreImportProgressBar) return;
   const stepSets = {
     core: [
@@ -2159,10 +1986,41 @@ if (coreImportForm) {
 }
 
 if (coreCredentialsModal) {
+  let _coreSubmitAfterClose = false;
+
   coreCredentialsModal.addEventListener('hidden.bs.modal', () => {
+    if (_coreSubmitAfterClose) {
+      _coreSubmitAfterClose = false;
+      if (coreImportForm) coreImportForm.requestSubmit();
+    }
     if (coreRuntimePassInput) coreRuntimePassInput.value = '';
     if (coreRuntimePassHidden) coreRuntimePassHidden.value = '';
   });
+
+  const coreCredentialsSubmitBtn = document.getElementById('core-credentials-submit-btn');
+  if (coreCredentialsSubmitBtn) {
+    coreCredentialsSubmitBtn.addEventListener('click', () => {
+      const user = coreRuntimeUserInput?.value.trim() || '';
+      const pass = coreRuntimePassInput?.value.trim() || '';
+      if (!user || !pass) {
+        window.appModal?.show({
+          title: 'Credenciales requeridas',
+          message: 'Debes ingresar usuario y contraseña de CORE.',
+          tone: 'warning'
+        });
+        return;
+      }
+      _coreSubmitAfterClose = true;
+      bootstrap.Modal.getOrCreateInstance(coreCredentialsModal).hide();
+    });
+  }
+
+  if (shouldOpenCoreCredentialsModal && window.bootstrap?.Modal) {
+    window.setTimeout(() => {
+      window.bootstrap.Modal.getOrCreateInstance(coreCredentialsModal).show();
+      coreRuntimePassInput?.focus();
+    }, 250);
+  }
 }
 
 const scrollTopBtn = document.getElementById('dashboard-scroll-top');
@@ -2218,11 +2076,119 @@ if (scrollTopBtn) {
   updateScrollTopVisibility();
 }
 
+window.__dashboardBulkControlsReady = true;
 refreshDashboardCounters();
 
 </script>
 
-</div>
+<script>
+(function () {
+  if (window.__dashboardBulkControlsReady) return;
+
+  const maintenanceMode = <?= $maintenanceMode ? 'true' : 'false' ?>;
+  const filterNav = document.getElementById('status-filters');
+  const processForm = document.getElementById('process-form');
+  const processAction = document.getElementById('process-action');
+  const processIds = document.getElementById('process-ids');
+  const processBtn = document.getElementById('process-btn');
+  const archiveBtn = document.getElementById('archive-btn');
+  const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+  const resetErrorsBtn = document.getElementById('reset-errors-btn');
+  const selAllTop = document.getElementById('sel-all-top');
+  const visibleCount = document.getElementById('visible-count');
+  const selectionCount = document.getElementById('selection-count');
+
+  const visibleRows = () => Array.from(document.querySelectorAll('.dashboard-table tbody tr'))
+    .filter(row => row.style.display !== 'none' && row.id !== 'dashboard-empty-row');
+
+  const selectedVisibleChecks = () => Array.from(document.querySelectorAll('.msg-check'))
+    .filter(input => input.checked && input.value && input.closest('tr')?.style.display !== 'none');
+
+  const refresh = () => {
+    const selected = selectedVisibleChecks();
+    if (visibleCount) visibleCount.textContent = String(visibleRows().length);
+    if (selectionCount) selectionCount.textContent = String(selected.length);
+    [processBtn, archiveBtn, deleteSelectedBtn, resetErrorsBtn].forEach(button => {
+      if (button) button.disabled = maintenanceMode || selected.length === 0;
+    });
+  };
+
+  const showActionsFor = filter => {
+    processBtn?.classList.toggle('d-none', filter !== 'pendiente');
+    archiveBtn?.classList.toggle('d-none', filter !== 'procesado');
+    resetErrorsBtn?.classList.toggle('d-none', filter !== 'error');
+    const chips = document.getElementById('dashboard-active-chips');
+    if (chips) {
+      const labels = {
+        pendiente: ['bi-hourglass-split', 'Pendientes por revisar'],
+        procesado: ['bi-check2-circle', 'Procesados correctamente'],
+        error: ['bi-exclamation-octagon', 'Errores pendientes'],
+      };
+      const [icon, label] = labels[filter] || labels.pendiente;
+      chips.innerHTML = `<span class="dashboard-filter-chip"><i class="bi ${icon}"></i>${label}</span>`;
+    }
+    refresh();
+  };
+
+  const applyFilter = filter => {
+    document.querySelectorAll('.dashboard-table tbody tr').forEach(row => {
+      if (row.id === 'dashboard-empty-row') return;
+      const status = (row.getAttribute('data-status') || '').toLowerCase();
+      row.style.display = status === filter ? '' : 'none';
+      const check = row.querySelector('.msg-check');
+      if (check && row.style.display === 'none') check.checked = false;
+    });
+    if (selAllTop) selAllTop.checked = false;
+    filterNav?.querySelectorAll('[data-filter]').forEach(card => {
+      card.classList.toggle('is-active', card.getAttribute('data-filter') === filter);
+    });
+    showActionsFor(filter);
+  };
+
+  selAllTop?.addEventListener('change', () => {
+    visibleRows().forEach(row => {
+      const check = row.querySelector('.msg-check');
+      if (check) check.checked = selAllTop.checked;
+    });
+    refresh();
+  });
+
+  document.querySelectorAll('.msg-check').forEach(input => {
+    input.addEventListener('change', refresh);
+  });
+
+  filterNav?.addEventListener('click', event => {
+    const card = event.target.closest('[data-filter]');
+    if (!card) return;
+    event.preventDefault();
+    applyFilter(card.getAttribute('data-filter') || 'pendiente');
+  });
+
+  const submitBulk = action => {
+    const ids = selectedVisibleChecks().map(input => input.value);
+    if (ids.length === 0 || !processForm || !processAction || !processIds) {
+      window.appModal?.show({
+        title: 'Seleccion requerida',
+        message: 'Selecciona al menos un mensaje.',
+        tone: 'warning'
+      });
+      return;
+    }
+    processAction.value = action;
+    processIds.value = ids.join(',');
+    processForm.submit();
+  };
+
+  processBtn?.addEventListener('click', () => submitBulk('process_selected'));
+  archiveBtn?.addEventListener('click', () => submitBulk('archive_selected'));
+  resetErrorsBtn?.addEventListener('click', () => submitBulk('reset_errors'));
+  deleteSelectedBtn?.addEventListener('click', () => submitBulk('delete_selected'));
+
+  const activeFilter = filterNav?.querySelector('[data-filter].is-active')?.getAttribute('data-filter') || 'pendiente';
+  applyFilter(activeFilter);
+})();
+</script>
+
 </div>
 </div> <!-- #page-content -->
 </body>

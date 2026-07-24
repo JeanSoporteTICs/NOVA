@@ -41,7 +41,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'], $_P
   if (!$maintenanceMode && !$deleteCanAct && $deleteRoleName === 'gestor' && !array_key_exists('historico_acciones', $deleteRoleCfg)) {
     $deleteCanAct = true;
   }
-  $deleteScope = auth_user_has_all_permissions() ? 'todos' : (auth_get_permission_value('historico_scope') ?? ($deleteRoleCfg['historico_scope'] ?? 'asignados'));
+  $deleteScope = 'asignados';
   $deleteUserId = (string)auth_get_user_id();
   $deleteUserNames = array_values(array_filter([
     trim((string)($_SESSION['user']['nombre'] ?? '')),
@@ -317,6 +317,7 @@ $f_usuario   = trim($_GET['usuario'] ?? '');
 $f_categoria = strtolower(trim($_GET['categoria'] ?? ''));
 $f_fuente    = $_GET['fuente'] ?? '';
 $f_busqueda  = trim($_GET['buscar'] ?? '');
+$f_descripcion = trim($_GET['descripcion'] ?? '');
 $perPageOptions = [25, 50, 100];
 $perPage = (int)($_GET['per_page'] ?? 25);
 if (!in_array($perPage, $perPageOptions, true)) {
@@ -326,14 +327,14 @@ $currentPage = max(1, (int)($_GET['page'] ?? 1));
 $roles       = auth_load_roles();
 $roleName    = auth_get_user_role();
 $roleCfg     = $roles[$roleName] ?? [];
-$scopePermitido = auth_user_has_all_permissions() ? 'todos' : (auth_get_permission_value('historico_scope') ?? ($roleCfg['historico_scope'] ?? 'asignados'));
+$scopePermitido = 'asignados';
 $scopeBloqueado = ($scopePermitido === 'asignados');
 $showActions = !$maintenanceMode && auth_can('historico_acciones');
 if (!$maintenanceMode && !$showActions && $roleName === 'gestor' && !array_key_exists('historico_acciones', $roleCfg)) {
   // compatibilidad con roles antiguos sin la clave
   $showActions = true;
 }
-$tableColspan = $showActions ? 12 : 11;
+$tableColspan = $showActions ? 10 : 9;
 $f_scope = $_GET['mensajes_scope'] ?? ($scopePermitido === 'todos' ? 'todos' : 'asignados');
 if (!in_array($f_scope, ['todos','asignados'], true)) $f_scope = 'asignados';
 if ($scopePermitido === 'asignados') {
@@ -348,9 +349,6 @@ $userNames = array_values(array_filter([
 $cfg = load_platform_config();
 $redminePlatformUrl = (string)($cfg['platform_url'] ?? '');
 $redmineToken = load_user_api_token($userId);
-if ($redmineToken === '') {
-  $redmineToken = trim((string)($cfg['platform_token'] ?? ''));
-}
 
 if (($_GET['ajax'] ?? '') === 'redmine_statuses') {
   header('Content-Type: application/json; charset=utf-8');
@@ -390,6 +388,11 @@ foreach ($items as $row) {
   $cat = strtolower($row['categoria'] ?? '');
   if ($f_categoria !== '' && $cat !== $f_categoria) continue;
   if (!historico_matches_search($row, $f_busqueda)) continue;
+  if ($f_descripcion !== '') {
+    $descriptionNeedle = dashboard_normalize_text($f_descripcion);
+    $descriptionText = dashboard_normalize_text((string)($row['descripcion'] ?? ''));
+    if ($descriptionNeedle !== '' && !str_contains($descriptionText, $descriptionNeedle)) continue;
+  }
   $row['_fecha_norm'] = $fecha;
   $filtered[] = $row;
 }
@@ -409,13 +412,13 @@ if ($currentPage > $totalPages) {
 }
 $pageOffset = ($currentPage - 1) * $perPage;
 $pagedRows = array_slice($filtered, $pageOffset, $perPage);
-$rangeStart = $totalFiltered > 0 ? $pageOffset + 1 : 0;
-$rangeEnd = min($totalFiltered, $pageOffset + count($pagedRows));
+$visibleRows = count($pagedRows);
 $historicoFilterChips = [];
 if ($f_desde !== '') $historicoFilterChips[] = ['icon' => 'bi-calendar-event', 'label' => 'Desde ' . historico_format_date($f_desde), 'remove' => 'desde'];
 if ($f_hasta !== '') $historicoFilterChips[] = ['icon' => 'bi-calendar-check', 'label' => 'Hasta ' . historico_format_date($f_hasta), 'remove' => 'hasta'];
 if ($f_fuente !== '') $historicoFilterChips[] = ['icon' => 'bi-inboxes', 'label' => 'Fuente ' . $f_fuente, 'remove' => 'fuente'];
 if ($f_busqueda !== '') $historicoFilterChips[] = ['icon' => 'bi-search', 'label' => 'Busqueda ' . $f_busqueda, 'remove' => 'buscar'];
+if ($f_descripcion !== '') $historicoFilterChips[] = ['icon' => 'bi-card-text', 'label' => 'Descripción ' . $f_descripcion, 'remove' => 'descripcion'];
 if ($f_categoria !== '') $historicoFilterChips[] = ['icon' => 'bi-tags', 'label' => 'Categoria ' . $f_categoria, 'remove' => 'categoria'];
 if (!$scopeBloqueado && $f_usuario !== '') $historicoFilterChips[] = ['icon' => 'bi-person', 'label' => 'Asignado ' . $f_usuario, 'remove' => 'usuario'];
 $historicoChipUrl = static function (string $key) use ($perPage): string {
@@ -446,113 +449,8 @@ ksort($catsSel);
 <html lang="es">
 <head>
   <?php $pageTitle = 'Historico'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <style>
-    .historico-filter-card {
-      border: 1px solid rgba(15, 23, 42, .08);
-      background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,250,255,.9));
-    }
-    .historico-filter-card .form-floating > label {
-      max-width: calc(100% - 1.5rem);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .historico-filter-card .btn {
-      min-height: 48px;
-      white-space: nowrap;
-    }
-    .historico-summary {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .75rem;
-      align-items: center;
-      justify-content: space-between;
-      padding: 1rem 1.15rem;
-      border-bottom: 1px solid rgba(15, 23, 42, .08);
-      background: rgba(248, 250, 255, .86);
-    }
-    .historico-count {
-      display: inline-flex;
-      align-items: center;
-      gap: .5rem;
-      color: #0f172a;
-      font-weight: 700;
-    }
-    .historico-summary__tools {
-      display: flex;
-      align-items: center;
-      gap: .9rem;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .historico-filter-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .5rem;
-      padding: .85rem 1.15rem;
-      border-bottom: 1px solid rgba(15, 23, 42, .06);
-      background: rgba(255, 255, 255, .72);
-    }
-    .historico-filter-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: .38rem;
-      min-height: 32px;
-      padding: .36rem .62rem;
-      border-radius: 999px;
-      border: 1px solid rgba(37, 99, 235, .18);
-      background: rgba(37, 99, 235, .08);
-      color: #1d4ed8;
-      font-size: .82rem;
-      font-weight: 800;
-      text-decoration: none;
-    }
-    .historico-filter-chip:hover {
-      background: #2563eb;
-      color: #fff;
-    }
-    .historico-table-card.is-compact .historico-table {
-      font-size: .84rem;
-    }
-    .historico-table-card.is-compact .historico-table th,
-    .historico-table-card.is-compact .historico-table td {
-      padding-top: .45rem;
-      padding-bottom: .45rem;
-    }
-    .historico-table th {
-      white-space: nowrap;
-      vertical-align: middle;
-    }
-    .historico-table td {
-      vertical-align: middle;
-    }
-    .historico-date {
-      display: inline-flex;
-      align-items: center;
-      gap: .35rem;
-      min-width: 108px;
-      color: #1e3a8a;
-      font-weight: 700;
-    }
-    .historico-source-badge {
-      border-radius: 999px;
-      padding: .4rem .7rem;
-      background: rgba(56, 189, 248, .14);
-      color: #075985;
-      border: 1px solid rgba(56, 189, 248, .22);
-      font-weight: 700;
-    }
-    .historico-status {
-      display: inline-flex;
-      max-width: 130px;
-      border-radius: 999px;
-      padding: .35rem .65rem;
-      background: rgba(52, 211, 153, .15);
-      color: #047857;
-      font-size: .78rem;
-      font-weight: 700;
-    }
-  </style>
+  <?php $historicoCssVersion = @filemtime(__DIR__ . '/../../assets/css/historico.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/historico.css?v=<?= (int)$historicoCssVersion ?>">
 </head>
 <body class="bg-light">
 <?php $activeNav = 'historico'; include __DIR__ . '/../partials/navbar.php'; ?>
@@ -577,7 +475,6 @@ ksort($catsSel);
           ['label' => 'Desde', 'name' => 'desde', 'type' => 'date', 'value' => $f_desde, 'col' => 2, 'aria_label' => 'Fecha desde'],
           ['label' => 'Hasta', 'name' => 'hasta', 'type' => 'date', 'value' => $f_hasta, 'col' => 2, 'aria_label' => 'Fecha hasta'],
           ['label' => 'Fuente', 'name' => 'fuente', 'type' => 'select', 'options' => ['' => 'Todas', 'reportes' => 'Reportes', 'horas_extra' => 'Horas extra'], 'value' => $f_fuente, 'col' => 2],
-          ['label' => 'Buscar solicitante / nombre / rut', 'name' => 'buscar', 'type' => 'text', 'value' => $f_busqueda, 'col' => 4, 'aria_label' => 'Buscar por solicitante, nombre o rut'],
         ];
         if (!$scopeBloqueado) {
           $filterFields[] = [
@@ -586,7 +483,7 @@ ksort($catsSel);
             'type' => 'select',
             'options' => ['' => 'Todos'] + $usuariosSel,
             'value' => $f_usuario,
-            'col' => 2,
+            'col' => 3,
           ];
         }
         $filterFields[] = [
@@ -596,6 +493,22 @@ ksort($catsSel);
           'options' => ['' => 'Todas'] + $catsSel,
           'value' => $f_categoria,
           'col' => 3,
+        ];
+        $filterFields[] = [
+          'label' => 'Buscar solicitante / nombre / rut',
+          'name' => 'buscar',
+          'type' => 'text',
+          'value' => $f_busqueda,
+          'col' => 4,
+          'aria_label' => 'Buscar por solicitante, nombre o rut',
+        ];
+        $filterFields[] = [
+          'label' => 'Buscar en descripción',
+          'name' => 'descripcion',
+          'type' => 'text',
+          'value' => $f_descripcion,
+          'col' => 4,
+          'aria_label' => 'Buscar texto en la descripción de los reportes',
         ];
       ?>
       <?php foreach ($filterFields as $field): ?>
@@ -633,7 +546,7 @@ ksort($catsSel);
     <div class="historico-summary">
       <div>
         <span class="historico-count"><i class="bi bi-clock-history text-primary"></i> <?= count($filtered) ?> registros</span>
-        <span class="text-muted ms-2">Mostrando <?= $h($rangeStart) ?>-<?= $h($rangeEnd) ?> de <?= $h($totalFiltered) ?></span>
+        <span class="text-muted ms-2">Mostrando <?= $h($visibleRows) ?> de <?= $h($totalFiltered) ?> registros</span>
       </div>
       <div class="historico-summary__tools">
         <label class="form-check form-switch m-0">
@@ -674,6 +587,18 @@ ksort($catsSel);
           </div>
         </div>
         <table class="table table-hover historico-table align-middle mb-0" role="grid" aria-label="Histórico de reportes" aria-busy="false">
+          <colgroup>
+            <col class="historico-col-date">
+            <col class="historico-col-id">
+            <col class="historico-col-redmine-status">
+            <col class="historico-col-requester">
+            <col class="historico-col-category">
+            <col class="historico-col-department">
+            <col class="historico-col-subject">
+            <col class="historico-col-source">
+            <col class="historico-col-detail">
+            <?php if ($showActions): ?><col class="historico-col-actions"><?php endif; ?>
+          </colgroup>
           <thead class="table-light">
             <tr class="position-sticky top-0 bg-light">
               <th scope="col">Fecha</th>
@@ -681,10 +606,8 @@ ksort($catsSel);
               <th scope="col">Estado Redmine</th>
               <th scope="col" class="text-truncate" style="max-width: 160px;">Solicitante</th>
               <th scope="col" class="text-truncate" style="max-width: 220px;">Categoría</th>
-              <th scope="col" class="text-truncate" style="max-width: 140px;">Establecimiento</th>
               <th scope="col" class="text-truncate" style="max-width: 140px;">Departamento</th>
-              <th scope="col" class="text-truncate" style="max-width: 140px;">Asignado CORE</th>
-              <th scope="col">Estado CORE</th>
+              <th scope="col">Asunto</th>
               <th scope="col">Fuente</th>
               <th scope="col">Detalle</th>
               <?php if ($showActions): ?>
@@ -701,19 +624,13 @@ ksort($catsSel);
                   $previewRows = dashboard_detail_preview_rows($row);
                   $previewRowsJson = $h((string)json_encode(array_values($previewRows), JSON_UNESCAPED_UNICODE));
                   $previewColumnsJson = $h((string)json_encode(dashboard_core_detail_table_schema($row), JSON_UNESCAPED_UNICODE));
-                  $detalleDescripcion = ($row['fuente'] ?? '') === 'manual'
-                    ? trim((string)($row['descripcion'] ?? ''))
-                    : '';
-                  $coreEstado = trim((string)($row['core_estado'] ?? ''));
-                  $coreEstadoKey = dashboard_normalize_text($coreEstado);
-                  $coreEstadoClass = str_contains($coreEstadoKey, 'manual')
-                    ? 'historico-status--manual'
-                    : (str_contains($coreEstadoKey, 'gestionada') || str_contains($coreEstadoKey, 'gestionado')
-                      ? 'historico-status--managed'
-                      : 'historico-status--neutral');
-                  $coreEstadoIcon = $coreEstadoClass === 'historico-status--manual'
-                    ? 'bi-pencil-square'
-                    : ($coreEstadoClass === 'historico-status--managed' ? 'bi-check2-circle' : 'bi-info-circle');
+                  // La descripción también contiene los datos completos usados al
+                  // generar reportes CORE. No limitarla a registros manuales.
+                  $detalleDescripcion = trim((string)($row['descripcion'] ?? ''));
+                  $isManual = strtolower(trim((string)($row['fuente'] ?? ''))) === 'manual';
+                  $sourceLabel = $isManual ? 'Manual' : 'CORE';
+                  $sourceIcon = $isManual ? 'bi-pencil-square' : 'bi-cloud-arrow-down';
+                  $isHoraExtra = normalize_hour_extra_value($row['hora_extra'] ?? '') === '1';
                   $redmineId = trim((string)($row['redmine_id'] ?? ''));
                   $redmineIssueUrl = historico_redmine_issue_url($redminePlatformUrl, $redmineId);
                 ?>
@@ -743,17 +660,17 @@ ksort($catsSel);
                   </td>
                   <td class="text-truncate" style="max-width: 160px;" title="<?= $h($row['solicitante'] ?? '') ?>"><?= $h($row['solicitante'] ?? '') ?></td>
                   <td class="text-truncate" style="max-width: 220px;" title="<?= $h($row['categoria'] ?? '') ?>"><?= $h($row['categoria'] ?? '') ?></td>
-                  <td class="text-truncate" style="max-width: 140px;" title="<?= $h($row['core_establecimiento'] ?? ($row['unidad_solicitante'] ?? '')) ?>"><?= $h($row['core_establecimiento'] ?? ($row['unidad_solicitante'] ?? '')) ?></td>
                   <td class="text-truncate" style="max-width: 140px;" title="<?= $h($row['core_departamento'] ?? ($row['unidad'] ?? '')) ?>"><?= $h($row['core_departamento'] ?? ($row['unidad'] ?? '')) ?></td>
-                  <td class="text-truncate" style="max-width: 140px;" title="<?= $h($row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? ($row['asignado_a'] ?? ''))) ?>"><?= $h($row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? ($row['asignado_a'] ?? ''))) ?></td>
+                  <td class="text-truncate" title="<?= $h($row['asunto'] ?? '') ?>"><?= $h($row['asunto'] ?? '-') ?></td>
                   <td>
-                    <span class="historico-status <?= $h($coreEstadoClass) ?> text-truncate" title="<?= $h($coreEstado) ?>">
-                      <i class="bi <?= $h($coreEstadoIcon) ?>"></i>
-                      <?= $h($coreEstado !== '' ? $coreEstado : 'Sin estado') ?>
+                    <span class="historico-source-badge <?= $isManual ? 'is-manual' : 'is-core' ?>" title="<?= $h($isManual ? 'Creado manualmente' : 'Importado desde CORE') ?>">
+                      <i class="bi <?= $h($sourceIcon) ?>"></i>
+                      <?= $h($sourceLabel) ?>
+                      <?php if ($isHoraExtra): ?>
+                        <span class="historico-overtime-icon" title="Hora extra" aria-label="Hora extra"><i class="bi bi-clock-fill"></i></span>
+                      <?php endif; ?>
                     </span>
                   </td>
-                  <?php $fuenteLabel = $row['_fuente'] ?? ''; ?>
-                  <td><span class="historico-source-badge"><?= $h($fuenteLabel) ?></span></td>
                   <td>
                     <button
                       type="button"
@@ -767,7 +684,24 @@ ksort($catsSel);
                       data-asunto="<?= $h($row['asunto'] ?? '') ?>"
                       data-solicitante="<?= $h($row['solicitante'] ?? '') ?>"
                       data-descripcion="<?= $h($detalleDescripcion) ?>"
+                      data-fecha="<?= $h(historico_format_date($row['_fecha_norm'] ?? '')) ?>"
+                      data-redmine-id="<?= $h($redmineId) ?>"
+                      data-estado-redmine="<?= $h($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? '') ?>"
+                      data-categoria="<?= $h($row['categoria'] ?? '') ?>"
+                      data-establecimiento="<?= $h($row['core_establecimiento'] ?? ($row['unidad_solicitante'] ?? '')) ?>"
+                      data-departamento="<?= $h($row['core_departamento'] ?? ($row['unidad'] ?? '')) ?>"
+                      data-asignado="<?= $h($row['core_usuario_asignado'] ?? ($row['asignado_nombre'] ?? ($row['asignado_a'] ?? ''))) ?>"
+                      data-fuente-label="<?= $h($sourceLabel) ?>"
+                      data-hora-extra="<?= $isHoraExtra ? 'Sí' : 'No' ?>"
+                      data-prioridad="<?= $h($row['prioridad'] ?? '') ?>"
+                      data-tipo="<?= $h($row['tipo'] ?? $row['core_tipo_solicitud'] ?? '') ?>"
+                      data-correo="<?= $h($row['core_email'] ?? $row['correo'] ?? '') ?>"
+                      data-anexo="<?= $h($row['anexo'] ?? $row['core_telefono'] ?? '') ?>"
+                      data-tiempo-estimado="<?= $h($row['tiempo_estimado'] ?? '') ?>"
+                      data-fecha-inicio="<?= $h(historico_format_date($row['fecha_inicio'] ?? '')) ?>"
+                      data-fecha-fin="<?= $h(historico_format_date($row['fecha_fin'] ?? '')) ?>"
                       title="Ver detalle"
+                      aria-label="Ver detalle"
                     >
                       <i class="bi bi-eye"></i>
                     </button>
@@ -778,7 +712,7 @@ ksort($catsSel);
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" value="<?= $h($row['id'] ?? '') ?>">
                         <input type="hidden" name="fuente" value="<?= $h($row['_fuente'] ?? '') ?>">
-                        <button type="submit" class="btn-action btn-action-delete" title="Eliminar">
+                        <button type="submit" class="btn-action btn-action-delete" title="Eliminar" aria-label="Eliminar">
                           <i class="bi bi-trash"></i>
                         </button>
                       </form>
@@ -800,6 +734,7 @@ ksort($catsSel);
             <input type="hidden" name="desde" value="<?= $h($f_desde) ?>">
             <input type="hidden" name="hasta" value="<?= $h($f_hasta) ?>">
             <input type="hidden" name="fuente" value="<?= $h($f_fuente) ?>">
+            <input type="hidden" name="descripcion" value="<?= $h($f_descripcion) ?>">
             <input type="hidden" name="buscar" value="<?= $h($f_busqueda) ?>">
             <input type="hidden" name="categoria" value="<?= $h($f_categoria) ?>">
             <input type="hidden" name="usuario" value="<?= $h($f_usuario) ?>">
@@ -814,7 +749,7 @@ ksort($catsSel);
             <span>registros</span>
           </form>
           <div class="historico-pagination__meta">
-            <?= $h($rangeStart) ?>-<?= $h($rangeEnd) ?> de <?= $h($totalFiltered) ?> registros
+            Mostrando <?= $h($visibleRows) ?> de <?= $h($totalFiltered) ?> registros
           </div>
         </div>
         <?php if ($totalPages > 1): ?>
@@ -855,6 +790,24 @@ ksort($catsSel);
             <div class="fw-semibold" id="historico-detalle-titulo"></div>
             <div class="text-muted small" id="historico-detalle-solicitante"></div>
           </div>
+          <dl class="historico-detail-facts" id="historico-detail-facts">
+            <div><dt><i class="bi bi-calendar3"></i>Fecha</dt><dd data-history-fact="fecha">-</dd></div>
+            <div><dt><i class="bi bi-box-arrow-up-right"></i>Redmine ID</dt><dd data-history-fact="redmineId">-</dd></div>
+            <div><dt><i class="bi bi-folder2-open"></i>Estado Redmine</dt><dd data-history-fact="estadoRedmine">-</dd></div>
+            <div><dt><i class="bi bi-cloud-arrow-down"></i>Fuente</dt><dd data-history-fact="fuenteLabel">-</dd></div>
+            <div><dt><i class="bi bi-ticket-perforated"></i>Tipo</dt><dd data-history-fact="tipo">-</dd></div>
+            <div><dt><i class="bi bi-flag"></i>Prioridad</dt><dd data-history-fact="prioridad">-</dd></div>
+            <div><dt><i class="bi bi-tags"></i>Categoría</dt><dd data-history-fact="categoria">-</dd></div>
+            <div><dt><i class="bi bi-person-check"></i>Asignado a</dt><dd data-history-fact="asignado">-</dd></div>
+            <div><dt><i class="bi bi-building"></i>Establecimiento</dt><dd data-history-fact="establecimiento">-</dd></div>
+            <div><dt><i class="bi bi-diagram-3"></i>Departamento</dt><dd data-history-fact="departamento">-</dd></div>
+            <div><dt><i class="bi bi-calendar-event"></i>Fecha inicio</dt><dd data-history-fact="fechaInicio">-</dd></div>
+            <div><dt><i class="bi bi-calendar-check"></i>Fecha fin</dt><dd data-history-fact="fechaFin">-</dd></div>
+            <div><dt><i class="bi bi-clock-history"></i>Hora extra</dt><dd data-history-fact="horaExtra">-</dd></div>
+            <div><dt><i class="bi bi-hourglass-split"></i>Tiempo estimado</dt><dd data-history-fact="tiempoEstimado">-</dd></div>
+            <div><dt><i class="bi bi-envelope"></i>Correo</dt><dd data-history-fact="correo">-</dd></div>
+            <div><dt><i class="bi bi-telephone"></i>Anexo</dt><dd data-history-fact="anexo">-</dd></div>
+          </dl>
           <div id="historico-detalle-tabla-wrap" class="table-responsive border rounded">
             <table class="table table-sm mb-0 align-middle">
               <thead class="table-light" id="historico-detalle-head"></thead>
@@ -862,12 +815,12 @@ ksort($catsSel);
             </table>
           </div>
           <div id="historico-detalle-descripcion-wrap" class="d-none">
-            <label for="historico-detalle-descripcion" class="form-label fw-semibold">Descripción</label>
-            <textarea id="historico-detalle-descripcion" class="form-control" rows="10" readonly></textarea>
+            <div class="form-label fw-semibold"><i class="bi bi-table me-2"></i>Descripción / datos del reporte</div>
+            <div id="historico-detalle-descripcion" class="nova-description-preview historico-description-preview"></div>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
         </div>
       </div>
     </div>
@@ -1054,16 +1007,34 @@ ksort($catsSel);
           if (titleEl) titleEl.textContent = asunto;
           if (subtitleEl) subtitleEl.textContent = solicitante ? `Solicitante: ${solicitante}` : '';
 
-          if (fuente === 'manual') {
-          if (tableWrap) tableWrap.classList.add('d-none');
-          if (descriptionWrap) descriptionWrap.classList.remove('d-none');
-          if (descriptionField) descriptionField.value = descripcion;
-          return;
-        }
+          document.querySelectorAll('#historico-detail-facts [data-history-fact]').forEach(field => {
+            const key = field.dataset.historyFact || '';
+            const value = triggerBtn.dataset[key] || '';
+            field.textContent = value.trim() || '-';
+          });
 
-          if (descriptionWrap) descriptionWrap.classList.add('d-none');
+          const renderDescription = () => {
+            if (!descriptionField) return;
+            if (window.NovaDescriptionTables?.render) {
+              window.NovaDescriptionTables.render({ value: descripcion }, descriptionField);
+              return;
+            }
+            descriptionField.textContent = descripcion || 'Sin descripción.';
+          };
+
+          if (fuente === 'manual') {
+            if (tableWrap) tableWrap.classList.add('d-none');
+            if (descriptionWrap) descriptionWrap.classList.remove('d-none');
+            renderDescription();
+            return;
+          }
+
+          // Los reportes CORE archivados conservan en `descripcion` campos que no
+          // tienen columnas propias (motivo, permisos, teléfono, correo, etc.).
+          // Mostrar ese bloque junto con la vista tabular evita perderlos.
+          if (descriptionWrap) descriptionWrap.classList.toggle('d-none', descripcion.trim() === '');
           if (tableWrap) tableWrap.classList.remove('d-none');
-          if (descriptionField) descriptionField.value = '';
+          renderDescription();
 
           if (!Array.isArray(columns) || columns.length === 0) {
             columns = [{ label: 'Detalle', key: 'detalle_nombre' }];
@@ -1086,23 +1057,9 @@ ksort($catsSel);
       }
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const historicoScrollTopBtn = document.getElementById('historico-scroll-top');
-      if (!historicoScrollTopBtn) return;
-      if (historicoScrollTopBtn.parentElement !== document.body) {
-        document.body.appendChild(historicoScrollTopBtn);
-      }
-      const updateHistoricoScrollTop = () => {
-        historicoScrollTopBtn.style.display = (window.scrollY || document.documentElement.scrollTop || 0) > 220 ? 'flex' : 'none';
-      };
-      historicoScrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-      window.addEventListener('scroll', updateHistoricoScrollTop, { passive: true });
-      window.addEventListener('resize', updateHistoricoScrollTop);
-      updateHistoricoScrollTop();
-    });
   </script>
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
-<button id="historico-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" style="position:fixed;bottom:28px;right:28px;z-index:1050;width:44px;height:44px;min-height:44px!important;border-radius:50%!important;display:none;align-items:center;justify-content:center;padding:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);" class="btn btn-primary">
+<button id="historico-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" class="btn btn-primary nova-scroll-top">
     <i class="bi bi-arrow-up"></i>
 </button>
 </div> <!-- #page-content -->

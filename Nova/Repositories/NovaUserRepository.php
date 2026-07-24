@@ -2,9 +2,9 @@
 
 namespace App\Modulos\Nova\Repositories;
 
-use App\Modulos\Nova\Models\NovaUser;
 use App\Modulos\Nova\Repositories\ModuleRegistry;
 use App\Modulos\Nova\Services\NovaUserService;
+use App\Modulos\Nova\Support\SecretValue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -41,6 +41,10 @@ final class NovaUserRepository
 
         if (!$this->service->verifyCredentials($user, $password, $allowApiToken)) {
             return null;
+        }
+
+        if ($this->service->verifyPassword($user, $password) && $this->service->passwordNeedsRehash($user)) {
+            $this->rehashPassword($user, $password);
         }
 
         $this->markLastLogin($user);
@@ -243,15 +247,16 @@ final class NovaUserRepository
 
         try {
             $integrationsByUser = $this->databaseIntegrationsByUserId();
-            $users              = NovaUser::query()
+            $users              = DB::table('usuarios_nova')
                 ->orderBy('nombre')
                 ->orderBy('apellido')
                 ->get()
-                ->map(function (NovaUser $row) use ($integrationsByUser): array {
+                ->map(function (object $row) use ($integrationsByUser): array {
                     $current = [];
 
                     $integrations     = $integrationsByUser[(int) $row->id] ?? [];
                     $emachCredentials = $integrations['emach_credentials']  ?? ($current['emach_credentials'] ?? null);
+                    $nextcloudCredentials = $integrations['nextcloud_credentials'] ?? ($current['nextcloud_credentials'] ?? null);
                     $telegramChatId   = trim((string) ($row->telegram_id_chat ?? ''));
                     $telegramSettings = $telegramChatId !== ''
                         ? ['chat_id' => $telegramChatId, 'updated_at' => (string) ($row->actualizado_at ?? '')]
@@ -275,6 +280,9 @@ final class NovaUserRepository
                     ]);
                     if (is_array($emachCredentials)) {
                         $user['emach_credentials'] = $emachCredentials;
+                    }
+                    if (is_array($nextcloudCredentials)) {
+                        $user['nextcloud_credentials'] = $nextcloudCredentials;
                     }
                     if (is_array($telegramSettings)) {
                         $user['telegram_settings'] = $telegramSettings;
@@ -339,12 +347,19 @@ final class NovaUserRepository
                 if (Schema::hasColumn('usuarios_nova', 'email')) {
                     $values['email'] = trim((string) ($user['email'] ?? '')) ?: null;
                 }
+                $values['actualizado_at'] = now();
 
-                $row = NovaUser::query()->updateOrCreate(
-                    ['uuid' => $uuid],
-                    $values
-                );
-                $this->writeDatabaseIntegrations((int) $row->id, $user);
+                $existingId = DB::table('usuarios_nova')->where('uuid', $uuid)->value('id');
+                if ($existingId !== null) {
+                    DB::table('usuarios_nova')->where('id', $existingId)->update($values);
+                    $userId = (int) $existingId;
+                } else {
+                    $values['uuid']      = $uuid;
+                    $values['creado_at'] = now();
+                    $userId = (int) DB::table('usuarios_nova')->insertGetId($values);
+                }
+
+                $this->writeDatabaseIntegrations($userId, $user);
             } catch (\Throwable) {
                 continue;
             }
@@ -379,6 +394,12 @@ final class NovaUserRepository
                     'password'   => (string) ($row->valor_secreto ?? ''),
                     'updated_at' => (string) ($row->actualizado_at ?? ''),
                 ];
+            } elseif ($type === 'nextcloud') {
+                $result[$userId]['nextcloud_credentials'] = [
+                    'user'       => trim((string) ($row->usuario_externo ?? '')),
+                    'password'   => (string) ($row->valor_secreto ?? ''),
+                    'updated_at' => (string) ($row->actualizado_at ?? ''),
+                ];
             }
         }
 
@@ -403,7 +424,7 @@ final class NovaUserRepository
                 'actualizado_at'  => now(),
             ];
             if ($emachPassword !== '') {
-                $values['valor_secreto'] = $emachPassword;
+                $this->applyEmachSecret($values, $emachPassword);
             }
             DB::table('integraciones_usuario')->updateOrInsert(
                 ['usuario_id' => $userId, 'tipo' => 'emach'],
@@ -415,6 +436,34 @@ final class NovaUserRepository
             ->where('usuario_id', $userId)
             ->where('tipo', 'telegram')
             ->delete();
+    }
+
+    /**
+     * Decides whether the EMACH secret being round-tripped through save()
+     * needs encrypting before it's written. Never double-encrypts an
+     * already-encrypted value, never writes a value flagged invalid, and
+     * never persists a plaintext-legacy value unencrypted.
+     *
+     * @param array<string,mixed> $values
+     */
+    private function applyEmachSecret(array &$values, string $emachPassword): void
+    {
+        $status = SecretValue::inspect($emachPassword)['status'];
+
+        if ($status === 'invalid') {
+            return;
+        }
+
+        if ($status !== 'plaintext_legacy') {
+            $values['valor_secreto'] = $emachPassword;
+
+            return;
+        }
+
+        try {
+            $values['valor_secreto'] = SecretValue::encryptSecret($emachPassword);
+        } catch (\Throwable) {
+        }
     }
 
     private function usersTableAvailable(): bool
@@ -446,7 +495,7 @@ final class NovaUserRepository
         $redmineId = trim((string) ($user['redmine_id'] ?? ''));
 
         try {
-            $query = NovaUser::query();
+            $query = DB::table('usuarios_nova');
             if ($uuid !== '') {
                 $query->where('uuid', $uuid);
             } elseif ($username !== '') {
@@ -457,31 +506,58 @@ final class NovaUserRepository
                 return;
             }
 
-            $query->update(['ultimo_login_at' => now()]);
+            $query->update(['ultimo_login_at' => now(), 'actualizado_at' => now()]);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function rehashPassword(array $user, string $password): void
+    {
+        if (!$this->usersTableAvailable()) {
+            return;
+        }
+
+        $uuid      = trim((string) ($user['id'] ?? ''));
+        $username  = trim((string) ($user['username'] ?? ''));
+        $redmineId = trim((string) ($user['redmine_id'] ?? ''));
+
+        try {
+            $query = DB::table('usuarios_nova');
+            if ($uuid !== '') {
+                $query->where('uuid', $uuid);
+            } elseif ($username !== '') {
+                $query->where('usuario', $username);
+            } elseif ($redmineId !== '') {
+                $query->where('redmine_id', $redmineId);
+            } else {
+                return;
+            }
+
+            $query->update([
+                'password' => $this->service->hashPassword($password),
+                'actualizado_at' => now(),
+            ]);
         } catch (\Throwable) {
         }
     }
 
     private function setStatus(string $id, string $status): int
     {
-        $users   = $this->all();
-        $changed = 0;
-
-        foreach ($users as $index => $user) {
-            if ((string) ($user['id'] ?? '') !== $id) {
-                continue;
-            }
-
-            $users[$index]['status'] = $this->service->normalizeStatus($status);
-            $changed                 = 1;
-            break;
+        $id = trim($id);
+        if ($id === '' || !$this->usersTableAvailable()) {
+            return 0;
         }
 
-        if ($changed === 1) {
-            $this->write($users);
+        try {
+            return DB::table('usuarios_nova')
+                ->where('uuid', $id)
+                ->update([
+                    'estado' => $this->service->normalizeStatus($status),
+                    'actualizado_at' => now(),
+                ]);
+        } catch (\Throwable) {
+            return 0;
         }
-
-        return $changed;
     }
 
     private function unsignedIntegerOrNull(mixed $value): ?int

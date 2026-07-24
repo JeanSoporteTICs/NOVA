@@ -11,11 +11,6 @@ function dashboard_set_flash(string $message): void {
     $_SESSION['flash'] = $message;
 }
 
-function dashboard_set_toast(string $message): void {
-    auth_start_session();
-    $_SESSION['dashboard_toast'] = $message;
-}
-
 function dashboard_consume_flash(): ?string {
     auth_start_session();
     $message = $_SESSION['flash'] ?? null;
@@ -58,7 +53,14 @@ function dashboard_json_response(array $payload, int $statusCode = 200): void {
 }
 
 function dashboard_security_actor(): string {
-    auth_start_session();
+    // Deliberately NOT calling auth_start_session() here: $_SESSION['user'] is already
+    // populated by LegacyProjectController::syncNovaUserToLegacySession() before this
+    // module's PHP is dispatched, and that value stays readable in memory for the rest
+    // of the request even after the session file is closed early (see the comment on
+    // session_write_close() in that method) to avoid AJAX requests serializing on the
+    // session file lock. Calling auth_start_session() here would silently reopen (and
+    // re-lock) the session just to read a value we already have, defeating that fix for
+    // every action that logs via dashboard_log_action() — including toggle_hora_extra.
     $name = trim((string)($_SESSION['user']['nombre'] ?? ''));
     $id = trim((string)($_SESSION['user']['id'] ?? ''));
     if ($name === '' && $id === '') {
@@ -613,11 +615,57 @@ function save_messages(array $messages): void {
     }
 }
 
+function dashboard_update_message_hora_extra(array $message): bool {
+    if (!class_exists(\Illuminate\Support\Facades\DB::class)) {
+        return false;
+    }
+
+    $reportId = null;
+    $fuenteId = trim((string)($message['fuente_id'] ?? ''));
+    $fuente = trim((string)($message['fuente'] ?? ''));
+
+    try {
+        if ($fuenteId !== '') {
+            $query = \Illuminate\Support\Facades\DB::table('redmine_mantencion_reportes')
+                ->where('fuente_id', $fuenteId);
+            if ($fuente !== '') {
+                $query->where('fuente', $fuente);
+            }
+            $reportId = $query->value('id');
+        } else {
+            $id = trim((string)($message['id'] ?? ''));
+            if ($id !== '' && ctype_digit($id)) {
+                $reportId = (int)$id;
+            }
+        }
+    } catch (Throwable) {
+        return false;
+    }
+
+    if ($reportId === null) {
+        return false;
+    }
+
+    $values = [
+        'hora_extra' => normalize_hour_extra_value($message['hora_extra'] ?? '') === '1' ? 1 : 0,
+        'actualizado_at' => function_exists('now') ? now() : date('Y-m-d H:i:s'),
+    ];
+
+    try {
+        return \Illuminate\Support\Facades\DB::table('redmine_mantencion_reportes')
+            ->where('id', (int)$reportId)
+            ->update($values) > 0;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
 function load_platform_config(): array {
     $repo = config_mantencion_repository();
     if ($repo !== null) {
         $data = $repo->loadAll();
         if (is_array($data)) {
+            $data['platform_token'] = '';
             return $data;
         }
     }
@@ -676,6 +724,28 @@ function dashboard_normalize_text(string $value): string {
     $value = strtolower($value);
     $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
     return trim($value ?? '');
+}
+
+/** @return array{key:string,label:string,icon:string,badge:string}|null */
+function dashboard_core_status_indicator(array $message): ?array {
+    $source = dashboard_normalize_text((string)($message['fuente'] ?? ''));
+    $hasCoreIdentity = $source === 'core'
+        || trim((string)($message['core_solicitud_id'] ?? $message['id_core'] ?? '')) !== '';
+    if (!$hasCoreIdentity) {
+        return null;
+    }
+
+    $coreStatus = dashboard_normalize_text((string)($message['core_estado'] ?? $message['core_detalle_estado'] ?? ''));
+    return match ($coreStatus) {
+        'en revision' => ['key' => 'review', 'label' => 'En Revisión', 'icon' => 'bi-hourglass-split', 'badge' => 'warning'],
+        'gestionada' => ['key' => 'managed', 'label' => 'Gestionada', 'icon' => 'bi-check-circle-fill', 'badge' => 'success'],
+        'rechazada' => ['key' => 'rejected', 'label' => 'Rechazada', 'icon' => 'bi-x-circle-fill', 'badge' => 'danger'],
+        default => null,
+    };
+}
+
+function dashboard_core_is_in_review(array $message): bool {
+    return (dashboard_core_status_indicator($message)['key'] ?? '') === 'review';
 }
 
 function dashboard_normalize_phone(string $value): string {
@@ -936,7 +1006,11 @@ function dashboard_central_user_from_needles(array $needles): ?array {
 function dashboard_current_user(): array {
     $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
     $user = $userId !== '' && function_exists('auth_find_user_by_id') ? auth_find_user_by_id($userId) : null;
-    auth_start_session();
+    // Not calling auth_start_session(): $_SESSION['user'] stays readable in memory
+    // after the early session_write_close() in handle_request() — see the full
+    // rationale on dashboard_security_actor() above. Reopening here would re-lock
+    // the session file on nearly every AJAX/POST response (this function runs on
+    // 'update' and on the AJAX response path for almost every action).
     $sessionUser = is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
     $novaUser = [];
     if (function_exists('session')) {
@@ -1116,13 +1190,31 @@ function dashboard_core_runtime_credentials(array $input = []): array {
 }
 
 function dashboard_core_credentials_for_current_user(): array {
-    $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
-    return core_credentials_for_user($userId);
+    return core_credentials_for_user(dashboard_core_current_credential_user_key());
 }
 
 function dashboard_core_has_saved_credentials(): bool {
-    $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
-    return core_credentials_has_saved($userId);
+    return core_credentials_has_saved(dashboard_core_current_credential_user_key());
+}
+
+function dashboard_core_current_credential_user_key(array $currentUser = []): string {
+    if (empty($currentUser)) {
+        $currentUser = dashboard_current_user();
+    }
+    $candidates = [
+        $currentUser['_nova_user_id'] ?? '',
+        $currentUser['uuid'] ?? '',
+        $currentUser['redmine_id'] ?? '',
+        $currentUser['id'] ?? '',
+        function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '',
+    ];
+    foreach ($candidates as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+    return '';
 }
 
 function dashboard_core_has_runtime_credentials(array $credentials): bool {
@@ -1212,6 +1304,25 @@ function dashboard_core_parse_login_form(string $html, string $baseUrl): array {
         }
     }
     return $form;
+}
+
+function dashboard_core_response_requires_auth(array $response): bool {
+    $body = (string)($response['body'] ?? '');
+    if ((int)($response['http_code'] ?? 0) === 401) {
+        return true;
+    }
+    $normalized = dashboard_normalize_text($body);
+    if (str_contains($normalized, 'no autorizado')
+        || str_contains($normalized, 'iniciar sesion en core')
+        || str_contains($normalized, 'usuario rut sin digito verificador o email')) {
+        return true;
+    }
+    $payload = json_decode($body, true);
+    if (is_array($payload)) {
+        $error = dashboard_normalize_text((string)($payload['error'] ?? $payload['message'] ?? ''));
+        return str_contains($error, 'no autorizado') || str_contains($error, 'unauthorized');
+    }
+    return false;
 }
 
 function dashboard_core_extract_rows(string $html): array {
@@ -2196,24 +2307,24 @@ function dashboard_core_trace_assigned_summary(array $assignedCounts, int $limit
 function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $filters = [], bool $force = false, ?string $loginUrl = null, array $credentials = []): array {
     $cfg = load_platform_config();
     if (!$force && !dashboard_should_auto_sync_core($cfg)) {
-        return ['skipped' => true, 'imported' => 0, 'updated' => 0, 'error' => ''];
+        return ['skipped' => true, 'imported' => 0, 'updated' => 0, 'error' => '', 'authenticated' => false];
     }
     if (!dashboard_core_is_configured($cfg)) {
-        return ['skipped' => true, 'imported' => 0, 'updated' => 0, 'error' => 'Configura URL, usuario y contraseña de CORE para sincronizar.'];
+        return ['skipped' => true, 'imported' => 0, 'updated' => 0, 'error' => 'Configura URL, usuario y contraseña de CORE para sincronizar.', 'authenticated' => false];
     }
     $credentials = dashboard_core_runtime_credentials($credentials);
     if (!dashboard_core_has_runtime_credentials($credentials)) {
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'Debes ingresar credenciales de CORE para esta consulta.'];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'Debes ingresar credenciales de CORE para esta consulta.', 'authenticated' => false];
     }
     $cookieJar = tempnam(sys_get_temp_dir(), 'core_sync_');
     if ($cookieJar === false) {
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo crear un archivo temporal para la sesión CORE.'];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo crear un archivo temporal para la sesión CORE.', 'authenticated' => false];
     }
     $sourceUrl = trim($sourceUrl);
     $loginUrl = trim((string)($loginUrl ?? ''));
     if ($sourceUrl === '') {
         @unlink($cookieJar);
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'Falta configurar la URL de origen de CORE.'];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'Falta configurar la URL de origen de CORE.', 'authenticated' => false];
     }
     if ($loginUrl === '') {
         $loginUrl = $sourceUrl;
@@ -2224,7 +2335,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     ]);
     if ($loginPage['error'] !== '') {
         @unlink($cookieJar);
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo abrir CORE: ' . $loginPage['error']];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo abrir CORE: ' . $loginPage['error'], 'authenticated' => false];
     }
     $formBaseUrl = trim((string)($loginPage['effective_url'] ?? '')) !== ''
         ? (string)$loginPage['effective_url']
@@ -2232,7 +2343,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     $form = dashboard_core_parse_login_form($loginPage['body'], $formBaseUrl);
     if (!$form['has_login_form']) {
         @unlink($cookieJar);
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se encontró el formulario de acceso de CORE.'];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se encontró el formulario de acceso de CORE.', 'authenticated' => false];
     }
     $payloadFields = is_array($form['fields'] ?? null) ? $form['fields'] : [];
     $payloadFields['csrf_token'] = $form['csrf_token'];
@@ -2251,8 +2362,13 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     ]);
     if ($login['error'] !== '') {
         @unlink($cookieJar);
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo autenticar en CORE: ' . $login['error']];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo autenticar en CORE: ' . $login['error'], 'authenticated' => false];
     }
+    if (dashboard_core_response_requires_auth($login) || dashboard_core_parse_login_form($login['body'], (string)($login['effective_url'] ?? $form['action']))['has_login_form']) {
+        @unlink($cookieJar);
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'CORE rechazó las credenciales ingresadas. Verifica usuario y contraseña.', 'authenticated' => false];
+    }
+    $coreAuthenticated = true;
     $rows = [];
     $page = ['body' => '', 'error' => '', 'http_code' => 0, 'effective_url' => ''];
     $requestHeaders = [
@@ -2271,8 +2387,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         if ($page['error'] !== '') {
             continue;
         }
-        $pageNorm = dashboard_normalize_text($page['body']);
-        if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
+        if (dashboard_core_response_requires_auth($page)) {
             continue;
         }
         $rows = dashboard_core_rows_from_response_body($page['body']);
@@ -2296,8 +2411,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         if ($page['error'] !== '') {
             continue;
         }
-        $pageNorm = dashboard_normalize_text($page['body']);
-        if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
+        if (dashboard_core_response_requires_auth($page)) {
             continue;
         }
         $rows = dashboard_core_rows_from_response_body($page['body']);
@@ -2310,8 +2424,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
             if ($page['error'] !== '') {
                 continue;
             }
-            $pageNorm = dashboard_normalize_text($page['body']);
-            if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
+            if (dashboard_core_response_requires_auth($page)) {
                 continue;
             }
             $rows = dashboard_core_rows_from_response_body($page['body']);
@@ -2338,14 +2451,14 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
     }
     @unlink($cookieJar);
     if ($page['error'] !== '') {
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo cargar la tabla de CORE: ' . $page['error']];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo cargar la tabla de CORE: ' . $page['error'], 'authenticated' => $coreAuthenticated];
     }
     $pageNorm = dashboard_normalize_text($page['body']);
-    if (str_contains($pageNorm, 'iniciar sesion en core') || str_contains($pageNorm, 'usuario rut sin digito verificador o email')) {
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'CORE rechazó las credenciales configuradas.'];
+    if (dashboard_core_response_requires_auth($page)) {
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'CORE rechazó las credenciales configuradas.', 'authenticated' => false];
     }
     if (empty($rows)) {
-        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se encontró la tabla de solicitudes en CORE.'];
+        return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se encontró la tabla de solicitudes en CORE.', 'authenticated' => $coreAuthenticated];
     }
     $traceCounters = [
         'rows_raw' => count($rows),
@@ -2464,6 +2577,7 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         'imported' => $imported,
         'updated' => $updated,
         'error' => '',
+        'authenticated' => $coreAuthenticated,
         'trace' => $traceCounters,
         'trace_sample' => $traceSample,
         'trace_assigned_summary' => dashboard_core_trace_assigned_summary($traceAssignedCounts),
@@ -2690,8 +2804,12 @@ function message_has_hora_extra(array $message): bool {
     return normalize_hour_extra_value($message['hora_extra'] ?? '') === '1';
 }
 
+function message_is_procesado(array $message): bool {
+    return strtolower(trim((string) ($message['estado'] ?? ''))) === 'procesado';
+}
+
 function append_hours_extra_record(array $message): void {
-    if (!message_has_hora_extra($message)) {
+    if (!message_has_hora_extra($message) || strtolower(trim((string) ($message['estado'] ?? ''))) !== 'archivado') {
         return;
     }
     $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
@@ -2708,62 +2826,22 @@ function remove_hours_extra_record_by_id(string $messageId): void {
 }
 
 function append_redmine_log(array $entry): void {
-    $path = redmine_log_path();
-    storage_append_line($path, json_encode($entry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    try {
+        \Illuminate\Support\Facades\DB::table('mantencion_log')->insert([
+            'canal' => 'redmine', 'tipo' => (string)($entry['event'] ?? $entry['status'] ?? 'envio'),
+            'mensaje_id' => trim((string)($entry['message_id'] ?? '')) ?: null,
+            'detalle' => (string)($entry['error'] ?? $entry['message'] ?? ''),
+            'contexto' => json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'registrado_at' => now(),
+        ]);
+    } catch (Throwable) {}
 }
 
 function parse_redmine_log_entries(): array {
-    $path = redmine_log_path();
-    $raw = storage_read_text($path, '');
-    if (trim($raw) === '') {
-        return [];
-    }
     $entries = [];
-    $buffer = '';
-    $depth = 0;
-    $inString = false;
-    $escape = false;
-    $length = strlen($raw);
-    for ($i = 0; $i < $length; $i++) {
-        $char = $raw[$i];
-        if ($depth === 0 && trim($char) === '') {
-            continue;
-        }
-        $buffer .= $char;
-        if ($escape) {
-            $escape = false;
-            continue;
-        }
-        if ($char === '\\') {
-            $escape = true;
-            continue;
-        }
-        if ($char === '"') {
-            $inString = !$inString;
-            continue;
-        }
-        if ($inString) {
-            continue;
-        }
-        if ($char === '{') {
-            $depth++;
-            continue;
-        }
-        if ($char === '}') {
-            $depth--;
-            if ($depth === 0) {
-                $decoded = json_decode($buffer, true);
-                if (is_array($decoded)) {
-                    $entries[] = [
-                        'message_id' => trim((string)($decoded['message_id'] ?? '')),
-                        'raw' => $buffer,
-                        'decoded' => $decoded,
-                    ];
-                }
-                $buffer = '';
-            }
-        }
-    }
+    try { foreach (\Illuminate\Support\Facades\DB::table('mantencion_log')->where('canal','redmine')->orderBy('id')->get() as $row) {
+        $decoded = json_decode((string)($row->contexto ?? '{}'), true); if (!is_array($decoded)) $decoded = [];
+        $entries[] = ['message_id'=>(string)($row->mensaje_id ?? ''),'raw'=>json_encode($decoded, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE),'decoded'=>$decoded];
+    }} catch (Throwable) {}
     return $entries;
 }
 
@@ -2782,26 +2860,8 @@ function load_redmine_logs_by_message(): array {
 
 function remove_redmine_logs_for_messages(array $ids): void {
     $ids = array_values(array_filter(array_map('trim', $ids)));
-    if (empty($ids)) {
-        return;
-    }
-    $kept = [];
-    foreach (parse_redmine_log_entries() as $entry) {
-        $mid = trim((string)($entry['message_id'] ?? ''));
-        if ($mid !== '' && in_array($mid, $ids, true)) {
-            continue;
-        }
-        $raw = trim((string)($entry['raw'] ?? ''));
-        if ($raw !== '') {
-            $kept[] = $raw;
-        }
-    }
-    $path = redmine_log_path();
-    if (empty($kept)) {
-        storage_truncate_file($path);
-        return;
-    }
-    storage_write_text($path, implode(PHP_EOL, $kept) . PHP_EOL);
+    if (empty($ids)) return;
+    try { \Illuminate\Support\Facades\DB::table('mantencion_log')->where('canal','redmine')->whereIn('mensaje_id',$ids)->delete(); } catch (Throwable) {}
 }
 
 function load_user_api_token(?string $userId): string {
@@ -2862,7 +2922,7 @@ function send_redmine_issue(array $issue, array $cfg, string $userToken = ''): a
         'Content-Type: application/json',
         'Accept: application/json',
     ];
-    $token = $userToken !== '' ? $userToken : trim($cfg['platform_token'] ?? '');
+    $token = trim($userToken);
     if ($token !== '') {
         $headers[] = 'X-Redmine-API-Key: ' . $token;
     }
@@ -2887,12 +2947,29 @@ function send_selected_messages(array &$messages, array $ids, array $cfg, string
     $success = 0;
     $created = [];
     $errors = [];
+    $blocked = 0;
+    $blockedIds = [];
     $ids = array_filter(array_map('trim', $ids));
     if (empty($ids)) {
-        return ['success' => 0, 'errors' => ['No hay mensajes seleccionados'], 'attempts' => 0];
+        return ['success' => 0, 'errors' => ['No hay mensajes seleccionados'], 'attempts' => 0, 'blocked' => 0];
+    }
+    if (trim($userToken) === '') {
+        return [
+            'success' => 0,
+            'errors' => ['Debes configurar tu API Key personal de Redmine en Cuentas conectadas antes de enviar reportes.'],
+            'attempts' => 0,
+            'blocked' => 0,
+            'redmine_ids' => [],
+        ];
     }
     foreach ($messages as &$message) {
         if (!in_array(($message['id'] ?? ''), $ids, true)) {
+            continue;
+        }
+        if (dashboard_core_is_in_review($message)) {
+            $message['estado'] = 'pendiente';
+            $blocked++;
+            $blockedIds[] = (string)($message['id'] ?? 'sin-id');
             continue;
         }
         $attempts++;
@@ -2943,11 +3020,15 @@ function send_selected_messages(array &$messages, array $ids, array $cfg, string
         append_hours_extra_record($message);
     }
     unset($message);
+    if ($blocked > 0) {
+        $errors[] = $blocked . ' reporte(s) permanecen pendientes por estar En Revisión en CORE: ' . implode(', ', $blockedIds) . '.';
+    }
     save_messages($messages);
     return [
         'success' => $success,
         'errors' => array_values(array_filter($errors)),
         'attempts' => $attempts,
+        'blocked' => $blocked,
         'redmine_ids' => $created,
     ];
 }
@@ -2996,6 +3077,7 @@ function archive_message_record(array $message, string $archivedBy = 'retencion'
     if ($repo !== null && $repo->tableReady()) {
         $message['estado'] = 'archivado';
         $repo->markArchived($message);
+        append_hours_extra_record($message);
     }
 }
 
@@ -3049,18 +3131,10 @@ function archive_selected_messages(array &$messages, array $ids): int {
 }
 
 function dashboard_messages_scope(): string {
-    if (function_exists('auth_user_has_all_permissions') && auth_user_has_all_permissions()) {
-        return 'todos';
-    }
-    $value = function_exists('auth_get_permission_value') ? auth_get_permission_value('mensajes') : null;
-    $scope = strtolower(trim((string)$value));
-    return $scope === 'todos' ? 'todos' : 'asignados';
+    return 'asignados';
 }
 
 function dashboard_filter_messages_by_scope(array $messages): array {
-    if (dashboard_messages_scope() === 'todos') {
-        return $messages;
-    }
     $userId = (string)auth_get_user_id();
     if ($userId === '') {
         return [];
@@ -3189,6 +3263,24 @@ function handle_request(): array {
     $flash = dashboard_consume_flash();
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         csrf_validate();
+
+        // Release the legacy session file lock here, once, right after the last thing
+        // in this request that genuinely needs it (login/timeout checks in
+        // auth_require_login(), flash-consume, CSRF token validation above — all done
+        // by this point). Everything from here on (the action switch below, including
+        // toggle_hora_extra) persists through the DB-backed *_repository() layer, not
+        // $_SESSION, so it doesn't need the lock. Without this, concurrent AJAX row
+        // actions from the same user serialize on this lock instead of running in
+        // parallel — see the session_write_close() call added for this same reason in
+        // LegacyProjectController::syncNovaUserToLegacySession(). Any code path below
+        // that still needs to WRITE session data (dashboard_set_flash(),
+        // the non-AJAX redirect+flash flow, or the maintenance-mode block) already
+        // reopens the session itself via auth_start_session() before writing, so this
+        // is safe for both the AJAX and non-AJAX flows.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
         $action = $_POST['action'] ?? '';
         if (function_exists('maintenance_mode_block_if_enabled')) {
             maintenance_mode_block_if_enabled();
@@ -3267,7 +3359,14 @@ function handle_request(): array {
                 }
                 unset($message);
                 if ($updated) {
-                    save_messages($messages);
+                    // Punctual update: persist only the one edited record via
+                    // save_messages()/syncMessages()'s existing per-message upsert,
+                    // instead of resyncing every message in the account for a single
+                    // edit. Same function, same guards (tableReady()/try-catch inside
+                    // the repository) — just scoped to what actually changed. Mirrors
+                    // the pattern already used by 'toggle_hora_extra' and 'delete' in
+                    // this same file (see dashboard_update_message_hora_extra()).
+                    save_messages([$updatedMessage]);
                     if (is_array($updatedMessage)) {
                         append_hours_extra_record($updatedMessage);
                     }
@@ -3300,17 +3399,21 @@ function handle_request(): array {
                     $message['hora_extra'] = $isEnabled ? '1' : '0';
                     if ($isEnabled) {
                         $message['tiempo_estimado'] = dashboard_hora_extra_default_time('1');
-                        $updatedMessage = $message;
                     } else {
                         $message['tiempo_estimado'] = '';
                     }
+                    $updatedMessage = $message;
                     $updated = true;
                     break;
                 }
                 unset($message);
                 if ($updated) {
-                    save_messages($messages);
                     if ($isEnabled && is_array($updatedMessage)) {
+                        if (!dashboard_update_message_hora_extra($updatedMessage)) {
+                            $flashMsg = 'No se pudo actualizar la hora extra.';
+                            $ajaxPayload['ok'] = false;
+                            break;
+                        }
                         append_hours_extra_record($updatedMessage);
                     } else {
                         remove_hours_extra_record_by_id($id);
@@ -3344,22 +3447,30 @@ function handle_request(): array {
                     break;
                 }
                 $deletedFuenteIds = [];
+                $deletedPkIds = [];
                 foreach ($messages as $m) {
                     if (is_array($m) && ($m['id'] ?? '') === $id) {
-                        $fid = trim((string)($m['fuente_id'] ?? $m['id'] ?? ''));
+                        $fid = trim((string)($m['fuente_id'] ?? ''));
                         if ($fid !== '') {
                             $deletedFuenteIds[] = $fid;
+                        } elseif (ctype_digit((string)($m['id'] ?? ''))) {
+                            $deletedPkIds[] = (int)$m['id'];
                         }
                         break;
                     }
                 }
-                $before = count($messages);
-                $messages = array_values(array_filter($messages, fn($m) => ($m['id'] ?? '') !== $id));
-                if ($before !== count($messages)) {
-                    save_messages($messages);
+                if (!empty($deletedFuenteIds) || !empty($deletedPkIds)) {
                     $dbRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
                     if ($dbRepo !== null && !empty($deletedFuenteIds)) {
                         $dbRepo->deleteByFuenteIds($deletedFuenteIds);
+                    }
+                    if (!empty($deletedPkIds)) {
+                        try {
+                            \Illuminate\Support\Facades\DB::table('redmine_mantencion_reportes')
+                                ->whereIn('id', $deletedPkIds)
+                                ->delete();
+                        } catch (\Throwable) {
+                        }
                     }
                     $flashMsg = 'Mensaje eliminado.';
                     dashboard_log_action('REPORT_DELETE', 'Elimino reporte ID ' . $id);
@@ -3392,6 +3503,7 @@ function handle_request(): array {
                     }
                 }
                 $currentUserData = dashboard_current_user();
+                $coreCredentialUserKey = dashboard_core_current_credential_user_key($currentUserData);
                 $result = dashboard_sync_core_history($messages, [
                     'desde' => $desde,
                     'hasta' => $hasta,
@@ -3401,11 +3513,17 @@ function handle_request(): array {
                     'user' => $coreUser,
                     'pass' => $corePass,
                 ]);
-                if (empty($result['error']) && $rememberCore && $coreUser !== '' && $corePass !== '') {
-                    core_credentials_save_for_user((string)$userId, $coreUser, $corePass);
+                if ($rememberCore && $coreUser !== '' && $corePass !== '' && (empty($result['error']) || !empty($result['authenticated']))) {
+                    core_credentials_save_for_user($coreCredentialUserKey, $coreUser, $corePass);
                 }
                 if (!empty($result['error'])) {
                     $flashMsg = $result['error'];
+                    if (str_contains(dashboard_normalize_text($flashMsg), 'core rechazo las credenciales')) {
+                        core_credentials_clear_for_user($coreCredentialUserKey);
+                        auth_start_session();
+                        $_SESSION['dashboard_open_core_credentials_modal'] = true;
+                        $_SESSION['dashboard_core_runtime_user'] = $coreUser;
+                    }
                     dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE desde ' . $desde . ' hasta ' . $hasta . ': ' . $result['error']);
                 } else {
                     $flashMsg = 'Importación CORE completada. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
@@ -3555,11 +3673,7 @@ function handle_request(): array {
             $ajaxPayload['counts'] = dashboard_status_counts($scopedMessages);
             dashboard_json_response($ajaxPayload, !empty($ajaxPayload['ok']) ? 200 : 400);
         }
-        if ($action === 'toggle_hora_extra') {
-            dashboard_set_toast($flashMsg ?? '');
-        } else {
-            dashboard_set_flash($flashMsg ?? '');
-        }
+        dashboard_set_flash($flashMsg ?? '');
         dashboard_redirect_back();
     }
     $rawLog = security_load_events();

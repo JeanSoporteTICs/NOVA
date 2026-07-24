@@ -19,3 +19,8 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Defense in depth only. The VirtualHost must still use this directory as DocumentRoot.
+<FilesMatch "(?i)^(?:\.env|\.git|composer\.(?:json|lock)|package(?:-lock)?\.json|phpunit\.xml)$|\.(?:sql|bak|backup|log|key|pem|p12|pfx|crt|cer|tmp|temp|orig|swp)$">
+    Require all denied
+</FilesMatch>

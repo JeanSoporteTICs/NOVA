@@ -4,14 +4,6 @@ require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/maintenance.php';
 // Mantenedor de configuración de envío a Redmine (incluye opciones de tracker/prioridad/estado)
 
-function config_normalize_document_path(string $path): string {
-    $parts = array_values(array_filter(explode('/', str_replace('\\', '/', $path)), static function (string $part): bool {
-        $part = trim($part);
-        return $part !== '' && $part !== '.' && $part !== '..';
-    }));
-    return $parts ? '/' . implode('/', $parts) : '/NOVA/Procedimientos';
-}
-
 function ensure_config_file($path) {
     // DB-only runtime: configuraciones_modulo is the source of truth.
 }
@@ -20,6 +12,7 @@ function load_config($path) {
     $repo = config_mantencion_repository();
     $data = $repo !== null ? $repo->loadAll() : [];
     if (!is_array($data)) $data = [];
+    $data['platform_token'] = '';
     if (!array_key_exists('categories_url', $data)) $data['categories_url'] = '';
     if (!array_key_exists('unidades_url', $data)) $data['unidades_url'] = '';
     if (!array_key_exists('cf_solicitante', $data) || $data['cf_solicitante'] === null || $data['cf_solicitante'] === '') {
@@ -44,13 +37,6 @@ function load_config($path) {
     if (!array_key_exists('core_sync_minutes', $data)) $data['core_sync_minutes'] = 2;
     if (!array_key_exists('core_last_sync', $data)) $data['core_last_sync'] = '';
     if (!array_key_exists('core_last_error', $data)) $data['core_last_error'] = '';
-    if (!array_key_exists('onlyoffice_url', $data)) $data['onlyoffice_url'] = '';
-    if (!array_key_exists('onlyoffice_app_url', $data)) $data['onlyoffice_app_url'] = '';
-    if (!array_key_exists('onlyoffice_jwt_secret', $data)) $data['onlyoffice_jwt_secret'] = '';
-    if (!array_key_exists('onlyoffice_disabled', $data)) $data['onlyoffice_disabled'] = false;
-    $data['procedures_storage'] = 'nextcloud';
-    if (!array_key_exists('procedures_nextcloud_root', $data)) $data['procedures_nextcloud_root'] = '/NOVA/Procedimientos';
-    $data['procedures_nextcloud_root'] = config_normalize_document_path((string)$data['procedures_nextcloud_root']);
     foreach (['trackers','prioridades','estados'] as $k) {
         if (!isset($data[$k]) || !is_array($data[$k])) $data[$k] = [];
     }
@@ -92,23 +78,37 @@ function handle_configuracion() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === '') {
         if (function_exists('csrf_validate')) csrf_validate();
         if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
-        $cfg['platform_url'] = trim($_POST['platform_url'] ?? $cfg['platform_url'] ?? '');
-        $postedToken = trim($_POST['platform_token'] ?? '');
-        if ($postedToken !== '') {
-            $cfg['platform_token'] = $postedToken;
+        $optionType = [
+            'trackers' => 'tracker',
+            'prioridades' => 'prioridad',
+            'estados' => 'estado',
+        ][(string)($_POST['opt_type'] ?? '')] ?? null;
+        $optionAction = (string)($_POST['opt_action'] ?? '');
+        if ($optionType !== null && in_array($optionAction, ['create', 'update', 'delete', 'set_default'], true)) {
+            $repo = config_mantencion_repository();
+            $id = trim((string)($_POST['opt_id'] ?? ''));
+            $originalId = trim((string)($_POST['opt_id_original'] ?? $id));
+            $name = trim((string)($_POST['opt_nombre'] ?? ''));
+            $default = isset($_POST['opt_default']);
+            if ($repo !== null) {
+                match ($optionAction) {
+                    'create' => $repo->createOption($optionType, $id, $name, $default),
+                    'update' => $repo->updateOption($optionType, $originalId, $id, $name, $default),
+                    'delete' => $repo->deleteOption($optionType, $originalId),
+                    'set_default' => $repo->setDefaultOption($optionType, $id),
+                };
+            }
+            config_set_flash('Configuración guardada');
+            config_redirect_back();
         }
+
+        $cfg['platform_url'] = trim($_POST['platform_url'] ?? $cfg['platform_url'] ?? '');
+        unset($cfg['platform_token']);
         $cfg['source_mode'] = 'core';
         $cfg['core_enabled'] = true;
         $cfg['core_admin_url'] = trim($_POST['core_admin_url'] ?? ($cfg['core_admin_url'] ?? ''));
         $cfg['core_historico_url'] = trim($_POST['core_historico_url'] ?? ($cfg['core_historico_url'] ?? ($cfg['core_admin_url'] ?? '')));
         $cfg['core_sync_minutes'] = max(1, (int)($_POST['core_sync_minutes'] ?? ($cfg['core_sync_minutes'] ?? 2)));
-        $cfg['onlyoffice_url'] = rtrim(trim((string)($_POST['onlyoffice_url'] ?? ($cfg['onlyoffice_url'] ?? ''))), '/');
-        $cfg['onlyoffice_app_url'] = rtrim(trim((string)($_POST['onlyoffice_app_url'] ?? ($cfg['onlyoffice_app_url'] ?? ''))), '/');
-        $postedOnlyOfficeSecret = trim((string)($_POST['onlyoffice_jwt_secret'] ?? ''));
-        if ($postedOnlyOfficeSecret !== '') {
-            $cfg['onlyoffice_jwt_secret'] = $postedOnlyOfficeSecret;
-        }
-        $cfg['onlyoffice_disabled'] = !empty($_POST['onlyoffice_disabled']);
         unset($cfg['core_login_user'], $cfg['core_login_pass']);
         $cfg['categories_url'] = trim($_POST['categories_url'] ?? ($cfg['categories_url'] ?? ''));
         $cfg['unidades_url'] = trim($_POST['unidades_url'] ?? ($cfg['unidades_url'] ?? ''));
@@ -124,85 +124,6 @@ function handle_configuracion() {
         $cfg['status_id'] = is_numeric($_POST['status_id'] ?? '') ? (int)$_POST['status_id'] : ($cfg['status_id'] ?? 1);
         $cfg['retencion_horas'] = max(1, (int)($_POST['retencion_horas'] ?? ($cfg['retencion_horas'] ?? 24)));
         $cfg['session_timeout'] = max(60, (int)($_POST['session_timeout'] ?? ($cfg['session_timeout'] ?? 300)));
-        // CRUD de opciones (trackers, prioridades, estados)
-        $optType = $_POST['opt_type'] ?? '';
-        $optAction = $_POST['opt_action'] ?? '';
-        if ($optType && isset($cfg[$optType]) && is_array($cfg[$optType])) {
-            $normalizeId = static function ($value): string {
-                return trim((string)$value);
-            };
-            $findOptionIndex = static function (array $items, string $id) use ($normalizeId): ?int {
-                foreach ($items as $index => $item) {
-                    if ($normalizeId($item['id'] ?? '') === $normalizeId($id)) {
-                        return $index;
-                    }
-                }
-                return null;
-            };
-            if ($optAction === 'create') {
-                $id = trim($_POST['opt_id'] ?? '');
-                $nombre = trim($_POST['opt_nombre'] ?? '');
-                if ($id !== '' && $nombre !== '') {
-                    if ($findOptionIndex($cfg[$optType], $id) === null) {
-                        if (isset($_POST['opt_default'])) {
-                            foreach ($cfg[$optType] as &$o) { $o['default'] = false; }
-                            unset($o);
-                        }
-                        $cfg[$optType][] = ['id' => is_numeric($id)?(int)$id:$id, 'nombre' => $nombre, 'default' => isset($_POST['opt_default'])];
-                    }
-                }
-            } elseif ($optAction === 'update') {
-                $originalId = trim((string)($_POST['opt_id_original'] ?? $_POST['opt_id'] ?? ''));
-                $newId = trim((string)($_POST['opt_id'] ?? ''));
-                $newNombre = trim((string)($_POST['opt_nombre'] ?? ''));
-                $targetIndex = $findOptionIndex($cfg[$optType], $originalId);
-                if ($targetIndex !== null && $newId !== '' && $newNombre !== '') {
-                    $conflictIndex = $findOptionIndex($cfg[$optType], $newId);
-                    if ($conflictIndex === null || $conflictIndex === $targetIndex) {
-                        $cfg[$optType][$targetIndex]['id'] = is_numeric($newId) ? (int)$newId : $newId;
-                        $cfg[$optType][$targetIndex]['nombre'] = $newNombre;
-                        $cfg[$optType][$targetIndex]['default'] = isset($_POST['opt_default']);
-                    }
-                }
-                if (isset($_POST['opt_default'])) {
-                    foreach ($cfg[$optType] as &$o) {
-                        $o['default'] = ($normalizeId($o['id'] ?? '') === $normalizeId($newId));
-                    }
-                    unset($o);
-                }
-            } elseif ($optAction === 'delete') {
-                $id = trim((string)($_POST['opt_id_original'] ?? $_POST['opt_id'] ?? ''));
-                $deletedWasDefault = false;
-                foreach ($cfg[$optType] as $o) {
-                    if ($normalizeId($o['id'] ?? '') === $normalizeId($id) && !empty($o['default'])) {
-                        $deletedWasDefault = true;
-                        break;
-                    }
-                }
-                $cfg[$optType] = array_values(array_filter($cfg[$optType], fn($o) => $normalizeId($o['id'] ?? '') !== $normalizeId($id)));
-                if ($deletedWasDefault && !empty($cfg[$optType])) {
-                    $cfg[$optType][0]['default'] = true;
-                }
-            } elseif ($optAction === 'set_default') {
-                $id = $_POST['opt_id'] ?? '';
-                foreach ($cfg[$optType] as &$o) {
-                    $o['default'] = ((string)$o['id'] === (string)$id);
-                }
-                unset($o);
-            }
-            // actualizar configuracion con default
-            foreach (['trackers'=>'tracker_id','prioridades'=>'priority_id','estados'=>'status_id'] as $k=>$confKey) {
-                if ($optType === $k) {
-                    $cfg[$confKey] = null;
-                    foreach ($cfg[$k] as $o) {
-                        if (!empty($o['default'])) {
-                            $cfg[$confKey] = $o['id'];
-                            break;
-                        }
-                    }
-                }
-            }
-        }
         save_config($CONFIG_FILE, $cfg);
         config_set_flash('Configuración guardada');
         config_redirect_back();

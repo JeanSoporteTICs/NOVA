@@ -50,23 +50,3 @@ $navItems = [
   </aside>
 
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
-<script>
-(function () {
-  var loader = document.getElementById('app-page-loader');
-  window.appUi = window.appUi || {};
-  window.appUi.setLoading = function (on) {
-    if (loader) loader.classList.toggle('is-visible', !!on);
-  };
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest('a[href]');
-    if (!a || e.defaultPrevented || a.target === '_blank') return;
-    try { var u = new URL(a.href, window.location.href); if (u.origin !== window.location.origin) return; } catch (_) { return; }
-    window.appUi.setLoading(true);
-  });
-  document.addEventListener('submit', function (e) {
-    if (!e.defaultPrevented) window.appUi.setLoading(true);
-  });
-  window.addEventListener('pageshow', function () { window.appUi.setLoading(false); });
-  window.addEventListener('load', function () { window.appUi.setLoading(false); });
-}());
-</script>

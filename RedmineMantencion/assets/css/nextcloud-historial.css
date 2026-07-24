@@ -1,0 +1,6 @@
+    body { margin: 0; }
+    .nextcloud-panel { border: 0; border-radius: 1.1rem; box-shadow: 0 16px 38px rgba(15, 23, 42, .08); }
+    .nextcloud-row-created > * { background-color: #dcfce7 !important; }
+    .nextcloud-row-existing > * { background-color: #fef3c7 !important; }
+    .nextcloud-row-failed > * { background-color: #fee2e2 !important; }
+  

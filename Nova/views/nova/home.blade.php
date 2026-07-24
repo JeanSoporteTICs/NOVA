@@ -14,69 +14,62 @@
     <main class="nova-home nova-shell">
         <header class="nova-topbar">
             <div class="nova-brand">
-                <div class="nova-brand-mark" aria-hidden="true">
+                <div class="nova-brand-mark" title="NOVA" aria-label="NOVA">
                     <i class="bi bi-grid-1x2-fill"></i>
                 </div>
                 <div class="nova-brand-title">
                     <strong>NOVA</strong>
-                    <span>Panel operativo</span>
                 </div>
             </div>
 
-            <nav class="nova-session" aria-label="Sesion">
+            <nav class="nova-session" aria-label="Sesión de {{ session('nova_user.name') }}">
                 @include('nova.partials.session-control')
-                <span class="nova-user">
-                    <i class="bi bi-person-circle"></i>
-                    {{ session('nova_user.name') }}
-                </span>
-                <a class="btn btn-outline-secondary nova-icon-btn" href="{{ route('modules.index') }}" title="Modulos" aria-label="Modulos">
-                    <i class="bi bi-sliders"></i>
-                </a>
-                @if (in_array((string) session('nova_user.role', 'usuario'), config('nova.module_admin_roles', []), true))
-                    <a class="btn btn-outline-secondary nova-icon-btn" href="{{ route('administracion.index') }}" title="Administracion" aria-label="Administracion">
-                        <i class="bi bi-person-gear"></i>
+                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                @if (isset($projects['integraciones']))
+                    <a class="btn btn-outline-light" href="{{ route('integrations.nova') }}" title="Mis integraciones">
+                        <i class="bi bi-person-lock"></i><span class="nova-navbar-label">Integraciones</span>
                     </a>
                 @endif
-                <form method="POST" action="{{ route('logout') }}" style="display:inline">
+                <a class="btn btn-outline-light" href="{{ route('modules.index') }}" title="Módulos">
+                    <i class="bi bi-sliders"></i><span class="nova-navbar-label">Módulos</span>
+                </a>
+                @if (in_array((string) session('nova_user.role', 'usuario'), config('nova.module_admin_roles', []), true))
+                    <a class="btn btn-outline-light" href="{{ route('administracion.index') }}" title="Administración">
+                        <i class="bi bi-person-gear"></i><span class="nova-navbar-label">Administración</span>
+                    </a>
+                @endif
+                <form method="POST" action="{{ route('logout') }}" class="nova-inline-form">
                     @csrf
-                    <button class="btn btn-outline-secondary nova-icon-btn" type="submit" title="Salir" aria-label="Salir">
-                        <i class="bi bi-box-arrow-right"></i>
+                    <button class="btn btn-outline-light" type="submit" title="Salir">
+                        <i class="bi bi-box-arrow-right"></i><span class="nova-navbar-label">Salir</span>
                     </button>
                 </form>
             </nav>
         </header>
 
-        <section class="nova-summary" aria-label="Resumen">
-            @php
-                $maintenanceProjects = collect($projects)->filter(static fn ($project) => data_get($project, 'maintenance.enabled'));
-                $maintenanceCount = $maintenanceProjects->count();
-            @endphp
+        @php
+            $homeProjects = collect($projects)->filter(static fn ($project) => ($project['show_on_home'] ?? true) !== false);
+            $maintenanceProjects = $homeProjects->filter(static fn ($project) => data_get($project, 'maintenance.enabled'));
+            $maintenanceCount = $maintenanceProjects->count();
+            $availableModules = $homeProjects->count();
+        @endphp
+
+        <section class="nova-home-section-head" aria-label="Módulos disponibles">
             <div>
-                <h1>Modulos de trabajo</h1>
+                <span class="nova-home-eyebrow">Tus herramientas</span>
+                <h2>Módulos disponibles</h2>
+                <p>Accede directamente a cada área de trabajo.</p>
             </div>
-            <div class="nova-metrics" aria-label="Indicadores">
-                <button class="nova-metric is-warning" type="button" data-nova-modal-open="mantencion-detalle" title="Ver proyectos en mantencion">
-                    <i class="bi bi-tools"></i>
-                    <div>
-                        <strong>{{ $maintenanceCount }}</strong>
-                        <span>Mantencion</span>
-                    </div>
+            <div class="nova-home-section-actions" aria-label="Resumen de módulos">
+                <span class="nova-home-status-pill"><i class="bi bi-grid"></i><strong>{{ $availableModules }}</strong> accesos</span>
+                <button class="nova-home-status-pill is-warning" type="button" data-nova-modal-open="mantencion-detalle" title="Ver proyectos en mantención">
+                    <i class="bi bi-tools"></i><strong>{{ $maintenanceCount }}</strong> en mantención
                 </button>
             </div>
         </section>
 
-        <section class="nova-system-head" aria-label="Modulos disponibles">
-            <span class="nova-system-icon" aria-hidden="true"><i class="bi bi-grid"></i></span>
-            <div>
-                <small>Accesos disponibles</small>
-                <h2>Disponibles</h2>
-                <p>Modulos activos para tu sesion actual.</p>
-            </div>
-            <span class="nova-system-meter"><strong>{{ count($projects) }}</strong><span>modulos</span></span>
-        </section>
-
         <section class="nova-grid" aria-label="Modulos disponibles">
-            @foreach ($projects as $key => $project)
+            @foreach ($homeProjects as $key => $project)
                 @php
                     $moduleIcons = [
                         'redmine_tic' => 'bi-kanban',
@@ -88,6 +81,7 @@
                         'usuarios' => 'bi-people',
                         'telegram' => 'bi-telegram',
                         'administracion' => 'bi-person-gear',
+                        'procedimientos' => 'bi-journal-richtext',
                     ];
                     $projectType = $project['type'] ?? 'legacy';
                     $projectIcon = $project['icon'] ?? ($moduleIcons[$key] ?? ($projectType === 'native' ? 'bi-window-stack' : 'bi-window-sidebar'));
@@ -99,11 +93,16 @@
                         'redmine-mantencion' => route('redmine.mantencion.dashboard'),
                         'telegram' => route('telegram.index'),
                         'administracion' => route('administracion.index'),
+                        'procedimientos' => route('procedimientos.index'),
+                        'horas-extra' => route('horas-extra.index'),
                         default => url($key),
                     };
                 @endphp
-                <article class="nova-module nova-card">
+                <article class="nova-module nova-card {{ $isMaintenance ? 'is-maintenance' : '' }}">
                     <a class="nova-module-link" href="{{ $projectUrl }}" aria-label="Abrir {{ $project['name'] }}"></a>
+                    @if ($isMaintenance)
+                        <span class="nova-module-maintenance" title="Módulo en mantención" aria-label="Módulo en mantención"><i class="bi bi-tools"></i></span>
+                    @endif
                     @if ($hasEmachCredentials || $hasTelegramSettings)
                         <span class="nova-module-status-icon" title="{{ $hasEmachCredentials ? 'Credenciales EMACH guardadas' : 'Telegram personal configurado' }}" aria-label="{{ $hasEmachCredentials ? 'Credenciales EMACH guardadas' : 'Telegram personal configurado' }}"><i class="bi {{ $hasEmachCredentials ? 'bi-key-fill' : 'bi-check-circle-fill' }}"></i></span>
                     @endif
@@ -119,9 +118,9 @@
                             </div>
                         </div>
                     </div>
-
                 </article>
             @endforeach
+
         </section>
 
         <div class="modal fade" id="usuarios-roles" tabindex="-1" aria-labelledby="usuarios-roles-title" aria-hidden="true">
@@ -158,7 +157,9 @@
                                     </td>
                                     <td>
                                         @foreach ($user['projects'] as $projectKey => $project)
-                                            @php($projectStatus = strtolower((string) ($project['status'] ?? '')))
+                                            @php
+                                                $projectStatus = strtolower((string) ($project['status'] ?? ''));
+                                            @endphp
                                             <span class="nova-project-role {{ in_array($projectStatus, ['activo', 'active'], true) ? 'is-active' : (in_array($projectStatus, ['baneado', 'banneado', 'banned', 'inactivo'], true) ? 'is-banned' : '') }}">
                                                 <i class="bi bi-folder2-open"></i>
                                                 {{ $project['name'] }}:
@@ -228,7 +229,7 @@
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button class="btn btn-primary" type="button" data-nova-modal-close>Cerrar</button>
+                            <button class="btn btn-outline-secondary" type="button" data-nova-modal-close>Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -236,55 +237,33 @@
         @endif
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}"></script>
     <script>
-        const openNovaModal = (modal) => {
-            if (!modal) return;
-            modal.classList.add('show');
-            modal.removeAttribute('aria-hidden');
-            modal.setAttribute('aria-modal', 'true');
-            modal.style.display = 'block';
-            document.body.classList.add('modal-open');
-        };
-
-        const closeNovaModal = (modal) => {
-            if (!modal) return;
-            modal.classList.remove('show');
-            modal.setAttribute('aria-hidden', 'true');
-            modal.removeAttribute('aria-modal');
-            modal.style.display = 'none';
-            document.body.classList.remove('modal-open');
-        };
-
-        document.querySelectorAll('[data-nova-modal-open]').forEach((trigger) => {
-            trigger.addEventListener('click', () => {
-                openNovaModal(document.getElementById(trigger.dataset.novaModalOpen));
-            });
+        // Delegated open/close wiring for this page's 3 modals, mirroring the
+        // pattern already used in RedmineMantencion/views/partials/navbar.php.
+        // window.appUi.openModal/closeModal (nova-ui.js) delegate to the real
+        // bootstrap.Modal component for elements with class="modal" (all 3
+        // here), so this page now gets a backdrop/focus-trap/native Escape
+        // handling instead of the previous hand-rolled toggle.
+        document.addEventListener('click', (event) => {
+            const closeTrigger = event.target.closest('[data-nova-modal-close], [data-bs-dismiss="modal"]');
+            if (closeTrigger) {
+                event.preventDefault();
+                window.appUi.closeModal(closeTrigger.closest('.modal'));
+                return;
+            }
+            const openTrigger = event.target.closest('[data-nova-modal-open]');
+            if (openTrigger && !openTrigger.matches('[data-bs-toggle]')) {
+                const target = document.getElementById(openTrigger.getAttribute('data-nova-modal-open'));
+                if (target) {
+                    event.preventDefault();
+                    window.appUi.openModal(target);
+                }
+            }
         });
 
         document.querySelectorAll('[data-auto-open-modal]').forEach((modal) => {
-            openNovaModal(modal);
-        });
-
-        document.querySelectorAll('[data-nova-modal-close]').forEach((trigger) => {
-            trigger.addEventListener('click', () => {
-                closeNovaModal(trigger.closest('.modal'));
-            });
-        });
-
-        document.querySelectorAll('.modal').forEach((modal) => {
-            modal.addEventListener('click', (event) => {
-                if (modal.dataset.novaSessionModal === '') return;
-                if (event.target === modal) {
-                    closeNovaModal(modal);
-                }
-            });
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape') return;
-            document.querySelectorAll('.modal.show:not([data-nova-session-modal])').forEach((modal) => {
-                closeNovaModal(modal);
-            });
+            window.appUi.openModal(modal);
         });
 
         const novaUserSearch = document.getElementById('nova-user-search');

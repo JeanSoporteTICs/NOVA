@@ -12,6 +12,26 @@ $csrf = legacy_csrf_token();
 [$cfg, $users, $categorias, $form, $flash, $error] = handle_manual_pending();
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
 $canAssignOtherUsers = dashboard_can_assign_other_users();
+$currentUser = dashboard_current_user();
+$assignMeUserId = manual_pending_normalize_user_id((string)($currentUser['id'] ?? auth_get_user_id() ?? ''), $users);
+if ($assignMeUserId === '') {
+    $currentUserName = trim((string)($currentUser['nombre_completo'] ?? ''));
+    foreach ($users as $user) {
+        if ($currentUserName !== '' && strcasecmp($currentUserName, trim((string)($user['nombre'] ?? ''))) === 0) {
+            $assignMeUserId = (string)($user['id'] ?? '');
+            break;
+        }
+    }
+}
+$categoryOptions = array_values(array_unique(array_filter(array_map(
+    fn($categoria) => trim((string)(is_array($categoria) ? ($categoria['nombre'] ?? $categoria['id'] ?? '') : $categoria)),
+    is_array($categorias) ? $categorias : []
+))));
+$categoryOptionsJson = htmlspecialchars(
+    json_encode($categoryOptions, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT),
+    ENT_QUOTES,
+    'UTF-8'
+);
 ?>
 <!doctype html>
 <html lang="es">
@@ -21,24 +41,8 @@ $canAssignOtherUsers = dashboard_can_assign_other_users();
 <body>
 <?php $activeNav = 'manual'; include __DIR__ . '/../partials/navbar.php'; ?>
 <div id="page-content">
-  <style>
-    .manual-card { border: 0; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08); }
-    .manual-grid label { font-weight: 600; color: #334155; }
-    .manual-grid .form-control, .manual-grid .form-select { border-color: #d7deea; }
-    .manual-grid .field-label { min-width: 120px; text-align: right; padding-top: 6px; font-weight: 700; color: #334155; }
-    .manual-grid .field-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); gap: 12px; align-items: start; }
-    .manual-grid .field-row.single { grid-template-columns: 120px minmax(0, 1fr); }
-    .manual-grid .field-row.three { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
-    .manual-grid .toolbar { border: 1px solid #d7deea; border-bottom: 0; border-radius: .5rem .5rem 0 0; background: #f8fafc; padding: .45rem .65rem; color: #64748b; font-size: .875rem; }
-    .manual-grid textarea.editor { min-height: 200px; border-top-left-radius: 0; border-top-right-radius: 0; }
-    .manual-grid .helper-link { font-size: .9rem; text-decoration: none; }
-    @media (max-width: 992px) {
-      .manual-grid .field-row,
-      .manual-grid .field-row.single,
-      .manual-grid .field-row.three { grid-template-columns: 1fr; }
-      .manual-grid .field-label { min-width: 0; text-align: left; padding-top: 0; }
-    }
-  </style>
+  <?php $pendienteManualCssVersion = @filemtime(__DIR__ . '/../../assets/css/pendiente-manual.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/pendiente-manual.css?v=<?= (int)$pendienteManualCssVersion ?>">
   <div class="container-fluid py-4">
     <?php
       $heroIcon = 'bi-pencil-square';
@@ -88,9 +92,13 @@ $canAssignOtherUsers = dashboard_can_assign_other_users();
           <div class="field-row single">
             <div class="field-label">Descripción</div>
             <div>
-              <div class="toolbar">Modificar | Previsualizar</div>
-              <textarea name="descripcion" class="form-control editor"><?= $h($form['descripcion'] ?? '') ?></textarea>
-              <div class="form-text">Campo opcional.</div>
+              <div class="toolbar manual-description-tabs" role="tablist" aria-label="Vista de descripción">
+                <button type="button" class="manual-description-tab is-active" id="description-edit-tab" role="tab" aria-selected="true">Modificar</button>
+                <button type="button" class="manual-description-tab" id="description-preview-tab" role="tab" aria-selected="false">Previsualizar</button>
+              </div>
+              <textarea name="descripcion" id="manual-descripcion" class="form-control editor" aria-labelledby="description-edit-tab"><?= $h($form['descripcion'] ?? '') ?></textarea>
+              <div class="manual-description-preview" id="manual-description-preview" role="tabpanel" aria-labelledby="description-preview-tab" hidden></div>
+              <div class="form-text">Campo opcional. Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div>
             </div>
           </div>
 
@@ -140,7 +148,7 @@ $canAssignOtherUsers = dashboard_can_assign_other_users();
                       </option>
                     <?php endforeach; ?>
                   </select>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" id="assign-me">Asignarme</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="assign-me" data-assign-me-id="<?= $h($assignMeUserId) ?>" <?= $assignMeUserId === '' ? 'disabled title="No se encontró tu usuario activo en Mantención"' : '' ?>>Asignarme</button>
                 <?php else: ?>
                   <input type="text" class="form-control" value="<?= $h($form['core_usuario_asignado'] ?? '') ?>" readonly>
                 <?php endif; ?>
@@ -158,13 +166,10 @@ $canAssignOtherUsers = dashboard_can_assign_other_users();
           <div class="field-row">
             <div class="field-label">Categoría</div>
             <div>
-              <input name="categoria" list="categoria-options" class="form-control" placeholder="Escribe o selecciona una categoría" value="<?= $h($form['categoria'] ?? '') ?>">
-              <datalist id="categoria-options">
-                <?php foreach ($categorias as $categoria): ?>
-                  <?php $nombreCategoria = trim((string)($categoria['nombre'] ?? '')); ?>
-                  <option value="<?= $h($nombreCategoria) ?>">
-                <?php endforeach; ?>
-              </datalist>
+              <div class="nova-search-select" data-search-select data-options='<?= $categoryOptionsJson ?>'>
+                <input name="categoria" id="manual-categoria" class="form-control" autocomplete="off" placeholder="Buscar categoría" value="<?= $h($form['categoria'] ?? '') ?>" data-search-select-input>
+                <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
+              </div>
             </div>
             <div></div>
             <div></div>
@@ -194,23 +199,144 @@ $canAssignOtherUsers = dashboard_can_assign_other_users();
             </div>
           </div>
 
-          <div class="d-flex justify-content-end gap-2 pt-2">
-            <a class="btn btn-outline-secondary" href="/redmine-mantencion">Volver a Reportes</a>
-            <button class="btn btn-primary" type="submit" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>Crear pendiente</button>
+          <div class="rm-manual-actions">
+            <button class="btn-nova btn-nova-success" type="submit" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>><i class="bi bi-plus-circle"></i>Crear pendiente</button>
+            <a class="btn btn-outline-secondary" href="<?= $h(legacy_app_url()) ?>"><i class="bi bi-inboxes"></i>Ver pendientes</a>
           </div>
         </form>
       </div>
     </div>
   </div>
 </div>
+<?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 <script>
   (() => {
+    window.NovaSearchSelect?.init(document);
+    const descriptionInput = document.getElementById('manual-descripcion');
+    const descriptionPreview = document.getElementById('manual-description-preview');
+    const descriptionEditTab = document.getElementById('description-edit-tab');
+    const descriptionPreviewTab = document.getElementById('description-preview-tab');
+
+    const cleanCell = value => String(value || '')
+      .replace(/\r?\n/g, '<br>')
+      .replace(/\|/g, '\\|')
+      .trim();
+
+    const rowsToMarkdown = rows => {
+      const normalizedRows = rows
+        .map(row => row.map(cleanCell))
+        .filter(row => row.some(cell => cell !== ''));
+      const columnCount = normalizedRows.reduce((max, row) => Math.max(max, row.length), 0);
+      if (normalizedRows.length < 1 || columnCount < 2) return '';
+      normalizedRows.forEach(row => {
+        while (row.length < columnCount) row.push('');
+      });
+      const line = row => `| ${row.join(' | ')} |`;
+      return [
+        line(normalizedRows[0]),
+        line(Array(columnCount).fill('---')),
+        ...normalizedRows.slice(1).map(line),
+      ].join('\n');
+    };
+
+    const clipboardTableRows = clipboardData => {
+      const html = clipboardData.getData('text/html');
+      if (html) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const table = doc.querySelector('table');
+        if (table) {
+          return Array.from(table.rows).map(row =>
+            Array.from(row.cells).map(cell => cell.innerText || cell.textContent || '')
+          );
+        }
+      }
+      const text = clipboardData.getData('text/plain');
+      if (!text.includes('\t')) return [];
+      return text.replace(/\r\n?/g, '\n').split('\n').map(row => row.split('\t'));
+    };
+
+    descriptionInput?.addEventListener('paste', event => {
+      const rows = clipboardTableRows(event.clipboardData);
+      const markdown = rowsToMarkdown(rows);
+      if (!markdown) return;
+      event.preventDefault();
+      const start = descriptionInput.selectionStart ?? descriptionInput.value.length;
+      const end = descriptionInput.selectionEnd ?? start;
+      const before = descriptionInput.value.slice(0, start);
+      const after = descriptionInput.value.slice(end);
+      const prefix = before && !before.endsWith('\n') ? '\n' : '';
+      const suffix = after && !after.startsWith('\n') ? '\n' : '';
+      descriptionInput.value = `${before}${prefix}${markdown}${suffix}${after}`;
+      const cursor = before.length + prefix.length + markdown.length;
+      descriptionInput.setSelectionRange(cursor, cursor);
+      descriptionInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const markdownCells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim().replace(/<br>/g, '\n'));
+    const renderDescriptionPreview = () => {
+      if (!descriptionPreview || !descriptionInput) return;
+      descriptionPreview.replaceChildren();
+      const lines = descriptionInput.value.trim().split(/\r?\n/);
+      const isTable = lines.length >= 2
+        && lines[0].includes('|')
+        && /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[1]);
+      if (!isTable) {
+        const text = document.createElement('div');
+        text.className = 'manual-description-preview__text';
+        text.textContent = descriptionInput.value || 'Sin descripción.';
+        descriptionPreview.appendChild(text);
+        return;
+      }
+      const table = document.createElement('table');
+      table.className = 'table table-sm table-bordered align-middle mb-0';
+      const thead = document.createElement('thead');
+      const tbody = document.createElement('tbody');
+      const appendRow = (target, cells, tag) => {
+        const tr = document.createElement('tr');
+        cells.forEach(value => {
+          const cell = document.createElement(tag);
+          cell.textContent = value;
+          tr.appendChild(cell);
+        });
+        target.appendChild(tr);
+      };
+      appendRow(thead, markdownCells(lines[0]), 'th');
+      lines.slice(2).filter(line => line.trim()).forEach(line => appendRow(tbody, markdownCells(line), 'td'));
+      table.append(thead, tbody);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-responsive';
+      wrapper.appendChild(table);
+      descriptionPreview.appendChild(wrapper);
+    };
+
+    const showDescriptionMode = preview => {
+      if (!descriptionInput || !descriptionPreview) return;
+      if (preview) renderDescriptionPreview();
+      descriptionInput.hidden = preview;
+      descriptionPreview.hidden = !preview;
+      descriptionEditTab?.classList.toggle('is-active', !preview);
+      descriptionPreviewTab?.classList.toggle('is-active', preview);
+      descriptionEditTab?.setAttribute('aria-selected', preview ? 'false' : 'true');
+      descriptionPreviewTab?.setAttribute('aria-selected', preview ? 'true' : 'false');
+    };
+    descriptionEditTab?.addEventListener('click', () => showDescriptionMode(false));
+    descriptionPreviewTab?.addEventListener('click', () => showDescriptionMode(true));
+
     const assignMeBtn = document.getElementById('assign-me');
     const assignedSelect = document.getElementById('asignado_a');
-    const currentUserId = <?= json_encode((string)($form['asignado_a'] ?? '')) ?>;
+    const currentUserId = assignMeBtn?.dataset.assignMeId || '';
     if (assignMeBtn && assignedSelect) {
       assignMeBtn.addEventListener('click', () => {
+        if (!currentUserId) {
+          window.NovaToast?.warning?.('No se encontró tu usuario activo en Mantención.');
+          return;
+        }
+        if (![...assignedSelect.options].some(option => option.value === currentUserId)) {
+          window.NovaToast?.warning?.('Tu usuario no está disponible en la lista de asignación.');
+          return;
+        }
         assignedSelect.value = currentUserId;
+        assignedSelect.dispatchEvent(new Event('change', { bubbles: true }));
       });
     }
   })();

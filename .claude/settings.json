@@ -7,7 +7,12 @@
       "Bash(/opt/lampp/bin/php artisan *)",
       "Bash(/opt/lampp/bin/php -r ' *)",
       "Bash(php artisan *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(chmod 666 /opt/lampp/htdocs/NOVA/storage/framework/sessions/W8xbjmhpWFs03rY9APJ2YzCfLOtsX3lJcfW0E6of)",
+      "Bash(COOKIE_NAME=laravel_session COOKIE_VALUE='eyJpdiI6IlNrVThhS2xPalBZRngxY1EzOVg4eFE9PSIsInZhbHVlIjoiODgyQ05EcTlWU1lDVDIzbDR6L21pekhOVlkvR2tKMGJNZUVxQWJJOUE5U2MyMWxlS0lPRFowdkdaV1Y1R0VxMWtub0MvZ3V4SnV4MTBLMngrc29ldDNndVVzM0IxR3VoTjRGeis5Q2VBWW5WSndra2xNb2hpSTNlOFBha3ZqdWMiLCJtYWMiOiI2ZTE4MmI4ZjI0YmVjMzE3ODNmYzMwNWNhYzRlYTllZTAxZWUzYjAyOGExMjIxMTc4YzFkYzdiNTBiNjkzMTRhIiwidGFnIjoiIn0=' timeout 90 node verify_roles_drawer.js)",
+      "Bash(grep -v \".blade.php$\")",
+      "Bash(COOKIE_NAME=laravel_session COOKIE_VALUE='eyJpdiI6IlNrVThhS2xPalBZRngxY1EzOVg4eFE9PSIsInZhbHVlIjoiODgyQ05EcTlWU1lDVDIzbDR6L21pekhOVlkvR2tKMGJNZUVxQWJJOUE5U2MyMWxlS0lPRFowdkdaV1Y1R0VxMWtub0MvZ3V4SnV4MTBLMngrc29ldDNndVVzM0IxR3VoTjRGeis5Q2VBWW5WSndra2xNb2hpSTNlOFBha3ZqdWMiLCJtYWMiOiI2ZTE4MmI4ZjI0YmVjMzE3ODNmYzMwNWNhYzRlYTllZTAxZWUzYjAyOGExMjIxMTc4YzFkYzdiNTBiNjkzMTRhIiwidGFnIjoiIn0=' timeout 90 node verify_roles_save.js)",
+      "Bash(composer dump-autoload *)"
     ]
   }
 }

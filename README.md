@@ -1,66 +1,181 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# NOVA
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+NOVA es la plataforma interna que centraliza autenticación, usuarios, permisos e
+integraciones para los módulos Redmine TIC, Redmine Mantención, EMACH, Telegram y
+Procedimientos.
 
-## About Laravel
+El proyecto funciona sobre Laravel 12 y PHP 8.2. Conserva algunos flujos PHP
+legacy detrás del enrutador de Laravel, pero la identidad, la configuración y los
+datos operativos tienen a MySQL/MariaDB como fuente de verdad. Los archivos JSON
+y respaldos locales usados durante la migración ya no forman parte del runtime.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Módulos
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **NOVA:** acceso, administración, permisos globales e integraciones personales.
+- **Redmine TIC:** reportes de soporte, histórico, horas extra, usuarios,
+  catálogos, estadísticas, webhook y bitácora.
+- **Redmine Mantención:** reportes manuales y CORE, histórico, horas extra,
+  usuarios, catálogos, Nextcloud y bitácora.
+- **EMACH:** consulta de marcaciones, horarios y monitoreo.
+- **Telegram:** bot, listener, cola y configuración de comandos.
+- **Procedimientos:** gestión documental integrada con Nextcloud.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Requisitos
 
-## Learning Laravel
+- PHP 8.2 con extensiones requeridas por Laravel y MySQL.
+- Composer 2.
+- MySQL o MariaDB.
+- Node.js y npm para compilar los recursos Vite.
+- Servidor web con el `DocumentRoot` apuntando exclusivamente a `public/`.
+- Opcional: Docker Compose para el listener de Telegram.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Instalación local
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+npm install
+npm run build
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 2000 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Configure en `.env` la URL de la aplicación, la conexión de base de datos, las
+sesiones y las integraciones necesarias. No almacene contraseñas, tokens,
+cookies, respaldos ni volcados SQL dentro del repositorio.
 
-## Laravel Sponsors
+En XAMPP para Windows, use el binario PHP de la instalación:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
+```text
+C:/xampp/php/php.exe artisan migrate
+C:/xampp/php/php.exe artisan test
+```
 
-### Premium Partners
+En este entorno Linux/XAMPP el equivalente habitual es:
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[Many](https://www.many.co.uk)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[OP.GG](https://op.gg)**
-- **[WebReinvent](https://webreinvent.com/?utm_source=laravel&utm_medium=github&utm_campaign=patreon-sponsors)**
-- **[Lendio](https://lendio.com)**
+```bash
+/opt/lampp/bin/php artisan migrate
+/opt/lampp/bin/php artisan test
+```
 
-## Contributing
+Después de modificar configuración, rutas o variables de entorno:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+php artisan optimize:clear
+```
 
-## Code of Conduct
+## Desarrollo
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+npm run dev
+```
 
-## Security Vulnerabilities
+Las entradas frontend son `resources/css/app.css` y `resources/js/app.js`. El
+sistema visual compartido vive en `public/assets/nova-ui.css`; los módulos deben
+reutilizar sus componentes antes de añadir estilos locales.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Comandos útiles:
 
-## License
+```bash
+php artisan route:list
+php artisan migrate:status
+php artisan nova:consolidate-users
+php artisan redmine:mantencion-repair-user-names
+php artisan redmine:archive-processed
+php artisan nova:health-alerts
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Telegram puede administrarse con:
+
+```bash
+docker compose -f docker-compose.telegram.yml ps
+docker compose -f docker-compose.telegram.yml logs
+docker compose -f docker-compose.telegram.yml restart
+```
+
+## Arquitectura
+
+```text
+app/                    Núcleo Laravel, contratos, middleware y comandos
+Nova/                   Módulo central NOVA
+RedmineTic/             Módulo Redmine TIC nativo
+RedmineMantencion/      Módulo Redmine Mantención y bridge legacy
+Emach/                  Módulo EMACH
+Procedimientos/         Módulo documental
+telegram/               Listener y librería del bot
+database/migrations/    Evolución versionada del esquema
+resources/              Vistas y recursos fuente
+public/                 Única raíz pública del servidor web
+tests/                  Pruebas PHPUnit
+ops/ y scripts/         Construcción, verificación y operación
+```
+
+Los módulos se registran en `config/modules.php`. El núcleo no debe depender
+directamente de implementaciones de Redmine TIC: las integraciones entre capas
+se resuelven mediante contratos en `app/Contracts` y enlaces del contenedor.
+
+### Datos e identidad
+
+- `usuarios_nova` es la única identidad central.
+- `integraciones_usuario` guarda cuentas y secretos externos por usuario.
+- `modulos_nova` y `permisos_usuario_modulo` controlan el acceso global.
+- Cada módulo conserva sus permisos y tablas operativas específicas.
+- Los repositorios encapsulan el acceso a datos; los controladores coordinan los
+  casos de uso.
+- No se deben reintroducir archivos JSON como almacenamiento de runtime.
+
+Las credenciales externas son personales. Nunca deben mostrarse en vistas
+administrativas, registrarse en bitácoras ni almacenarse en historiales.
+
+## Seguridad
+
+- El cierre de sesión se realiza únicamente mediante `POST /logout` con CSRF.
+- Los endpoints de autenticación y extensión de sesión conservan throttling.
+- Toda acción legacy que modifique datos debe validar CSRF y permisos.
+- Los archivos de usuario y los secretos permanecen fuera de `public/`.
+- Los logs y respaldos de producción deben almacenarse fuera del repositorio,
+  cifrados y con una política de retención.
+
+## Pruebas y validación
+
+```bash
+php artisan test
+php vendor/bin/pint --test
+npm run build
+```
+
+No existe un script `npm test` ni `npm lint`. Antes de desplegar también se debe
+verificar:
+
+```bash
+php artisan migrate:status
+php artisan route:list
+```
+
+Las pruebas que requieren servicios externos o una base de datos de staging
+deben ejecutarse únicamente con credenciales y autorización del entorno
+correspondiente.
+
+## Producción
+
+El artefacto de producción se construye desde un commit o tag limpio mediante
+los scripts de `ops/production`. El despliegue debe publicar solo `public/`,
+instalar dependencias desde los lockfiles, ejecutar las migraciones aprobadas y
+mantener un mecanismo de rollback.
+
+Documentación operativa vigente:
+
+- [Construcción y verificación del artefacto](ops/production/README.md)
+- [Runbook de despliegue](docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md)
+- [Pruebas de humo](docs/PROD05_SMOKE_TESTS.md)
+- [Sistema visual](docs/nova-design-system.md)
+
+## Reglas de mantenimiento
+
+- No editar `vendor/` ni `node_modules/`.
+- No versionar `.env`, logs, dumps, respaldos o archivos temporales.
+- Toda modificación de esquema requiere una migración reversible.
+- Mantener separados los permisos globales NOVA y los permisos operativos de
+  cada módulo.
+- Actualizar este README cuando cambien requisitos, módulos, comandos o el
+  proceso de despliegue.

@@ -2,28 +2,40 @@
 
 namespace App\Modulos\RedmineMantencion\Repositories;
 
+use App\Modulos\Nova\Repositories\HorasExtraRepository;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Gestiona a qué grupo del dominio compartido Horas Extra (ver
+ * Nova\Repositories\HorasExtraRepository) pertenece cada reporte de
+ * Mantención, agrupado por (usuario_id, fecha) y filtrado siempre por
+ * origen='mantencion'. Los reportes en sí (asunto, categoria, estado, etc.)
+ * siguen viviendo exclusivamente en redmine_mantencion_reportes: este
+ * repositorio solo hidrata los reporte_ids que el repositorio compartido
+ * le devuelve.
+ */
 final class MantencionHoursExtraRepository
 {
     private const MODULE_KEY = 'redmine-mantencion';
+    private const ORIGEN = 'mantencion';
 
     private ?int $moduleId = null;
     private bool $moduleIdResolved = false;
 
-    public function __construct(private readonly MantencionReportRepository $reports)
-    {
+    public function __construct(
+        private readonly MantencionReportRepository $reports,
+        private readonly HorasExtraRepository $shared,
+    ) {
     }
 
     public function tableReady(): bool
     {
         try {
             return $this->reports->tableReady()
-                && Schema::hasTable('modulos_nova')
-                && Schema::hasTable('redmine_mantencion_horas_extra_grupos')
-                && Schema::hasTable('redmine_mantencion_horas_extra_reportes');
+                && $this->shared->tableReady()
+                && Schema::hasTable('redmine_mantencion_reportes');
         } catch (\Throwable) {
             return false;
         }
@@ -36,52 +48,61 @@ final class MantencionHoursExtraRepository
             return [];
         }
 
-        $moduleId = $this->resolveModuleId();
-        if ($moduleId === null) {
+        $grupos = $this->shared->groupsForOrigen(self::ORIGEN);
+        if ($grupos === []) {
+            return [];
+        }
+
+        $todosLosReporteIds = array_values(array_unique(array_merge(...array_map(
+            static fn (array $g): array => $g['reporte_ids'],
+            $grupos
+        ))));
+
+        if ($todosLosReporteIds === []) {
             return [];
         }
 
         try {
-            $rows = DB::table('redmine_mantencion_horas_extra_grupos as g')
-                ->join('redmine_mantencion_horas_extra_reportes as hr', 'hr.grupo_id', '=', 'g.id')
-                ->join('redmine_mantencion_reportes as r', 'r.id', '=', 'hr.reporte_id')
+            $rows = DB::table('redmine_mantencion_reportes as r')
                 ->leftJoin('categorias as c', 'c.id', '=', 'r.categoria_id')
-                ->where('g.modulo_id', $moduleId)
-                ->where('r.modulo_id', $moduleId)
-                ->where('r.hora_extra', 1)
-                ->orderByDesc('g.fecha')
+                ->whereIn('r.id', $todosLosReporteIds)
+                ->where('r.estado', 'archivado')
                 ->orderByDesc('r.fecha_reporte')
                 ->orderByDesc('r.id')
-                ->get([
-                    'g.id as grupo_id',
-                    'g.fecha as grupo_fecha',
-                    'g.hora_inicio as grupo_hora_inicio',
-                    'g.hora_fin as grupo_hora_fin',
-                    'r.*',
-                    'c.nombre as categoria_nombre',
-                ]);
+                ->get(['r.*', 'c.nombre as categoria_nombre']);
+        } catch (\Throwable) {
+            return [];
+        }
 
-            $groups = [];
+        $result = [];
+        foreach ($grupos as $grupo) {
+            $reporteIdsDelGrupo = array_flip($grupo['reporte_ids']);
+            $reportesDelGrupo = [];
+            // Se itera $rows (ya ordenado por fecha_reporte/id desc) en vez de
+            // reporte_ids (sin orden) para conservar el orden de visualizacion previo.
             foreach ($rows as $row) {
-                $key = (string) $row->grupo_id;
-                if (! isset($groups[$key])) {
-                    $groups[$key] = [
-                        'fecha' => $this->formatDate($row->grupo_fecha ?? null),
-                        'hora_inicio' => $this->formatTime($row->grupo_hora_inicio ?? null),
-                        'hora_fin' => $this->formatTime($row->grupo_hora_fin ?? null),
-                        'reports' => [],
-                    ];
+                if (!isset($reporteIdsDelGrupo[$row->id])) {
+                    continue;
                 }
                 $message = $this->reports->rowToMessage($row);
                 $message['hora_extra'] = '1';
                 $message['_fuente'] = 'horas_extra';
-                $groups[$key]['reports'][] = $message;
+                $reportesDelGrupo[] = $message;
             }
 
-            return array_values($groups);
-        } catch (\Throwable) {
-            return [];
+            if ($reportesDelGrupo === []) {
+                continue;
+            }
+
+            $result[] = [
+                'fecha' => $grupo['fecha'],
+                'hora_inicio' => $this->formatTime($grupo['hora_inicio']),
+                'hora_fin' => $this->formatTime($grupo['hora_fin']),
+                'reports' => $reportesDelGrupo,
+            ];
         }
+
+        return $result;
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -108,9 +129,8 @@ final class MantencionHoursExtraRepository
             return;
         }
 
-        $moduleId = $this->resolveModuleId();
         $reportId = $this->reportIdForMessage($message);
-        if ($moduleId === null || $reportId === null) {
+        if ($reportId === null) {
             return;
         }
 
@@ -121,39 +141,17 @@ final class MantencionHoursExtraRepository
 
         $horaInicio = $this->timeFromMessage($message, ['hora_inicio', 'hora']);
         $horaFin = $this->timeFromMessage($message, ['hora_fin', 'hora']);
+        $usuarioId = $this->shared->resolveUsuarioId((string) ($message['asignado_a'] ?? $message['id_redmine_asignado'] ?? ''));
 
-        try {
-            $grupoId = DB::table('redmine_mantencion_horas_extra_grupos')
-                ->where('modulo_id', $moduleId)
-                ->where('fecha', $fecha)
-                ->value('id');
-
-            if ($grupoId === null) {
-                $grupoId = DB::table('redmine_mantencion_horas_extra_grupos')->insertGetId([
-                    'modulo_id' => $moduleId,
-                    'fecha' => $fecha,
-                    'hora_inicio' => $horaInicio,
-                    'hora_fin' => $horaFin,
-                    'creado_at' => now(),
-                    'actualizado_at' => now(),
-                ]);
-            } else {
-                $values = ['actualizado_at' => now()];
-                if ($horaInicio !== null) {
-                    $values['hora_inicio'] = $horaInicio;
-                }
-                if ($horaFin !== null) {
-                    $values['hora_fin'] = $horaFin;
-                }
-                DB::table('redmine_mantencion_horas_extra_grupos')->where('id', $grupoId)->update($values);
-            }
-
-            DB::table('redmine_mantencion_horas_extra_reportes')->updateOrInsert(
-                ['grupo_id' => (int) $grupoId, 'reporte_id' => $reportId],
-                ['actualizado_at' => now()],
-            );
-        } catch (\Throwable) {
+        $grupoId = $this->shared->findOrCreateGroup($usuarioId, $fecha, $horaInicio, $horaFin);
+        if ($grupoId === null) {
+            return;
         }
+
+        // Si el grupo ya existia (p.ej. creado antes por TIC para el mismo usuario+fecha),
+        // se fusionan aqui las horas de este mensaje sin pisar valores ya definidos.
+        $this->shared->updateGroupTime($grupoId, $horaInicio, $horaFin);
+        $this->shared->attachReporte($grupoId, self::ORIGEN, $reportId);
     }
 
     public function detachMessageId(string $messageId): bool
@@ -169,17 +167,13 @@ final class MantencionHoursExtraRepository
         }
 
         try {
-            $deleted = DB::table('redmine_mantencion_horas_extra_reportes')
-                ->where('reporte_id', $reportId)
-                ->delete();
+            $detached = $this->shared->detachReporte(self::ORIGEN, $reportId);
 
             DB::table('redmine_mantencion_reportes')
                 ->where('id', $reportId)
                 ->update(['hora_extra' => 0, 'actualizado_at' => now()]);
 
-            $this->deleteEmptyGroups();
-
-            return $deleted > 0;
+            return $detached;
         } catch (\Throwable) {
             return false;
         }
@@ -191,33 +185,18 @@ final class MantencionHoursExtraRepository
             return false;
         }
 
-        $moduleId = $this->resolveModuleId();
         $fecha = $this->normalizeDate($fecha) ?? '';
-        if ($moduleId === null || $fecha === '') {
+        if ($fecha === '') {
             return false;
         }
 
-        $values = ['actualizado_at' => now()];
         $inicio = $this->normalizeTime($horaInicio);
         $fin = $this->normalizeTime($horaFin);
-        if ($inicio !== null) {
-            $values['hora_inicio'] = $inicio;
-        }
-        if ($fin !== null) {
-            $values['hora_fin'] = $fin;
-        }
-        if (count($values) === 1) {
+        if ($inicio === null && $fin === null) {
             return false;
         }
 
-        try {
-            return DB::table('redmine_mantencion_horas_extra_grupos')
-                ->where('modulo_id', $moduleId)
-                ->where('fecha', $fecha)
-                ->update($values) > 0;
-        } catch (\Throwable) {
-            return false;
-        }
+        return $this->shared->updateGroupsByOrigenAndFecha(self::ORIGEN, $fecha, $inicio, $fin);
     }
 
     private function reportIdForMessage(array $message): ?int
@@ -306,27 +285,26 @@ final class MantencionHoursExtraRepository
             return null;
         }
 
-        foreach (['H:i:s', 'H:i', 'Y-m-d H:i:s', 'Y-m-d H:i', 'd-m-Y H:i:s', 'd-m-Y H:i', 'd/m/Y H:i:s', 'd/m/Y H:i'] as $format) {
+        // Cubre "H:i" y "H:i:s" (lo que envía <input type="time"> y lo que
+        // guarda la columna TIME) sin depender de recortar el string al largo
+        // del propio nombre del formato, que no coincide con el largo real
+        // del valor (bug previo: dejaba pasar siempre null para "17:02").
+        if (preg_match('/^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/', $value, $matches)) {
+            $hour = max(0, min(23, (int) $matches[1]));
+            $minute = (int) $matches[2];
+            $second = isset($matches[3]) ? (int) $matches[3] : 0;
+
+            return sprintf('%02d:%02d:%02d', $hour, $minute, $second);
+        }
+
+        foreach (['Y-m-d H:i:s', 'Y-m-d H:i', 'd-m-Y H:i:s', 'd-m-Y H:i', 'd/m/Y H:i:s', 'd/m/Y H:i'] as $format) {
             try {
-                return Carbon::createFromFormat($format, substr($value, 0, strlen($format)))->format('H:i:s');
+                return Carbon::createFromFormat($format, $value)->format('H:i:s');
             } catch (\Throwable) {
             }
         }
 
         return null;
-    }
-
-    private function formatDate(mixed $value): string
-    {
-        if ($value === null || trim((string) $value) === '') {
-            return '';
-        }
-
-        try {
-            return Carbon::parse((string) $value)->toDateString();
-        } catch (\Throwable) {
-            return trim((string) $value);
-        }
     }
 
     private function formatTime(mixed $value): string
@@ -340,17 +318,6 @@ final class MantencionHoursExtraRepository
         } catch (\Throwable) {
             return trim((string) $value);
         }
-    }
-
-    private function deleteEmptyGroups(): void
-    {
-        DB::table('redmine_mantencion_horas_extra_grupos')
-            ->whereNotExists(function ($query): void {
-                $query->selectRaw('1')
-                    ->from('redmine_mantencion_horas_extra_reportes as hr')
-                    ->whereColumn('hr.grupo_id', 'redmine_mantencion_horas_extra_grupos.id');
-            })
-            ->delete();
     }
 
     private function resolveModuleId(): ?int

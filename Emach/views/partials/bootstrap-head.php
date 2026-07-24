@@ -31,3 +31,6 @@ $novaFaviconVersion = @filemtime($novaFaviconPath) ?: time();
   <?php $novaUiVersion = @filemtime($novaUiPath) ?: time(); ?>
   <link href="<?= $h(function_exists('asset') ? asset('assets/nova-ui.css') : '/NOVA/public/assets/nova-ui.css') ?>?v=<?= (int) $novaUiVersion ?>" rel="stylesheet">
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <?php $novaUiJsPath = function_exists('base_path') ? base_path('public/assets/nova-ui.js') : __DIR__ . '/../../../public/assets/nova-ui.js'; ?>
+  <?php $novaUiJsVersion = @filemtime($novaUiJsPath) ?: time(); ?>
+  <script defer src="<?= $h(function_exists('asset') ? asset('assets/nova-ui.js') : '/NOVA/public/assets/nova-ui.js') ?>?v=<?= (int) $novaUiJsVersion ?>"></script>

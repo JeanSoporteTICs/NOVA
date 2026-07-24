@@ -500,76 +500,23 @@ function handle_maintenance_request(): ?string {
         return $flash;
     }
     $action = $_POST['action'] ?? '';
-    if (!in_array($action, ['maintenance_export', 'maintenance_import', 'maintenance_settings'], true)) {
+    if ($action !== 'maintenance_settings') {
         return $flash;
     }
     if (function_exists('csrf_validate')) {
         csrf_validate();
     }
-    if ($action === 'maintenance_import' && maintenance_mode_enabled()) {
-        maintenance_mode_block_if_enabled();
+    $cfg = maintenance_load_config();
+    $wasEnabled = !empty($cfg['maintenance_mode']);
+    $enabled = !empty($_POST['maintenance_mode']);
+    $cfg['maintenance_mode'] = $enabled;
+    $cfg['maintenance_until'] = $enabled ? trim((string)($_POST['maintenance_until'] ?? '')) : '';
+    if ($enabled && (!$wasEnabled || trim((string)($cfg['maintenance_started_at'] ?? '')) === '')) {
+        $cfg['maintenance_started_at'] = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('c');
+    } elseif (!$enabled) {
+        unset($cfg['maintenance_started_at']);
     }
-    if ($action === 'maintenance_settings') {
-        $cfg = maintenance_load_config();
-        $wasEnabled = !empty($cfg['maintenance_mode']);
-        $enabled = !empty($_POST['maintenance_mode']);
-        $cfg['maintenance_mode'] = $enabled;
-        $cfg['maintenance_until'] = $enabled ? trim((string)($_POST['maintenance_until'] ?? '')) : '';
-        if ($enabled && (!$wasEnabled || trim((string)($cfg['maintenance_started_at'] ?? '')) === '')) {
-            $cfg['maintenance_started_at'] = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('c');
-        } elseif (!$enabled) {
-            unset($cfg['maintenance_started_at']);
-        }
-        maintenance_save_config($cfg);
-        maintenance_set_flash($cfg['maintenance_mode'] ? 'Modo mantencion activado.' : 'Modo mantencion desactivado.');
-        maintenance_redirect_back();
-    }
-    $selected = array_values(array_filter((array)($_POST['maintenance_sections'] ?? []), 'is_string'));
-    if (empty($selected)) {
-        maintenance_set_flash('Selecciona al menos una seccion de mantencion.');
-        maintenance_redirect_back();
-    }
-    if ($action === 'maintenance_export') {
-        $package = null;
-        try {
-            $package = maintenance_export_package($selected);
-            maintenance_clear_output_buffers();
-            header('Content-Type: ' . $package['content_type']);
-            header('Content-Disposition: attachment; filename="' . $package['filename'] . '"');
-            header('Content-Length: ' . filesize($package['path']));
-            readfile($package['path']);
-            maintenance_remove_dir((string)$package['temp_dir']);
-            exit;
-        } catch (Throwable $e) {
-            if (is_array($package) && !empty($package['temp_dir'])) {
-                maintenance_remove_dir((string)$package['temp_dir']);
-            }
-            $bundle = maintenance_export_bundle($selected);
-            $filename = 'mantencion-redmine-' . date('Ymd-His') . '.json';
-            maintenance_clear_output_buffers();
-            header('Content-Type: application/json; charset=utf-8');
-            header('Content-Disposition: attachment; filename="' . $filename . '"');
-            echo json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
-        }
-    }
-    $upload = $_FILES['maintenance_file'] ?? null;
-    if (!is_array($upload) || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        maintenance_set_flash('No se pudo leer el archivo de importacion.');
-        maintenance_redirect_back();
-    }
-    try {
-        $name = strtolower((string)($upload['name'] ?? ''));
-        if (preg_match('/\.(zip|tar|tgz|gz)$/', $name)) {
-            $written = maintenance_import_package((string)$upload['tmp_name'], $selected);
-        } else {
-            $raw = file_get_contents((string)$upload['tmp_name']);
-            $bundle = json_decode((string)$raw, true);
-            $written = maintenance_import_bundle(is_array($bundle) ? $bundle : [], $selected);
-        }
-        maintenance_set_flash('Importacion completada. Archivos actualizados: ' . $written . '.');
-    } catch (Throwable $e) {
-        maintenance_set_flash('Error al importar: ' . $e->getMessage());
-    }
+    maintenance_save_config($cfg);
+    maintenance_set_flash($cfg['maintenance_mode'] ? 'Modo mantencion activado.' : 'Modo mantencion desactivado.');
     maintenance_redirect_back();
 }

@@ -1,0 +1,167 @@
+/* Nova/views/nova/admin/index.blade.php — moved out of the inline <style>
+   block, Fase 6. Same rules, no values changed. Loaded after nova-ui.css,
+   same relative order as the inline block it replaces, so the cascade
+   result is identical. */
+body { margin: 0; min-height: 100vh; background: #eef3fb; color: #0f172a; }
+.rm-shell { min-height: 100vh; }
+.rm-navbar { min-height: 68px; background: linear-gradient(115deg, #1f2f56 0%, #314ed8 62%, #4966ff 100%); box-shadow: 0 16px 36px rgba(31, 47, 86, .22); }
+.rm-brand-mark { display: inline-grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.24); color: #fff; }
+.rm-top-actions { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.rm-main { min-width: 0; }
+.rm-hero { border: 0; border-radius: 18px; color: #fff; background: linear-gradient(130deg, #2563eb 0%, #0891b2 58%, #059669 100%); box-shadow: 0 18px 34px rgba(49, 91, 170, .14); overflow: hidden; }
+.rm-hero-icon { display: grid; width: 46px; height: 46px; place-items: center; flex: 0 0 auto; border-radius: 14px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); font-size: 1.25rem; }
+.rm-page-title { margin: 0; color: #fff; font-size: clamp(1.55rem, 3vw, 2.25rem); font-weight: 800; }
+.rm-page-subtitle { margin: 4px 0 0; color: rgba(255,255,255,.84); font-size: .94rem; font-weight: 750; }
+.rm-hero-retention { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; min-height: 36px; padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.14); color: #fff; font-size: .86rem; font-weight: 900; white-space: nowrap; }
+.rm-work-panel { border-radius: 14px; overflow: hidden; }
+.rm-panel { padding: 16px; }
+.nova-card, .control-card { border-color: #dbe4f0; box-shadow: 0 12px 28px rgba(15, 23, 42, .05); }
+.rm-table-wrap .table thead th { background: #eaf8fd; color: #435061; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+.rm-table-wrap .table tbody tr { transition: background .14s ease; }
+.rm-table-wrap .table tbody tr:hover { background: #f8fafc; }
+.rm-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.rm-section-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+.rm-section-head p { margin: 4px 0 0; color: var(--nova-muted); }
+.admin-empty-row { padding: 18px; color: #64748b; font-weight: 800; }
+.user-grid { display: block; }
+.form-panel { display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
+.form-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+.form-title h2 { margin: 0; font-size: 1.08rem; font-weight: 900; color: #0f172a; }
+.form-section { display: grid; gap: 12px; margin-bottom: 14px; }
+.form-section.is-two { grid-template-columns: 1fr 1fr; }
+.form-section-title { margin: 16px 0 10px; color: #64748b; font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.config-grid .is-wide { grid-column: 1 / -1; }
+.config-status { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: .78rem; font-weight: 900; }
+.config-status.is-ok { background: #dcfce7; color: #166534; }
+.config-status.is-warn { background: #fef3c7; color: #92400e; }
+.config-code { display: grid; gap: 6px; margin-top: 12px; padding: 12px; border-radius: 10px; background: #0f172a; color: #86efac; font-size: .82rem; font-weight: 800; word-break: break-word; }
+.config-code code { white-space: pre-wrap; }
+.control-grid { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.control-card { display: grid; gap: 8px; min-height: 132px; padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgba(15, 23, 42, .04); }
+.control-card:hover { transform: translateY(-1px); box-shadow: 0 16px 34px rgba(15, 23, 42, .07); }
+.control-card h3 { margin: 0; color: #334155; font-size: .82rem; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
+.control-card strong { color: #0f172a; font-size: 1.8rem; line-height: 1; font-weight: 950; }
+.control-card span { color: #64748b; font-size: .85rem; font-weight: 800; }
+.control-card i { color: #2563eb; font-size: 1.2rem; }
+.control-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.command-list { display: grid; gap: 10px; }
+.command-row { display: grid; grid-template-columns: 160px 1fr; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4f0; border-radius: 12px; background: #fff; }
+.command-row code { color: #1d4ed8; font-weight: 950; }
+.command-alias { display: inline-flex; min-height: 22px; align-items: center; margin-right: 4px; padding: 2px 7px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: .72rem; font-weight: 900; }
+.health-dot { display: inline-flex; align-items: center; gap: 7px; min-height: 26px; padding: 3px 8px; border-radius: 999px; font-size: .75rem; font-weight: 900; }
+.health-dot.is-ok { background: #dcfce7; color: #166534; }
+.health-dot.is-warn { background: #fef3c7; color: #92400e; }
+.health-dot.is-error { background: #fee2e2; color: #991b1b; }
+.telegram-admin-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, .72fr); gap: 16px; align-items: start; }
+.telegram-listener-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.telegram-listener-metric { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 12px; border: 1px solid #d7e2ef; border-radius: 12px; background: #f8fafc; }
+.telegram-listener-metric i { display: grid; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border-radius: 12px; background: #e0f2fe; color: #0369a1; }
+.telegram-listener-metric strong { display: block; color: #111827; font-size: 1rem; line-height: 1.1; }
+.telegram-listener-metric span { color: #64748b; font-size: .74rem; font-weight: 900; text-transform: uppercase; }
+.telegram-listener-metric.is-ok i { background: #dcfce7; color: #15803d; }
+.telegram-listener-metric.is-warn i { background: #fef3c7; color: #b45309; }
+.telegram-listener-metric.is-bad i { background: #fee2e2; color: #dc2626; }
+.telegram-listener-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.telegram-log-tail { min-height: 150px; max-height: 260px; overflow: auto; padding: 12px; border-radius: 12px; background: #020617; color: #86efac; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; white-space: pre-wrap; }
+.telegram-message-grid { display: grid; gap: 16px; align-items: start; }
+.telegram-message-editor-layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.telegram-message-picker { display: grid; gap: 8px; padding: 10px; border: 1px solid #dbe4f0; border-radius: 14px; background: #f8fafc; }
+.telegram-message-picker-title { margin: 0 0 2px; color: #0f172a; font-size: .9rem; font-weight: 950; }
+.telegram-message-option { width: 100%; display: grid; gap: 4px; padding: 10px 11px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #334155; text-align: left; }
+.telegram-message-option:hover { background: #fff; border-color: #dbe4f0; }
+.telegram-message-option.is-active { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
+.telegram-message-option strong { display: flex; align-items: center; gap: 7px; font-size: .86rem; font-weight: 950; }
+.telegram-message-option span { color: #64748b; font-size: .74rem; font-weight: 800; }
+.telegram-message-option code { color: inherit; font-size: .78rem; font-weight: 950; }
+.telegram-message-editor { display: none; padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; }
+.telegram-message-editor.is-active { display: block; }
+.telegram-message-editor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+.telegram-message-editor-head h3 { margin: 0; color: #0f172a; font-size: 1.05rem; font-weight: 950; }
+.telegram-message-editor-head p { margin: 4px 0 0; color: #64748b; font-size: .84rem; font-weight: 750; }
+.telegram-message-command { display: inline-flex; min-height: 30px; align-items: center; padding: 3px 9px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: .9rem; font-weight: 950; }
+.telegram-message-editor label { color: #334155; font-size: .78rem; font-weight: 950; text-transform: uppercase; letter-spacing: .03em; }
+.telegram-message-editor textarea { min-height: 260px; margin-top: 7px; font-weight: 750; resize: vertical; }
+.telegram-command-message-toggle { display: inline-flex; align-items: center; gap: 9px; color: #334155; font-size: .82rem; font-weight: 950; }
+.telegram-command-message-toggle .form-check-input { width: 2.4rem; height: 1.25rem; margin: 0; }
+.telegram-edit-help { margin: 8px 0 0; color: #64748b; font-size: .8rem; font-weight: 750; }
+.telegram-placeholder-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.telegram-placeholder-list code { display: inline-flex; min-height: 23px; align-items: center; padding: 2px 7px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: .72rem; font-weight: 950; }
+.telegram-placeholder-list span { align-self: center; color: #64748b; font-size: .74rem; font-weight: 900; }
+.telegram-save-bar { position: sticky; bottom: 12px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding: 12px 14px; border: 1px solid #bfdbfe; border-radius: 14px; background: rgba(239, 246, 255, .96); box-shadow: 0 14px 30px rgba(15, 23, 42, .12); }
+.telegram-save-bar strong { display: block; color: #0f172a; font-size: .9rem; font-weight: 950; }
+.telegram-save-bar span { color: #475569; font-size: .8rem; font-weight: 800; }
+.telegram-command-toggle { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4f0; border-radius: 12px; background: #fff; }
+.telegram-command-toggle code { color: #1d4ed8; font-weight: 950; }
+.telegram-command-toggle .form-check-input { width: 2.4rem; height: 1.25rem; margin: 0; }
+.field { margin-bottom: 12px; }
+.field label { display: block; margin-bottom: 6px; color: #334155; font-size: .86rem; font-weight: 800; }
+.field-help { display: none; margin-top: 6px; color: #b91c1c; font-size: .78rem; font-weight: 800; }
+.form-control.is-invalid + .field-help { display: block; }
+.table td, .table th { vertical-align: middle; }
+.table-panel-head { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(360px, 720px) auto; align-items: center; gap: 14px; padding: 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+.table-panel-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a; }
+.user-filters { display: grid; grid-template-columns: minmax(260px, 1fr) 150px 150px 42px; gap: 10px; align-items: center; justify-content: end; }
+.user-search { width: 100%; position: relative; }
+.user-search i { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #64748b; }
+.user-search input { padding-left: 38px; }
+.column-filter { width: 100%; }
+.user-primary-action { justify-self: end; }
+.access-panel-head { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 460px) auto; align-items: center; gap: 14px; padding: 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+.access-panel-head h2 { margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a; }
+.access-help { margin: 4px 0 0; color: var(--nova-muted); font-size: .84rem; font-weight: 700; }
+.access-tools { display: grid; grid-template-columns: minmax(240px, 1fr); gap: 10px; align-items: center; }
+.access-list { display: grid; gap: 14px; padding: 16px; }
+.access-user-panel { display: none; gap: 14px; }
+.access-user-panel.is-active { display: grid; }
+.access-user-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid #dbe4f0; border-radius: 14px; background: #f8fafc; }
+.access-user-summary h3 { margin: 0; color: #0f172a; font-size: 1rem; font-weight: 900; }
+.access-module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.access-view-card { display: grid; gap: 14px; padding: 16px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgba(15, 23, 42, .04); }
+.access-view-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.access-view-title { margin: 0; font-size: 1rem; font-weight: 900; color: #0f172a; }
+.access-view-meta { margin-top: 3px; color: #64748b; font-size: .8rem; font-weight: 700; }
+.access-user-option { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 0; border-radius: 10px; cursor: pointer; }
+.access-user-option:hover { background: #f1f5f9; }
+.access-user-option .form-check-input { margin: 0; width: 1.05rem; height: 1.05rem; }
+.access-user-name { color: #0f172a; font-size: .86rem; font-weight: 900; }
+.access-user-meta { color: #64748b; font-size: .74rem; font-weight: 700; }
+.access-source { display: inline-flex; min-height: 20px; align-items: center; padding: 2px 6px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: .68rem; font-weight: 900; }
+.access-source.is-default { background: #dcfce7; color: #166534; }
+.access-source.is-manual { background: #dbeafe; color: #1d4ed8; }
+.emach-credential-badge, .telegram-user-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .72rem; font-weight: 900; white-space: nowrap; }
+.emach-credential-badge.is-missing, .telegram-user-badge.is-missing { background: #fee2e2; color: #991b1b; }
+.nova-user-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+.nova-user-page-actions { display: flex; align-items: center; gap: 8px; }
+.row-actions { display: flex; gap: 7px; justify-content: flex-end; }
+.nova-modal-backdrop { position: fixed; inset: 0; z-index: 1070; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(15, 23, 42, .54); }
+.nova-modal-backdrop.is-open { display: flex; }
+.nova-confirm { width: min(460px, 100%); border-radius: 18px; border: 0; background: #fff; box-shadow: 0 28px 70px rgba(15, 23, 42, .28); overflow: hidden; }
+.nova-user-form { width: min(760px, 100%); overflow: hidden; }
+.nova-user-form__body { overflow: auto; padding: 22px; }
+.nova-user-form__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+.modal-close { border: 0; background: transparent; color: #64748b; font-size: 1.45rem; line-height: 1; padding: 0; }
+.nova-confirm__body { padding: 22px; }
+.nova-confirm__body h2 { margin: 0 0 8px; font-size: 1.1rem; font-weight: 900; }
+.nova-confirm__body p { margin: 0; color: #475569; }
+.nova-confirm__actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+@media (max-width: 900px) {
+    .rm-layout { padding: 14px 12px 32px; }
+    .user-grid { grid-template-columns: 1fr; }
+    .control-grid { grid-template-columns: 1fr; }
+    .command-row { grid-template-columns: 1fr; }
+    .config-grid { grid-template-columns: 1fr; }
+    .telegram-admin-grid { grid-template-columns: 1fr; }
+    .telegram-message-grid { grid-template-columns: 1fr; }
+    .telegram-message-editor-layout { grid-template-columns: 1fr; }
+    .telegram-listener-grid { grid-template-columns: 1fr; }
+    .form-section.is-two { grid-template-columns: 1fr; }
+    .table-panel-head { grid-template-columns: 1fr; align-items: stretch; }
+    .user-filters { grid-template-columns: 1fr; }
+    .user-search, .column-filter, .user-filters { width: 100%; }
+    .user-primary-action { justify-self: stretch; }
+    .access-panel-head { grid-template-columns: 1fr; align-items: stretch; }
+    .access-tools { grid-template-columns: 1fr; }
+    .access-list { grid-template-columns: 1fr; }
+    .access-user-summary { align-items: flex-start; flex-direction: column; }
+}

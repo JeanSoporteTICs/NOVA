@@ -1,0 +1,474 @@
+    /* Fallback modal styles si Bootstrap no carga */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1055;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .modal.show { display: flex; }
+    .modal-dialog {
+      margin: 0 auto;
+      max-height: calc(100vh - 30px);
+    }
+    .modal-dialog.modal-dialog-top { margin-top: 12px; }
+    .modal-dialog-scrollable,
+    .modal-dialog-scrollable .modal-content {
+      max-height: calc(100vh - 60px);
+    }
+    .modal-dialog-scrollable .modal-body,
+    .modal-body.modal-body-tight {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+    }
+    .modal-backdrop { display: block; }
+    .modal-dialog-scrollable .modal-body {
+      max-height: calc(100vh - 220px);
+      overflow-y: auto;
+    }
+    /* Botones de config */
+    .cfg-grid { row-gap: 20px; }
+    .cfg-btn {
+      padding: 22px 22px;
+      font-size: 1.05rem;
+      width: 100%;
+      border-radius: 16px;
+      background: #fff;
+      color: #1f2937;
+      box-shadow: 0 10px 28px rgba(17, 24, 39, 0.08);
+      border: 1px solid rgba(0,0,0,0.03);
+      transition: all .18s ease;
+      min-height: 88px;
+    }
+    .cfg-btn i { font-size: 1.35rem; }
+    .cfg-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 36px rgba(53,88,230,0.18);
+      color: var(--sb-primary);
+    }
+    .cfg-btn span { font-weight: 600; letter-spacing: 0.01em; }
+    .cfg-btn .bi-arrow-right-short { font-size: 1.4rem; }
+    .cfg-section { background: #fff; border-radius: 18px; box-shadow: 0 12px 30px rgba(17,24,39,0.08); padding: 18px 20px; }
+    .cfg-section h5 { font-weight: 700; }
+    .form-check { margin-bottom: 8px; }
+    .permission-section-help {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: #475569;
+      font-size: .88rem;
+      margin: -6px 0 14px;
+      padding: 10px 12px;
+      border: 1px solid #dbeafe;
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+    .permission-section-help::before {
+      content: "i";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #2563eb;
+      color: #fff;
+      font-size: .75rem;
+      font-weight: 800;
+      flex: 0 0 auto;
+      margin-top: 1px;
+    }
+    .permission-related {
+      position: relative;
+      padding-bottom: 0 !important;
+    }
+    .permission-child {
+      position: relative;
+      min-height: 29px !important;
+      width: 75%;
+      margin-top: -4px !important;
+      margin-left: auto !important;
+      border-color: #dbeafe !important;
+      background: #f8fbff !important;
+      box-shadow: inset 3px 0 0 #93c5fd;
+    }
+    .permission-child::before {
+      content: "";
+      position: absolute;
+      left: -25%;
+      top: -14px;
+      width: 25%;
+      height: 24px;
+      border-left: 2px solid #bfdbfe;
+      border-bottom: 2px solid #bfdbfe;
+      border-bottom-left-radius: 8px;
+      pointer-events: none;
+    }
+    .permission-tag {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: #e0f2fe;
+      color: #0369a1;
+      font-size: .58rem;
+      font-weight: 800;
+      line-height: 1;
+      vertical-align: middle;
+    }
+    .permission-note {
+      display: block;
+      margin-top: 1px;
+      color: #64748b;
+      font-size: .58rem;
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .permission-child .form-check-label {
+      display: block;
+    }
+    .permission-child .form-check-input:disabled + .form-check-label,
+    .permission-child .form-check-input:disabled ~ .form-check-label {
+      color: #9ca3af !important;
+    }
+    .permission-child .form-check-input:disabled ~ .form-check-label .permission-tag {
+      background: #f3f4f6;
+      color: #9ca3af;
+    }
+    .permission-child .form-check-input:disabled ~ .form-check-label .permission-note {
+      color: #9ca3af;
+    }
+    .user-picker {
+      position: relative;
+    }
+    .user-picker-results {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      max-height: 260px;
+      overflow-y: auto;
+      border: 1px solid #dbeafe;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
+      z-index: 1056;
+    }
+    .user-picker-option {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 0;
+      border-bottom: 1px solid #eef2f7;
+      background: #fff;
+      color: #1f2937;
+      text-align: left;
+      font-weight: 700;
+    }
+    .user-picker-option:hover,
+    .user-picker-option.is-active {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    .user-picker-option:last-child {
+      border-bottom: 0;
+    }
+    .user-picker-id {
+      flex: 0 0 auto;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e0f2fe;
+      color: #0369a1;
+      font-size: .76rem;
+      font-weight: 800;
+    }
+    .user-picker-empty {
+      padding: 12px;
+      color: #64748b;
+      font-size: .9rem;
+    }
+    .roles-modal-shell { display: grid; gap: 18px; }
+    :is(#rolesModal, #usuariosModal) .modal-content {
+      border: 0;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, .18);
+    }
+    :is(#rolesModal, #usuariosModal) .modal-header {
+      background: linear-gradient(135deg, #f8fbff, #eef6ff);
+      border-bottom: 1px solid #dbeafe;
+      padding: 18px 22px;
+    }
+    :is(#rolesModal, #usuariosModal) .modal-title {
+      font-weight: 800;
+      color: #111827;
+    }
+    :is(#rolesModal, #usuariosModal) .modal-body {
+      background: #f6f8fb;
+      padding: 18px;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12 {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 26px rgba(15, 23, 42, .05);
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 {
+      width: 100%;
+      display: block;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 .form-label,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 .form-label,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12 > .form-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-weight: 800;
+      color: #111827;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 .form-label::before,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 .form-label::before,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12 > .form-label::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #2563eb;
+      box-shadow: 0 0 0 4px #dbeafe;
+      flex: 0 0 auto;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 .form-text,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-8 .form-text {
+      margin-bottom: 0;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 input[name="new_role"] {
+      margin-top: 10px !important;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(2) .row {
+      row-gap: 12px;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(2) .col-md-4 {
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #f8fafc;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(2) .small {
+      font-weight: 800;
+      color: #374151;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-scope-section .row {
+      row-gap: 12px;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-scope-section .col-md-4 {
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #f8fafc;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-scope-section .small {
+      font-weight: 800;
+      color: #374151;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .col-md-4,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .col-md-4 {
+      padding: 0 6px;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .col-md-4 {
+      padding: 0 6px;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 0 0 10px;
+      padding: 12px 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fff;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 0 0 10px;
+      padding: 12px 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fff;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check:has(.form-check-input:checked),
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check:has(.form-check-input:checked) {
+      border-color: #93c5fd;
+      background: #f8fbff;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, .08);
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check:has(.form-check-input:checked) {
+      border-color: #93c5fd;
+      background: #f8fbff;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, .08);
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input {
+      order: 2;
+      margin-left: 12px;
+      width: 2.7rem;
+      height: 1.45rem;
+      margin-top: 0;
+      margin-right: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      background-color: #cbd5e1;
+      background-image: none;
+      cursor: pointer;
+      position: relative;
+      flex: 0 0 auto;
+      transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input {
+      order: 2;
+      margin-left: 12px;
+      width: 2.7rem;
+      height: 1.45rem;
+      margin-top: 0;
+      margin-right: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      background-color: #cbd5e1;
+      background-image: none;
+      cursor: pointer;
+      position: relative;
+      flex: 0 0 auto;
+      transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input::before,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 1.05rem;
+      height: 1.05rem;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, .25);
+      transition: transform .18s ease;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 1.05rem;
+      height: 1.05rem;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, .25);
+      transition: transform .18s ease;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:checked,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:checked {
+      border-color: #2563eb;
+      background-color: #2563eb;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input:checked {
+      border-color: #2563eb;
+      background-color: #2563eb;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:checked::before,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:checked::before {
+      transform: translateX(1.22rem);
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-input:checked::before {
+      transform: translateX(1.22rem);
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:focus,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:focus {
+      box-shadow: 0 0 0 .2rem rgba(37, 99, 235, .18);
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-input:disabled,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-input:disabled {
+      border-color: #e5e7eb;
+      background-color: #e5e7eb;
+      cursor: not-allowed;
+      opacity: 1;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(3) .form-check-label,
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-12:nth-of-type(4) .form-check-label {
+      order: 1;
+      flex: 1 1 auto;
+      font-weight: 700;
+      color: #1f2937;
+      line-height: 1.2;
+    }
+    :is(#rolesModal, #usuariosModal) .permission-grid-section .form-check-label {
+      order: 1;
+      flex: 1 1 auto;
+      font-weight: 700;
+      color: #1f2937;
+      line-height: 1.2;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell .form-check.ms-3 {
+      background: #f9fafb;
+      padding: 5px 8px;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-input {
+      width: 1.5rem;
+      height: .8rem;
+      margin-left: 6px;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-input::before {
+      top: 1px;
+      left: 1px;
+      width: .58rem;
+      height: .58rem;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-input:checked::before {
+      transform: translateX(.68rem);
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell .permission-child .form-check-label {
+      font-size: .62rem;
+    }
+    :is(#rolesModal, #usuariosModal) .roles-modal-shell > .text-end {
+      position: sticky;
+      bottom: -18px;
+      margin: 0 -16px -16px;
+      padding: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0), #fff 35%);
+      border: 0;
+      box-shadow: none;
+      z-index: 3;
+    }
+    :is(#rolesModal, #usuariosModal) #btn-save-roles,
+    :is(#rolesModal, #usuariosModal) #btn-save-user-perms {
+      min-width: 180px;
+      font-weight: 800;
+    }
+    @media (max-width: 767.98px) {
+      :is(#rolesModal, #usuariosModal) .roles-modal-shell > .col-md-6 input[name="new_role"] { margin-top: 10px !important; }
+    }
+    .table thead th { font-weight: 700; text-transform: uppercase; font-size: .78rem; letter-spacing: .02em; }
+  

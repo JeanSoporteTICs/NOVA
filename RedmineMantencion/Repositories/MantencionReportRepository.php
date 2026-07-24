@@ -12,6 +12,7 @@ final class MantencionReportRepository
 
     private ?int $moduleId = null;
     private bool $moduleIdResolved = false;
+    private ?bool $tableReadyCache = null;
 
     public function __construct(private readonly MantencionCatalogRepository $catalogs)
     {
@@ -19,12 +20,18 @@ final class MantencionReportRepository
 
     public function tableReady(): bool
     {
+        if ($this->tableReadyCache !== null) {
+            return $this->tableReadyCache;
+        }
+
         try {
-            return Schema::hasTable('modulos_nova')
+            $this->tableReadyCache = Schema::hasTable('modulos_nova')
                 && Schema::hasTable('redmine_mantencion_reportes');
         } catch (\Throwable) {
-            return false;
+            $this->tableReadyCache = false;
         }
+
+        return $this->tableReadyCache;
     }
 
     /**
@@ -95,11 +102,43 @@ final class MantencionReportRepository
             return;
         }
 
+        // Resolve each distinct categoria name once for the whole batch instead of
+        // once per message — upsertMessage()/payload() would otherwise call
+        // categoriaIdPorNombre() (Schema::hasColumn + a query) on every iteration,
+        // even though most CORE imports reuse a small, fixed set of categoria names
+        // across many messages. See Fase 4 lote 2.
+        $categoriaIds = $this->prefetchCategoriaIds($messages);
+
         foreach ($messages as $message) {
             if (is_array($message)) {
-                $this->upsertMessage($message, $config);
+                $this->upsertMessage($message, $config, $categoriaIds);
             }
         }
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $messages
+     * @return array<string,int|null>  trimmed categoria name (same casing as payload()) => categoria_id
+     */
+    private function prefetchCategoriaIds(array $messages): array
+    {
+        $names = [];
+        foreach ($messages as $message) {
+            if (! is_array($message)) {
+                continue;
+            }
+            $name = trim((string) ($message['categoria'] ?? $message['core_tipo_solicitud'] ?? ''));
+            if ($name !== '') {
+                $names[$name] = true;
+            }
+        }
+
+        $ids = [];
+        foreach (array_keys($names) as $name) {
+            $ids[$name] = $this->catalogs->categoriaIdPorNombre($name);
+        }
+
+        return $ids;
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -147,8 +186,13 @@ final class MantencionReportRepository
         }
     }
 
-    /** @param array<string,mixed> $message */
-    public function upsertMessage(array $message, array $config = []): void
+    /**
+     * @param array<string,mixed> $message
+     * @param array<string,int|null>|null $categoriaIds  optional prefetched name=>id map
+     *        (see syncMessages()/prefetchCategoriaIds()); when omitted, the categoria
+     *        is resolved with its own query as before — safe for standalone calls.
+     */
+    public function upsertMessage(array $message, array $config = [], ?array $categoriaIds = null): void
     {
         $moduleId = $this->resolveModuleId();
         if ($moduleId === null || ! $this->tableReady()) {
@@ -164,7 +208,7 @@ final class MantencionReportRepository
             return;
         }
 
-        $values = $this->filterColumns($this->payload($moduleId, $message, $config));
+        $values = $this->filterColumns($this->payload($moduleId, $message, $config, $categoriaIds));
 
         try {
             $existing = DB::table('redmine_mantencion_reportes')
@@ -241,6 +285,11 @@ final class MantencionReportRepository
         $asignadoNombre = trim((string) ($row->asignado_nombre ?? ''));
         $idCore = trim((string) ($row->id_core ?? ''));
 
+        $estado = trim((string) ($row->estado ?? 'pendiente')) ?: 'pendiente';
+        $procesadoTs = in_array(strtolower($estado), ['procesado', 'error', 'archivado'], true)
+            ? $this->formatDateTimeForLegacy($row->actualizado_at ?? null)
+            : '';
+
         return [
             'id' => $id,
             'fuente' => trim((string) ($row->fuente ?? '')),
@@ -256,7 +305,7 @@ final class MantencionReportRepository
             'asunto' => trim((string) ($row->asunto ?? '')),
             'mensaje' => trim((string) ($row->asunto ?? '')),
             'descripcion' => trim((string) ($row->descripcion ?? '')),
-            'estado' => trim((string) ($row->estado ?? 'pendiente')) ?: 'pendiente',
+            'estado' => $estado,
             'estado_redmine' => $estadoRedmine,
             'core_estado' => $estadoRedmine,
             'status_id' => trim((string) ($row->estado_id ?? '')),
@@ -285,11 +334,14 @@ final class MantencionReportRepository
             'hora_extra' => ((int) ($row->hora_extra ?? 0)) === 1 ? '1' : '0',
             'redmine_id' => $redmineId,
             'numero_ticket_redmine' => $redmineId,
+            'procesado_ts' => $procesadoTs,
+            'actualizado_at' => $this->formatDateTimeForLegacy($row->actualizado_at ?? null),
         ];
     }
 
     /** @return array<string,mixed> */
-    private function payload(int $moduleId, array $message, array $config): array
+    /** @param array<string,int|null>|null $categoriaIds see upsertMessage() */
+    private function payload(int $moduleId, array $message, array $config, ?array $categoriaIds = null): array
     {
         $fuente = trim((string) ($message['fuente'] ?? ''));
         $fuenteId = trim((string) ($message['fuente_id'] ?? $message['id'] ?? ''));
@@ -319,7 +371,11 @@ final class MantencionReportRepository
             'priority_id' => $priorityId !== '' ? $priorityId : null,
             'id_redmine_asignado' => trim((string) ($message['asignado_a'] ?? $message['id_redmine_asignado'] ?? '')) ?: null,
             'asignado_nombre' => trim((string) ($message['asignado_nombre'] ?? $message['core_usuario_asignado'] ?? '')) ?: null,
-            'categoria_id' => $categoriaNombre !== '' ? $this->catalogs->categoriaIdPorNombre($categoriaNombre) : null,
+            'categoria_id' => $categoriaNombre !== ''
+                ? ($categoriaIds !== null
+                    ? ($categoriaIds[$categoriaNombre] ?? null)
+                    : $this->catalogs->categoriaIdPorNombre($categoriaNombre))
+                : null,
             'solicitante' => trim((string) ($message['solicitante'] ?? '')) ?: null,
             'anexo' => trim((string) ($message['anexo'] ?? $message['core_telefono'] ?? $message['core_celular'] ?? $message['numero'] ?? '')) ?: null,
             'unidad_texto' => $unidadTexto !== '' ? $unidadTexto : null,
@@ -452,6 +508,19 @@ final class MantencionReportRepository
 
         try {
             return Carbon::parse((string) $value)->format('H:i');
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
+    }
+
+    private function formatDateTimeForLegacy(mixed $value): string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return '';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->toAtomString();
         } catch (\Throwable) {
             return trim((string) $value);
         }

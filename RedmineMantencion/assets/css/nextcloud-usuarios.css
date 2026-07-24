@@ -1,0 +1,68 @@
+    body { margin: 0; }
+    .nextcloud-panel { border: 0; border-radius: 1.1rem; box-shadow: 0 16px 38px rgba(15, 23, 42, .08); }
+    .nextcloud-preview-table th { white-space: nowrap; }
+    .nextcloud-preview-table td { vertical-align: middle; }
+    .nextcloud-group-badge { display: inline-flex; align-items: center; gap: .4rem; min-height: 2rem; }
+    .nextcloud-group-tools { background: #f8fbff; border: 1px solid #dbeafe; border-radius: 1rem; padding: 1rem; }
+    .nextcloud-row-created > * { background-color: #dcfce7 !important; }
+    .nextcloud-row-existing > * { background-color: #fef3c7 !important; }
+    .nextcloud-loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2050;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(15, 23, 42, .58);
+      backdrop-filter: blur(6px);
+    }
+    .nextcloud-loading-overlay.is-visible { display: flex; }
+    .nextcloud-loading-card {
+      width: min(520px, 94vw);
+      border-radius: 1.25rem;
+      background: #fff;
+      box-shadow: 0 28px 70px rgba(15, 23, 42, .28);
+      overflow: hidden;
+    }
+    .nextcloud-loading-media {
+      height: 220px;
+      background: linear-gradient(135deg, #e0f2fe, #f0fdf4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nextcloud-loading-media img {
+      width: 320px;
+      max-width: calc(100% - 2rem);
+      height: auto;
+      max-height: 205px;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+    .nextcloud-loading-body { padding: 1.25rem; }
+    .nextcloud-loading-title { margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; }
+    .nextcloud-loading-text { margin: .25rem 0 1rem; color: #64748b; }
+    .nextcloud-loading-progress {
+      height: .7rem;
+      border-radius: 999px;
+      background: #e5eef8;
+      overflow: hidden;
+    }
+    .nextcloud-loading-progress-bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+      transition: width .25s ease;
+    }
+    .nextcloud-loading-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: .75rem;
+      color: #64748b;
+      font-size: .9rem;
+      font-weight: 700;
+    }
+  

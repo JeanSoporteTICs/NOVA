@@ -49,8 +49,8 @@
                 @endif
             @endforeach
         </div>
-        <div class="rm-empty-state mt-3" data-catalog-empty hidden>No hay resultados para la busqueda.</div>
+        <div class="nova-empty-state mt-3" data-catalog-empty hidden>No hay resultados para la busqueda.</div>
     @else
-        <div class="rm-empty-state">No hay categorias registradas.</div>
+        <div class="nova-empty-state">No hay categorias registradas.</div>
     @endif
 </div>

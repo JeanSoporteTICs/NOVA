@@ -1,11 +1,14 @@
 <?php
 
+use App\Modulos\Nova\Controllers\HoursExtraController;
 use App\Modulos\Nova\Controllers\LegacyProjectController;
 use App\Modulos\Nova\Controllers\ModuleAdminController;
 use App\Modulos\Nova\Controllers\NovaAdministrationController;
 use App\Modulos\Nova\Controllers\NovaAuthController;
 use App\Modulos\Telegram\Controllers\TelegramController;
+use App\Modulos\Shared\Controllers\ModuleLogController;
 use App\Modulos\Nova\Controllers\UserIntegrationController;
+use App\Modulos\Procedimientos\Controllers\ProcedimientosController;
 use App\Modulos\Nova\Repositories\ModuleRegistry;
 use App\Modulos\Nova\Repositories\NovaAccessRepository;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
@@ -36,17 +39,19 @@ $legacyModulePattern = implode('|', array_map(
 Route::get('/login', [NovaAuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [NovaAuthController::class, 'login'])->middleware('throttle:5,1')->name('login.store');
 Route::post('/logout', [NovaAuthController::class, 'logout'])->name('logout');
-Route::post('/session/extend', [NovaAuthController::class, 'extendSession'])->middleware('throttle:5,1')->name('session.extend');
+Route::post('/session/extend', [NovaAuthController::class, 'extendSession'])
+    ->withoutMiddleware(\App\Http\Middleware\VerifyCsrfToken::class)
+    ->middleware('throttle:5,1')
+    ->name('session.extend');
+
+Route::get('/procedimientos/document/{token}', [ProcedimientosController::class, 'document'])->name('procedimientos.document');
+Route::post('/procedimientos/callback/{token}', [ProcedimientosController::class, 'callback'])
+    ->withoutMiddleware(\App\Http\Middleware\VerifyCsrfToken::class)
+    ->name('procedimientos.callback');
 
 Route::get('/{project}/assets/{path}', [LegacyProjectController::class, 'asset'])
     ->where('project', $modulePattern)
     ->where('path', '.*');
-
-Route::match(['GET', 'HEAD'], '/redmine-mantencion/controllers/procedimientos_file.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'controllers/procedimientos_file.php'))
-    ->name('redmine.mantencion.procedimientos-file');
-
-Route::post('/redmine-mantencion/controllers/onlyoffice.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'controllers/onlyoffice.php'))
-    ->name('redmine.mantencion.onlyoffice-callback');
 
 Route::middleware('nova.auth')->group(function () use ($modulePattern, $legacyModulePattern) {
 Route::get('/', function (ModuleRegistry $modules, NovaAccessRepository $access) {
@@ -62,12 +67,21 @@ Route::get('/', function (ModuleRegistry $modules, NovaAccessRepository $access)
     ]);
 })->name('home');
 
+Route::get('/horas-extra', [HoursExtraController::class, 'index'])->name('horas-extra.index');
+Route::post('/horas-extra', [HoursExtraController::class, 'update'])->name('horas-extra.update');
+Route::get('/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'nova')->name('integrations.nova');
+Route::post('/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'nova')->name('integrations.nova.update');
+Route::get('/procedimientos', [ProcedimientosController::class, 'index'])->name('procedimientos.index');
+Route::match(['GET', 'POST'], '/procedimientos/browser', [ProcedimientosController::class, 'browser'])->name('procedimientos.browser');
+Route::get('/procedimientos/editor', [ProcedimientosController::class, 'editor'])->name('procedimientos.editor');
+
 Route::get('/admin/modules', [ModuleAdminController::class, 'index'])->name('modules.index');
 Route::post('/admin/modules', [ModuleAdminController::class, 'update'])->name('modules.update');
 Route::get('/administracion', [NovaAdministrationController::class, 'index'])->name('administracion.index');
 Route::get('/administracion/{section}', [NovaAdministrationController::class, 'index'])->name('administracion.section');
 Route::post('/administracion/configuracion', [NovaAdministrationController::class, 'updateSettings'])->name('administracion.config.update');
-Route::post('/administracion/respaldos', [NovaAdministrationController::class, 'createBackup'])->name('administracion.backups.create');
+Route::post('/administracion/salud/notificar', [NovaAdministrationController::class, 'notifyHealth'])->name('administracion.health.notify');
+Route::post('/administracion/onlyoffice/test', [NovaAdministrationController::class, 'testOnlyOffice'])->name('administracion.onlyoffice.test');
 Route::post('/administracion/telegram/listener', [NovaAdministrationController::class, 'telegramListener'])->name('administracion.telegram.listener');
 Route::post('/administracion/usuarios', [NovaAdministrationController::class, 'updateUsers'])->name('administracion.users.update');
 Route::post('/administracion/accesos', [NovaAdministrationController::class, 'updateAccess'])->name('administracion.access.update');
@@ -75,14 +89,19 @@ Route::get('/admin/users', fn () => redirect()->route('administracion.section', 
 Route::post('/admin/users', [NovaAdministrationController::class, 'updateUsers'])->name('nova-users.update');
 Route::get('/usuarios_nova', fn () => redirect()->route('administracion.section', 'usuarios'))->name('nova-users.project');
 Route::get('/telegram', [TelegramController::class, 'index'])->name('telegram.index');
+Route::get('/telegram/log', [ModuleLogController::class, 'index'])->defaults('module', 'telegram')->name('telegram.log');
 Route::get('/telegram/admin', fn () => redirect()->route('administracion.section', 'telegram'))->name('telegram.admin');
 Route::get('/telegram/mensajes', fn () => redirect()->route('administracion.section', 'telegram-mensajes'))->name('telegram.messages');
-Route::post('/telegram/configuracion', [TelegramController::class, 'update'])->name('telegram.update');
 Route::post('/telegram/admin/configuracion', [TelegramController::class, 'updateAdmin'])->name('telegram.admin.update');
 Route::post('/telegram/admin/listener', [TelegramController::class, 'listener'])->name('telegram.admin.listener');
 Route::post('/telegram/test', [TelegramController::class, 'test'])->name('telegram.test');
 Route::get('/emach/configuracion', [UserIntegrationController::class, 'show'])->defaults('module', 'emach')->name('integrations.emach');
 Route::post('/emach/configuracion', [UserIntegrationController::class, 'update'])->defaults('module', 'emach')->name('integrations.emach.update');
+Route::post('/emach/horas-extra-sugerencia', [UserIntegrationController::class, 'emachOvertimeSuggestion'])->name('emach.overtime-suggestion');
+Route::get('/emach', fn (ProjectAccessGuard $access, LegacyProjectController $controller) => $controller->index('emach', $access))->name('emach.index');
+Route::get('/emach/log', [ModuleLogController::class, 'index'])->defaults('module', 'emach')->name('emach.log');
+Route::post('/emach', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'emach', 'index.php'))->name('emach.query');
+Route::match(['GET', 'POST'], '/emach/horario.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'emach', 'horario.php'))->name('emach.schedule');
 
 Route::get('/redmine_tic/health.php', fn () => response()->json([
     'ok' => true,
@@ -103,8 +122,6 @@ Route::post('/redmine_tic/app/usuarios', [RedmineDashboardController::class, 'us
 Route::post('/redmine_tic/app/categorias', [RedmineDashboardController::class, 'categoryAction'])->name('redmine.native.categories.action');
 Route::post('/redmine_tic/app/unidades', [RedmineDashboardController::class, 'unitAction'])->name('redmine.native.units.action');
 Route::post('/redmine_tic/app/configuracion', [RedmineDashboardController::class, 'configurationAction'])->name('redmine.native.config.action');
-Route::post('/redmine_tic/app/configuracion/importar', [RedmineDashboardController::class, 'configurationImportAction'])->name('redmine.native.config.import');
-Route::post('/redmine_tic/app/configuracion/exportar', [RedmineDashboardController::class, 'configurationExportAction'])->name('redmine.native.config.export');
 Route::get('/redmine_tic/app/historico/estados', [RedmineDashboardController::class, 'historyStatuses'])->name('redmine.native.history.statuses');
 Route::post('/redmine_tic/app/historico', [RedmineDashboardController::class, 'historyAction'])->name('redmine.native.history.action');
 Route::post('/redmine_tic/app/horas-extra', [RedmineDashboardController::class, 'hoursAction'])->name('redmine.native.hours.action');
@@ -125,7 +142,7 @@ Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, L
     ->name('redmine.mantencion.dashboard');
 Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');
 Route::post('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion.update');
-Route::match(['GET', 'POST'], '/nc_browser_ajax.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Procedimientos/nc_browser_ajax.php'))
+Route::match(['GET', 'POST'], '/nc_browser_ajax.php', fn () => redirect()->route('procedimientos.index'))
     ->name('redmine.mantencion.nc-browser-legacy');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
     $path = match ($section) {
@@ -133,7 +150,7 @@ Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Req
         'manual', 'pendiente-manual' => 'views/Pendientes/manual.php',
         'horas-extra' => 'views/HorasExtra/horas_extra.php',
         'historico' => 'views/Historico/historico.php',
-        'procedimientos' => 'views/Procedimientos/procedimientos.php',
+        'procedimientos' => null,
         'usuarios' => 'views/Usuarios/usuarios.php',
         'integraciones-nextcloud-usuarios' => 'views/Integraciones/NextcloudUsuarios.php',
         'integraciones-nextcloud-historial' => 'views/Integraciones/NextcloudHistorial.php',
@@ -143,6 +160,9 @@ Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Req
         default => abort(404),
     };
 
+    if ($section === 'procedimientos') {
+        return redirect()->route('procedimientos.index');
+    }
     return $controller->passthrough($request, 'redmine-mantencion', $path);
 })->name('redmine.mantencion.section');
 Route::match(['GET', 'POST'], '/redmine-mantencion/{path}', fn (Request $request, LegacyProjectController $controller, ?string $path = null) => $controller->passthrough($request, 'redmine-mantencion', $path))

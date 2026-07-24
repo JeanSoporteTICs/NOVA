@@ -53,15 +53,6 @@ class SystemHealthModel
             $status['checks']['backups'] = 'not_writable';
             $status['ok'] = false;
         }
-        $lastBackupFile = APP_BASE_PATH . '/data/backups/.last_auto_backup';
-        $lastBackup = trim(\storage_read_text($lastBackupFile, ''));
-        if ($lastBackup === date('Y-m-d')) {
-            $status['checks']['last_auto_backup'] = 'ok';
-        } else {
-            $status['checks']['last_auto_backup'] = $lastBackup !== '' ? 'stale:' . $lastBackup : 'missing';
-            $status['warnings']['last_auto_backup'] = 'No hay backup automatico registrado para hoy.';
-        }
-
         if (!empty($config['debug'])) {
             $status['warnings']['app_debug'] = 'APP_DEBUG esta activo; debe quedar apagado en produccion.';
             if (($config['env'] ?? 'production') === 'production') {
@@ -80,9 +71,7 @@ class SystemHealthModel
                     $status['checks']['config_' . $key] = 'ok';
                 }
             }
-            if (empty($cfg['platform_token'])) {
-                $status['warnings']['platform_token'] = 'No hay token global configurado; se usara token por usuario si existe.';
-            }
+            unset($status['warnings']['platform_token']);
         }
 
         $logFile = ini_get('error_log');

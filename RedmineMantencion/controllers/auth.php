@@ -133,8 +133,13 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
             ->whereIn('usuario_id', $ids)
             ->get()
             ->groupBy('usuario_id');
+        $userPermissions = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('mantencion_permisos_usuario')) {
+            $userPermissions = \Illuminate\Support\Facades\DB::table('mantencion_permisos_usuario')
+                ->whereIn('usuario_id', $ids)->get()->groupBy('usuario_id');
+        }
 
-        return $rows->map(function ($row) use ($integrations): array {
+        return $rows->map(function ($row) use ($integrations, $userPermissions): array {
             $rowIntegrations = $integrations[(int)$row->nova_id] ?? collect();
             $byType = $rowIntegrations->keyBy('tipo');
             $redmine = $byType['redmine_mantencion'] ?? null;
@@ -148,6 +153,12 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
                     $api = (string)decrypt($api);
                 } catch (\Throwable) {
                 }
+            }
+
+            $permissions = [];
+            foreach ($userPermissions[(int)$row->nova_id] ?? [] as $permissionRow) {
+                $value = (string)$permissionRow->valor;
+                $permissions[(string)$permissionRow->permiso] = $value === '1' ? true : ($value === '' ? false : $value);
             }
 
             return [
@@ -168,7 +179,7 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
                 'nextcloud_user'  => trim((string)($nextcloud->usuario_externo ?? '')),
                 'nextcloud_pass_enc' => (string)($nextcloud->valor_secreto ?? ''),
                 'telegram_chat_id'=> trim((string)($row->telegram_id_chat ?? '')),
-                'permisos'        => $legacyRole === 'root' ? ['all' => true] : [],
+                'permisos'        => $legacyRole === 'root' ? array_merge($permissions, ['all' => true]) : $permissions,
                 '_nova_user_id'   => trim((string)($row->uuid ?? '')),
                 'ultimo_login_at' => (string)($row->ultimo_login_at ?? ''),
                 'creado_at'       => (string)($row->creado_at ?? ''),
@@ -339,9 +350,26 @@ function auth_apply_role_permission_defaults(array $roles): array {
         if (!array_key_exists('procedimientos', $cfg)) {
             $cfg['procedimientos'] = true;
         }
-        if (!array_key_exists('procedimientos_editar', $cfg)) {
-            $cfg['procedimientos_editar'] = in_array((string)$name, ['root', 'gestor', 'administrador'], true);
+        if (!array_key_exists('mis_integraciones', $cfg)) {
+            $cfg['mis_integraciones'] = true;
         }
+        if (!array_key_exists('integraciones_nextcloud', $cfg)) {
+            $cfg['integraciones_nextcloud'] = in_array((string)$name, ['root', 'gestor'], true);
+        }
+        if (!array_key_exists('actividad_eliminar', $cfg)) {
+            $cfg['actividad_eliminar'] = !empty($cfg['actividad']);
+        }
+        if (!array_key_exists('actividad_todos', $cfg)) {
+            $cfg['actividad_todos'] = !empty($cfg['actividad']);
+        }
+        $configAccess = !empty($cfg['configuracion']);
+        foreach (['cfg_resumen', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $permission) {
+            if (!array_key_exists($permission, $cfg)) {
+                $cfg[$permission] = $permission === 'cfg_categorias' ? !empty($cfg['categorias']) : $configAccess;
+            }
+        }
+        // Permiso retirado: ver Procedimientos habilita sus acciones internas.
+        unset($cfg['procedimientos_editar']);
     }
     unset($cfg);
     return $roles;
@@ -427,6 +455,16 @@ function auth_get_permission_value(string $permiso) {
 }
 
 function auth_can($permiso) {
+    if (in_array((string)$permiso, ['actividad', 'actividad_eliminar', 'actividad_todos'], true)) {
+        $override = auth_get_user_override_permissions();
+        if (array_key_exists((string)$permiso, $override)) {
+            return !empty($override[(string)$permiso]);
+        }
+        $roleCfg = auth_get_role_config();
+        if (array_key_exists((string)$permiso, $roleCfg)) {
+            return !empty($roleCfg[(string)$permiso]);
+        }
+    }
     if (auth_user_has_all_permissions()) {
         return true;
     }

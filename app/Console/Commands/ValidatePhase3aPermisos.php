@@ -19,19 +19,18 @@ class ValidatePhase3aPermisos extends Command
     protected $signature = 'nova:validate-phase3a';
     protected $description = 'Validate Phase 3a: relational permission tables vs JSON source';
 
-    private const EXPECTED_KEYS = 37;
+    private const EXPECTED_KEYS = 31;
 
     private const SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
 
     private const ALL_KEYS = [
         'mensajes', 'mensajes_acceso', 'horas_extra', 'historico', 'historico_acciones',
-        'historico_scope', 'configuracion', 'estadisticas', 'estadisticas_manual', 'usuarios',
+        'historico_scope', 'configuracion', 'estadisticas', 'usuarios',
         'categorias', 'unidades', 'simulador', 'actividad', 'reportes_editar',
         'reportes_eliminar', 'horas_extra_editar', 'horas_extra_eliminar', 'usuarios_editar',
         'usuarios_eliminar', 'cfg_resumen', 'cfg_conexion', 'cfg_proyecto', 'cfg_redmine',
-        'cfg_campos', 'cfg_retencion', 'cfg_webhook', 'cfg_sesion', 'cfg_mantencion',
-        'cfg_trackers', 'cfg_prioridades', 'cfg_estados', 'cfg_roles', 'cfg_usuarios',
-        'cfg_catalogos', 'cfg_categorias', 'cfg_unidades',
+        'cfg_campos', 'cfg_retencion', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
+        'cfg_categorias', 'cfg_unidades', 'mis_integraciones',
     ];
 
     private int $passed = 0;
@@ -101,7 +100,7 @@ class ValidatePhase3aPermisos extends Command
         $dbKeys = DB::table('redmine_tic_permisos_catalogo')->pluck('clave')->toArray();
         $missing = array_diff(self::ALL_KEYS, $dbKeys);
         if (empty($missing)) {
-            $this->pass('Todas las 37 claves canónicas están en el catálogo');
+            $this->pass('Todas las claves canónicas están en el catálogo');
         } else {
             $this->checkFail('Claves faltantes en catálogo: ' . implode(', ', $missing));
         }
@@ -144,7 +143,7 @@ class ValidatePhase3aPermisos extends Command
             $this->checkFail("Insuficientes filas: {$totalRows} < {$expectedMin}");
         }
 
-        // Check profiles with fewer than 37 keys
+        // Check profiles with fewer than the canonical key count.
         $countsByPerfil = DB::table('redmine_tic_permisos_usuario')
             ->select('perfil_id', DB::raw('COUNT(*) as cnt'))
             ->groupBy('perfil_id')
@@ -170,14 +169,14 @@ class ValidatePhase3aPermisos extends Command
                 array_keys($profilesWithFewer),
                 $profilesWithFewer
             ));
-            $this->checkFail(count($profilesWithFewer) . ' perfil(es) con menos de 37 claves: ' . $detail);
+            $this->checkFail(count($profilesWithFewer) . ' perfil(es) con permisos incompletos: ' . $detail);
         }
 
-        // Verify the 37 distinct keys actually stored
+        // Verify the distinct canonical keys actually stored.
         $storedKeys   = DB::table('redmine_tic_permisos_usuario')->distinct()->pluck('clave')->toArray();
         $missingKeys  = array_diff(self::ALL_KEYS, $storedKeys);
         if (empty($missingKeys)) {
-            $this->pass('Las 37 claves canónicas aparecen al menos una vez en la tabla');
+            $this->pass('Las claves canónicas aparecen al menos una vez en la tabla');
         } else {
             $this->checkFail('Claves nunca vistas en permisos_usuario: ' . implode(', ', $missingKeys));
         }
@@ -217,14 +216,14 @@ class ValidatePhase3aPermisos extends Command
 
         $rolesWithFewer = array_filter($roles, fn($c) => $c < self::EXPECTED_KEYS);
         if (empty($rolesWithFewer)) {
-            $this->pass('Todos los roles tienen ≥ 37 claves');
+            $this->pass('Todos los roles tienen el catálogo completo');
         } else {
             $detail = implode(', ', array_map(
                 fn($r, $c) => "{$r}={$c}",
                 array_keys($rolesWithFewer),
                 $rolesWithFewer
             ));
-            $this->checkFail('Roles con menos de 37 claves: ' . $detail);
+            $this->checkFail('Roles con permisos incompletos: ' . $detail);
         }
     }
 
@@ -320,7 +319,7 @@ class ValidatePhase3aPermisos extends Command
                 $this->checkFail("Conteo relacional ({$count}) ≠ total perfiles ({$totalPerfiles})");
             }
 
-            // Verify at least one profile has all 37 keys
+            // Verify at least one profile has all canonical keys.
             $sample    = reset($result);
             $keyCount  = is_array($sample) ? count($sample) : 0;
             if ($keyCount === self::EXPECTED_KEYS) {

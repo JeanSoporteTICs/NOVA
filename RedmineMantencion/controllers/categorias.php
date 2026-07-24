@@ -93,16 +93,14 @@ function sync_categorias_desde_api($configPath, $dataPath = null) {
     $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
     $cfg = $repo !== null ? $repo->loadAll() : [];
     $platformUrl = $cfg['platform_url'] ?? '';
-    $apiKey = $cfg['platform_token'] ?? '';
-    $userToken = user_api_token_fallback('');
-    if (!$apiKey && $userToken) $apiKey = $userToken;
+    $apiKey = user_api_token_fallback('');
     $url = !empty($cfg['categories_url']) ? $cfg['categories_url'] : categorias_api_url($platformUrl);
     $url = categorias_request_url($url);
     if (!$url) {
         return ['error' => 'Falta platform_url o categories_url en configuraci&oacute;n.'];
     }
     if (!$apiKey) {
-        return ['error' => 'Falta token de API (plataforma o usuario).'];
+        return ['error' => 'Falta token de API personal. Agrega tu API en Cuentas conectadas.'];
     }
     $ch = curl_init($url);
     curl_setopt_array($ch, [

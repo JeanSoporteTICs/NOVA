@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../controllers/auth.php';
-auth_require_role(['root', 'gestor'], '/redmine-mantencion/login.php');
+auth_require_login('/redmine-mantencion/login.php');
+if (!auth_can('integraciones_nextcloud')) { http_response_code(403); exit('No tienes permiso para administrar Nextcloud.'); }
 require_once __DIR__ . '/../../controllers/nextcloud.php';
 [$flash, $nextcloudCfg, $nextcloudGroups, $lastImport, $preview] = handle_nextcloud();
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
@@ -21,75 +22,8 @@ foreach ($previewUsers as $item) {
 <html lang="es">
 <head>
   <?php $pageTitle = 'Crear usuarios por lotes'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <style>
-    body { margin: 0; }
-    .nextcloud-panel { border: 0; border-radius: 1.1rem; box-shadow: 0 16px 38px rgba(15, 23, 42, .08); }
-    .nextcloud-preview-table th { white-space: nowrap; }
-    .nextcloud-preview-table td { vertical-align: middle; }
-    .nextcloud-group-badge { display: inline-flex; align-items: center; gap: .4rem; min-height: 2rem; }
-    .nextcloud-group-tools { background: #f8fbff; border: 1px solid #dbeafe; border-radius: 1rem; padding: 1rem; }
-    .nextcloud-row-created > * { background-color: #dcfce7 !important; }
-    .nextcloud-row-existing > * { background-color: #fef3c7 !important; }
-    .nextcloud-loading-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 2050;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-      background: rgba(15, 23, 42, .58);
-      backdrop-filter: blur(6px);
-    }
-    .nextcloud-loading-overlay.is-visible { display: flex; }
-    .nextcloud-loading-card {
-      width: min(520px, 94vw);
-      border-radius: 1.25rem;
-      background: #fff;
-      box-shadow: 0 28px 70px rgba(15, 23, 42, .28);
-      overflow: hidden;
-    }
-    .nextcloud-loading-media {
-      height: 220px;
-      background: linear-gradient(135deg, #e0f2fe, #f0fdf4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .nextcloud-loading-media img {
-      width: 320px;
-      max-width: calc(100% - 2rem);
-      height: auto;
-      max-height: 205px;
-      object-fit: contain;
-      image-rendering: auto;
-    }
-    .nextcloud-loading-body { padding: 1.25rem; }
-    .nextcloud-loading-title { margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; }
-    .nextcloud-loading-text { margin: .25rem 0 1rem; color: #64748b; }
-    .nextcloud-loading-progress {
-      height: .7rem;
-      border-radius: 999px;
-      background: #e5eef8;
-      overflow: hidden;
-    }
-    .nextcloud-loading-progress-bar {
-      width: 0%;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, #38bdf8, #22c55e);
-      transition: width .25s ease;
-    }
-    .nextcloud-loading-meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-top: .75rem;
-      color: #64748b;
-      font-size: .9rem;
-      font-weight: 700;
-    }
-  </style>
+  <?php $nextcloudUsuariosCssVersion = @filemtime(__DIR__ . '/../../assets/css/nextcloud-usuarios.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/nextcloud-usuarios.css?v=<?= (int)$nextcloudUsuariosCssVersion ?>">
 </head>
 <body class="bg-light">
 <?php $activeNav = 'integraciones_nextcloud_usuarios'; include __DIR__ . '/../partials/navbar.php'; ?>
@@ -149,7 +83,6 @@ foreach ($previewUsers as $item) {
                 <input type="hidden" name="prepared_users" value="<?= $h(json_encode(['users' => $previewUsers], JSON_UNESCAPED_UNICODE)) ?>">
                 <input type="hidden" name="nextcloud_runtime_user" id="nextcloud-runtime-user-hidden" value="">
                 <input type="hidden" name="nextcloud_runtime_pass" id="nextcloud-runtime-pass-hidden" value="">
-                <input type="hidden" name="nextcloud_remember_credentials" id="nextcloud-remember-hidden" value="0">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                   <div class="d-flex align-items-center gap-3">
                     <div class="rounded-4 bg-primary bg-opacity-10 text-primary d-inline-flex align-items-center justify-content-center" style="width:48px;height:48px;">
@@ -413,11 +346,7 @@ foreach ($previewUsers as $item) {
             <input type="password" class="form-control" id="nextcloud-runtime-pass-input" autocomplete="current-password" placeholder="Contraseña de aplicación Nextcloud">
           </div>
           <div class="col-12">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="nextcloud-remember-input">
-              <label class="form-check-label" for="nextcloud-remember-input">Recordar credenciales Nextcloud para mi usuario</label>
-            </div>
-            <div class="form-text">La contraseña se guarda cifrada en tu usuario, junto a las credenciales CORE.</div>
+            <div class="form-text">Estas credenciales se usarán solo en esta operación. Para guardarlas, usa <a href="<?= htmlspecialchars(route('integrations.nova'), ENT_QUOTES, 'UTF-8') ?>">Mis integraciones de NOVA</a>.</div>
           </div>
         </div>
       </div>
@@ -444,10 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const hasSavedNextcloudCredentials = <?= $hasSavedNextcloudCredentials ? 'true' : 'false' ?>;
   const nextcloudRuntimeUserInput = document.getElementById('nextcloud-runtime-user-input');
   const nextcloudRuntimePassInput = document.getElementById('nextcloud-runtime-pass-input');
-  const nextcloudRememberInput = document.getElementById('nextcloud-remember-input');
   const nextcloudRuntimeUserHidden = document.getElementById('nextcloud-runtime-user-hidden');
   const nextcloudRuntimePassHidden = document.getElementById('nextcloud-runtime-pass-hidden');
-  const nextcloudRememberHidden = document.getElementById('nextcloud-remember-hidden');
   const nextcloudCredentialsModal = document.getElementById('nextcloudCredentialsModal');
   const nextcloudLoadingOverlay = document.getElementById('nextcloud-loading-overlay');
   const nextcloudLoadingProgressBar = document.getElementById('nextcloud-loading-progress-bar');
@@ -714,7 +641,6 @@ document.addEventListener('DOMContentLoaded', () => {
     previewForm.addEventListener('submit', event => {
       if (nextcloudRuntimeUserHidden) nextcloudRuntimeUserHidden.value = nextcloudRuntimeUserInput?.value || '';
       if (nextcloudRuntimePassHidden) nextcloudRuntimePassHidden.value = nextcloudRuntimePassInput?.value || '';
-      if (nextcloudRememberHidden) nextcloudRememberHidden.value = nextcloudRememberInput?.checked ? '1' : '0';
       if (nextcloudSubmitAccepted) {
         showNextcloudLoading();
         return;

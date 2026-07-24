@@ -35,21 +35,33 @@ function handle_unidades() {
         if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
         $action = $_POST['action'] ?? '';
         if ($action === 'create') {
-            $rows[] = [
+            $newRow = [
                 'id' => trim($_POST['id'] ?? '') ?: uniqid('', true),
                 'nombre' => trim($_POST['nombre'] ?? ''),
             ];
-            save_unidades($DATA_FILE, $rows);
+            $rows[] = $newRow;
+            // Punctual create: save_unidades()/upsertRows() does a real DB
+            // SELECT+UPDATE/INSERT per row it receives, so passing the whole
+            // $rows collection here re-wrote every unidad in the table for a
+            // single new record. Pass only the new row instead.
+            save_unidades($DATA_FILE, [$newRow]);
             $flash = 'Unidad creada';
         } elseif ($action === 'update') {
             $id = $_POST['id'] ?? '';
+            $updatedRow = null;
             foreach ($rows as &$r) {
                 if ($r['id'] === $id) {
                     $r['nombre'] = trim($_POST['nombre'] ?? $r['nombre']);
+                    $updatedRow = $r;
                     break;
                 }
             }
-            save_unidades($DATA_FILE, $rows);
+            unset($r);
+            // Punctual update: same reasoning as 'create' above — only the
+            // edited row needs to be upserted, not the whole collection.
+            if ($updatedRow !== null) {
+                save_unidades($DATA_FILE, [$updatedRow]);
+            }
             $flash = 'Unidad actualizada';
         } elseif ($action === 'delete') {
             $id = $_POST['id'] ?? '';

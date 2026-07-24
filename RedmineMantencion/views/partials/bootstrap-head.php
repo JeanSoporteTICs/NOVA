@@ -25,3 +25,6 @@ $novaFaviconVersion = @filemtime($novaFaviconPath) ?: time();
   <?php $novaUiPath = function_exists('base_path') ? base_path('public/assets/nova-ui.css') : __DIR__ . '/../../../public/assets/nova-ui.css'; ?>
   <?php $novaUiVersion = @filemtime($novaUiPath) ?: time(); ?>
   <link href="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-ui.css') : '/NOVA/public/assets/nova-ui.css', ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaUiVersion ?>" rel="stylesheet">
+  <?php $novaUiJsPath = function_exists('base_path') ? base_path('public/assets/nova-ui.js') : __DIR__ . '/../../../public/assets/nova-ui.js'; ?>
+  <?php $novaUiJsVersion = @filemtime($novaUiJsPath) ?: time(); ?>
+  <script defer src="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-ui.js') : '/NOVA/public/assets/nova-ui.js', ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaUiJsVersion ?>"></script>

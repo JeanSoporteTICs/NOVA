@@ -4,7 +4,6 @@ namespace App\Modulos\RedmineMantencion\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class MantencionReporte extends Model
 {
@@ -61,15 +60,5 @@ class MantencionReporte extends Model
     public function categoria(): BelongsTo
     {
         return $this->belongsTo(Categoria::class, 'categoria_id');
-    }
-
-    public function gruposHoraExtra(): BelongsToMany
-    {
-        return $this->belongsToMany(
-            MantencionHoraExtraGrupo::class,
-            'redmine_mantencion_horas_extra_reportes',
-            'reporte_id',
-            'grupo_id'
-        );
     }
 }

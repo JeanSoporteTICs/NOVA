@@ -43,16 +43,28 @@ return new class extends Migration
 
         // 3. integraciones_usuario.chat_id — Telegram migrated to usuarios_nova.telegram_id_chat (S19); 0/69 populated
         if (Schema::hasColumn('integraciones_usuario', 'chat_id')) {
+            // Existing databases may use the audited legacy name or Laravel's derived name.
+            foreach (['idx_integraciones_chat_id', 'integraciones_usuario_chat_id_index'] as $index) {
+                Schema::whenTableHasIndex('integraciones_usuario', $index, function (Blueprint $table) use ($index): void {
+                    $table->dropIndex($index);
+                });
+            }
+
             Schema::table('integraciones_usuario', function (Blueprint $table): void {
-                try { $table->dropIndex('idx_integraciones_chat_id'); } catch (\Throwable) {}
                 $table->dropColumn('chat_id');
             });
         }
 
         // 4. modulos_nova.activo — written on INSERT but never read; habilitado is the actual read/write path
         if (Schema::hasColumn('modulos_nova', 'activo')) {
+            // The clean migration derives this name; legacy databases may use the audited name.
+            foreach (['idx_modulos_nova_activo', 'modulos_nova_activo_index'] as $index) {
+                Schema::whenTableHasIndex('modulos_nova', $index, function (Blueprint $table) use ($index): void {
+                    $table->dropIndex($index);
+                });
+            }
+
             Schema::table('modulos_nova', function (Blueprint $table): void {
-                try { $table->dropIndex('idx_modulos_nova_activo'); } catch (\Throwable) {}
                 $table->dropColumn('activo');
             });
         }

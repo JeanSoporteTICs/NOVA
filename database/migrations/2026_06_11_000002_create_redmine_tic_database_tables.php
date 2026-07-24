@@ -135,8 +135,8 @@ return new class extends Migration
         DB::table('modulos_nova')->updateOrInsert(
             ['clave_modulo' => 'redmine_tic'],
             [
-                'nombre' => 'Redmine TICS',
-                'descripcion' => 'Captura, procesa y envia reportes del proyecto Redmine TICS.',
+                'nombre' => 'Backlog Soporte TI',
+                'descripcion' => 'Captura, procesa y envia reportes del proyecto Backlog Soporte TI.',
                 'icono' => 'bi-kanban',
                 'tipo' => 'native',
                 'ruta' => 'redmine_tic',

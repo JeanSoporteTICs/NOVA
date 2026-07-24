@@ -2,11 +2,17 @@
 
 namespace App\Modulos\Telegram\Services;
 
+use App\Modulos\Telegram\ExternalClients\TelegramApiClient;
 use App\Modulos\Telegram\Services\TelegramLibrary;
 
 final class TelegramService
 {
     private bool $loaded = false;
+
+    public function __construct(
+        private readonly TelegramApiClient $client = new TelegramApiClient()
+    ) {
+    }
 
     public function load(): void
     {
@@ -62,8 +68,15 @@ final class TelegramService
     public function deleteWebhook(string $token): void
     {
         $this->load();
-        if (function_exists('telegram_delete_webhook')) {
-            telegram_delete_webhook($token);
+        // Transport now goes through TelegramApiClient (see ExternalClients/) —
+        // telegram_delete_webhook() in telegram/lib/telegram.php is left as-is
+        // for its other caller (telegram/bin/listen.php). Preserves the same
+        // throwing contract callers (TelegramController/NovaAdministrationController)
+        // already depend on.
+        $config = function_exists('telegram_read_config') ? telegram_read_config() : [];
+        $result = $this->client->deleteWebhook($token, (string) ($config['proxy_url'] ?? ''));
+        if (!$result['ok']) {
+            throw new \RuntimeException((string) $result['error']);
         }
     }
 
@@ -86,7 +99,7 @@ final class TelegramService
         if (!$this->tryLoad()) {
             return false;
         }
-        if (!function_exists('telegram_read_config') || !function_exists('telegram_send_message')) {
+        if (!function_exists('telegram_read_config')) {
             return false;
         }
         $config = telegram_read_config();
@@ -95,12 +108,33 @@ final class TelegramService
         if ($token === '' || $chatId === '') {
             return false;
         }
-        try {
-            telegram_send_message($token, $chatId, $message);
-            return true;
-        } catch (\Throwable) {
+        // Transport now goes through TelegramApiClient — see deleteWebhook() note above.
+        $result = $this->client->sendMessage($token, $chatId, $message, [
+            'proxy_url' => (string) ($config['proxy_url'] ?? ''),
+        ]);
+
+        return $result['ok'];
+    }
+
+    public function sendToChat(string $chatId, string $message): bool
+    {
+        if (!$this->tryLoad()) {
             return false;
         }
+        if (!function_exists('telegram_read_config')) {
+            return false;
+        }
+        $config = telegram_read_config();
+        $token  = trim((string) ($config['bot_token'] ?? ''));
+        $chatId = trim($chatId);
+        if ($token === '' || $chatId === '') {
+            return false;
+        }
+        $result = $this->client->sendMessage($token, $chatId, $message, [
+            'proxy_url' => (string) ($config['proxy_url'] ?? ''),
+        ]);
+
+        return $result['ok'];
     }
 
     /**

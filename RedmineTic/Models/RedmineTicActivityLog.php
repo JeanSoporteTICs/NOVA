@@ -10,7 +10,7 @@ class RedmineTicActivityLog extends Model
 {
     public $timestamps = false;
 
-    protected $table = 'redmine_tic_activity_logs';
+    protected $table = 'tic_log';
 
     protected $fillable = [
         'modulo_id',

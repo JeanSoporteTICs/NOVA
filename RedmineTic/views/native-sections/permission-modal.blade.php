@@ -95,7 +95,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-secondary" type="button" data-nova-modal-close data-bs-dismiss="modal"><i class="bi bi-x-lg"></i>Cancelar</button>
-                <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
+                <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar permisos</button>
             </div>
         </form>
     </div>

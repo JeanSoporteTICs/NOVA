@@ -1,30 +1,30 @@
 <?php
 require_once __DIR__ . '/../../controllers/auth.php';
-auth_require_role(['root', 'gestor'], '/redmine-mantencion/login.php');
+auth_require_login('/redmine-mantencion/login.php');
+if (!auth_can('integraciones_nextcloud')) { http_response_code(403); exit('No tienes permiso para administrar Nextcloud.'); }
 require_once __DIR__ . '/../../controllers/nextcloud.php';
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
-$csrf = legacy_csrf_token();
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'clear_nextcloud_history') {
-    if (function_exists('csrf_validate')) csrf_validate();
-    nextcloud_created_history_clear();
-    nextcloud_set_flash('Historial Nextcloud eliminado.');
-    header('Location: ' . ($_SERVER['REQUEST_URI'] ?? '/redmine-mantencion/views/Integraciones/NextcloudHistorial.php'));
-    exit;
-}
 $flash = nextcloud_consume_flash();
 $batches = nextcloud_created_history_load();
+$historyGroups = [];
+foreach ($batches as $batch) {
+    foreach (['result_users', 'created_users', 'existing_users', 'failed_users', 'users'] as $collection) {
+        foreach ((array)($batch[$collection] ?? []) as $item) {
+            $group = trim((string)($item['group'] ?? ''));
+            if ($group !== '') $historyGroups[$group] = true;
+        }
+    }
+}
+$historyGroups = array_keys($historyGroups);
+natcasesort($historyGroups);
+$historyGroups = array_values($historyGroups);
 ?>
 <!doctype html>
 <html lang="es">
 <head>
   <?php $pageTitle = 'Historial Nextcloud'; $includeTheme = true; include __DIR__ . '/../partials/bootstrap-head.php'; ?>
-  <style>
-    body { margin: 0; }
-    .nextcloud-panel { border: 0; border-radius: 1.1rem; box-shadow: 0 16px 38px rgba(15, 23, 42, .08); }
-    .nextcloud-row-created > * { background-color: #dcfce7 !important; }
-    .nextcloud-row-existing > * { background-color: #fef3c7 !important; }
-    .nextcloud-row-failed > * { background-color: #fee2e2 !important; }
-  </style>
+  <?php $nextcloudHistorialCssVersion = @filemtime(__DIR__ . '/../../assets/css/nextcloud-historial.css') ?: time(); ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/nextcloud-historial.css?v=<?= (int)$nextcloudHistorialCssVersion ?>">
 </head>
 <body class="bg-light">
 <?php $activeNav = 'integraciones_nextcloud_historial'; include __DIR__ . '/../partials/navbar.php'; ?>
@@ -34,34 +34,52 @@ $batches = nextcloud_created_history_load();
     <?php
       $heroIcon = 'bi-clock-history';
       $heroTitle = 'Historial Nextcloud';
-      $heroSubtitle = 'Lotes de usuarios creados disponibles por 24 horas para copiar credenciales.';
+      $heroSubtitle = 'Registro permanente de los lotes procesados en Nextcloud.';
       $heroExtras = '';
       include __DIR__ . '/../partials/hero.php';
     ?>
 
     <?php if ($flash): ?>
-      <div class="alert alert-success d-flex align-items-center gap-2" role="alert">
+      <div class="nova-alert-card is-success mb-3" role="alert">
         <i class="bi bi-check-circle"></i>
         <span><?= $h($flash) ?></span>
       </div>
     <?php endif; ?>
 
-    <div class="d-flex justify-content-end mb-3">
-      <form method="post" onsubmit="return confirm('¿Eliminar todo el historial de Nextcloud?');">
-        <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-        <input type="hidden" name="action" value="clear_nextcloud_history">
-        <button type="submit" class="btn btn-outline-danger" <?= !$batches ? 'disabled' : '' ?>>
-          <i class="bi bi-trash"></i> Limpiar historial
-        </button>
-      </form>
-    </div>
+    <?php if ($batches): ?>
+      <section class="card nextcloud-panel mb-3" aria-label="Filtros del historial">
+        <div class="card-body p-3">
+          <div class="row g-3 align-items-end">
+            <div class="col-12 col-lg-8">
+              <label class="form-label" for="nextcloud-history-search"><i class="bi bi-search"></i> Buscar</label>
+              <input class="form-control" id="nextcloud-history-search" type="search" placeholder="Usuario, nombre, correo o detalle" autocomplete="off">
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label" for="nextcloud-history-group"><i class="bi bi-people"></i> Grupo</label>
+              <select class="form-select" id="nextcloud-history-group">
+                <option value="">Todos los grupos</option>
+                <?php foreach ($historyGroups as $group): ?>
+                  <option value="<?= $h($group) ?>"><?= $h($group) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+          </div>
+          <div class="text-muted small mt-2" id="nextcloud-history-count" aria-live="polite"></div>
+        </div>
+      </section>
+      <div class="nova-empty-state mb-3" id="nextcloud-history-no-results" hidden>
+        <div class="nova-empty-state-icon"><i class="bi bi-search"></i></div>
+        <h3>Sin coincidencias</h3>
+        <p>No hay registros que coincidan con la búsqueda y el grupo seleccionados.</p>
+      </div>
+    <?php endif; ?>
 
     <?php if (!$batches): ?>
       <div class="card nextcloud-panel">
         <div class="nova-empty-state">
           <div class="nova-empty-state-icon"><i class="bi bi-clock-history"></i></div>
           <h3>Sin historial disponible</h3>
-          <p>Los lotes de usuarios creados aparecen aquí durante 24 horas. Una vez expirados se eliminan automáticamente.</p>
+          <p>Los nuevos lotes procesados en Nextcloud aparecerán aquí.</p>
         </div>
       </div>
     <?php endif; ?>
@@ -106,14 +124,13 @@ $batches = nextcloud_created_history_load();
             }
         }
       ?>
-      <div class="card nextcloud-panel mb-3">
+      <div class="card nextcloud-panel mb-3" data-history-batch>
         <div class="card-body p-4">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
             <div>
               <h5 class="mb-1">Lote <?= $h($batch['id'] ?? '') ?></h5>
               <div class="text-muted small">
                 Creado: <?= $h(date('d-m-Y H:i', strtotime((string)($batch['created_at'] ?? 'now')))) ?>
-                Disponible hasta: <?= $h(date('d-m-Y H:i', strtotime((string)($batch['expires_at'] ?? 'now')))) ?>
               </div>
             </div>
             <div class="d-flex flex-wrap gap-2">
@@ -132,19 +149,17 @@ $batches = nextcloud_created_history_load();
                   <th>Nombre a desplegar</th>
                   <th>Correo</th>
                   <th>Grupo</th>
-                  <th>Contraseña</th>
                   <th>Detalle</th>
                 </tr>
               </thead>
               <tbody>
                 <?php foreach ($batchUsers as $item): ?>
-                  <tr class="<?= $h($item['_row'] ?? '') ?>">
+                  <tr class="<?= $h($item['_row'] ?? '') ?>" data-history-row data-history-group="<?= $h($item['group'] ?? '') ?>">
                     <td><span class="badge text-bg-<?= $h($item['_badge'] ?? 'secondary') ?>"><?= $h($item['_status'] ?? '') ?></span></td>
                     <td><?= $h($item['userid'] ?? '') ?></td>
                     <td><?= $h($item['displayName'] ?? '') ?></td>
                     <td><?= $h($item['email'] ?? '') ?></td>
                     <td><?= $h($item['group'] ?? '') ?></td>
-                    <td><?= $h($item['password'] ?? '') ?></td>
                     <td><?= $h($item['message'] ?? '') ?></td>
                   </tr>
                 <?php endforeach; ?>
@@ -160,11 +175,40 @@ $batches = nextcloud_created_history_load();
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  const search = document.getElementById('nextcloud-history-search');
+  const group = document.getElementById('nextcloud-history-group');
+  const count = document.getElementById('nextcloud-history-count');
+  const noResults = document.getElementById('nextcloud-history-no-results');
+  const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const applyFilters = () => {
+    const term = normalize(search?.value);
+    const selectedGroup = normalize(group?.value);
+    let visibleRows = 0;
+    document.querySelectorAll('[data-history-batch]').forEach(batch => {
+      let batchRows = 0;
+      batch.querySelectorAll('[data-history-row]').forEach(row => {
+        const matchesSearch = term === '' || normalize(row.textContent).includes(term);
+        const matchesGroup = selectedGroup === '' || normalize(row.dataset.historyGroup) === selectedGroup;
+        row.hidden = !(matchesSearch && matchesGroup);
+        if (!row.hidden) {
+          batchRows += 1;
+          visibleRows += 1;
+        }
+      });
+      batch.hidden = batchRows === 0;
+    });
+    if (count) count.textContent = `${visibleRows} registro(s) encontrado(s)`;
+    if (noResults) noResults.hidden = visibleRows !== 0;
+  };
+  search?.addEventListener('input', applyFilters);
+  group?.addEventListener('change', applyFilters);
+  applyFilters();
+
   document.querySelectorAll('[data-copy-table]').forEach(button => {
     button.addEventListener('click', async () => {
       const table = document.querySelector(button.dataset.copyTable);
       if (!table) return;
-      const rowsText = Array.from(table.querySelectorAll('tr')).map(row => {
+      const rowsText = Array.from(table.querySelectorAll('tr')).filter(row => !row.hidden).map(row => {
         return Array.from(row.children).map(cell => cell.innerText.trim()).join('\t');
       }).join('\n');
       try {

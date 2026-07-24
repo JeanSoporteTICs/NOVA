@@ -53,6 +53,8 @@
             const extendButton = sessionModalElement.querySelector('[data-nova-session-extend]');
             const logoutButton = sessionModalElement.querySelector('[data-nova-session-logout]');
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const sessionIdentity = @json((string) session('nova_user.id', ''));
+            const loginUrl = @json(route('login'));
 
             const fallbackCloseModal = () => {
                 sessionModalElement.classList.remove('show');
@@ -122,6 +124,10 @@
             };
 
             logoutButton?.addEventListener('click', () => {
+                if (sessionExpired) {
+                    window.location.assign(loginUrl);
+                    return;
+                }
                 const logoutForm = document.createElement('form');
                 logoutForm.method = 'POST';
                 logoutForm.action = @json(route('logout'));
@@ -152,7 +158,8 @@
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrf,
                         },
-                        body: JSON.stringify({password}),
+                        credentials: 'same-origin',
+                        body: JSON.stringify({password, identity: sessionIdentity}),
                     });
                     const data = await response.json();
                     if (!response.ok || !data.ok) {

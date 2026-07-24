@@ -217,7 +217,7 @@
                         <span>{{ array_key_last($byDate) }}</span>
                     </div>
                 @else
-                    <div class="rm-empty-state">Sin datos por fecha.</div>
+                    <div class="nova-empty-state">Sin datos por fecha.</div>
                 @endif
             </article>
 
@@ -359,7 +359,7 @@
                         @endforeach
                     </div>
                 @else
-                    <div class="rm-empty-state">Sin datos.</div>
+                    <div class="nova-empty-state">Sin datos.</div>
                 @endif
             </article>
         @endforeach
@@ -412,7 +412,7 @@
                     </table>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-sm btn-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -442,7 +442,7 @@
                     </table>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-sm btn-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -516,7 +516,7 @@
                 </div>
                 <div class="modal-footer rm-chart-modal-footer">
                     <span>Incluye todos los valores con tickets dentro del rango seleccionado.</span>
-                    <button type="button" class="btn btn-sm btn-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -559,7 +559,7 @@
                         @endforeach
                     </div>
                 @else
-                    <div class="rm-empty-state">Sin datos por fecha.</div>
+                    <div class="nova-empty-state">Sin datos por fecha.</div>
                 @endif
             </div>
         </div>
