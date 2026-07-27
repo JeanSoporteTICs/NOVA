@@ -63,9 +63,7 @@ final class HorasExtraRepository
                 ->where('origen', $origen)
                 ->orderByDesc('actualizado_at')
                 ->orderByDesc('grupo_id')
-                ->get(['grupo_id', 'reporte_id'])
-                ->unique('reporte_id')
-                ->values();
+                ->get(['grupo_id', 'reporte_id']);
 
             if ($pivotRows->isEmpty()) {
                 return [];
@@ -160,28 +158,10 @@ final class HorasExtraRepository
         }
 
         try {
-            $previousGroupIds = DB::table('horas_extra_grupo_reportes')
-                ->where('origen', $origen)
-                ->where('reporte_id', $reporteId)
-                ->where('grupo_id', '<>', $grupoId)
-                ->pluck('grupo_id');
-
-            if ($previousGroupIds->isNotEmpty()) {
-                DB::table('horas_extra_grupo_reportes')
-                    ->where('origen', $origen)
-                    ->where('reporte_id', $reporteId)
-                    ->where('grupo_id', '<>', $grupoId)
-                    ->delete();
-            }
-
             DB::table('horas_extra_grupo_reportes')->updateOrInsert(
                 ['grupo_id' => $grupoId, 'origen' => $origen, 'reporte_id' => $reporteId],
                 ['actualizado_at' => now()],
             );
-
-            foreach ($previousGroupIds as $previousGroupId) {
-                $this->deleteIfEmpty((int) $previousGroupId);
-            }
         } catch (\Throwable) {
         }
     }

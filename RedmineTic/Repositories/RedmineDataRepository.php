@@ -3,6 +3,7 @@
 namespace RedmineTic\Repositories;
 
 use App\Modulos\Nova\Models\NovaUser;
+use App\Modulos\Nova\Services\RedmineIdentityService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +39,7 @@ final class RedmineDataRepository
     private ?RedmineIssueSenderService    $issueSenderInst     = null;
     private ?RedmineStatisticsRepository  $statisticsRepoInst  = null;
     private ?RedmineMembershipSyncService $membershipSyncInst  = null;
+    private ?RedmineIdentityService       $redmineIdentityInst = null;
 
     public function forProject(string $projectKey): self
     {
@@ -121,6 +123,11 @@ final class RedmineDataRepository
     private function membershipSync(): RedmineMembershipSyncService
     {
         return $this->membershipSyncInst ??= new RedmineMembershipSyncService();
+    }
+
+    private function redmineIdentity(): RedmineIdentityService
+    {
+        return $this->redmineIdentityInst ??= app(RedmineIdentityService::class);
     }
 
     /**
@@ -344,8 +351,9 @@ final class RedmineDataRepository
             return ['ok' => false, 'items' => [], 'error' => $remote['error']];
         }
 
+        $currentUsers = $this->users();
         $currentAccess = [];
-        foreach ($this->users() as $user) {
+        foreach ($currentUsers as $user) {
             $id = trim((string) ($user['redmine_id'] ?? $user['id'] ?? ''));
             if ($id !== '') {
                 $currentAccess[$id] = true;
@@ -362,17 +370,35 @@ final class RedmineDataRepository
             if ($id === '') {
                 continue;
             }
-            [$firstName, $lastName] = $this->membershipSync()->resolveUserName($redmineUser, $remote['base_url'], $remote['token'], fn (string $url, string $token): array => $this->getRedmineJson($url, $token));
+            $identity = $this->membershipSync()->resolveUserIdentity(
+                $redmineUser,
+                $remote['base_url'],
+                $remote['token'],
+                fn (string $url, string $token): array => $this->getRedmineJson($url, $token)
+            );
+            $firstName = $identity['firstname'];
+            $lastName = $identity['lastname'];
+            $login = $identity['login'];
             if ($firstName === '' && $lastName === '') {
                 continue;
             }
             $access = $this->userRepo()->accessStatusByRedmineId($id);
+            $localMatch = $this->redmineIdentity()->projectUserIndexByLogin($currentUsers, $login);
+            $centralMatch = $this->redmineIdentity()->centralUserByLogin($login);
+            $previousId = $localMatch !== null
+                ? trim((string) ($currentUsers[$localMatch]['redmine_id'] ?? $currentUsers[$localMatch]['id'] ?? ''))
+                : trim((string) ($centralMatch['redmine_id'] ?? ''));
+            $changedId = $previousId !== '' && $previousId !== $id;
             $items[] = [
                 'id' => $id,
                 'nombre' => $firstName,
                 'apellido' => $lastName,
+                'login' => $login,
+                'previous_id' => $changedId ? $previousId : '',
                 'redmine_membership_id' => $membership['id'] ?? null,
-                'status' => isset($currentAccess[$id]) || $access['has_access'] ? 'current' : ($access['exists'] ? 'revoked' : 'new'),
+                'status' => $changedId
+                    ? 'changed'
+                    : (isset($currentAccess[$id]) || $access['has_access'] ? 'current' : ($access['exists'] ? 'revoked' : 'new')),
             ];
         }
 
@@ -415,7 +441,7 @@ final class RedmineDataRepository
         $users = $this->users();
         $byId = [];
         foreach ($users as $index => $user) {
-            $id = (string) ($user['id'] ?? '');
+            $id = trim((string) ($user['redmine_id'] ?? $user['id'] ?? ''));
             if ($id !== '') {
                 $byId[$id] = $index;
             }
@@ -436,30 +462,56 @@ final class RedmineDataRepository
                 continue;
             }
 
-            [$firstName, $lastName] = $this->membershipSync()->resolveUserName($redmineUser, $baseUrl, $token, fn (string $url, string $t): array => $this->getRedmineJson($url, $t));
+            $identity = $this->membershipSync()->resolveUserIdentity(
+                $redmineUser,
+                $baseUrl,
+                $token,
+                fn (string $url, string $t): array => $this->getRedmineJson($url, $t)
+            );
+            $firstName = $identity['firstname'];
+            $lastName = $identity['lastname'];
+            $login = $identity['login'];
             $row = [
                 'id' => $id,
+                'redmine_id' => $id,
                 'nombre' => $firstName,
                 'apellido' => $lastName,
                 'rol' => 'usuario',
                 'redmine_membership_id' => $membership['id'] ?? null,
             ];
 
-            if (isset($byId[$id])) {
-                $index = $byId[$id];
-                $users[$index] = array_merge($row, $users[$index], [
+            $index = $byId[$id] ?? $this->redmineIdentity()->projectUserIndexByLogin($users, $login);
+            if ($index !== null) {
+                $previousId = trim((string) ($users[$index]['redmine_id'] ?? $users[$index]['id'] ?? ''));
+                $users[$index] = array_merge($users[$index], $row, [
                     'id' => $id,
-                    'nombre' => $users[$index]['nombre'] ?? $firstName,
-                    'apellido' => $users[$index]['apellido'] ?? $lastName,
+                    'redmine_id' => $id,
+                    'nombre' => $firstName !== '' ? $firstName : ($users[$index]['nombre'] ?? ''),
+                    'apellido' => $lastName !== '' ? $lastName : ($users[$index]['apellido'] ?? ''),
                     'redmine_membership_id' => $membership['id'] ?? ($users[$index]['redmine_membership_id'] ?? null),
                 ]);
+                if ($previousId !== '' && $previousId !== $id) {
+                    unset($byId[$previousId]);
+                }
+                $byId[$id] = $index;
                 $updated++;
                 continue;
             }
 
+            $centralMatch = $this->redmineIdentity()->centralUserByLogin($login);
+            if ($centralMatch !== null) {
+                $row['_nova_user_id'] = $centralMatch['uuid'];
+                $row['rut_sin_dv'] = $centralMatch['usuario'];
+                $row['rut'] = $centralMatch['rut'];
+                $updated++;
+            } else {
+                $row['rut_sin_dv'] = $this->redmineIdentity()->accessUsernameFromLogin($login);
+                $row['rut'] = $this->redmineIdentity()->rutFromLogin($login);
+                $created++;
+            }
+
             $users[] = $row;
             $byId[$id] = count($users) - 1;
-            $created++;
         }
 
         $this->userRepo()->persistUsers($users, true, 'baneado');

@@ -204,6 +204,52 @@ class RedmineTicUsersTest extends TestCase
         $this->assertNotNull(DB::table('usuarios_nova')->where('id', $novaId)->value('creado_at'));
     }
 
+    public function test_import_reconciles_a_changed_redmine_id_without_creating_a_second_identity(): void
+    {
+        $oldId = $this->newRedmineId();
+        $newId = $this->newRedmineId();
+        $username = 'b3reconcile' . $oldId;
+        $facade = $this->facade();
+        $facade->saveUser([
+            '_creating' => true,
+            'id' => $oldId,
+            'rut_sin_dv' => $username,
+            'nombre' => 'Cambio',
+            'apellido' => 'Identidad',
+        ]);
+
+        $nova = DB::table('usuarios_nova')->where('redmine_id', $oldId)->first();
+        $this->assertNotNull($nova);
+        DB::table('integraciones_usuario')->updateOrInsert(
+            ['usuario_id' => $nova->id, 'tipo' => 'redmine_mantencion'],
+            ['usuario_externo' => $oldId, 'actualizado_at' => now()]
+        );
+
+        $this->userRepo()->persistUsers([[
+            'id' => $newId,
+            'redmine_id' => $newId,
+            '_nova_user_id' => $nova->uuid,
+            'rut_sin_dv' => $username,
+            'nombre' => 'Cambio',
+            'apellido' => 'Identidad',
+            'rol' => 'usuario',
+        ]], true, 'baneado');
+
+        $this->assertSame(1, DB::table('usuarios_nova')->where('usuario', $username)->count());
+        $this->assertFalse(DB::table('usuarios_nova')->where('redmine_id', $oldId)->exists());
+        $this->assertSame($newId, (string) DB::table('usuarios_nova')->where('id', $nova->id)->value('redmine_id'));
+        $this->assertSame(
+            [$newId, $newId],
+            DB::table('integraciones_usuario')
+                ->where('usuario_id', $nova->id)
+                ->whereIn('tipo', ['redmine_tic', 'redmine_mantencion'])
+                ->orderBy('tipo')
+                ->pluck('usuario_externo')
+                ->map(static fn ($value): string => (string) $value)
+                ->all()
+        );
+    }
+
     public function test_active_users_with_phone_matches_repository(): void
     {
         $viaFacade = $this->facade()->activeUsersWithPhone();

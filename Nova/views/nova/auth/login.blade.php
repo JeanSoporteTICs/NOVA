@@ -13,29 +13,15 @@
     <main class="login" aria-labelledby="login-title">
         <section class="login-hero" aria-label="Plataforma NOVA">
             <div class="login-hero__content">
-                <span class="login-brand">
-                    <span class="login-mark"><i class="bi bi-grid-1x2-fill"></i></span>
-                    <span>NOVA</span>
-                </span>
-                <div class="login-hero__copy">
-                    <span class="login-eyebrow">Plataforma operacional</span>
-                    <h1>Todo tu trabajo,<br>en un solo lugar.</h1>
-                    <p>Accede a las herramientas y servicios internos desde una experiencia centralizada.</p>
-                </div>
-                <div class="login-module-list" aria-label="Módulos disponibles">
-                    <span><i class="bi bi-ticket-perforated"></i> Redmine</span>
-                    <span><i class="bi bi-clock-history"></i> EMACH</span>
-                    <span><i class="bi bi-send"></i> Telegram</span>
-                    <span><i class="bi bi-cloud"></i> Nextcloud</span>
-                </div>
+                <p class="login-product-name">NOVA</p>
+                <p class="login-hero__tagline">Plataforma de gestión interna</p>
             </div>
         </section>
 
         <section class="login-body">
             <div class="login-body__heading">
-                <span class="login-eyebrow">Acceso seguro</span>
-                <h2 id="login-title">Inicia sesión</h2>
-                <p>Usa tus credenciales institucionales para continuar.</p>
+                <h2 id="login-title">Ingresar</h2>
+                <p>Accede con tus credenciales institucionales.</p>
             </div>
 
             @if ($errors->any())
@@ -48,27 +34,47 @@
             <form method="post" action="{{ route('login.store') }}" class="login-form">
                 @csrf
                 <div class="field">
-                    <label for="username">Usuario, ID Redmine o RUT</label>
+                    <label for="username">Usuario, ID o RUT</label>
                     <div class="login-input">
                         <i class="bi bi-person" aria-hidden="true"></i>
-                        <input class="form-control" id="username" name="username" value="{{ old('username') }}" autocomplete="username" required autofocus placeholder="Ingresa tu identificador">
+                        <input class="form-control" id="username" name="username" value="{{ old('username') }}" autocomplete="username" required autofocus>
                     </div>
                 </div>
                 <div class="field">
                     <label for="password">Contraseña</label>
                     <div class="login-input">
                         <i class="bi bi-lock" aria-hidden="true"></i>
-                        <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required placeholder="Ingresa tu contraseña">
+                        <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
+                        <button class="login-password-toggle" type="button" aria-controls="password" aria-label="Mostrar contraseña" aria-pressed="false">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
                 <button class="btn btn-primary nova-w-full login-submit" type="submit">
-                    <span>Ingresar a NOVA</span><i class="bi bi-arrow-right"></i>
+                    <span>Ingresar</span><i class="bi bi-arrow-right"></i>
                 </button>
             </form>
 
-            <p class="login-security-note"><i class="bi bi-shield-check"></i> Conexión protegida por NOVA</p>
+            <p class="login-security-note"><i class="bi bi-shield-check"></i> Conexión segura</p>
         </section>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function () {
+            const toggle = document.querySelector('.login-password-toggle');
+            const password = document.getElementById('password');
+            if (!toggle || !password) return;
+
+            toggle.addEventListener('click', function () {
+                const willShow = password.type === 'password';
+                password.type = willShow ? 'text' : 'password';
+                toggle.setAttribute('aria-pressed', willShow ? 'true' : 'false');
+                toggle.setAttribute('aria-label', willShow ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                const icon = toggle.querySelector('i');
+                if (icon) icon.className = willShow ? 'bi bi-eye-slash' : 'bi bi-eye';
+                password.focus();
+            });
+        }());
+    </script>
 </body>
 </html>

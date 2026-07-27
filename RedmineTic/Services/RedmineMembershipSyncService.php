@@ -120,6 +120,64 @@ final class RedmineMembershipSyncService
     }
 
     /**
+     * Resolves the stable fields needed to reconcile a Redmine account.
+     * Unlike resolveUserName(), this also fetches detail when the membership
+     * already has a display name but omits the Redmine login.
+     *
+     * @param array<string,mixed> $redmineUser
+     * @param callable $httpGetJson fn(string $url, string $token): array{http_code:int,body:string,error:string}
+     * @return array{id:string,firstname:string,lastname:string,login:string,mail:string}
+     */
+    public function resolveUserIdentity(array $redmineUser, string $baseUrl, string $token, callable $httpGetJson): array
+    {
+        $id = trim((string) ($redmineUser['id'] ?? ''));
+        $firstName = trim((string) ($redmineUser['firstname'] ?? $redmineUser['first_name'] ?? ''));
+        $lastName = trim((string) ($redmineUser['lastname'] ?? $redmineUser['last_name'] ?? ''));
+        $login = trim((string) ($redmineUser['login'] ?? ''));
+        $mail = trim((string) ($redmineUser['mail'] ?? $redmineUser['email'] ?? ''));
+
+        if (
+            $id !== ''
+            && $baseUrl !== ''
+            && $token !== ''
+            && ($login === '' || $firstName === '' || $lastName === '')
+        ) {
+            $response = $httpGetJson($baseUrl . '/users/' . rawurlencode($id) . '.json', $token);
+            if ($response['error'] === '' && $response['http_code'] >= 200 && $response['http_code'] < 300) {
+                $data = json_decode($response['body'], true);
+                $detail = is_array($data['user'] ?? null) ? $data['user'] : [];
+                $firstName = trim((string) ($detail['firstname'] ?? $detail['first_name'] ?? $firstName));
+                $lastName = trim((string) ($detail['lastname'] ?? $detail['last_name'] ?? $lastName));
+                $login = trim((string) ($detail['login'] ?? $login));
+                $mail = trim((string) ($detail['mail'] ?? $detail['email'] ?? $mail));
+            }
+        }
+
+        if (($firstName === '' || $lastName === '') && $id !== '' && $baseUrl !== '' && $token !== '') {
+            $response = $this->getRedmineHtml($baseUrl . '/users/' . rawurlencode($id) . '/edit', $token);
+            if ($response['error'] === '' && $response['http_code'] >= 200 && $response['http_code'] < 300) {
+                $firstName = $firstName !== '' ? $firstName : $this->htmlInputValue($response['body'], 'user[firstname]');
+                $lastName = $lastName !== '' ? $lastName : $this->htmlInputValue($response['body'], 'user[lastname]');
+                $login = $login !== '' ? $login : $this->htmlInputValue($response['body'], 'user[login]');
+            }
+        }
+
+        if ($firstName === '' || $lastName === '') {
+            [$splitFirstName, $splitLastName] = $this->splitRedmineName((string) ($redmineUser['name'] ?? ''));
+            $firstName = $firstName !== '' ? $firstName : $splitFirstName;
+            $lastName = $lastName !== '' ? $lastName : $splitLastName;
+        }
+
+        return [
+            'id' => $id,
+            'firstname' => $firstName,
+            'lastname' => $lastName,
+            'login' => $login,
+            'mail' => $mail,
+        ];
+    }
+
+    /**
      * @return array{http_code:int,body:string,error:string}
      */
     private function getRedmineHtml(string $url, string $token): array

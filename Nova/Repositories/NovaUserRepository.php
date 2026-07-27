@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 
 final class NovaUserRepository
 {
+    private string $lastWriteError = '';
+
     public function __construct(
         private ModuleRegistry $modules,
         private NovaUserService $service,
@@ -93,7 +95,7 @@ final class NovaUserRepository
         }
 
         $current  = $index !== null ? $users[$index] : [];
-        $rut      = trim((string) ($payload['rut'] ?? $current['rut'] ?? ''));
+        $rut      = $this->service->canonicalRut((string) ($payload['rut'] ?? $current['rut'] ?? ''));
         $username = $this->service->normalizeRutUsername($rut);
         if ($username === '' && !$isNew) {
             $username = trim((string) ($payload['username'] ?? $current['username'] ?? $current['redmine_id'] ?? ''));
@@ -123,7 +125,9 @@ final class NovaUserRepository
             }
         }
 
-        $redmineId = trim((string) ($payload['redmine_id'] ?? $current['redmine_id'] ?? ''));
+        // Redmine IDs are managed exclusively by the Redmine import flows.
+        // Never accept this value from the NOVA administration form.
+        $redmineId = $isNew ? '' : trim((string) ($current['redmine_id'] ?? ''));
 
         foreach ($users as $i => $user) {
             if ($index !== null && $i === $index) {
@@ -180,7 +184,14 @@ final class NovaUserRepository
             $users[$index] = $row;
         }
 
-        $this->write($users);
+        if (!$this->write($users)) {
+            return [
+                'ok' => false,
+                'error' => $this->lastWriteError !== ''
+                    ? $this->lastWriteError
+                    : 'No fue posible guardar el usuario.',
+            ];
+        }
 
         return ['ok' => true, 'error' => ''];
     }
@@ -230,9 +241,32 @@ final class NovaUserRepository
     /**
      * @param array<int,array<string,mixed>> $users
      */
-    private function write(array $users): void
+    private function write(array $users): bool
     {
-        $this->writeUsersToDatabase($users);
+        $this->lastWriteError = '';
+        if (!$this->usersTableAvailable()) {
+            $this->lastWriteError = 'La tabla de usuarios no esta disponible.';
+
+            return false;
+        }
+
+        try {
+            DB::transaction(function () use ($users): void {
+                $this->writeUsersToDatabase($users);
+            });
+
+            return true;
+        } catch (\Throwable $exception) {
+            $message = strtolower($exception->getMessage());
+            $this->lastWriteError = match (true) {
+                str_contains($message, 'redmine') => 'Ya existe un usuario con ese ID Redmine.',
+                str_contains($message, 'rut') => 'Ya existe un usuario con ese RUT.',
+                str_contains($message, 'usuario') => 'Ya existe un usuario con ese acceso.',
+                default => 'No fue posible guardar el usuario.',
+            };
+
+            return false;
+        }
     }
 
     /**
@@ -304,10 +338,6 @@ final class NovaUserRepository
      */
     private function writeUsersToDatabase(array $users): void
     {
-        if (!$this->usersTableAvailable()) {
-            return;
-        }
-
         foreach ($users as $user) {
             if (!is_array($user)) {
                 continue;
@@ -331,38 +361,34 @@ final class NovaUserRepository
                 $lastName = $remainingName;
             }
 
-            try {
-                $values = [
-                    'usuario'          => $username,
-                    'rut'              => trim((string) ($user['rut'] ?? '')) ?: null,
-                    'redmine_id'       => $this->unsignedIntegerOrNull($user['redmine_id'] ?? null),
-                    'nombre'           => $name,
-                    'apellido'         => $lastName,
-                    'rol'              => $this->service->normalizeNovaRole((string) ($user['role']   ?? 'usuario')),
-                    'estado'           => $this->service->normalizeStatus((string)   ($user['status'] ?? 'activo')),
-                    'password'         => $password,
-                    'usuario_core'     => trim((string) ($user['core_user'] ?? '')) ?: null,
-                    'telegram_id_chat' => trim((string) data_get($user, 'telegram_settings.chat_id', '')) ?: null,
-                ];
-                if (Schema::hasColumn('usuarios_nova', 'email')) {
-                    $values['email'] = trim((string) ($user['email'] ?? '')) ?: null;
-                }
-                $values['actualizado_at'] = now();
-
-                $existingId = DB::table('usuarios_nova')->where('uuid', $uuid)->value('id');
-                if ($existingId !== null) {
-                    DB::table('usuarios_nova')->where('id', $existingId)->update($values);
-                    $userId = (int) $existingId;
-                } else {
-                    $values['uuid']      = $uuid;
-                    $values['creado_at'] = now();
-                    $userId = (int) DB::table('usuarios_nova')->insertGetId($values);
-                }
-
-                $this->writeDatabaseIntegrations($userId, $user);
-            } catch (\Throwable) {
-                continue;
+            $values = [
+                'usuario'          => $username,
+                'rut'              => $this->service->canonicalRut((string) ($user['rut'] ?? '')) ?: null,
+                'redmine_id'       => $this->unsignedIntegerOrNull($user['redmine_id'] ?? null),
+                'nombre'           => $name,
+                'apellido'         => $lastName,
+                'rol'              => $this->service->normalizeNovaRole((string) ($user['role']   ?? 'usuario')),
+                'estado'           => $this->service->normalizeStatus((string)   ($user['status'] ?? 'activo')),
+                'password'         => $password,
+                'usuario_core'     => trim((string) ($user['core_user'] ?? '')) ?: null,
+                'telegram_id_chat' => trim((string) data_get($user, 'telegram_settings.chat_id', '')) ?: null,
+            ];
+            if (Schema::hasColumn('usuarios_nova', 'email')) {
+                $values['email'] = trim((string) ($user['email'] ?? '')) ?: null;
             }
+            $values['actualizado_at'] = now();
+
+            $existingId = DB::table('usuarios_nova')->where('uuid', $uuid)->value('id');
+            if ($existingId !== null) {
+                DB::table('usuarios_nova')->where('id', $existingId)->update($values);
+                $userId = (int) $existingId;
+            } else {
+                $values['uuid']      = $uuid;
+                $values['creado_at'] = now();
+                $userId = (int) DB::table('usuarios_nova')->insertGetId($values);
+            }
+
+            $this->writeDatabaseIntegrations($userId, $user);
         }
     }
 

@@ -93,6 +93,21 @@ docker compose -f docker-compose.telegram.yml logs
 docker compose -f docker-compose.telegram.yml restart
 ```
 
+El comando `/tic problema, unidad, solicitante` crea un reporte pendiente de
+forma directa. El modo diario permite enviar después mensajes sin comando:
+
+```text
+/tic activar
+problema, unidad, solicitante
+/tic estado
+/tic salir
+```
+
+El modo se guarda por Chat ID en la caché de Laravel, permanece tras reinicios
+del listener y expira automáticamente a las 23:59 de `America/Santiago`. Los
+mensajes sin comando solo se procesan cuando contienen exactamente los tres
+campos no vacíos separados por comas.
+
 ## Arquitectura
 
 ```text
@@ -117,9 +132,18 @@ se resuelven mediante contratos en `app/Contracts` y enlaces del contenedor.
 ### Datos e identidad
 
 - `usuarios_nova` es la única identidad central.
+- `usuario` y `rut` son únicos. El RUT se persiste en formato canónico sin
+  puntos (`12345678-9`) para que su índice único no dependa del formato de
+  entrada.
+- Al importar miembros desde Redmine TIC o Mantención, un cambio de
+  `redmine_id` se reconcilia únicamente mediante una coincidencia única entre
+  el `login` remoto y el usuario de acceso/RUT central; nunca por nombre.
 - `integraciones_usuario` guarda cuentas y secretos externos por usuario.
 - `modulos_nova` y `permisos_usuario_modulo` controlan el acceso global.
 - Cada módulo conserva sus permisos y tablas operativas específicas.
+- Las reimportaciones desde CORE identifican la solicitud por `id_core`: si el
+  reporte sigue pendiente, actualizan sus datos modificados; los reportes
+  procesados, con error o archivados no se sobrescriben.
 - Los repositorios encapsulan el acceso a datos; los controladores coordinan los
   casos de uso.
 - No se deben reintroducir archivos JSON como almacenamiento de runtime.

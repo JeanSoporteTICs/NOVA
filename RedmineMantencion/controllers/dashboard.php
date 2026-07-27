@@ -2045,7 +2045,7 @@ function dashboard_core_build_message(array $row, array $catalogs, array $users)
     $categoria = dashboard_core_resolve_category($tipoSolicitud, $catalogs['categorias'] ?? []);
     $unidad = $departamento !== '' ? $departamento : ($establecimiento !== '' ? $establecimiento : 'HBV');
     $unidadSolicitante = dashboard_infer_catalog_match(trim($departamento . ' ' . $establecimiento), $catalogs['unidades'] ?? [], $establecimiento !== '' ? $establecimiento : 'HBV');
-    $sourceKey = sha1(implode('|', [
+    $fallbackSourceKey = sha1(implode('|', [
         $solicitante,
         $fecha,
         $hora,
@@ -2056,6 +2056,9 @@ function dashboard_core_build_message(array $row, array $catalogs, array $users)
         $celular,
         $email,
     ]));
+    $sourceKey = $coreSolicitudId !== ''
+        ? 'core-id:' . substr($coreSolicitudId, 0, 152)
+        : $fallbackSourceKey;
     $assignedUser = null;
     if ($numero !== '' && isset($users['phone'][$numero])) {
         $assignedUser = $users['phone'][$numero];
@@ -2284,6 +2287,8 @@ function dashboard_core_log_import_trace(array $counters, ?array $sample): void 
         . ' | skipped_user_mismatch ' . (int)($counters['skipped_user_mismatch'] ?? 0)
         . ' | skipped_existing_json ' . (int)($counters['skipped_existing_json'] ?? 0)
         . ' | skipped_existing_db ' . (int)($counters['skipped_existing_db'] ?? 0)
+        . ' | skipped_non_pending ' . (int)($counters['skipped_non_pending'] ?? 0)
+        . ' | skipped_unchanged ' . (int)($counters['skipped_unchanged'] ?? 0)
         . ' | imported ' . (int)($counters['imported'] ?? 0)
         . ' | updated ' . (int)($counters['updated'] ?? 0);
     if (is_array($sample)) {
@@ -2467,6 +2472,8 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         'skipped_user_mismatch' => 0,
         'skipped_existing_json' => 0,
         'skipped_existing_db' => 0,
+        'skipped_non_pending' => 0,
+        'skipped_unchanged' => 0,
         'imported' => 0,
         'updated' => 0,
     ];
@@ -2506,19 +2513,15 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         'unidades' => dashboard_catalog_names('unidades'),
     ];
     $users = dashboard_load_user_maps();
-    $existingBySource = [];
-    foreach ($messages as $index => $message) {
-        $sourceId = trim((string)($message['fuente_id'] ?? ''));
-        if ($sourceId !== '') {
-            $existingBySource[$sourceId] = $index;
-        }
-    }
+    $coreSync = app(\App\Modulos\RedmineMantencion\Services\CorePendingReportSyncService::class);
+    $existingIndexes = $coreSync->indexes($messages);
     // DB-based duplicate guard: query redmine_mantencion_reportes for existing fuente_ids.
     // This is the authoritative source for "does this record exist?".
     // Archive rows in redmine_mantencion_reportes are historical only.
     // and must not block re-import of physically-deleted records.
     $dbImportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
     $dbFuenteIds = ($dbImportRepo !== null) ? $dbImportRepo->getExistingFuenteIds('core') : [];
+    $dbCoreIds = ($dbImportRepo !== null) ? $dbImportRepo->getExistingCoreIds() : [];
     $imported = 0;
     $updated = 0;
     foreach ($rows as $row) {
@@ -2534,16 +2537,21 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
         if ($sourceId === '') {
             continue;
         }
-        // Record is active in dashboard view — UPDATE, preserving local edits.
-        if (isset($existingBySource[$sourceId])) {
-            $idx = $existingBySource[$sourceId];
-            $currentState = strtolower((string)($messages[$idx]['estado'] ?? 'pendiente'));
-            $preserve = $messages[$idx];
-            $message['estado'] = in_array($currentState, ['procesado', 'error'], true) ? $currentState : 'pendiente';
-            $message['redmine_id'] = $preserve['redmine_id'] ?? ($message['redmine_id'] ?? '');
-            $message['procesado_ts'] = $preserve['procesado_ts'] ?? ($message['procesado_ts'] ?? '');
-            $message['id'] = $preserve['id'] ?? $message['id'];
-            $messages[$idx] = array_merge($preserve, $message);
+        // Match the stable CORE request ID first and the old fingerprint as
+        // fallback. Only pending reports may receive changes from CORE.
+        $existingIndex = $coreSync->matchIndex($existingIndexes, $message);
+        if ($existingIndex !== null) {
+            $merge = $coreSync->mergePending($messages[$existingIndex], $message);
+            if (! $merge['eligible']) {
+                $traceCounters['skipped_non_pending']++;
+                continue;
+            }
+            if (! $merge['changed']) {
+                $traceCounters['skipped_unchanged']++;
+                continue;
+            }
+
+            $messages[$existingIndex] = $merge['message'];
             $updated++;
             $traceCounters['updated']++;
             continue;
@@ -2557,11 +2565,19 @@ function dashboard_sync_core_source(array &$messages, string $sourceUrl, array $
             }
             continue;
         }
+        $coreId = $coreSync->coreId($message);
+        if ($coreId !== '' && isset($dbCoreIds[$coreId])) {
+            $traceCounters['skipped_existing_db']++;
+            if ($traceSample === null) {
+                $traceSample = dashboard_core_import_trace_sample($message, $filters, 'existing_core_id_db');
+            }
+            continue;
+        }
         // Not in active view and not in DB — import as new.
         // Archive blobs are intentionally not checked here: if the record was deleted
         // from redmine_mantencion_reportes it must be importable again.
         $messages[] = $message;
-        $existingBySource[$sourceId] = count($messages) - 1;
+        $existingIndexes = $coreSync->indexes($messages);
         $imported++;
         $traceCounters['imported']++;
     }

@@ -26,12 +26,20 @@
             <div>
                 <h2 class="h3 fw-black mb-1">{{ $mode === 'admin' ? 'Telegram Admin' : 'Mi Telegram' }}</h2>
             </div>
-            <span class="telegram-status-pill">
-                <i class="bi {{ ($mode === 'admin' ? $configured : ($configured && ($userTelegram['stored'] ?? false))) ? 'bi-check-circle' : 'bi-exclamation-triangle' }}"></i>
-                {{ $mode === 'admin'
-                    ? ($configured ? 'Bot configurado' : 'Bot pendiente')
-                    : (($configured && ($userTelegram['stored'] ?? false)) ? 'Listo' : 'Pendiente') }}
-            </span>
+            <div class="telegram-hero-actions">
+                @if ($mode === 'user')
+                    <button class="btn btn-outline-light telegram-help-trigger" type="button" data-bs-toggle="modal" data-bs-target="#telegramChatIdHelp">
+                        <i class="bi bi-question-circle"></i>
+                        Cómo obtener mi Chat ID
+                    </button>
+                @endif
+                <span class="telegram-status-pill">
+                    <i class="bi {{ ($mode === 'admin' ? $configured : ($configured && ($userTelegram['stored'] ?? false))) ? 'bi-check-circle' : 'bi-exclamation-triangle' }}"></i>
+                    {{ $mode === 'admin'
+                        ? ($configured ? 'Bot configurado' : 'Bot pendiente')
+                        : (($configured && ($userTelegram['stored'] ?? false)) ? 'Listo' : 'Pendiente') }}
+                </span>
+            </div>
         </div>
     </section>
 
@@ -245,6 +253,76 @@
     </div>
     </div>
 </main>
+
+@if ($mode === 'user')
+<div class="modal fade telegram-help-modal" id="telegramChatIdHelp" tabindex="-1" aria-labelledby="telegramChatIdHelpTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="telegram-help-title">
+                    <span><i class="bi bi-telegram"></i></span>
+                    <div>
+                        <small>Ayuda Telegram</small>
+                        <h2 class="modal-title" id="telegramChatIdHelpTitle">Cómo obtener tu Chat ID</h2>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="telegram-help-intro">Tu Chat ID es el número que permite a NOVA enviarte mensajes de forma personal. Obtenlo con el bot NOVA siguiendo estos pasos:</p>
+                <ol class="telegram-help-steps">
+                    <li>
+                        <span class="telegram-help-step-number">1</span>
+                        <div>
+                            <strong>Abre el bot NOVA</strong>
+                            <p>En Telegram, busca y abre el bot que te indicó el administrador de NOVA.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="telegram-help-step-number">2</span>
+                        <div>
+                            <strong>Inicia la conversación</strong>
+                            <p>Presiona <b>Iniciar</b> o envía el comando <code>/start</code>.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="telegram-help-step-number">3</span>
+                        <div>
+                            <strong>Solicita tu identificador</strong>
+                            <p>Envía <code>/id</code>. El bot responderá con tu Chat ID.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="telegram-help-step-number">4</span>
+                        <div>
+                            <strong>Copia el número</strong>
+                            <p>Copia solo los dígitos del mensaje, sin espacios ni texto adicional.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="telegram-help-step-number">5</span>
+                        <div>
+                            <strong>Guárdalo en NOVA</strong>
+                            <p>Abre <b>Mis integraciones</b>, selecciona Telegram, pega el número en <b>Chat ID</b> y guarda los cambios.</p>
+                        </div>
+                    </li>
+                </ol>
+                <div class="telegram-help-finish">
+                    <i class="bi bi-send-check"></i>
+                    <p><strong>Último paso:</strong> vuelve a esta pantalla y usa “Enviar mensaje de prueba” para confirmar que quedó conectado.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <a class="btn-nova btn-nova-primary" href="{{ route('integrations.nova') }}#integration-telegram">
+                    <i class="bi bi-person-lock"></i>
+                    Ir a Mis integraciones
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ asset('assets/nova-ui.js') }}"></script>

@@ -2,6 +2,8 @@
 
 namespace RedmineTic\Repositories;
 
+use App\Modulos\Nova\Services\RedmineIdentityService;
+use App\Support\StringNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -22,6 +24,7 @@ class RedmineUserRepository
     private ?bool $redmineTicProfilesTableAvailableCache = null;
     private ?bool $projectAccessTableAvailableCache = null;
     private ?bool $userIntegrationsTableAvailableCache = null;
+    private ?RedmineIdentityService $redmineIdentityInst = null;
 
     public function __construct(
         private string $projectKey,
@@ -157,6 +160,30 @@ class RedmineUserRepository
                 if ((string) ($user['id'] ?? '') === $id) {
                     return ['ok' => false, 'error' => 'El ID ya esta asociado a otro usuario.', 'users' => $users];
                 }
+            }
+
+            $incomingRut = trim((string) ($payload['rut'] ?? ''));
+            $incomingUsername = trim((string) ($payload['rut_sin_dv'] ?? $payload['username'] ?? ''));
+            foreach ($users as $user) {
+                if (
+                    $incomingRut !== ''
+                    && StringNormalizer::normalize((string) ($user['rut'] ?? '')) === StringNormalizer::normalize($incomingRut)
+                ) {
+                    return ['ok' => false, 'error' => 'El RUT ya esta asociado a otro usuario.', 'users' => $users];
+                }
+                if (
+                    $incomingUsername !== ''
+                    && StringNormalizer::normalize((string) ($user['rut_sin_dv'] ?? '')) === StringNormalizer::normalize($incomingUsername)
+                ) {
+                    return ['ok' => false, 'error' => 'El usuario de acceso ya esta asociado a otro usuario.', 'users' => $users];
+                }
+            }
+
+            if (
+                ($incomingRut !== '' && $this->redmineIdentity()->centralUserByLogin($incomingRut) !== null)
+                || ($incomingUsername !== '' && $this->redmineIdentity()->centralUserByLogin($incomingUsername) !== null)
+            ) {
+                return ['ok' => false, 'error' => 'El RUT o usuario de acceso ya pertenece a un usuario NOVA.', 'users' => $users];
             }
         }
 
@@ -506,8 +533,9 @@ class RedmineUserRepository
             }
         }
 
-        $username = trim((string) ($projectUser['rut_sin_dv'] ?? $projectUser['username'] ?? '')) ?: $redmineId;
-        $rut      = trim((string) ($projectUser['rut'] ?? ''));
+        $rawUsername = trim((string) ($projectUser['rut_sin_dv'] ?? $projectUser['username'] ?? ''));
+        $username = $rawUsername !== '' ? $rawUsername : $redmineId;
+        $rut = $this->redmineIdentity()->rutFromLogin((string) ($projectUser['rut'] ?? ''));
         $name     = $name !== '' ? $name : 'Redmine';
         $lastName = $lastName !== '' ? $lastName : 'Usuario';
         $role     = $this->normalizeNovaRoleForProject((string) ($projectUser['rol'] ?? 'usuario'));
@@ -519,17 +547,32 @@ class RedmineUserRepository
 
         try {
             $existing = DB::table('usuarios_nova')->where('redmine_id', $redmineId)->first();
-            if (!$existing && $rut !== '') {
-                $existing = DB::table('usuarios_nova')->where('rut', $rut)->first();
+            if (!$existing && $uuid !== '') {
+                $existing = DB::table('usuarios_nova')->where('uuid', $uuid)->first();
             }
-            if (!$existing && $username !== '') {
-                $existing = DB::table('usuarios_nova')->where('usuario', $username)->first();
+            if (!$existing && $rut !== '') {
+                $matched = $this->redmineIdentity()->centralUserByLogin($rut);
+                $existing = $matched !== null
+                    ? DB::table('usuarios_nova')->where('id', $matched['id'])->first()
+                    : null;
+            }
+            if (!$existing && $rawUsername !== '') {
+                $matched = $this->redmineIdentity()->centralUserByLogin($rawUsername);
+                $existing = $matched !== null
+                    ? DB::table('usuarios_nova')->where('id', $matched['id'])->first()
+                    : null;
             }
 
             $currentId = $existing ? (int) $existing->id : null;
+            if ($existing && $rawUsername === '') {
+                $username = trim((string) $existing->usuario) ?: $username;
+            }
+            if ($existing && $rut === '') {
+                $rut = trim((string) $existing->rut);
+            }
 
             $values = [
-                'usuario'        => $this->uniqueNovaUsername($username, $currentId),
+                'usuario'        => $username,
                 'rut'            => $rut !== '' ? $rut : null,
                 'redmine_id'     => $redmineId,
                 'nombre'         => $name,
@@ -543,6 +586,7 @@ class RedmineUserRepository
 
             if ($existing) {
                 DB::table('usuarios_nova')->where('id', $existing->id)->update($values);
+                $this->redmineIdentity()->syncRedmineIdAndIntegrations((int) $existing->id, $redmineId);
 
                 return (int) $existing->id;
             }
@@ -551,33 +595,12 @@ class RedmineUserRepository
             $values['password']  = Hash::make(Str::random(40));
             $values['creado_at'] = now();
 
-            return (int) DB::table('usuarios_nova')->insertGetId($values);
+            $createdId = (int) DB::table('usuarios_nova')->insertGetId($values);
+            $this->redmineIdentity()->syncRedmineIdAndIntegrations($createdId, $redmineId);
+
+            return $createdId;
         } catch (\Throwable) {
             return null;
-        }
-    }
-
-    private function uniqueNovaUsername(string $username, ?int $currentId = null): string
-    {
-        $username  = trim($username) !== '' ? trim($username) : (string) Str::uuid();
-        $candidate = $username;
-        $suffix    = 2;
-
-        while (true) {
-            try {
-                $query = DB::table('usuarios_nova')->where('usuario', $candidate);
-                if ($currentId !== null) {
-                    $query->where('id', '<>', $currentId);
-                }
-                if (!$query->exists()) {
-                    return $candidate;
-                }
-            } catch (\Throwable) {
-                return $candidate;
-            }
-
-            $candidate = $username . '-' . $suffix;
-            $suffix++;
         }
     }
 
@@ -599,6 +622,11 @@ class RedmineUserRepository
             );
         } catch (\Throwable) {
         }
+    }
+
+    private function redmineIdentity(): RedmineIdentityService
+    {
+        return $this->redmineIdentityInst ??= app(RedmineIdentityService::class);
     }
 
     /**
@@ -854,7 +882,7 @@ class RedmineUserRepository
 
     private function normalizeNovaRoleForProject(string $role): string
     {
-        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
+        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
     }
 
     private function normalizeUnifiedIdentity(string $value): string

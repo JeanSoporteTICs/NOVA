@@ -202,15 +202,17 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
                 <tbody>
                 <?php foreach ($importPreview as $item):
                   $status = (string)($item['status'] ?? 'new');
-                  $checked = $status === 'new' ? 'checked' : '';
+                  $checked = in_array($status, ['new', 'changed'], true) ? 'checked' : '';
                   $label = match ($status) {
                       'current' => 'Ya tiene acceso',
                       'revoked' => 'Existe sin acceso',
+                      'changed' => 'ID cambiado: ' . ($item['previous_id'] ?? '-') . ' → ' . ($item['id'] ?? '-'),
                       default => 'Nuevo, se creara baneado',
                   };
                   $badge = match ($status) {
                       'current' => 'is-activo',
                       'revoked' => 'is-baneado',
+                      'changed' => 'is-gestor',
                       default => 'is-usuario',
                   };
                   $fullName = trim((string)($item['nombre'] ?? '') . ' ' . (string)($item['apellido'] ?? ''));

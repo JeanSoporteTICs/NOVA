@@ -249,8 +249,9 @@ class RedmineCatalogRepository
         try {
             $rows = DB::table('catalogos_modulo')
                 ->where('modulo_id', $moduleId)
-                ->where('activo', 1)
-                ->get(['id', 'tipo', 'clave_externa', 'nombre']);
+                ->orderByDesc('activo')
+                ->orderBy('id')
+                ->get(['id', 'tipo', 'clave_externa', 'nombre', 'activo']);
         } catch (\Throwable) {
             return;
         }
@@ -264,6 +265,9 @@ class RedmineCatalogRepository
             }
 
             $this->namesById[$id] = $name;
+            if (empty($row->activo)) {
+                continue;
+            }
             foreach ([$row->clave_externa ?? '', $name] as $candidate) {
                 $candidate = $this->normalizeLookupValue((string) $candidate);
                 if ($candidate !== '') {

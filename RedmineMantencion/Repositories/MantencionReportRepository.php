@@ -71,6 +71,38 @@ final class MantencionReportRepository
     }
 
     /**
+     * Return stable CORE request IDs already persisted, regardless of their
+     * local workflow status. Used to prevent re-importing processed/archive
+     * rows when the legacy fuente_id fingerprint changed.
+     *
+     * @return array<string,true>
+     */
+    public function getExistingCoreIds(): array
+    {
+        if (! $this->tableReady()) {
+            return [];
+        }
+
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null) {
+            return [];
+        }
+
+        try {
+            return DB::table('redmine_mantencion_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('fuente', 'core')
+                ->whereNotNull('id_core')
+                ->where('id_core', '<>', '')
+                ->pluck('id_core')
+                ->mapWithKeys(fn (string $id): array => [trim($id) => true])
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Physically delete report rows by their fuente_id values.
      *
      * @param array<int,string> $fuenteIds
@@ -215,10 +247,22 @@ final class MantencionReportRepository
                 ->where('modulo_id', $moduleId)
                 ->where('fuente', $fuente !== '' ? $fuente : null)
                 ->where('fuente_id', $fuenteId)
-                ->value('id');
+                ->first(['id', 'fuente_id']);
+
+            $idCore = $this->idCore($message);
+            if ($existing === null && $fuente === 'core' && $idCore !== null) {
+                $existing = DB::table('redmine_mantencion_reportes')
+                    ->where('modulo_id', $moduleId)
+                    ->where('fuente', 'core')
+                    ->where('id_core', $idCore)
+                    ->first(['id', 'fuente_id']);
+            }
 
             if ($existing !== null) {
-                DB::table('redmine_mantencion_reportes')->where('id', $existing)->update($values);
+                // Keep the original persistence key when an old fingerprint
+                // was reconciled through the stable CORE request ID.
+                $values['fuente_id'] = trim((string) ($existing->fuente_id ?? '')) ?: $fuenteId;
+                DB::table('redmine_mantencion_reportes')->where('id', $existing->id)->update($values);
                 return;
             }
 

@@ -540,9 +540,10 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
     }
     $name = $name !== '' ? $name : 'Redmine';
     $lastName = $lastName !== '' ? $lastName : 'Usuario';
+    $identityService = app(\App\Modulos\Nova\Services\RedmineIdentityService::class);
     $rawUsername = trim((string)($user['rut_sin_dv'] ?? $user['username'] ?? ''));
     $username = $rawUsername !== '' ? $rawUsername : $redmineId;
-    $rut = trim((string)($user['rut'] ?? ''));
+    $rut = $identityService->rutFromLogin((string)($user['rut'] ?? ''));
     $incomingStatus = array_key_exists('estado', $user) || array_key_exists('estado_usuario', $user)
         ? (string)($user['estado'] ?? $user['estado_usuario'] ?? '')
         : '';
@@ -560,16 +561,25 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
             $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('uuid', $uuid)->first();
         }
         if (!$row && $rut !== '') {
-            $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('rut', $rut)->first();
+            $match = $identityService->centralUserByLogin($rut);
+            $row = $match !== null
+                ? \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('id', $match['id'])->first()
+                : null;
         }
-        if (!$row && $username !== '') {
-            $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('usuario', $username)->first();
+        if (!$row && $rawUsername !== '') {
+            $match = $identityService->centralUserByLogin($rawUsername);
+            $row = $match !== null
+                ? \Illuminate\Support\Facades\DB::table('usuarios_nova')->where('id', $match['id'])->first()
+                : null;
         }
         if ($row && !empty($user['_preserve_existing_status'])) {
             $status = '';
         }
         if ($row && $rawUsername === '') {
             $username = trim((string)$row->usuario) ?: $username;
+        }
+        if ($row && $rut === '') {
+            $rut = trim((string)$row->rut);
         }
         if (!$row && $status === '') {
             $status = 'activo';
@@ -598,6 +608,9 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
             $values['password']  = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
             $values['creado_at'] = now();
             $userId = (int)\Illuminate\Support\Facades\DB::table('usuarios_nova')->insertGetId($values);
+        }
+        if ($redmineId !== '') {
+            $identityService->syncRedmineIdAndIntegrations($userId, $redmineId);
         }
         usuarios_central_save_integration($userId, 'redmine_mantencion', trim((string)($user['api'] ?? '')), $redmineId);
         usuarios_central_save_integration_encrypted($userId, 'core', trim((string)($user['core_pass_enc'] ?? '')), trim((string)($user['core_user'] ?? '')));
@@ -953,6 +966,31 @@ function usuarios_redmine_person_name(array $user, string $apiKey = '', string $
     ];
 }
 
+function usuarios_redmine_person_identity(array $user, string $apiKey = '', string $membersUrl = ''): array {
+    $id = trim((string)($user['id'] ?? ''));
+    $detail = $user;
+    $login = trim((string)($user['login'] ?? ''));
+    $nombre = trim((string)($user['firstname'] ?? $user['first_name'] ?? ''));
+    $apellido = trim((string)($user['lastname'] ?? $user['last_name'] ?? ''));
+
+    if ($id !== '' && $apiKey !== '' && $membersUrl !== '' && ($login === '' || $nombre === '' || $apellido === '')) {
+        $remoteDetail = usuarios_fetch_redmine_user_detail($id, $apiKey, $membersUrl);
+        if ($remoteDetail !== []) {
+            $detail = array_merge($user, $remoteDetail);
+        }
+    }
+
+    [$nombre, $apellido] = usuarios_redmine_person_name($detail, $apiKey, $membersUrl);
+
+    return [
+        'id' => $id,
+        'nombre' => $nombre,
+        'apellido' => $apellido,
+        'login' => trim((string)($detail['login'] ?? $login)),
+        'mail' => trim((string)($detail['mail'] ?? $detail['email'] ?? '')),
+    ];
+}
+
 function usuarios_remote_connection(): array {
     $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
     $cfg = $repo !== null ? $repo->loadAll() : [];
@@ -1056,6 +1094,7 @@ function usuarios_remote_import_preview(array $rows): array {
     }
 
     $items = [];
+    $identityService = app(\App\Modulos\Nova\Services\RedmineIdentityService::class);
     foreach (($remote['memberships'] ?? []) as $membership) {
         if (!is_array($membership)) {
             continue;
@@ -1065,16 +1104,29 @@ function usuarios_remote_import_preview(array $rows): array {
             continue;
         }
         $id = trim((string)($user['id'] ?? ''));
-        [$nombre, $apellido] = usuarios_redmine_person_name($user, (string)$remote['apiKey'], (string)$remote['url']);
+        $identity = usuarios_redmine_person_identity($user, (string)$remote['apiKey'], (string)$remote['url']);
+        $nombre = $identity['nombre'];
+        $apellido = $identity['apellido'];
+        $login = $identity['login'];
         if ($id === '' || ($nombre === '' && $apellido === '')) {
             continue;
         }
         $central = usuarios_central_access_status_by_redmine_id($id);
+        $localMatch = $identityService->projectUserIndexByLogin($rows, $login);
+        $centralMatch = $identityService->centralUserByLogin($login);
+        $previousId = $localMatch !== null
+            ? trim((string)($rows[$localMatch]['redmine_id'] ?? $rows[$localMatch]['id'] ?? ''))
+            : trim((string)($centralMatch['redmine_id'] ?? ''));
+        $changedId = $previousId !== '' && $previousId !== $id;
         $items[] = [
             'id' => $id,
             'nombre' => $nombre !== '' ? $nombre : trim((string)($user['name'] ?? 'Redmine')),
             'apellido' => $apellido,
-            'status' => isset($currentAccess[$id]) || $central['has_access'] ? 'current' : ($central['exists'] ? 'revoked' : 'new'),
+            'login' => $login,
+            'previous_id' => $changedId ? $previousId : '',
+            'status' => $changedId
+                ? 'changed'
+                : (isset($currentAccess[$id]) || $central['has_access'] ? 'current' : ($central['exists'] ? 'revoked' : 'new')),
         ];
     }
 
@@ -1115,6 +1167,7 @@ function usuarios_sync_remote(array &$rows, ?array $selectedIds = null): array {
     }
     $created = 0;
     $updated = 0;
+    $identityService = app(\App\Modulos\Nova\Services\RedmineIdentityService::class);
     foreach ($memberships as $membership) {
         if (!is_array($membership)) {
             continue;
@@ -1127,33 +1180,42 @@ function usuarios_sync_remote(array &$rows, ?array $selectedIds = null): array {
         if ($selected !== null && !isset($selected[$id])) {
             continue;
         }
-        [$nombre, $apellido] = usuarios_redmine_person_name($user, $apiKey, $url);
+        $identity = usuarios_redmine_person_identity($user, $apiKey, $url);
+        $nombre = $identity['nombre'];
+        $apellido = $identity['apellido'];
+        $login = $identity['login'];
         if ($id === '' || ($nombre === '' && $apellido === '')) {
             continue;
         }
-        if (isset($indexed[$id])) {
-            $idx = $indexed[$id];
+        $idx = $indexed[$id] ?? $identityService->projectUserIndexByLogin($rows, $login);
+        if ($idx !== null) {
+            $previousId = trim((string)($rows[$idx]['redmine_id'] ?? $rows[$idx]['id'] ?? ''));
+            $rows[$idx]['id'] = $id;
+            $rows[$idx]['redmine_id'] = $id;
             $currentName = trim((string)($rows[$idx]['nombre'] ?? ''));
             $currentLastName = trim((string)($rows[$idx]['apellido'] ?? ''));
             if ($currentName !== $nombre || $currentLastName !== $apellido) {
                 $rows[$idx]['nombre'] = $nombre;
                 $rows[$idx]['apellido'] = $apellido;
-                $rows[$idx]['rut_sin_dv'] = '';
-                $rows[$idx]['rut'] = '';
-                $rows[$idx]['estamento'] = '';
-                $updated++;
             }
+            if ($previousId !== '' && $previousId !== $id) {
+                unset($indexed[$previousId]);
+            }
+            $indexed[$id] = $idx;
+            $updated++;
             $rows[$idx]['_preserve_existing_status'] = true;
             usuarios_central_upsert($rows[$idx]);
             unset($rows[$idx]['_preserve_existing_status']);
             continue;
         }
+        $centralMatch = $identityService->centralUserByLogin($login);
         $newRow = [
             'id' => $id,
-            'rut_sin_dv' => '',
+            'redmine_id' => $id,
+            'rut_sin_dv' => $centralMatch['usuario'] ?? $identityService->accessUsernameFromLogin($login),
             'nombre' => $nombre !== '' ? $nombre : trim((string)($user['name'] ?? 'Redmine')),
             'apellido' => $apellido,
-            'rut' => '',
+            'rut' => $centralMatch['rut'] ?? $identityService->rutFromLogin($login),
             'numero_celular' => '',
             'estamento' => '',
             'api' => '',
@@ -1167,10 +1229,17 @@ function usuarios_sync_remote(array &$rows, ?array $selectedIds = null): array {
             'permisos' => [],
             '_preserve_existing_status' => true,
         ];
+        if ($centralMatch !== null) {
+            $newRow['_nova_user_id'] = $centralMatch['uuid'];
+        }
         $rows[] = $newRow;
         usuarios_central_upsert($newRow);
         $indexed[$id] = count($rows) - 1;
-        $created++;
+        if ($centralMatch !== null) {
+            $updated++;
+        } else {
+            $created++;
+        }
     }
     save_usuarios($DATA_FILE, $rows);
     return ['ok' => true, 'created' => $created, 'updated' => $updated];

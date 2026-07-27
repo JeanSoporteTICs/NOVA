@@ -3,7 +3,9 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use App\Modulos\Nova\Services\DatabaseSqlBackupService;
 use RedmineTic\Repositories\RedmineDataRepository;
+use RedmineTic\Services\LegacyTicBackupImportService;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,13 +27,59 @@ Artisan::command('redmine:archive-processed', function (RedmineDataRepository $r
     $this->info($archived . ' reporte(s) procesado(s) archivado(s) por retencion.');
 })->purpose('Archive processed Redmine reports after configured retention hours');
 
+Artisan::command('nova:import-legacy-tic-backup
+    {path : Carpeta extraida del respaldo legacy TIC}
+    {--assignees=117,122 : IDs Redmine separados por coma}
+    {--apply : Ejecutar la importacion; sin esta opcion solo analiza}
+    {--expect-reports= : Cantidad exacta de reportes esperada}
+    {--expect-hour-links= : Cantidad exacta de asociaciones de horas extra esperada}
+    {--confirm= : Debe ser IMPORTAR-LEGACY-TIC al ejecutar}', function (
+        LegacyTicBackupImportService $importer,
+        DatabaseSqlBackupService $backups
+    ) {
+    $path = (string) $this->argument('path');
+    if (!str_starts_with($path, DIRECTORY_SEPARATOR) && preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) !== 1) {
+        $path = base_path($path);
+    }
+    $assignees = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('assignees')))));
+    $summary = $importer->analyze($path, $assignees);
+    $this->line(json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+    if (!$this->option('apply')) {
+        $this->info('Simulacion completada. No se modifico la base de datos.');
+        return 0;
+    }
+    if ((string) $this->option('confirm') !== 'IMPORTAR-LEGACY-TIC') {
+        $this->error('Falta --confirm=IMPORTAR-LEGACY-TIC.');
+        return 1;
+    }
+    $expectedReports = filter_var($this->option('expect-reports'), FILTER_VALIDATE_INT);
+    $expectedHourLinks = filter_var($this->option('expect-hour-links'), FILTER_VALIDATE_INT);
+    if ($expectedReports === false || $expectedHourLinks === false) {
+        $this->error('Para ejecutar debes indicar --expect-reports y --expect-hour-links.');
+        return 1;
+    }
+    if ((int) $summary['selected_reports'] !== $expectedReports || (int) $summary['selected_hour_links'] !== $expectedHourLinks) {
+        $this->error('Los conteos del respaldo no coinciden con los valores esperados. No se importo nada.');
+        return 1;
+    }
+
+    $backupPath = $backups->create('before-legacy-tic-import');
+    $this->info('Respaldo SQL creado: ' . $backupPath);
+    $result = $importer->import($path, $assignees);
+    $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $this->info('Importacion legacy TIC completada.');
+
+    return 0;
+})->purpose('Analyze or import selected reports from a legacy Redmine TIC JSON backup');
+
 
 Artisan::command('nova:consolidate-users', function () {
     $normalizeStatus = static function (string $status): string {
         return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
     };
     $normalizeRole = static function (string $role): string {
-        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
+        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
     };
     $splitPerson = static function (string $name, string $lastName = ''): array {
         $name = preg_replace('/\s+/', ' ', trim($name)) ?? '';

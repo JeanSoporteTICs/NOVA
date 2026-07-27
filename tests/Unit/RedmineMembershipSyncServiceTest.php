@@ -166,4 +166,35 @@ class RedmineMembershipSyncServiceTest extends TestCase
         $this->assertSame('', $first);
         $this->assertSame('', $last);
     }
+
+    public function test_resolve_user_identity_fetches_login_even_when_membership_already_has_names(): void
+    {
+        $calls = 0;
+        $httpGetJson = function (string $url, string $token) use (&$calls): array {
+            $calls++;
+
+            return $this->jsonResponse(200, [
+                'user' => [
+                    'id' => 44,
+                    'login' => '12345678-5',
+                    'firstname' => 'Maria',
+                    'lastname' => 'Rojas',
+                    'mail' => 'maria@example.test',
+                ],
+            ]);
+        };
+
+        $identity = $this->service()->resolveUserIdentity(
+            ['id' => '44', 'firstname' => 'Maria', 'lastname' => 'Rojas'],
+            'https://redmine.test',
+            'tok',
+            $httpGetJson
+        );
+
+        $this->assertSame(1, $calls);
+        $this->assertSame('12345678-5', $identity['login']);
+        $this->assertSame('Maria', $identity['firstname']);
+        $this->assertSame('Rojas', $identity['lastname']);
+        $this->assertSame('maria@example.test', $identity['mail']);
+    }
 }

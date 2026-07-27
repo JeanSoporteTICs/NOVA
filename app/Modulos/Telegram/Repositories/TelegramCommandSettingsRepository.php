@@ -15,11 +15,12 @@ class TelegramCommandSettingsRepository
     public function all(): array
     {
         $settings = $this->loadFromDb();
+
         return array_replace_recursive($this->defaults(), $settings);
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     public function save(array $payload): bool
     {
@@ -33,12 +34,12 @@ class TelegramCommandSettingsRepository
 
         $messages = [];
         foreach ($this->defaults()['messages'] as $key => $default) {
-            $value            = trim((string) data_get($payload, "messages.{$key}", ''));
-            $messages[$key]   = $value !== '' ? $value : $default;
+            $value = trim((string) data_get($payload, "messages.{$key}", ''));
+            $messages[$key] = $value !== '' ? $value : $default;
         }
 
-        $settings['commands']   = $commands;
-        $settings['messages']   = $messages;
+        $settings['commands'] = $commands;
+        $settings['messages'] = $messages;
         $settings['updated_at'] = date(DATE_ATOM);
 
         return $this->saveToDb($settings);
@@ -63,7 +64,7 @@ class TelegramCommandSettingsRepository
     {
         $message = $this->message($key);
         foreach ($replace as $name => $value) {
-            $message = str_replace('{' . $name . '}', (string) $value, $message);
+            $message = str_replace('{'.$name.'}', (string) $value, $message);
         }
 
         return $message;
@@ -76,27 +77,34 @@ class TelegramCommandSettingsRepository
     {
         return [
             'commands' => [
-                'help'   => ['enabled' => true],
+                'help' => ['enabled' => true],
                 'status' => ['enabled' => true],
-                'emach'  => ['enabled' => true],
-                'tic'    => ['enabled' => true],
-                'test'   => ['enabled' => true],
+                'chat_id' => ['enabled' => true],
+                'emach' => ['enabled' => true],
+                'tic' => ['enabled' => true],
+                'test' => ['enabled' => true],
             ],
             'messages' => [
-                'help_header'               => 'Comandos Telegram NOVA:',
-                'status'                    => "Servicio Telegram NOVA activo\nFecha: {fecha}",
-                'test'                      => 'Mensaje de prueba desde Telegram NOVA: {fecha}',
-                'tic_success'               => "Reporte TIC recibido\nAsunto: {asunto}\nCategoría: {categoria}\nUnidad: {unidad}\nEstado: pendiente",
-                'tic_unavailable'           => 'No pude cargar Redmine TIC desde el listener Telegram.',
-                'tic_error'                 => 'No pude crear el reporte TIC: {error}',
-                'emach_success'             => "Última marcación EMACH\nFecha: {fecha}\nHora: {hora}\nTipo: {tipo}\nReloj: {reloj}",
-                'emach_missing_chat_id'     => 'Tu Chat ID no está asociado a un usuario NOVA. Ingresa a NOVA > Mis integraciones y guarda tu TELEGRAM_CHAT_ID.',
-                'emach_user_lookup_error'   => 'No pude consultar tu usuario NOVA desde el servicio Telegram. Revisa la conexión de Docker con la base de datos.',
+                'help_header' => 'Comandos Telegram NOVA:',
+                'status' => "Servicio Telegram NOVA activo\nFecha: {fecha}",
+                'chat_id' => "Tu Chat ID es: {chat_id}\nCopia este número y guárdalo en NOVA > Mis integraciones > Telegram.",
+                'test' => 'Mensaje de prueba desde Telegram NOVA: {fecha}',
+                'tic_success' => "Reporte TIC recibido\nAsunto: {asunto}\nCategoría: {categoria}\nUnidad: {unidad}\nEstado: pendiente",
+                'tic_unavailable' => 'No pude cargar Redmine TIC desde el listener Telegram.',
+                'tic_error' => 'No pude crear el reporte TIC: {error}',
+                'tic_mode_activated' => "Modo TIC activado hasta {hasta}.\nAhora puedes enviar: problema, unidad, solicitante",
+                'tic_mode_deactivated' => 'Modo TIC desactivado. Los mensajes normales ya no se crearán como reportes.',
+                'tic_mode_status_active' => "El modo TIC está activo hasta {hasta}.\nFormato: problema, unidad, solicitante",
+                'tic_mode_status_inactive' => 'El modo TIC está inactivo. Usa /tic activar para habilitarlo durante el día.',
+                'tic_mode_invalid_format' => "No se creó el reporte.\nUsa el formato: problema, unidad, solicitante",
+                'emach_success' => "Última marcación EMACH\nFecha: {fecha}\nHora: {hora}\nTipo: {tipo}\nReloj: {reloj}",
+                'emach_missing_chat_id' => 'Tu Chat ID no está asociado a un usuario NOVA. Ingresa a NOVA > Mis integraciones y guarda tu TELEGRAM_CHAT_ID.',
+                'emach_user_lookup_error' => 'No pude consultar tu usuario NOVA desde el servicio Telegram. Revisa la conexión de Docker con la base de datos.',
                 'emach_missing_credentials' => 'No tienes credenciales EMACH guardadas en NOVA.',
-                'emach_empty'               => 'No encontré marcaciones EMACH para el mes actual.',
-                'emach_error'               => 'No pude consultar EMACH: {error}',
-                'disabled'                  => 'Comando desactivado.',
-                'unknown'                   => 'No entendí ese comando. Usa /ayuda.',
+                'emach_empty' => 'No encontré marcaciones EMACH para el mes actual.',
+                'emach_error' => 'No pude consultar EMACH: {error}',
+                'disabled' => 'Comando desactivado.',
+                'unknown' => 'No entendí ese comando. Usa /ayuda.',
             ],
         ];
     }
@@ -108,14 +116,15 @@ class TelegramCommandSettingsRepository
             return $id === null ? null : (int) $id;
         }
         try {
-            if (!Schema::hasTable('modulos_nova') || !Schema::hasTable('configuraciones_modulo')) {
+            if (! Schema::hasTable('modulos_nova') || ! Schema::hasTable('configuraciones_modulo')) {
                 return $id = null;
             }
             $row = DB::table('modulos_nova')->where('clave_modulo', self::MODULE_KEY)->first(['id']);
-            $id  = $row ? (int) $row->id : null;
+            $id = $row ? (int) $row->id : null;
         } catch (\Throwable) {
             $id = null;
         }
+
         return $id === null ? null : (int) $id;
     }
 
@@ -137,6 +146,7 @@ class TelegramCommandSettingsRepository
             foreach ($rows as $row) {
                 $out[(string) $row->clave] = $this->cast((string) ($row->valor ?? ''), (string) ($row->tipo ?? 'string'));
             }
+
             return $out;
         } catch (\Throwable) {
             return [];
@@ -156,10 +166,10 @@ class TelegramCommandSettingsRepository
                 if ($key === '') {
                     continue;
                 }
-                $type   = is_bool($value) ? 'bool' : (is_int($value) ? 'int' : (is_array($value) ? 'json' : 'string'));
+                $type = is_bool($value) ? 'bool' : (is_int($value) ? 'int' : (is_array($value) ? 'json' : 'string'));
                 $stored = match ($type) {
-                    'json'  => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null,
-                    'bool'  => $value ? '1' : '0',
+                    'json' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null,
+                    'bool' => $value ? '1' : '0',
                     default => (string) $value,
                 };
                 DB::table('configuraciones_modulo')->updateOrInsert(
@@ -167,6 +177,7 @@ class TelegramCommandSettingsRepository
                     ['valor' => $stored, 'tipo' => $type, 'actualizado_at' => now()]
                 );
             }
+
             return true;
         } catch (\Throwable) {
             return false;
@@ -176,9 +187,9 @@ class TelegramCommandSettingsRepository
     private function cast(string $value, string $type): mixed
     {
         return match ($type) {
-            'json'  => json_decode($value, true) ?? [],
-            'bool'  => in_array(strtolower($value), ['1', 'true', 'si', 'sí', 'yes'], true),
-            'int'   => (int) $value,
+            'json' => json_decode($value, true) ?? [],
+            'bool' => in_array(strtolower($value), ['1', 'true', 'si', 'sí', 'yes'], true),
+            'int' => (int) $value,
             default => $value,
         };
     }

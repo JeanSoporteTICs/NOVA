@@ -1,0 +1,38 @@
+{
+    "type": "redmine-maintenance-package",
+    "version": 2,
+    "created_at": "2026-07-25T16:17:07-04:00",
+    "sections": {
+        "archivados": {
+            "label": "Archivados",
+            "files": [
+                "reportes/2025/diciembre.json",
+                "reportes/2026/abril.json",
+                "reportes/2026/enero.json",
+                "reportes/2026/febrero.json",
+                "reportes/2026/julio.json",
+                "reportes/2026/junio.json",
+                "reportes/2026/marzo.json",
+                "reportes/2026/mayo.json"
+            ]
+        },
+        "pendientes": {
+            "label": "Pendientes activos",
+            "files": [
+                "mensaje.json"
+            ]
+        },
+        "horas_extras": {
+            "label": "Horas extra",
+            "files": [
+                "horasExtras/2026/abril.json",
+                "horasExtras/2026/enero.json",
+                "horasExtras/2026/febrero.json",
+                "horasExtras/2026/julio.json",
+                "horasExtras/2026/junio.json",
+                "horasExtras/2026/marzo.json",
+                "horasExtras/2026/mayo.json"
+            ]
+        }
+    }
+}

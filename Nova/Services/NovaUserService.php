@@ -51,6 +51,25 @@ final class NovaUserService
         return $clean;
     }
 
+    /**
+     * Canonical database representation: numeric body, hyphen and DV.
+     * Keeping one representation makes the existing unique index on `rut`
+     * effective even when users enter the value with or without dots.
+     */
+    public function canonicalRut(string $rut): string
+    {
+        $clean = strtolower((string) preg_replace('/[^0-9k]/i', '', trim($rut)));
+        if ($clean === '') {
+            return '';
+        }
+
+        if (strlen($clean) < 2) {
+            return $clean;
+        }
+
+        return substr($clean, 0, -1) . '-' . substr($clean, -1);
+    }
+
     public function isValidRut(string $rut): bool
     {
         $clean = strtolower((string) preg_replace('/[^0-9k]/i', '', trim($rut)));
@@ -86,7 +105,9 @@ final class NovaUserService
     {
         $role = strtolower(trim($role));
 
-        return in_array($role, ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
+        // "gestor" is a module-specific role and must never grant global
+        // NOVA administration privileges.
+        return in_array($role, ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
     }
 
     public function normalizeStatus(string $status): string

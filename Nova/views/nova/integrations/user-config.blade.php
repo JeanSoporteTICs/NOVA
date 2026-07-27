@@ -171,7 +171,7 @@
                     $formId = 'integration-form-' . $type;
                     $secretInputId = 'secret-drawer-' . $type;
                 @endphp
-                <article class="integration-card nova-card integration-card-summary" role="button" tabindex="0"
+                <article class="integration-card nova-card integration-card-summary" id="integration-{{ $type }}" role="button" tabindex="0"
                          data-integration-card data-drawer-target="{{ $drawerId }}"
                          aria-controls="{{ $drawerId }}">
                     <div class="integration-card-head">
@@ -281,7 +281,7 @@
                     </div>
                     <div class="offcanvas-footer nova-drawer-actions">
                         <form method="post" action="{{ $postUrl }}" class="integration-delete-form js-integration-delete"
-                              data-app-confirm="Eliminar la credencial {{ $definition['label'] }}?">
+                              data-integration-label="{{ $definition['label'] }}">
                             @csrf
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="type" value="{{ $type }}">
@@ -352,6 +352,41 @@
 </div>
 @endif
 
+<div class="modal fade integration-confirm-modal" id="integrationDeleteConfirm" tabindex="-1"
+     aria-labelledby="integrationDeleteConfirmTitle" aria-describedby="integrationDeleteConfirmDescription" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="integration-confirm-title">
+                    <span class="integration-confirm-icon"><i class="bi bi-trash3"></i></span>
+                    <div>
+                        <small>Confirmar eliminación</small>
+                        <h2 class="modal-title" id="integrationDeleteConfirmTitle">¿Eliminar esta integración?</h2>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="integrationDeleteConfirmDescription">
+                    Se eliminarán las credenciales guardadas de
+                    <strong data-integration-confirm-name>esta integración</strong>.
+                </p>
+                <div class="integration-confirm-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>Para volver a usarla tendrás que ingresar nuevamente tus datos de acceso.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn-nova btn-nova-danger" type="button" data-integration-confirm-delete>
+                    <span class="btn-nova-icon"><i class="bi bi-trash3"></i></span>
+                    <span>Eliminar integración</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @if ($moduleKey !== 'emach')
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('assets/nova-ui.js') }}"></script>
@@ -403,13 +438,38 @@
         }
     });
 
+    const deleteModalElement = document.getElementById('integrationDeleteConfirm');
+    const deleteIntegrationName = deleteModalElement?.querySelector('[data-integration-confirm-name]');
+    const deleteConfirmButton = deleteModalElement?.querySelector('[data-integration-confirm-delete]');
+    let pendingDeleteForm = null;
+    let pendingDeleteTrigger = null;
+    let deleteConfirmed = false;
+    const getDeleteModal = function () {
+        if (!deleteModalElement || !window.bootstrap || !window.bootstrap.Modal) return null;
+        return window.bootstrap.Modal.getOrCreateInstance(deleteModalElement);
+    };
+
     document.addEventListener('submit', function (event) {
         const form = event.target;
-        const message = form.getAttribute('data-app-confirm');
-        if (message && !window.confirm(message)) {
+
+        if (form.matches('.js-integration-delete') && !deleteConfirmed) {
             event.preventDefault();
+            const deleteModal = getDeleteModal();
+            if (!deleteModal) {
+                window.NovaToast?.error('No se pudo abrir la confirmación de eliminación.');
+                return;
+            }
+
+            pendingDeleteForm = form;
+            pendingDeleteTrigger = event.submitter || form.querySelector('button[type="submit"]');
+            if (deleteIntegrationName) {
+                deleteIntegrationName.textContent = form.dataset.integrationLabel || 'esta integración';
+            }
+            deleteModal?.show();
             return;
         }
+
+        deleteConfirmed = false;
         if (event.defaultPrevented) {
             return;
         }
@@ -422,6 +482,28 @@
             event.submitter.disabled = true;
             event.submitter.classList.add('is-submitting');
         }
+    });
+
+    deleteConfirmButton?.addEventListener('click', function () {
+        const form = pendingDeleteForm;
+        const deleteModal = getDeleteModal();
+        if (!form || !deleteModalElement || !deleteModal) return;
+
+        deleteConfirmButton.disabled = true;
+        deleteConfirmButton.classList.add('is-submitting');
+        deleteConfirmed = true;
+        deleteModalElement.addEventListener('hidden.bs.modal', function () {
+            form.requestSubmit();
+        }, { once: true });
+        deleteModal.hide();
+    });
+
+    deleteModalElement?.addEventListener('hidden.bs.modal', function () {
+        deleteConfirmButton?.classList.remove('is-submitting');
+        if (deleteConfirmButton) deleteConfirmButton.disabled = false;
+        if (!deleteConfirmed) pendingDeleteTrigger?.focus();
+        pendingDeleteForm = null;
+        pendingDeleteTrigger = null;
     });
 
     document.querySelectorAll('.integration-drawer').forEach(function (drawer) {

@@ -3,7 +3,16 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/lib/telegram.php';
+use App\Modulos\Nova\Support\SecretValue;
+use App\Modulos\Telegram\Repositories\TelegramCommandCatalog;
+use App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository;
+use App\Modulos\Telegram\Services\TelegramTicModeService;
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use RedmineTic\Repositories\RedmineDataRepository;
+
+require_once dirname(__DIR__).'/lib/telegram.php';
 telegram_bootstrap_laravel();
 
 $once = in_array('--once', $argv, true);
@@ -36,7 +45,7 @@ if ($sendQueued) {
         "Telegram outbox | enviados=%d fallidos=%d%s\n",
         (int) ($result['sent'] ?? 0),
         (int) ($result['failed'] ?? 0),
-        (string) ($result['error'] ?? '') !== '' ? ' error=' . $result['error'] : ''
+        (string) ($result['error'] ?? '') !== '' ? ' error='.$result['error'] : ''
     ));
     exit((string) ($result['error'] ?? '') === '' ? 0 : 1);
 }
@@ -50,7 +59,7 @@ do {
     $outbox = telegram_process_outbox();
     if (((int) ($outbox['sent'] ?? 0)) > 0 || ((int) ($outbox['failed'] ?? 0)) > 0) {
         fwrite(STDOUT, sprintf(
-            '[%s] Outbox procesado: enviados=%d fallidos=%d' . PHP_EOL,
+            '[%s] Outbox procesado: enviados=%d fallidos=%d'.PHP_EOL,
             date('Y-m-d H:i:s'),
             (int) ($outbox['sent'] ?? 0),
             (int) ($outbox['failed'] ?? 0)
@@ -60,8 +69,8 @@ do {
     try {
         $updates = telegram_get_updates($token, $offset, $once ? 2 : 25);
     } catch (Throwable $e) {
-        fwrite(STDERR, "ERROR: " . $e->getMessage() . PHP_EOL);
-        fwrite(STDERR, "TIP: ejecuta php telegram/bin/listen.php --diagnose para revisar webhook y cola pendiente." . PHP_EOL);
+        fwrite(STDERR, 'ERROR: '.$e->getMessage().PHP_EOL);
+        fwrite(STDERR, 'TIP: ejecuta php telegram/bin/listen.php --diagnose para revisar webhook y cola pendiente.'.PHP_EOL);
         exit(1);
     }
     foreach ($updates as $update) {
@@ -73,6 +82,17 @@ do {
             continue;
         }
         $command = telegram_command_name($text);
+        if (in_array($command, ['/id', '/chatid'], true)) {
+            $settings = telegram_command_settings();
+            if ($settings->commandEnabled('chat_id')) {
+                telegram_send_message($token, $incomingChatId, $settings->render('chat_id', ['chat_id' => $incomingChatId]));
+            } else {
+                telegram_send_message($token, $incomingChatId, $settings->message('disabled'));
+            }
+            fwrite(STDOUT, '['.date('Y-m-d H:i:s').'] Chat ID solicitado.'.PHP_EOL);
+
+            continue;
+        }
         $lookup = telegram_user_lookup_by_chat_id($incomingChatId);
         $user = is_array($lookup['user'] ?? null) ? $lookup['user'] : [];
         if ($user === []) {
@@ -81,18 +101,19 @@ do {
                     ? 'emach_user_lookup_error'
                     : 'emach_missing_chat_id';
                 telegram_send_message($token, $incomingChatId, telegram_command_settings()->message($messageKey));
-                fwrite(STDOUT, '[' . date('Y-m-d H:i:s') . '] /emach rechazado: ' . ($lookup['detail'] ?? 'usuario no encontrado') . ' | chat_id=' . $incomingChatId . PHP_EOL);
+                fwrite(STDOUT, '['.date('Y-m-d H:i:s').'] /emach rechazado: '.($lookup['detail'] ?? 'usuario no encontrado').' | chat_id='.$incomingChatId.PHP_EOL);
             }
+
             continue;
         }
         telegram_send_message($token, $incomingChatId, telegram_command_reply($text, $user));
-        fwrite(STDOUT, '[' . date('Y-m-d H:i:s') . '] Comando atendido: ' . $text . PHP_EOL);
+        fwrite(STDOUT, '['.date('Y-m-d H:i:s').'] Comando atendido: '.$text.PHP_EOL);
     }
     telegram_write_state($updatesFile, ['updated_at' => date(DATE_ATOM), 'offset' => $offset]);
-    if (!$once && empty($updates)) {
+    if (! $once && empty($updates)) {
         usleep(250000);
     }
-} while (!$once);
+} while (! $once);
 
 function telegram_print_diagnostics(string $token): void
 {
@@ -102,31 +123,37 @@ function telegram_print_diagnostics(string $token): void
     $lastError = trim((string) ($info['last_error_message'] ?? ''));
 
     fwrite(STDOUT, "Telegram diagnostico\n");
-    fwrite(STDOUT, "Webhook: " . ($url !== '' ? 'activo' : 'inactivo') . PHP_EOL);
+    fwrite(STDOUT, 'Webhook: '.($url !== '' ? 'activo' : 'inactivo').PHP_EOL);
     if ($url !== '') {
-        fwrite(STDOUT, "Webhook URL: " . $url . PHP_EOL);
+        fwrite(STDOUT, 'Webhook URL: '.$url.PHP_EOL);
     }
-    fwrite(STDOUT, "Mensajes pendientes: " . $pending . PHP_EOL);
+    fwrite(STDOUT, 'Mensajes pendientes: '.$pending.PHP_EOL);
     if ($lastError !== '') {
-        fwrite(STDOUT, "Ultimo error webhook: " . $lastError . PHP_EOL);
+        fwrite(STDOUT, 'Ultimo error webhook: '.$lastError.PHP_EOL);
     }
 }
 
 function telegram_command_reply(string $text, array $user): string
 {
+    if (! str_starts_with(ltrim($text), '/')) {
+        return telegram_tic_plain_message_reply($text, $user);
+    }
+
     $command = telegram_command_name($text);
 
     $settings = telegram_command_settings();
     $commandKey = telegram_command_key($command);
-    if ($commandKey !== '' && !$settings->commandEnabled($commandKey)) {
+    if ($commandKey !== '' && ! $settings->commandEnabled($commandKey)) {
         return $settings->message('disabled');
     }
 
     return match ($command) {
         '/start', '/ayuda', '/help' => telegram_help_reply(),
         '/estado', '/status' => $settings->render('status', ['fecha' => date('d/m/Y H:i:s')]),
+        '/id', '/chatid' => $settings->render('chat_id', ['chat_id' => (string) data_get($user, 'telegram_settings.chat_id', '')]),
         '/emach' => telegram_emach_last_mark_reply($user),
-        '/tic', '/reporte' => telegram_redmine_tic_report_reply(telegram_command_arguments($text), $user),
+        '/tic' => telegram_tic_command_reply(telegram_command_arguments($text), $user),
+        '/reporte' => telegram_redmine_tic_report_reply(telegram_command_arguments($text), $user),
         '/test' => $settings->render('test', ['fecha' => date('d/m/Y H:i:s')]),
         default => $settings->message('unknown'),
     };
@@ -142,19 +169,19 @@ function telegram_command_name(string $text): string
     return $command;
 }
 
-function telegram_command_settings(): \App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository
+function telegram_command_settings(): TelegramCommandSettingsRepository
 {
     static $settings = null;
-    if ($settings instanceof \App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository) {
+    if ($settings instanceof TelegramCommandSettingsRepository) {
         return $settings;
     }
 
-    return $settings = new \App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository();
+    return $settings = new TelegramCommandSettingsRepository;
 }
 
 function telegram_help_reply(): string
 {
-    return (new \App\Modulos\Telegram\Repositories\TelegramCommandCatalog(telegram_command_settings()))->helpText();
+    return (new TelegramCommandCatalog(telegram_command_settings()))->helpText();
 }
 
 function telegram_command_key(string $command): string
@@ -162,6 +189,7 @@ function telegram_command_key(string $command): string
     return match ($command) {
         '/start', '/ayuda', '/help' => 'help',
         '/estado', '/status' => 'status',
+        '/id', '/chatid' => 'chat_id',
         '/emach' => 'emach',
         '/tic', '/reporte' => 'tic',
         '/test' => 'test',
@@ -172,27 +200,101 @@ function telegram_command_key(string $command): string
 function telegram_command_arguments(string $text): string
 {
     $parts = preg_split('/\s+/', trim($text), 2);
+
     return trim((string) ($parts[1] ?? ''));
+}
+
+function telegram_tic_command_reply(string $arguments, array $user): string
+{
+    $action = strtolower(trim($arguments));
+    $chatId = trim((string) data_get($user, 'telegram_settings.chat_id', ''));
+    $settings = telegram_command_settings();
+
+    try {
+        if ($action === 'activar') {
+            $state = telegram_tic_mode_service()->activate($chatId);
+
+            return $settings->render('tic_mode_activated', [
+                'hasta' => telegram_tic_mode_service()->formattedUntil($state),
+            ]);
+        }
+
+        if (in_array($action, ['salir', 'desactivar'], true)) {
+            telegram_tic_mode_service()->deactivate($chatId);
+
+            return $settings->message('tic_mode_deactivated');
+        }
+
+        if ($action === 'estado') {
+            $state = telegram_tic_mode_service()->status($chatId);
+            if (! $state['active']) {
+                return $settings->message('tic_mode_status_inactive');
+            }
+
+            return $settings->render('tic_mode_status_active', [
+                'hasta' => telegram_tic_mode_service()->formattedUntil($state),
+            ]);
+        }
+    } catch (Throwable $e) {
+        return $settings->render('tic_error', ['error' => $e->getMessage()]);
+    }
+
+    return telegram_redmine_tic_report_reply($arguments, $user);
+}
+
+function telegram_tic_plain_message_reply(string $text, array $user): string
+{
+    $settings = telegram_command_settings();
+    if (! $settings->commandEnabled('tic')) {
+        return $settings->message('unknown');
+    }
+
+    $chatId = trim((string) data_get($user, 'telegram_settings.chat_id', ''));
+    try {
+        if (! telegram_tic_mode_service()->isActive($chatId)) {
+            return $settings->message('unknown');
+        }
+
+        $validation = telegram_tic_mode_service()->validateReportText($text);
+        if (! $validation['valid']) {
+            return $settings->message('tic_mode_invalid_format');
+        }
+
+        return telegram_redmine_tic_report_reply($validation['text'], $user);
+    } catch (Throwable $e) {
+        return $settings->render('tic_error', ['error' => $e->getMessage()]);
+    }
+}
+
+function telegram_tic_mode_service(): TelegramTicModeService
+{
+    static $service = null;
+    if ($service instanceof TelegramTicModeService) {
+        return $service;
+    }
+
+    return $service = app(TelegramTicModeService::class);
 }
 
 function telegram_redmine_tic_report_reply(string $text, array $user): string
 {
-    if (!class_exists(\RedmineTic\Repositories\RedmineDataRepository::class)) {
+    if (! class_exists(RedmineDataRepository::class)) {
         return telegram_command_settings()->message('tic_unavailable');
     }
 
     try {
-        $redmine = new \RedmineTic\Repositories\RedmineDataRepository();
+        $redmine = new RedmineDataRepository;
         $result = $redmine->forProject('redmine_tic')->createTelegramReport($text, $user);
     } catch (Throwable $e) {
         return telegram_command_settings()->render('tic_error', ['error' => $e->getMessage()]);
     }
 
-    if (!($result['ok'] ?? false)) {
+    if (! ($result['ok'] ?? false)) {
         return (string) ($result['error'] ?? 'No pude crear el reporte TIC.');
     }
 
     $report = is_array($result['report'] ?? null) ? $result['report'] : [];
+
     return telegram_command_settings()->render('tic_success', [
         'asunto' => (string) ($report['asunto'] ?? '-'),
         'categoria' => (string) ($report['categoria'] ?? '-'),
@@ -207,22 +309,23 @@ function telegram_bootstrap_laravel(): void
     }
 
     $basePath = dirname(__DIR__, 2);
-    $autoload = $basePath . '/vendor/autoload.php';
-    $bootstrap = $basePath . '/bootstrap/app.php';
-    if (!is_file($autoload) || !is_file($bootstrap)) {
+    $autoload = $basePath.'/vendor/autoload.php';
+    $bootstrap = $basePath.'/bootstrap/app.php';
+    if (! is_file($autoload) || ! is_file($bootstrap)) {
         return;
     }
 
     require_once $autoload;
     $app = require $bootstrap;
-    if (is_object($app) && method_exists($app, 'make') && interface_exists(\Illuminate\Contracts\Console\Kernel::class)) {
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+    if (is_object($app) && method_exists($app, 'make') && interface_exists(Kernel::class)) {
+        $app->make(Kernel::class)->bootstrap();
     }
 }
 
 function telegram_user_by_chat_id(string $chatId): array
 {
     $lookup = telegram_user_lookup_by_chat_id($chatId);
+
     return is_array($lookup['user'] ?? null) ? $lookup['user'] : [];
 }
 
@@ -232,11 +335,11 @@ function telegram_user_by_chat_id(string $chatId): array
 function telegram_user_lookup_by_chat_id(string $chatId): array
 {
     // Primary: look up by telegram_id_chat in usuarios_nova (DB-only since S30)
-    if (class_exists(\Illuminate\Support\Facades\DB::class) && class_exists(\Illuminate\Support\Facades\Schema::class)) {
+    if (class_exists(DB::class) && class_exists(Schema::class)) {
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')
-                && \Illuminate\Support\Facades\Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
-                $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+            if (Schema::hasTable('usuarios_nova')
+                && Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
+                $row = DB::table('usuarios_nova')
                     ->leftJoin('integraciones_usuario', static function ($join): void {
                         $join->on('integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
                             ->where('integraciones_usuario.tipo', '=', 'emach');
@@ -257,20 +360,20 @@ function telegram_user_lookup_by_chat_id(string $chatId): array
                     ]);
                 if ($row !== null) {
                     return ['user' => [
-                        'id'               => (string) ($row->uuid ?? $row->id ?? ''),
-                        'name'             => (string) ($row->nombre ?? ''),
-                        'apellido'         => (string) ($row->apellido ?? ''),
-                        'username'         => (string) ($row->usuario ?? $row->rut ?? ''),
-                        'redmine_id'       => (string) ($row->redmine_id ?? ''),
-                        'emach_credentials'=> [
+                        'id' => (string) ($row->uuid ?? $row->id ?? ''),
+                        'name' => (string) ($row->nombre ?? ''),
+                        'apellido' => (string) ($row->apellido ?? ''),
+                        'username' => (string) ($row->usuario ?? $row->rut ?? ''),
+                        'redmine_id' => (string) ($row->redmine_id ?? ''),
+                        'emach_credentials' => [
                             'user' => (string) ($row->emach_user ?? ''),
                             'password' => (string) ($row->emach_password ?? ''),
                         ],
-                        'telegram_settings'=> ['chat_id' => $chatId],
+                        'telegram_settings' => ['chat_id' => $chatId],
                     ], 'error' => '', 'detail' => 'ok'];
                 }
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return ['user' => [], 'error' => 'lookup_error', 'detail' => $e->getMessage()];
         }
     }
@@ -280,7 +383,7 @@ function telegram_user_lookup_by_chat_id(string $chatId): array
 
 function telegram_emach_last_mark_reply(array $user): string
 {
-    if (!telegram_emach_client_available()) {
+    if (! telegram_emach_client_available()) {
         return telegram_command_settings()->render('emach_error', ['error' => 'Modulo EMACH no disponible en este despliegue.']);
     }
 
@@ -305,6 +408,7 @@ function telegram_emach_last_mark_reply(array $user): string
     });
 
     $mark = $marks[0];
+
     return telegram_command_settings()->render('emach_success', [
         'fecha' => $mark['fecha'] ?: '-',
         'hora' => $mark['marcas'] ?: '-',
@@ -321,7 +425,7 @@ function telegram_emach_client_available(): bool
 
     $basePath = dirname(__DIR__, 2);
     $clientPath = null;
-    foreach ([$basePath . '/Emach/lib/client.php', $basePath . '/emach/lib/client.php'] as $candidate) {
+    foreach ([$basePath.'/Emach/lib/client.php', $basePath.'/emach/lib/client.php'] as $candidate) {
         if (is_file($candidate)) {
             $clientPath = $candidate;
             break;
@@ -340,6 +444,7 @@ function telegram_emach_client_available(): bool
 function telegram_emach_credentials(array $user): array
 {
     $credentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
+
     return [
         'user' => trim((string) ($credentials['user'] ?? '')),
         'password' => telegram_decrypt_secret((string) ($credentials['password'] ?? '')),
@@ -348,24 +453,25 @@ function telegram_emach_credentials(array $user): array
 
 function telegram_decrypt_secret(string $secret): string
 {
-    return \App\Modulos\Nova\Support\SecretValue::decryptSecret($secret) ?? '';
+    return SecretValue::decryptSecret($secret) ?? '';
 }
 
 function telegram_emach_mark_sort_key(array $mark): string
 {
-    $date = DateTime::createFromFormat('d/m/Y H:i:s', trim((string) ($mark['fecha'] ?? '')) . ' ' . trim((string) ($mark['marcas'] ?? '')));
+    $date = DateTime::createFromFormat('d/m/Y H:i:s', trim((string) ($mark['fecha'] ?? '')).' '.trim((string) ($mark['marcas'] ?? '')));
     if ($date instanceof DateTime) {
         return $date->format('YmdHis');
     }
-    return (string) ($mark['fecha'] ?? '') . ' ' . (string) ($mark['marcas'] ?? '');
+
+    return (string) ($mark['fecha'] ?? '').' '.(string) ($mark['marcas'] ?? '');
 }
 
 function telegram_write_state(string $path, array $state): void
 {
     $directory = dirname($path);
-    if (!is_dir($directory)) {
+    if (! is_dir($directory)) {
         mkdir($directory, 0775, true);
     }
-    file_put_contents($path, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
+    file_put_contents($path, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL, LOCK_EX);
     @chmod($path, 0666);
 }

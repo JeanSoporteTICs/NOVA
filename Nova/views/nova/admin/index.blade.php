@@ -453,6 +453,11 @@
                             'tic_success' => 'Reporte TIC creado',
                             'tic_unavailable' => 'TIC no disponible',
                             'tic_error' => 'Error TIC',
+                            'tic_mode_activated' => 'Modo TIC activado',
+                            'tic_mode_deactivated' => 'Modo TIC desactivado',
+                            'tic_mode_status_active' => 'Estado modo TIC activo',
+                            'tic_mode_status_inactive' => 'Estado modo TIC inactivo',
+                            'tic_mode_invalid_format' => 'Formato TIC inválido',
                             'emach_success' => 'Marcación EMACH',
                             'emach_missing_chat_id' => 'EMACH sin Chat ID',
                             'emach_user_lookup_error' => 'EMACH sin conexión NOVA',
@@ -476,6 +481,11 @@
                             'tic_success' => 'Confirmación cuando se crea un reporte TIC pendiente.',
                             'tic_unavailable' => 'Se muestra si NOVA no puede cargar el módulo TIC.',
                             'tic_error' => 'Se muestra si falla la creación del reporte TIC.',
+                            'tic_mode_activated' => 'Confirma que los mensajes con formato serán reportes hasta el final del día.',
+                            'tic_mode_deactivated' => 'Confirma la salida del modo de recepción diaria.',
+                            'tic_mode_status_active' => 'Indica que el modo diario está activo y su vencimiento.',
+                            'tic_mode_status_inactive' => 'Indica cómo activar el modo diario.',
+                            'tic_mode_invalid_format' => 'Se muestra cuando un mensaje diario no contiene los tres campos requeridos.',
                             'emach_success' => 'Respuesta con la última marcación encontrada.',
                             'emach_missing_chat_id' => 'Se muestra si el Chat ID que escribio al bot no esta asociado a un usuario NOVA.',
                             'emach_user_lookup_error' => 'Se muestra si el listener de Docker no puede consultar usuarios NOVA en la base de datos.',
@@ -490,6 +500,8 @@
                             'test' => ['{fecha}' => 'Fecha y hora actual'],
                             'tic_success' => ['{asunto}' => 'Problema reportado', '{categoria}' => 'Categoría detectada', '{unidad}' => 'Ubicación o unidad'],
                             'tic_error' => ['{error}' => 'Detalle del error'],
+                            'tic_mode_activated' => ['{hasta}' => 'Fecha y hora de término'],
+                            'tic_mode_status_active' => ['{hasta}' => 'Fecha y hora de término'],
                             'emach_success' => ['{fecha}' => 'Fecha de marcación', '{hora}' => 'Hora de marcación', '{tipo}' => 'Entrada o salida', '{reloj}' => 'Reloj utilizado'],
                             'emach_error' => ['{error}' => 'Detalle del error'],
                         ];
@@ -656,7 +668,9 @@
                         </div>
                         <div class="field">
                             <label for="redmine_id">Redmine ID</label>
-                            <input class="form-control" id="redmine_id" name="redmine_id" type="number" min="1" step="1" data-user-redmine-id>
+                            <input class="form-control" id="redmine_id" name="redmine_id" type="number" readonly
+                                placeholder="Se asigna al importar desde Redmine" aria-describedby="redmine-id-help" data-user-redmine-id>
+                            <div class="field-help" id="redmine-id-help">Solo se actualiza mediante la importación desde Redmine TIC o Mantención.</div>
                         </div>
                         <div class="field">
                             <label for="username">Usuario acceso</label>
@@ -705,11 +719,11 @@
                         </div>
                     </div>
 
-                    <div class="form-section-title">Integraciones personales</div>
+                    <!-- <div class="form-section-title">Integraciones personales</div>
                     <div class="nova-alert-card is-info mb-0">
                         <i class="bi bi-person-lock"></i>
                         <span>Cada usuario debe ingresar sus propias credenciales desde el modulo correspondiente. Administracion solo ve si estan configuradas.</span>
-                    </div>
+                    </div> -->
                 </div>
                 <div class="nova-user-form__footer">
                     <button class="btn btn-outline-secondary" type="button" data-user-close>Cancelar</button>
@@ -761,7 +775,7 @@
                         <tbody>
                         @forelse ($users as $user)
                             @php
-                                $novaRole = in_array(($user['role'] ?? 'usuario'), ['admin', 'administrador', 'gestor', 'root'], true) ? 'admin' : 'usuario';
+                                $novaRole = in_array(($user['role'] ?? 'usuario'), ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
                                 $userStatus = $user['status'] ?? 'activo';
                                 $emachCredentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
                                 $hasEmachCredentials = trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '';
