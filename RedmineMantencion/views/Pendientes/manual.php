@@ -98,7 +98,7 @@ $categoryOptionsJson = htmlspecialchars(
               </div>
               <textarea name="descripcion" id="manual-descripcion" class="form-control editor" aria-labelledby="description-edit-tab"><?= $h($form['descripcion'] ?? '') ?></textarea>
               <div class="manual-description-preview" id="manual-description-preview" role="tabpanel" aria-labelledby="description-preview-tab" hidden></div>
-              <div class="form-text">Campo opcional. Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div>
+              <!-- <div class="form-text">Campo opcional. Puedes pegar texto y tablas juntos; las celdas de Excel conservarán su estructura.</div> -->
             </div>
           </div>
 
@@ -239,74 +239,207 @@ $categoryOptionsJson = htmlspecialchars(
       ].join('\n');
     };
 
-    const clipboardTableRows = clipboardData => {
-      const html = clipboardData.getData('text/html');
-      if (html) {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const table = doc.querySelector('table');
-        if (table) {
-          return Array.from(table.rows).map(row =>
-            Array.from(row.cells).map(cell => cell.innerText || cell.textContent || '')
-          );
+    const tableRowsFromElement = table => Array.from(table.rows).map(row =>
+      Array.from(row.cells).map(cell => cell.innerText || cell.textContent || '')
+    );
+
+    const plainClipboardToMarkdown = text => {
+      const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+      const output = [];
+      let foundTable = false;
+
+      for (let index = 0; index < lines.length;) {
+        if (!lines[index].includes('\t')) {
+          output.push(lines[index]);
+          index += 1;
+          continue;
+        }
+
+        const rows = [];
+        while (index < lines.length && lines[index].includes('\t')) {
+          rows.push(lines[index].split('\t'));
+          index += 1;
+        }
+        const markdown = rowsToMarkdown(rows);
+        if (markdown) {
+          foundTable = true;
+          output.push(markdown);
+        } else {
+          output.push(...rows.map(row => row.join('\t')));
         }
       }
-      const text = clipboardData.getData('text/plain');
-      if (!text.includes('\t')) return [];
-      return text.replace(/\r\n?/g, '\n').split('\n').map(row => row.split('\t'));
+
+      return {
+        foundTable,
+        markdown: output.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+      };
     };
 
-    descriptionInput?.addEventListener('paste', event => {
-      const rows = clipboardTableRows(event.clipboardData);
-      const markdown = rowsToMarkdown(rows);
-      if (!markdown) return;
-      event.preventDefault();
+    const htmlClipboardToMarkdown = html => {
+      if (!html) return { foundTable: false, markdown: '' };
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const tables = Array.from(doc.querySelectorAll('table'));
+      if (!tables.length) return { foundTable: false, markdown: '' };
+
+      const replacements = new Map();
+      tables.forEach((table, index) => {
+        const markdown = rowsToMarkdown(tableRowsFromElement(table));
+        if (!markdown) return;
+        const marker = `NOVA_CLIPBOARD_TABLE_${index}`;
+        replacements.set(marker, markdown);
+        table.replaceWith(doc.createTextNode(`\n${marker}\n`));
+      });
+      if (!replacements.size) return { foundTable: false, markdown: '' };
+
+      const blockTags = new Set([
+        'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DIV', 'FOOTER', 'H1', 'H2',
+        'H3', 'H4', 'H5', 'H6', 'HEADER', 'LI', 'MAIN', 'P', 'PRE', 'SECTION',
+      ]);
+      const nodeText = node => {
+        if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+        if (node.tagName === 'BR') return '\n';
+        const content = Array.from(node.childNodes).map(nodeText).join('');
+        return blockTags.has(node.tagName) ? `${content}\n` : content;
+      };
+
+      let markdown = nodeText(doc.body)
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n');
+      replacements.forEach((tableMarkdown, marker) => {
+        markdown = markdown.replace(marker, `\n${tableMarkdown}\n`);
+      });
+
+      return {
+        foundTable: true,
+        markdown: markdown.replace(/\n{3,}/g, '\n\n').trim(),
+      };
+    };
+
+    const clipboardDescriptionMarkdown = clipboardData => {
+      const plainResult = plainClipboardToMarkdown(clipboardData.getData('text/plain'));
+      if (plainResult.foundTable) return plainResult.markdown;
+      const htmlResult = htmlClipboardToMarkdown(clipboardData.getData('text/html'));
+      return htmlResult.foundTable ? htmlResult.markdown : '';
+    };
+
+    const insertDescriptionBlock = content => {
       const start = descriptionInput.selectionStart ?? descriptionInput.value.length;
       const end = descriptionInput.selectionEnd ?? start;
       const before = descriptionInput.value.slice(0, start);
       const after = descriptionInput.value.slice(end);
-      const prefix = before && !before.endsWith('\n') ? '\n' : '';
-      const suffix = after && !after.startsWith('\n') ? '\n' : '';
-      descriptionInput.value = `${before}${prefix}${markdown}${suffix}${after}`;
-      const cursor = before.length + prefix.length + markdown.length;
+      const prefix = before === '' || before.endsWith('\n\n')
+        ? ''
+        : (before.endsWith('\n') ? '\n' : '\n\n');
+      const suffix = after.startsWith('\n\n')
+        ? ''
+        : (after.startsWith('\n') ? '\n' : '\n\n');
+      const inserted = `${prefix}${content.trim()}${suffix}`;
+      descriptionInput.value = `${before}${inserted}${after}`;
+      const cursor = before.length + inserted.length;
       descriptionInput.setSelectionRange(cursor, cursor);
       descriptionInput.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    descriptionInput?.addEventListener('paste', event => {
+      const markdown = clipboardDescriptionMarkdown(event.clipboardData);
+      if (!markdown) return;
+      event.preventDefault();
+      insertDescriptionBlock(markdown);
     });
 
-    const markdownCells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim().replace(/<br>/g, '\n'));
+    const markdownCells = line => {
+      const source = line.trim().replace(/^\||\|$/g, '');
+      const cells = [];
+      let cell = '';
+      for (let index = 0; index < source.length; index += 1) {
+        const character = source[index];
+        if (character === '\\' && source[index + 1] === '|') {
+          cell += '|';
+          index += 1;
+        } else if (character === '|') {
+          cells.push(cell.trim().replace(/<br>/g, '\n'));
+          cell = '';
+        } else {
+          cell += character;
+        }
+      }
+      cells.push(cell.trim().replace(/<br>/g, '\n'));
+      return cells;
+    };
+    const isMarkdownSeparator = line =>
+      /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(line || '');
+    const isMarkdownTableRow = line => {
+      const value = String(line || '').trim();
+      return value.startsWith('|') && value.endsWith('|') && value.slice(1, -1).includes('|');
+    };
     const renderDescriptionPreview = () => {
       if (!descriptionPreview || !descriptionInput) return;
       descriptionPreview.replaceChildren();
-      const lines = descriptionInput.value.trim().split(/\r?\n/);
-      const isTable = lines.length >= 2
-        && lines[0].includes('|')
-        && /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[1]);
-      if (!isTable) {
+      const value = descriptionInput.value;
+      if (!value.trim()) {
         const text = document.createElement('div');
         text.className = 'manual-description-preview__text';
-        text.textContent = descriptionInput.value || 'Sin descripción.';
+        text.textContent = 'Sin descripción.';
         descriptionPreview.appendChild(text);
         return;
       }
-      const table = document.createElement('table');
-      table.className = 'table table-sm table-bordered align-middle mb-0';
-      const thead = document.createElement('thead');
-      const tbody = document.createElement('tbody');
-      const appendRow = (target, cells, tag) => {
-        const tr = document.createElement('tr');
-        cells.forEach(value => {
-          const cell = document.createElement(tag);
-          cell.textContent = value;
-          tr.appendChild(cell);
-        });
-        target.appendChild(tr);
+
+      const lines = value.replace(/\r\n?/g, '\n').split('\n');
+      const appendText = textLines => {
+        const content = textLines.join('\n').replace(/^\n+|\n+$/g, '');
+        if (!content) return;
+        const text = document.createElement('div');
+        text.className = 'manual-description-preview__text';
+        text.textContent = content;
+        descriptionPreview.appendChild(text);
       };
-      appendRow(thead, markdownCells(lines[0]), 'th');
-      lines.slice(2).filter(line => line.trim()).forEach(line => appendRow(tbody, markdownCells(line), 'td'));
-      table.append(thead, tbody);
-      const wrapper = document.createElement('div');
-      wrapper.className = 'table-responsive';
-      wrapper.appendChild(table);
-      descriptionPreview.appendChild(wrapper);
+      const appendTable = tableLines => {
+        const table = document.createElement('table');
+        table.className = 'table table-sm table-bordered align-middle mb-0';
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+        const appendRow = (target, cells, tag) => {
+          const tr = document.createElement('tr');
+          cells.forEach(cellValue => {
+            const cell = document.createElement(tag);
+            cell.textContent = cellValue;
+            tr.appendChild(cell);
+          });
+          target.appendChild(tr);
+        };
+        appendRow(thead, markdownCells(tableLines[0]), 'th');
+        tableLines.slice(2).forEach(line => appendRow(tbody, markdownCells(line), 'td'));
+        table.append(thead, tbody);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'table-responsive manual-description-preview__table';
+        wrapper.appendChild(table);
+        descriptionPreview.appendChild(wrapper);
+      };
+
+      let textLines = [];
+      for (let index = 0; index < lines.length;) {
+        const startsTable = index + 1 < lines.length
+          && isMarkdownTableRow(lines[index])
+          && isMarkdownSeparator(lines[index + 1]);
+        if (!startsTable) {
+          textLines.push(lines[index]);
+          index += 1;
+          continue;
+        }
+
+        appendText(textLines);
+        textLines = [];
+        const tableLines = [lines[index], lines[index + 1]];
+        index += 2;
+        while (index < lines.length && isMarkdownTableRow(lines[index])) {
+          tableLines.push(lines[index]);
+          index += 1;
+        }
+        appendTable(tableLines);
+      }
+      appendText(textLines);
     };
 
     const showDescriptionMode = preview => {

@@ -11,7 +11,9 @@
     .manual-description-tab:hover, .manual-description-tab.is-active { background: #e8f1ff; color: #1d4ed8; }
     .manual-grid textarea.editor { min-height: 200px; border-top-left-radius: 0; border-top-right-radius: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; tab-size: 4; }
     .manual-description-preview { min-height: 200px; padding: .75rem; border: 1px solid #d7deea; border-radius: 0 0 .5rem .5rem; background: #fff; }
+    .manual-description-preview > * + * { margin-top: .85rem; }
     .manual-description-preview__text { white-space: pre-wrap; }
+    .manual-description-preview__table { margin-block: .25rem; }
     .manual-description-preview th { background: #eaf2ff; color: #173b5c; white-space: pre-wrap; }
     .manual-description-preview td { white-space: pre-wrap; }
     .manual-grid .helper-link { font-size: .9rem; text-decoration: none; }
