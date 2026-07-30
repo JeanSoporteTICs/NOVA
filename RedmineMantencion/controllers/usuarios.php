@@ -221,6 +221,12 @@ function usuarios_normalize_status(string $status): string {
     return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
 }
 
+function usuarios_normalize_module_role(string $role): string {
+    $role = strtolower(trim($role));
+
+    return in_array($role, ['root', 'administrador', 'gestor', 'usuario'], true) ? $role : 'usuario';
+}
+
 function usuarios_migrate_global_nextcloud_credentials(array &$rows): bool {
     $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
     if ($userId === '') {
@@ -458,15 +464,20 @@ function usuarios_central_save_integration_encrypted(int $userId, string $type, 
     usuarios_central_save_integration($userId, $type, (string) $plaintext, $externalUser);
 }
 
-function usuarios_central_grant_access(int $userId, string $moduleKey = 'redmine-mantencion'): void {
+function usuarios_central_grant_access(int $userId, string $moduleKey = 'redmine-mantencion', ?string $moduleRole = null): void {
     $moduleId = usuarios_central_module_id($moduleKey);
     if ($userId <= 0 || $moduleId === null || !class_exists(\Illuminate\Support\Facades\DB::class)) {
         return;
     }
     try {
+        $values = ['permitido' => 1, 'actualizado_at' => now()];
+        if ($moduleRole !== null
+            && \Illuminate\Support\Facades\Schema::hasColumn('permisos_usuario_modulo', 'rol_modulo')) {
+            $values['rol_modulo'] = usuarios_normalize_module_role($moduleRole);
+        }
         \Illuminate\Support\Facades\DB::table('permisos_usuario_modulo')->updateOrInsert(
             ['usuario_id' => $userId, 'modulo_id' => $moduleId],
-            ['permitido' => 1, 'actualizado_at' => now()]
+            $values
         );
     } catch (\Throwable) {
     }
@@ -550,8 +561,7 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
     $status = $incomingStatus !== ''
         ? usuarios_normalize_status($incomingStatus)
         : '';
-    $roleRaw = strtolower(trim((string)($user['rol'] ?? 'usuario')));
-    $role = in_array($roleRaw, ['administrador', 'gestor', 'root'], true) ? $roleRaw : 'usuario';
+    $moduleRole = usuarios_normalize_module_role((string)($user['rol'] ?? 'usuario'));
     try {
         $row = null;
         if ($redmineId !== '') {
@@ -590,7 +600,6 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
             'rut'            => $rut !== '' ? $rut : null,
             'nombre'         => $name,
             'apellido'       => $lastName,
-            'rol'            => $role,
             'actualizado_at' => now(),
         ];
         if ($redmineId !== '') {
@@ -605,6 +614,9 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
             $userId = (int)$row->id;
         } else {
             $values['uuid']      = (string)\Illuminate\Support\Str::uuid();
+            // El rol de Mantención es local al módulo y no debe elevar el rol
+            // global del usuario recién importado.
+            $values['rol']       = 'usuario';
             $values['password']  = \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
             $values['creado_at'] = now();
             $userId = (int)\Illuminate\Support\Facades\DB::table('usuarios_nova')->insertGetId($values);
@@ -615,7 +627,7 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
         usuarios_central_save_integration($userId, 'redmine_mantencion', trim((string)($user['api'] ?? '')), $redmineId);
         usuarios_central_save_integration_encrypted($userId, 'core', trim((string)($user['core_pass_enc'] ?? '')), trim((string)($user['core_user'] ?? '')));
         usuarios_central_save_integration_encrypted($userId, 'nextcloud', trim((string)($user['nextcloud_pass_enc'] ?? '')), trim((string)($user['nextcloud_user'] ?? '')));
-        usuarios_central_grant_access($userId, $moduleKey);
+        usuarios_central_grant_access($userId, $moduleKey, $moduleRole);
         return $userId;
     } catch (\Throwable) {
         return null;
@@ -634,11 +646,15 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
         }
     }
     try {
+        $selectColumns = ['usuarios_nova.*'];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('permisos_usuario_modulo', 'rol_modulo')) {
+            $selectColumns[] = 'permisos_usuario_modulo.rol_modulo';
+        }
         $central = \Illuminate\Support\Facades\DB::table('usuarios_nova')
             ->join('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
             ->where('permisos_usuario_modulo.modulo_id', $moduleId)
             ->where('permisos_usuario_modulo.permitido', 1)
-            ->select('usuarios_nova.*')
+            ->select($selectColumns)
             ->get();
     } catch (\Throwable) {
         return $rows;
@@ -702,7 +718,15 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
             'nextcloud_user' => $nextcloudExternal,
             'nextcloud_pass_enc' => '',
             'has_nextcloud_credentials' => $nextcloudSecret !== '',
-            'rol' => trim((string)($user->rol ?? 'usuario')) === 'admin' ? 'administrador' : 'usuario',
+            'rol' => strtolower(trim((string)($user->rol ?? 'usuario'))) === 'root'
+                ? 'root'
+                : usuarios_normalize_module_role(
+                    (string)($user->rol_modulo ?? (
+                        in_array(strtolower(trim((string)($user->rol ?? 'usuario'))), ['admin', 'administrador'], true)
+                            ? 'administrador'
+                            : 'usuario'
+                    ))
+                ),
             'estado' => trim((string)($user->estado ?? 'activo')),
             'password' => (string)($user->password ?? ''),
             'permisos' => [],

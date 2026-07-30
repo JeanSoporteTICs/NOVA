@@ -14,6 +14,7 @@
     };
     $canEditReports = $permissionEnabled('reportes_editar');
     $canDeleteReports = $permissionEnabled('reportes_eliminar');
+    $canEditHoursExtra = $permissionEnabled('horas_extra_editar');
     $fmtDate = static function ($value): string {
         $value = trim((string) $value);
         $value = preg_split('/\s+/', $value)[0] ?? $value;
@@ -127,7 +128,11 @@
                 </colgroup>
                 <thead>
                     <tr>
-                        <th><input type="checkbox" aria-label="Seleccionar todos" data-dashboard-select-all></th>
+                        <th class="rm-dashboard-select-cell">
+                            <div class="rm-dashboard-select-control">
+                                <input type="checkbox" aria-label="Seleccionar todos" data-dashboard-select-all>
+                            </div>
+                        </th>
                         <th>Redmine ID</th>
                         <th>Asunto</th>
                         <th>Solicitante</th>
@@ -136,7 +141,7 @@
                         <th>Unidad</th>
                         <th>Unidad solicitante</th>
                         <th>Estado local</th>
-                        <th class="nova-col-actions">Acciones</th>
+                        <th class="nova-col-actions text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -147,9 +152,30 @@
                         $estadoLocal = strtolower(trim((string) ($report['estado'] ?? '')));
                         $errorLogText = (string) (($errorLogsByReport ?? [])[$reportId] ?? 'Sin registros de error para este reporte.');
                         $errorLogTarget = 'dashboard-error-log-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $reportId);
+                        $reportOrigin = strtolower(trim((string) ($report['origen'] ?? '')));
+                        $reportSource = $reportOrigin === 'telegram' || trim((string) ($report['chat_id_telegram'] ?? '')) !== ''
+                            ? 'telegram'
+                            : 'manual';
                     @endphp
                     <tr>
-                        <td><input type="checkbox" value="{{ $report['id'] ?? '' }}" aria-label="Seleccionar solicitud" data-dashboard-row-check></td>
+                        <td class="rm-dashboard-select-cell">
+                            <div class="rm-dashboard-select-control">
+                                <input type="checkbox" value="{{ $report['id'] ?? '' }}" aria-label="Seleccionar solicitud" data-dashboard-row-check>
+                                @if ($reportSource === 'telegram')
+                                    <span class="badge rounded-circle p-2 action-tooltip rm-dashboard-source-indicator is-telegram"
+                                        title="Origen: Telegram"
+                                        aria-label="Origen: Telegram">
+                                        <i class="bi bi-telegram"></i>
+                                    </span>
+                                @else
+                                    <span class="badge rounded-circle p-2 action-tooltip rm-dashboard-source-indicator is-manual"
+                                        title="Origen: Creación manual"
+                                        aria-label="Origen: Creación manual">
+                                        <i class="bi bi-pencil-fill"></i>
+                                    </span>
+                                @endif
+                            </div>
+                        </td>
                         <td>{{ $report['redmine_id'] ?? '-' }}</td>
                         <td>
                             <div class="rm-dashboard-subject" title="{{ $report['asunto'] ?? $report['mensaje'] ?? '-' }}">
@@ -166,7 +192,7 @@
                                 <i class="bi {{ $estadoLocal === 'procesado' ? 'bi-check2' : ($estadoLocal === 'error' ? 'bi-exclamation-triangle' : 'bi-hourglass-split') }}"></i>
                             </span>
                         </td>
-                        <td>
+                        <td class="nova-col-actions">
                             <div class="nova-row-actions">
                                 @if ($estadoLocal === 'error')
                                     <button class="btn-action btn-action-view action-tooltip" type="button"
@@ -208,7 +234,7 @@
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
                                 @endif
-                                @if ($canEditReports)
+                                @if ($canEditHoursExtra)
                                 <form method="post" action="{{ $redmineRoute('redmine.native.dashboard.action') }}"
                                       data-no-page-loader="true"
                                       data-optimistic-toggle
@@ -322,11 +348,20 @@
                                 <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
                             </div>
                         </div>
-                        <div class="col-12 col-md-3"><label class="form-label">Hora extra</label><select class="form-select" name="hora_extra"><option value="NO">No</option><option value="SI">Si</option></select></div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Hora extra</label>
+                            <select class="form-select" name="hora_extra" @disabled(!$canEditHoursExtra)>
+                                <option value="NO">No</option>
+                                <option value="SI">Si</option>
+                            </select>
+                            @if (!$canEditHoursExtra)
+                                <div class="form-text"><i class="bi bi-lock"></i> Requiere el permiso Editar de Horas extra.</div>
+                            @endif
+                        </div>
                         <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
 
                         <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1:30"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" @disabled(!$canEditHoursExtra)></div>
                         <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
 

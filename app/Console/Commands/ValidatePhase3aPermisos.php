@@ -19,7 +19,7 @@ class ValidatePhase3aPermisos extends Command
     protected $signature = 'nova:validate-phase3a';
     protected $description = 'Validate Phase 3a: relational permission tables vs JSON source';
 
-    private const EXPECTED_KEYS = 31;
+    private const EXPECTED_KEYS = 30;
 
     private const SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
 
@@ -27,7 +27,7 @@ class ValidatePhase3aPermisos extends Command
         'mensajes', 'mensajes_acceso', 'horas_extra', 'historico', 'historico_acciones',
         'historico_scope', 'configuracion', 'estadisticas', 'usuarios',
         'categorias', 'unidades', 'simulador', 'actividad', 'reportes_editar',
-        'reportes_eliminar', 'horas_extra_editar', 'horas_extra_eliminar', 'usuarios_editar',
+        'reportes_eliminar', 'horas_extra_editar', 'usuarios_editar',
         'usuarios_eliminar', 'cfg_resumen', 'cfg_conexion', 'cfg_proyecto', 'cfg_redmine',
         'cfg_campos', 'cfg_retencion', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
         'cfg_categorias', 'cfg_unidades', 'mis_integraciones',

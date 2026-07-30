@@ -371,7 +371,7 @@ class RedmineUserRepository
                 $users[$index]['rol'] = trim($role);
             }
             $users[$index]['permisos'] = $permissions;
-            $this->persistUsers($users);
+            $this->persistUsers([$users[$index]], true, 'baneado');
 
             return true;
         }
@@ -538,8 +538,6 @@ class RedmineUserRepository
         $rut = $this->redmineIdentity()->rutFromLogin((string) ($projectUser['rut'] ?? ''));
         $name     = $name !== '' ? $name : 'Redmine';
         $lastName = $lastName !== '' ? $lastName : 'Usuario';
-        $role     = $this->normalizeNovaRoleForProject((string) ($projectUser['rol'] ?? 'usuario'));
-
         $incomingStatus = array_key_exists('estado_usuario', $projectUser)
             ? trim((string) $projectUser['estado_usuario'])
             : '';
@@ -577,7 +575,6 @@ class RedmineUserRepository
                 'redmine_id'     => $redmineId,
                 'nombre'         => $name,
                 'apellido'       => $lastName,
-                'rol'            => $role,
                 'actualizado_at' => now(),
             ];
             if (!$existing || !$preserveExistingStatus) {
@@ -592,6 +589,8 @@ class RedmineUserRepository
             }
 
             $values['uuid']      = (string) Str::uuid();
+            // A module-specific role must never grant global NOVA privileges.
+            $values['rol']       = 'usuario';
             $values['password']  = Hash::make(Str::random(40));
             $values['creado_at'] = now();
 
@@ -878,11 +877,6 @@ class RedmineUserRepository
     private function normalizeProjectStatus(string $status): string
     {
         return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
-    }
-
-    private function normalizeNovaRoleForProject(string $role): string
-    {
-        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
     }
 
     private function normalizeUnifiedIdentity(string $value): string

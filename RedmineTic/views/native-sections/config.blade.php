@@ -41,7 +41,6 @@
         'reportes_editar' => 'Editar reportes',
         'reportes_eliminar' => 'Eliminar reportes',
         'horas_extra_editar' => 'Editar horas extra',
-        'horas_extra_eliminar' => 'Eliminar horas extra',
         'usuarios_editar' => 'Editar usuarios',
         'usuarios_eliminar' => 'Eliminar usuarios',
     ];
@@ -60,7 +59,7 @@
     ];
     $rolePermissionRows = [
         ['label' => 'Reportes', 'icon' => 'bi-inboxes', 'access' => 'mensajes_acceso', 'edit' => 'reportes_editar', 'delete' => 'reportes_eliminar', 'scope' => 'mensajes', 'scope_input' => 'mensajes'],
-        ['label' => 'Horas extra', 'icon' => 'bi-clock-history', 'access' => 'horas_extra', 'edit' => 'horas_extra_editar', 'delete' => 'horas_extra_eliminar', 'scope' => 'horas_extra', 'scope_input' => 'horas'],
+        ['label' => 'Horas extra', 'icon' => 'bi-clock-history', 'access' => 'horas_extra', 'edit' => 'horas_extra_editar', 'delete' => null, 'scope' => 'horas_extra', 'scope_input' => 'horas'],
         ['label' => 'Historico', 'icon' => 'bi-archive', 'access' => 'historico', 'edit' => 'historico_acciones', 'delete' => null, 'scope' => 'historico_scope', 'scope_input' => 'historico'],
         ['label' => 'Estadisticas', 'icon' => 'bi-bar-chart-line', 'access' => 'estadisticas', 'edit' => null, 'delete' => null, 'scope' => null, 'scope_input' => null],
         ['label' => 'Usuarios', 'icon' => 'bi-people', 'access' => 'usuarios', 'edit' => 'usuarios_editar', 'delete' => 'usuarios_eliminar', 'scope' => null, 'scope_input' => null],
@@ -827,15 +826,50 @@
         }
         $selectedPermissions = is_array($roles[$selectedRole] ?? null) ? $roles[$selectedRole] : [];
         $roleFormAction = $redmineRoute('redmine.native.config.action', ['panel' => 'roles', 'role' => $selectedRole]);
-        $selectedRoleActiveCount = collect($selectedPermissions)->filter(fn ($value, $key) => is_string($key) && !in_array($key, ['mensajes', 'horas_extra', 'historico_scope'], true) && $value === true)->count();
+        $selectedRoleActiveCount = collect($selectedPermissions)->filter(function ($value, $key) {
+            if ($key === 'horas_extra') {
+                return in_array($value, ['todos', 'asignados'], true);
+            }
+
+            return is_string($key)
+                && !in_array($key, ['all', 'mensajes', 'historico_scope'], true)
+                && $value === true;
+        })->count();
+        $selectedRoleLabel = ucfirst($selectedRole);
+        $selectedRoleInitials = strtoupper(mb_substr($selectedRole ?: 'R', 0, 2));
+        $isNovaRoot = strtolower(trim((string) session('nova_user.role', 'usuario'))) === 'root';
+        $selectedRoleIsBase = in_array($selectedRole, $baseRoles ?? ['administrador', 'usuario'], true);
+        $selectedRoleAssignedUsers = collect($users ?? [])
+            ->filter(fn ($user) => (string) ($user['rol'] ?? '') === $selectedRole)
+            ->count();
+        $rolePermissionGroups = [
+            [
+                'label' => 'Operación diaria',
+                'description' => 'Reportes, horas extra e histórico.',
+                'icon' => 'bi-briefcase',
+                'rows' => array_slice($rolePermissionRows, 0, 3),
+            ],
+            [
+                'label' => 'Gestión y administración',
+                'description' => 'Herramientas, usuarios e integraciones.',
+                'icon' => 'bi-grid',
+                'rows' => array_slice($rolePermissionRows, 3),
+            ],
+        ];
     @endphp
     <section class="card nova-card rm-panel rm-config-feature-form rm-permissions-page">
-        <div class="rm-feature-head">
+        <div class="rm-feature-head rm-role-permission-feature-head">
             <span class="rm-feature-head-icon is-green"><i class="bi bi-shield-check"></i></span>
-            <div>
+            <div class="rm-feature-selection-copy">
                 <small>Matriz de acceso</small>
                 <h2>Roles y Permisos</h2>
-                <p>Define que vistas, acciones y alcances quedan disponibles para cada rol.</p>
+                <div class="rm-feature-selection-identity">
+                    <span class="rm-selected-user-avatar is-small">{{ $selectedRoleInitials }}</span>
+                    <div>
+                        <strong>{{ $selectedRoleLabel ?: 'Sin rol seleccionado' }}</strong>
+                        <p>Activa vistas y acciones disponibles para este rol.</p>
+                    </div>
+                </div>
             </div>
             <div class="rm-feature-meter">
                 <strong>{{ count($roleNames) }}</strong>
@@ -847,126 +881,213 @@
             <aside class="rm-permissions-list-panel">
                 <div class="rm-permissions-list-head">
                     <div>
-                        <h3>Roles</h3>
-                        <p>{{ count($roleNames) }} perfil(es) configurado(s)</p>
+                        <h3>Seleccionar rol</h3>
+                        <p>{{ count($roleNames) }} rol(es) configurado(s)</p>
                     </div>
-                    <span>{{ $selectedRoleActiveCount }} activos</span>
+                    <span><strong data-role-active-count>{{ $selectedRoleActiveCount }}</strong>&nbsp;permisos</span>
                 </div>
-                <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-role-dropdown-card">
+                <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-user-combobox rm-picker-combobox rm-role-combobox" data-role-picker>
                     <input type="hidden" name="panel" value="roles">
-                    <span class="rm-permission-selector-icon"><i class="bi bi-shield-check"></i></span>
-                    <span class="rm-permission-selector-copy">
-                        <strong>Rol seleccionado</strong>
-                        <small>{{ $selectedRoleActiveCount }} permiso(s) activo(s)</small>
-                    </span>
-                    <select class="form-select" name="role" aria-label="Seleccionar rol" onchange="this.form.submit()">
+                    <input type="hidden" name="role" value="{{ $selectedRole }}" data-role-picker-value>
+                    <div class="rm-picker-combobox-control">
+                        <label>
+                            <i class="bi bi-search"></i>
+                            <input
+                                class="form-control"
+                                type="search"
+                                value="{{ $selectedRoleLabel }}"
+                                placeholder="Buscar y seleccionar rol"
+                                aria-label="Buscar y seleccionar rol"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded="false"
+                                aria-controls="rm-role-options"
+                                autocomplete="off"
+                                data-role-picker-search
+                            >
+                        </label>
+                        <button type="button" class="rm-picker-combobox-toggle" aria-label="Mostrar roles" aria-expanded="false" data-role-picker-toggle>
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </div>
+                    <div class="rm-picker-combobox-menu" id="rm-role-options" role="listbox" data-role-picker-menu hidden>
                         @foreach ($roleNames as $roleName)
-                            <option value="{{ $roleName }}" @selected($selectedRole === $roleName)>{{ $roleName }}</option>
+                            <button
+                                type="button"
+                                id="rm-role-option-{{ $loop->index }}"
+                                class="rm-picker-combobox-option @if ($selectedRole === $roleName) is-selected @endif"
+                                role="option"
+                                aria-selected="{{ $selectedRole === $roleName ? 'true' : 'false' }}"
+                                data-role-option
+                                data-role-name="{{ $roleName }}"
+                                data-role-label="{{ ucfirst($roleName) }}"
+                            >
+                                <span class="rm-picker-combobox-option-icon"><i class="bi bi-shield"></i></span>
+                                <span>{{ ucfirst($roleName) }}</span>
+                                <i class="bi bi-check2 rm-picker-combobox-option-check"></i>
+                            </button>
                         @endforeach
-                    </select>
-                </form>
-                <form class="rm-create-role-form rm-create-role-card" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'roles']) }}">
-                    @csrf
-                    <input type="hidden" name="config_action" value="save_role_permissions">
-                    <span class="rm-permission-selector-icon"><i class="bi bi-plus-lg"></i></span>
-                    <span class="rm-permission-selector-copy">
-                        <strong>Crear rol</strong>
-                        <small>Agrega un nuevo perfil a la lista.</small>
-                    </span>
-                    <div class="rm-create-role-row">
-                        <input class="form-control" id="rm-new-role" name="role_name" placeholder="Nombre del rol" aria-label="Nombre del rol" autocomplete="off" required>
-                        <button class="btn-nova btn-nova-success" type="submit" title="Crear rol" aria-label="Crear rol"><i class="bi bi-plus-lg"></i></button>
+                        <div class="rm-picker-combobox-empty" data-role-picker-empty hidden>No se encontraron roles.</div>
                     </div>
                 </form>
+                <details class="rm-create-role-disclosure">
+                    <summary>
+                        <span><i class="bi bi-plus-circle"></i>Crear un rol</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </summary>
+                    <form class="rm-create-role-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'roles']) }}">
+                        @csrf
+                        <input type="hidden" name="config_action" value="save_role_permissions">
+                        <label class="rm-inline-field" for="rm-new-role">
+                            <span>Nombre del nuevo rol</span>
+                            <input class="form-control" id="rm-new-role" name="role_name" placeholder="Ej. supervisor" autocomplete="off" required>
+                        </label>
+                        <button class="btn-nova btn-nova-success" type="submit">
+                            <i class="bi bi-plus-lg"></i>
+                            <span>Crear rol</span>
+                        </button>
+                    </form>
+                </details>
+                @if ($selectedRoleIsBase)
+                    <div class="rm-role-delete-state is-protected">
+                        <i class="bi bi-lock-fill"></i>
+                        <span>
+                            <strong>Rol base protegido</strong>
+                            <small>{{ $selectedRoleLabel }} es necesario para el funcionamiento del módulo.</small>
+                        </span>
+                    </div>
+                @else
+                    <form
+                        class="rm-role-delete-form"
+                        method="post"
+                        action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'roles']) }}"
+                        data-role-delete-form
+                        data-app-confirm="¿Eliminar el rol {{ $selectedRoleLabel }}? Se eliminarán sus permisos y cualquier cambio sin guardar. Esta acción no se puede deshacer."
+                        data-app-confirm-title="Eliminar rol"
+                        data-app-confirm-text="Eliminar rol"
+                        data-app-confirm-tone="danger"
+                    >
+                        @csrf
+                        <input type="hidden" name="config_action" value="delete_role">
+                        <input type="hidden" name="role_name" value="{{ $selectedRole }}">
+                        <button class="btn-nova btn-nova-danger" type="submit" @disabled($selectedRoleAssignedUsers > 0)>
+                            <i class="bi bi-trash3"></i>
+                            <span>Eliminar rol</span>
+                        </button>
+                        <small>
+                            @if ($selectedRoleAssignedUsers > 0)
+                                Asignado a {{ $selectedRoleAssignedUsers }} usuario(s). Reasígnalos antes de eliminar.
+                            @else
+                                Elimina este rol personalizado de forma permanente.
+                            @endif
+                        </small>
+                    </form>
+                @endif
             </aside>
 
             <div class="rm-permissions-editor-panel">
-                <div class="rm-permissions-editor-head">
-                    <div>
-                        <small>Matriz de acceso</small>
-                        <h3>{{ $selectedRole ?: 'Sin rol seleccionado' }}</h3>
-                        <p>Activa vistas y define las acciones disponibles para este rol.</p>
-                    </div>
-                    <div class="rm-role-summary">
-                        <strong>{{ $selectedRoleActiveCount }}</strong>
-                        <span>activos</span>
-                    </div>
-                </div>
-
-                <form id="rm-config-form-roles" class="rm-permissions-inline-form" method="post" action="{{ $roleFormAction }}" data-inline-restore-form>
+                <form id="rm-config-form-roles" class="rm-permissions-inline-form" method="post" action="{{ $roleFormAction }}" data-role-permission-form data-inline-restore-form>
                     @csrf
                     <input type="hidden" name="config_action" value="save_role_permissions">
                     <input type="hidden" name="role_name" value="{{ $selectedRole }}">
 
-                    <div class="rm-scope-panel">
-                        <h3 class="rm-permission-title">Alcance</h3>
-                        <div class="rm-scope-grid">
-                            @foreach ($rolePermissionRows as $permissionRow)
-                                @if ($permissionRow['scope'])
-                                    <label class="rm-scope-card">
-                                        <span>{{ $permissionRow['label'] }}</span>
-                                        <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
-                                            <option value="todos" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
-                                            <option value="asignados" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Asignados</option>
-                                        </select>
-                                    </label>
-                                @endif
-                            @endforeach
-                        </div>
-                    </div>
+                    <div class="rm-permission-groups">
+                        @foreach ($rolePermissionGroups as $permissionGroup)
+                            @php
+                                $groupActiveCount = collect($permissionGroup['rows'])
+                                    ->filter(fn ($row) => !empty($selectedPermissions[$row['access']]))
+                                    ->count();
+                            @endphp
+                            <details class="rm-permission-group" open>
+                                <summary>
+                                    <span class="rm-permission-group-icon"><i class="bi {{ $permissionGroup['icon'] }}"></i></span>
+                                    <span class="rm-permission-group-copy">
+                                        <strong>{{ $permissionGroup['label'] }}</strong>
+                                        <small>{{ $permissionGroup['description'] }}</small>
+                                    </span>
+                                    <span class="rm-permission-group-count" data-role-group-count>{{ $groupActiveCount }}/{{ count($permissionGroup['rows']) }}</span>
+                                    <i class="bi bi-chevron-down rm-permission-group-chevron"></i>
+                                </summary>
+                                <div class="rm-role-permission-list">
+                                    @foreach ($permissionGroup['rows'] as $permissionRow)
+                                        <section class="rm-role-permission-item" data-role-permission-card>
+                                            <div class="rm-role-permission-main">
+                                                <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
+                                                <label class="rm-toggle-line">
+                                                    <span>Ver</span>
+                                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedPermissions[$permissionRow['access']] ))>
+                                                </label>
+                                            </div>
 
-                    <div class="rm-role-permission-list">
-                        @foreach ($rolePermissionRows as $permissionRow)
-                            <section class="rm-role-permission-item">
-                                <div class="rm-role-permission-main">
-                                    <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
-                                    <label class="rm-toggle-line">
-                                        <span>Ver</span>
-                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedPermissions[$permissionRow['access']] ))>
-                                    </label>
+                                            @if ($permissionRow['scope'] && $isNovaRoot)
+                                                <label class="rm-permission-scope-inline" data-role-dependent-actions>
+                                                    <span><i class="bi bi-diagram-3"></i>Alcance</span>
+                                                    <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
+                                                        <option value="todos" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
+                                                        <option value="asignados" @selected(($selectedPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Solo asignados</option>
+                                                    </select>
+                                                </label>
+                                            @endif
+
+                                            @if ($permissionRow['edit'] || $permissionRow['delete'])
+                                                <div class="rm-role-permission-children" data-role-dependent-actions>
+                                                    @if ($permissionRow['edit'])
+                                                        <label class="rm-toggle-line rm-role-permission-child">
+                                                            <span>{{ $permissionRow['edit_label'] ?? 'Editar' }}</span>
+                                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['edit']]))>
+                                                        </label>
+                                                    @endif
+                                                    @if ($permissionRow['delete'])
+                                                        <label class="rm-toggle-line rm-role-permission-child">
+                                                            <span>Eliminar</span>
+                                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['delete']]))>
+                                                        </label>
+                                                    @endif
+                                                </div>
+                                            @endif
+                                        </section>
+                                    @endforeach
                                 </div>
-
-                                @if ($permissionRow['edit'] || $permissionRow['delete'])
-                                    <div class="rm-role-permission-children" data-role-dependent-actions>
-                                        @if ($permissionRow['edit'])
-                                            <label class="rm-toggle-line rm-role-permission-child">
-                                                <span>{{ $permissionRow['edit_label'] ?? 'Editar' }}</span>
-                                                <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['edit']]))>
-                                            </label>
-                                        @endif
-                                        @if ($permissionRow['delete'])
-                                            <label class="rm-toggle-line rm-role-permission-child">
-                                                <span>Eliminar</span>
-                                                <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedPermissions[$permissionRow['delete']]))>
-                                            </label>
-                                        @endif
-                                    </div>
-                                @endif
-                            </section>
+                            </details>
                         @endforeach
-                    </div>
 
-                    <div class="rm-config-permission-panel" data-config-dependent-panel>
-                        <h3 class="rm-permission-title">Configuracion y subcategorias</h3>
-                        <div class="rm-permission-grid">
-                            @foreach ($configPermissions as $permissionKey => $permissionLabel)
-                                <label class="rm-toggle-line rm-config-permission-switch">
-                                    <span>{{ $permissionLabel }}</span>
-                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedPermissions[$permissionKey]))>
-                                </label>
-                            @endforeach
-                        </div>
+                        <details class="rm-permission-group is-config" data-config-dependent-panel open>
+                            <summary>
+                                <span class="rm-permission-group-icon"><i class="bi bi-sliders"></i></span>
+                                <span class="rm-permission-group-copy">
+                                    <strong>Secciones de configuración</strong>
+                                    <small>Define qué apartados puede administrar.</small>
+                                </span>
+                                <span class="rm-permission-group-count" data-role-config-count>{{ collect($configPermissions)->keys()->filter(fn ($key) => !empty($selectedPermissions[$key]))->count() }}/{{ count($configPermissions) }}</span>
+                                <i class="bi bi-chevron-down rm-permission-group-chevron"></i>
+                            </summary>
+                            <div class="rm-permission-grid">
+                                @foreach ($configPermissions as $permissionKey => $permissionLabel)
+                                    <label class="rm-toggle-line rm-config-permission-switch">
+                                        <span>{{ $permissionLabel }}</span>
+                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedPermissions[$permissionKey]))>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </details>
                     </div>
                 </form>
 
-                <div class="rm-inline-actions">
-                    <button class="btn-nova btn-nova-secondary" type="button" data-role-cancel hidden>
-                        <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
-                        <span>Cancelar</span>
+                <div class="rm-permission-savebar" data-role-permission-savebar>
+                    <div class="rm-permission-save-state" aria-live="polite">
+                        <span><i class="bi bi-check2"></i></span>
+                        <div>
+                            <strong data-role-permission-state-title>Todo guardado</strong>
+                            <small data-role-permission-state-copy>No hay cambios pendientes.</small>
+                        </div>
+                    </div>
+                    <button class="btn-nova btn-nova-secondary" type="button" data-role-cancel disabled>
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        <span>Descartar cambios</span>
                     </button>
-                    <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-roles">
+                    <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-roles" data-role-permission-save disabled>
                         <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
-                        <span>Guardar</span>
+                        <span>Guardar cambios</span>
                     </button>
                 </div>
             </div>
@@ -978,8 +1099,8 @@
     @php
         $userOptions = collect($users ?? [])
             ->filter(function ($user) {
-                $ticStatus = strtolower(trim((string) ($user['estado_usuario'] ?? 'activo')));
-                $novaStatus = strtolower(trim((string) ($user['estado_nova'] ?? $user['estado'] ?? 'activo')));
+                $ticStatus = strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? '')));
+                $novaStatus = strtolower(trim((string) ($user['estado_nova'] ?? '')));
 
                 return $ticStatus === 'activo' && $novaStatus === 'activo';
             })
@@ -996,19 +1117,55 @@
         $selectedUserPermissions = is_array($selectedUser['permisos'] ?? null)
             ? $selectedUser['permisos']
             : (is_array($roles[$selectedUserRole] ?? null) ? $roles[$selectedUserRole] : []);
-        $selectedUserActiveCount = collect($selectedUserPermissions)->filter(fn ($value, $key) => is_string($key) && !in_array($key, ['mensajes', 'horas_extra', 'historico_scope'], true) && $value === true)->count();
+        $selectedUserActiveCount = collect($selectedUserPermissions)->filter(function ($value, $key) {
+            if ($key === 'horas_extra') {
+                return in_array($value, ['todos', 'asignados'], true);
+            }
+
+            return is_string($key)
+                && !in_array($key, ['all', 'mensajes', 'historico_scope'], true)
+                && $value === true;
+        })->count();
         $selectedUserName = $selectedUser
             ? (trim(($selectedUser['nombre'] ?? '') . ' ' . ($selectedUser['apellido'] ?? '')) ?: ($selectedUser['id'] ?? 'Usuario'))
             : '';
+        $selectedUserInitials = $selectedUser
+            ? strtoupper(mb_substr((string) ($selectedUser['nombre'] ?? 'U'), 0, 1) . mb_substr((string) ($selectedUser['apellido'] ?? ''), 0, 1))
+            : 'U';
+        $isNovaRoot = strtolower(trim((string) session('nova_user.role', 'usuario'))) === 'root';
+        $userPermissionGroups = [
+            [
+                'label' => 'Operación diaria',
+                'description' => 'Reportes, horas extra e histórico.',
+                'icon' => 'bi-briefcase',
+                'rows' => array_slice($rolePermissionRows, 0, 3),
+            ],
+            [
+                'label' => 'Gestión y administración',
+                'description' => 'Herramientas, usuarios e integraciones.',
+                'icon' => 'bi-grid',
+                'rows' => array_slice($rolePermissionRows, 3),
+            ],
+        ];
         $userPermissionFormAction = $redmineRoute('redmine.native.config.action', ['panel' => 'usuarios-permisos', 'user_id' => $selectedUserId]);
     @endphp
     <section class="card nova-card rm-panel rm-config-feature-form rm-permissions-page">
-        <div class="rm-feature-head">
+        <div class="rm-feature-head rm-user-permission-feature-head">
             <span class="rm-feature-head-icon is-orange"><i class="bi bi-person-lock"></i></span>
-            <div>
+            <div class="rm-feature-selection-copy">
                 <small>Permisos por usuario</small>
                 <h2>Usuarios y permisos</h2>
-                <p>Ajusta permisos individuales sin perder la referencia del rol asignado.</p>
+                @if ($selectedUser)
+                    <div class="rm-feature-selection-identity">
+                        <span class="rm-selected-user-avatar is-small">{{ $selectedUserInitials }}</span>
+                        <div>
+                            <strong>{{ $selectedUserName }}</strong>
+                            <p>Redmine ID {{ $selectedUser['id'] ?? '-' }} · Rol actual: {{ $selectedUserRole }}</p>
+                        </div>
+                    </div>
+                @else
+                    <p>Selecciona un usuario activo para administrar sus permisos.</p>
+                @endif
             </div>
             <div class="rm-feature-meter">
                 <strong>{{ $userOptions->count() }}</strong>
@@ -1020,150 +1177,232 @@
                 <aside class="rm-permissions-list-panel">
                     <div class="rm-permissions-list-head">
                         <div>
-                            <h3>Usuarios activos</h3>
-                            <p>{{ $userOptions->count() }} usuario(s) disponible(s)</p>
+                            <h3>Seleccionar usuario</h3>
+                            <p>{{ $userOptions->count() }} usuario(s) activo(s)</p>
                         </div>
-                        <span>{{ $selectedUserActiveCount }} activos</span>
+                        <span><strong data-user-active-count>{{ $selectedUserActiveCount }}</strong>&nbsp;permisos</span>
                     </div>
-                    <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-role-dropdown-card" data-user-permission-picker>
+                    <form method="get" action="{{ $redmineRoute('redmine.native.section', 'configuracion') }}" class="rm-user-combobox rm-picker-combobox rm-user-picker-combobox" data-active-user-picker>
                         <input type="hidden" name="panel" value="usuarios-permisos">
-                        <input type="hidden" name="user_id" value="{{ $selectedUserId }}" data-user-permission-id>
-                        <span class="rm-permission-selector-icon"><i class="bi bi-person"></i></span>
-                        <span class="rm-permission-selector-copy">
-                            <strong>Usuario seleccionado</strong>
-                            <small>{{ $selectedUserName }} · {{ $selectedUserRole }}</small>
-                        </span>
-                        <div class="rm-user-search-row">
-                            <input
-                                class="form-control"
-                                type="search"
-                                list="rm-user-permission-options"
-                                value="{{ $selectedUserName }} · {{ $selectedUserRole }} · ID {{ $selectedUserId }}"
-                                placeholder="Buscar usuario por nombre, rol o ID"
-                                aria-label="Buscar usuario"
-                                autocomplete="off"
-                                data-user-permission-search
-                            >
-                            <button class="btn-nova btn-nova-primary" type="submit" title="Cargar usuario" aria-label="Cargar usuario"><i class="bi bi-search"></i></button>
+                        <input type="hidden" name="user_id" value="{{ $selectedUserId }}" data-active-user-id>
+                        <div class="rm-picker-combobox-control">
+                            <label>
+                                <i class="bi bi-search"></i>
+                                <input
+                                    class="form-control"
+                                    type="search"
+                                    value="{{ $selectedUserName }} · {{ $selectedUserRole }} · ID {{ $selectedUserId }}"
+                                    placeholder="Buscar usuario activo"
+                                    aria-label="Buscar y seleccionar usuario activo"
+                                    role="combobox"
+                                    aria-autocomplete="list"
+                                    aria-expanded="false"
+                                    aria-controls="rm-active-user-options"
+                                    autocomplete="off"
+                                    data-active-user-search
+                                >
+                            </label>
+                            <button type="button" class="rm-picker-combobox-toggle" aria-label="Mostrar usuarios activos" aria-expanded="false" data-active-user-toggle>
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
                         </div>
-                        <datalist id="rm-user-permission-options">
+                        <div class="rm-picker-combobox-menu is-users" id="rm-active-user-options" role="listbox" data-active-user-menu hidden>
                             @foreach ($userOptions as $userOption)
                                 @php
                                     $userOptionId = (string) ($userOption['id'] ?? '');
                                     $userOptionName = trim(($userOption['nombre'] ?? '') . ' ' . ($userOption['apellido'] ?? '')) ?: $userOptionId;
                                     $userOptionRole = (string) ($userOption['rol'] ?? 'usuario');
+                                    $userOptionLabel = $userOptionName . ' · ' . $userOptionRole . ' · ID ' . $userOptionId;
+                                    $userOptionInitials = strtoupper(
+                                        mb_substr((string) ($userOption['nombre'] ?? 'U'), 0, 1)
+                                        . mb_substr((string) ($userOption['apellido'] ?? ''), 0, 1)
+                                    );
                                 @endphp
-                                <option value="{{ $userOptionName }} · {{ $userOptionRole }} · ID {{ $userOptionId }}" data-user-id="{{ $userOptionId }}"></option>
+                                <button
+                                    type="button"
+                                    id="rm-active-user-option-{{ $loop->index }}"
+                                    class="rm-picker-combobox-option is-user @if ($selectedUserId === $userOptionId) is-selected @endif"
+                                    role="option"
+                                    aria-selected="{{ $selectedUserId === $userOptionId ? 'true' : 'false' }}"
+                                    data-active-user-option
+                                    data-user-id="{{ $userOptionId }}"
+                                    data-user-label="{{ $userOptionLabel }}"
+                                    data-user-search="{{ $userOptionName }} {{ $userOptionRole }} {{ $userOptionId }}"
+                                >
+                                    <span class="rm-picker-user-avatar">{{ $userOptionInitials ?: 'U' }}</span>
+                                    <span class="rm-picker-user-copy">
+                                        <strong>{{ $userOptionName }}</strong>
+                                        <small>{{ ucfirst($userOptionRole) }} · ID {{ $userOptionId }}</small>
+                                    </span>
+                                    <i class="bi bi-check2 rm-picker-combobox-option-check"></i>
+                                </button>
                             @endforeach
-                        </datalist>
+                            <div class="rm-picker-combobox-empty" data-active-user-empty hidden>No se encontraron usuarios activos.</div>
+                        </div>
                     </form>
                 </aside>
 
                 <div class="rm-permissions-editor-panel">
-                    <div class="rm-permissions-editor-head">
-                        <div>
-                            <small>Permisos por usuario</small>
-                            <h3>{{ $selectedUserName }}</h3>
-                            <p>ID {{ $selectedUser['id'] ?? '-' }} · Rol actual: {{ $selectedUserRole }}</p>
-                        </div>
-                        <div class="rm-role-summary">
-                            <strong data-user-active-count>{{ $selectedUserActiveCount }}</strong>
-                            <span>activos</span>
-                        </div>
-                    </div>
-
                     <form id="rm-config-form-usuarios-permisos" class="rm-permissions-inline-form" method="post" action="{{ $userPermissionFormAction }}" data-user-permission-form data-inline-restore-form>
                         @csrf
                         <input type="hidden" name="config_action" value="save_user_permissions">
                         <input type="hidden" name="user_id" value="{{ $selectedUserId }}">
                         <input type="hidden" name="apply_role_permissions" value="0" data-apply-role-permissions>
 
-                        <div class="rm-user-permission-actions">
-                            <label class="rm-inline-field">
-                                <span>Rol asignado</span>
-                                <select class="form-select" name="user_role" aria-label="Rol asignado" data-user-role-select data-current-user-role="{{ $selectedUserRole }}">
-                                    @foreach (array_unique(array_merge(array_keys($roles), [$selectedUserRole])) as $roleOption)
-                                        <option value="{{ $roleOption }}" @selected($selectedUserRole === $roleOption)>{{ $roleOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <button class="btn-nova btn-nova-info" type="button" data-load-role-permissions>
-                                <i class="bi bi-arrow-repeat"></i>Cargar permisos del rol
-                            </button>
-                            <button class="btn-nova btn-nova-secondary" type="button" data-reset-user-permissions>
-                                <i class="bi bi-eraser"></i>Restaurar
-                            </button>
-                        </div>
-
-                        <div class="rm-scope-panel">
-                            <h3 class="rm-permission-title">Alcance</h3>
-                            <div class="rm-scope-grid">
-                                @foreach ($rolePermissionRows as $permissionRow)
-                                    @if ($permissionRow['scope'])
-                                        <label class="rm-scope-card">
-                                            <span>{{ $permissionRow['label'] }}</span>
-                                            <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
-                                                <option value="todos" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
-                                                <option value="asignados" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Asignados</option>
-                                            </select>
-                                        </label>
-                                    @endif
-                                @endforeach
+                        <section class="rm-role-template-bar">
+                            <div>
+                                <small>Plantilla de acceso</small>
+                                <strong>Rol asignado</strong>
+                                <p>Cambia el rol sin reemplazar los ajustes personalizados.</p>
                             </div>
-                        </div>
-
-                        <div class="rm-role-permission-list">
-                            @foreach ($rolePermissionRows as $permissionRow)
-                                <section class="rm-role-permission-item">
-                                    <div class="rm-role-permission-main">
-                                        <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
-                                        <label class="rm-toggle-line">
-                                            <span>Ver</span>
-                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedUserPermissions[$permissionRow['access']] ))>
+                            <div class="rm-inline-field">
+                                <span>Rol</span>
+                                <div class="rm-user-combobox rm-picker-combobox rm-assigned-role-combobox" data-assigned-role-picker>
+                                    <input type="hidden" name="user_role" value="{{ $selectedUserRole }}" data-user-role-select data-current-user-role="{{ $selectedUserRole }}">
+                                    <div class="rm-picker-combobox-control">
+                                        <label>
+                                            <i class="bi bi-search"></i>
+                                            <input
+                                                class="form-control"
+                                                type="search"
+                                                value="{{ ucfirst($selectedUserRole) }}"
+                                                placeholder="Seleccionar rol"
+                                                aria-label="Buscar y seleccionar rol asignado"
+                                                role="combobox"
+                                                aria-autocomplete="list"
+                                                aria-expanded="false"
+                                                aria-controls="rm-assigned-role-options"
+                                                autocomplete="off"
+                                                data-assigned-role-search
+                                            >
                                         </label>
+                                        <button type="button" class="rm-picker-combobox-toggle" aria-label="Mostrar roles" aria-expanded="false" data-assigned-role-toggle>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </button>
                                     </div>
-
-                                    @if ($permissionRow['edit'] || $permissionRow['delete'])
-                                        <div class="rm-role-permission-children" data-role-dependent-actions>
-                                            @if ($permissionRow['edit'])
-                                                <label class="rm-toggle-line rm-role-permission-child">
-                                                    <span>{{ $permissionRow['edit_label'] ?? 'Editar' }}</span>
-                                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['edit']]))>
-                                                </label>
-                                            @endif
-                                            @if ($permissionRow['delete'])
-                                                <label class="rm-toggle-line rm-role-permission-child">
-                                                    <span>Eliminar</span>
-                                                    <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['delete']]))>
-                                                </label>
-                                            @endif
-                                        </div>
-                                    @endif
-                                </section>
-                            @endforeach
-                        </div>
-
-                        <div class="rm-config-permission-panel" data-config-dependent-panel>
-                            <h3 class="rm-permission-title">Configuracion y subcategorias</h3>
-                            <div class="rm-permission-grid">
-                                @foreach ($configPermissions as $permissionKey => $permissionLabel)
-                                    <label class="rm-toggle-line rm-config-permission-switch">
-                                        <span>{{ $permissionLabel }}</span>
-                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedUserPermissions[$permissionKey]))>
-                                    </label>
-                                @endforeach
+                                    <div class="rm-picker-combobox-menu" id="rm-assigned-role-options" role="listbox" data-assigned-role-menu hidden>
+                                    @foreach (array_unique(array_merge(array_keys($roles), [$selectedUserRole])) as $roleOption)
+                                            <button
+                                                type="button"
+                                                id="rm-assigned-role-option-{{ $loop->index }}"
+                                                class="rm-picker-combobox-option @if ($selectedUserRole === $roleOption) is-selected @endif"
+                                                role="option"
+                                                aria-selected="{{ $selectedUserRole === $roleOption ? 'true' : 'false' }}"
+                                                data-assigned-role-option
+                                                data-role-name="{{ $roleOption }}"
+                                                data-role-label="{{ ucfirst($roleOption) }}"
+                                            >
+                                                <span class="rm-picker-combobox-option-icon"><i class="bi bi-shield"></i></span>
+                                                <span>{{ ucfirst($roleOption) }}</span>
+                                                <i class="bi bi-check2 rm-picker-combobox-option-check"></i>
+                                            </button>
+                                    @endforeach
+                                        <div class="rm-picker-combobox-empty" data-assigned-role-empty hidden>No se encontraron roles.</div>
+                                    </div>
+                                </div>
                             </div>
+                            <button class="btn-nova btn-nova-info" type="button" data-load-role-permissions>
+                                <i class="bi bi-stars"></i>Aplicar plantilla
+                            </button>
+                        </section>
+
+                        <div class="rm-user-permission-groups">
+                            @foreach ($userPermissionGroups as $permissionGroup)
+                                @php
+                                    $groupActiveCount = collect($permissionGroup['rows'])
+                                        ->filter(fn ($row) => !empty($selectedUserPermissions[$row['access']]))
+                                        ->count();
+                                @endphp
+                                <details class="rm-permission-group" open>
+                                    <summary>
+                                        <span class="rm-permission-group-icon"><i class="bi {{ $permissionGroup['icon'] }}"></i></span>
+                                        <span class="rm-permission-group-copy">
+                                            <strong>{{ $permissionGroup['label'] }}</strong>
+                                            <small>{{ $permissionGroup['description'] }}</small>
+                                        </span>
+                                        <span class="rm-permission-group-count" data-permission-group-count>{{ $groupActiveCount }}/{{ count($permissionGroup['rows']) }}</span>
+                                        <i class="bi bi-chevron-down rm-permission-group-chevron"></i>
+                                    </summary>
+                                    <div class="rm-role-permission-list">
+                                        @foreach ($permissionGroup['rows'] as $permissionRow)
+                                            <section class="rm-role-permission-item" data-permission-card>
+                                                <div class="rm-role-permission-main">
+                                                    <strong><i class="bi {{ $permissionRow['icon'] }}"></i>{{ $permissionRow['label'] }}</strong>
+                                                    <label class="rm-toggle-line">
+                                                        <span>Ver</span>
+                                                        <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['access'] }}" value="1" data-role-access-toggle @if ($permissionRow['access'] === 'configuracion') data-config-access-toggle @endif @checked(!empty($selectedUserPermissions[$permissionRow['access']] ))>
+                                                    </label>
+                                                </div>
+
+                                                @if ($permissionRow['scope'] && $isNovaRoot)
+                                                    <label class="rm-permission-scope-inline" data-role-dependent-actions>
+                                                        <span><i class="bi bi-diagram-3"></i>Alcance</span>
+                                                        <select class="form-select" name="perm_{{ $permissionRow['scope_input'] }}_scope">
+                                                            <option value="todos" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') === 'todos')>Todos</option>
+                                                            <option value="asignados" @selected(($selectedUserPermissions[$permissionRow['scope']] ?? 'asignados') !== 'todos')>Solo asignados</option>
+                                                        </select>
+                                                    </label>
+                                                @endif
+
+                                                @if ($permissionRow['edit'] || $permissionRow['delete'])
+                                                    <div class="rm-role-permission-children" data-role-dependent-actions>
+                                                        @if ($permissionRow['edit'])
+                                                            <label class="rm-toggle-line rm-role-permission-child">
+                                                                <span>{{ $permissionRow['edit_label'] ?? 'Editar' }}</span>
+                                                                <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['edit'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['edit']]))>
+                                                            </label>
+                                                        @endif
+                                                        @if ($permissionRow['delete'])
+                                                            <label class="rm-toggle-line rm-role-permission-child">
+                                                                <span>Eliminar</span>
+                                                                <input class="rm-switch" type="checkbox" name="perm_{{ $permissionRow['delete'] }}" value="1" @checked(!empty($selectedUserPermissions[$permissionRow['delete']]))>
+                                                            </label>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                            </section>
+                                        @endforeach
+                                    </div>
+                                </details>
+                            @endforeach
+
+                            <details class="rm-permission-group is-config" data-config-dependent-panel open>
+                                <summary>
+                                    <span class="rm-permission-group-icon"><i class="bi bi-sliders"></i></span>
+                                    <span class="rm-permission-group-copy">
+                                        <strong>Secciones de configuración</strong>
+                                        <small>Define qué apartados puede administrar.</small>
+                                    </span>
+                                    <span class="rm-permission-group-count" data-config-group-count>{{ collect($configPermissions)->keys()->filter(fn ($key) => !empty($selectedUserPermissions[$key]))->count() }}/{{ count($configPermissions) }}</span>
+                                    <i class="bi bi-chevron-down rm-permission-group-chevron"></i>
+                                </summary>
+                                <div class="rm-permission-grid">
+                                    @foreach ($configPermissions as $permissionKey => $permissionLabel)
+                                        <label class="rm-toggle-line rm-config-permission-switch">
+                                            <span>{{ $permissionLabel }}</span>
+                                            <input class="rm-switch" type="checkbox" name="perm_{{ $permissionKey }}" value="1" @checked(!empty($selectedUserPermissions[$permissionKey]))>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </details>
                         </div>
                     </form>
 
-                    <div class="rm-inline-actions is-two">
-                        <button class="btn-nova btn-nova-secondary" type="button" data-user-permission-cancel hidden>
-                            <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
-                            <span>Cancelar</span>
+                    <div class="rm-permission-savebar" data-user-permission-savebar>
+                        <div class="rm-permission-save-state" aria-live="polite">
+                            <span><i class="bi bi-check2"></i></span>
+                            <div>
+                                <strong data-user-permission-state-title>Todo guardado</strong>
+                                <small data-user-permission-state-copy>No hay cambios pendientes.</small>
+                            </div>
+                        </div>
+                        <button class="btn-nova btn-nova-secondary" type="button" data-reset-user-permissions disabled>
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            <span>Descartar cambios</span>
                         </button>
-                        <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-usuarios-permisos">
+                        <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-usuarios-permisos" data-user-permission-save disabled>
                             <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
-                            <span>Guardar</span>
+                            <span>Guardar cambios</span>
                         </button>
                     </div>
                 </div>
@@ -1408,25 +1647,67 @@
         const currentUserPermissionPayload = @json($selectedUserPermissions);
         const userPermissionForm = document.querySelector('[data-user-permission-form]');
         const applyRolePermissionsInput = document.querySelector('[data-apply-role-permissions]');
-        const userPermissionCancel = document.querySelector('[data-user-permission-cancel]');
+        const userPermissionReset = document.querySelector('[data-reset-user-permissions]');
+        const userPermissionSave = document.querySelector('[data-user-permission-save]');
+        const userPermissionSavebar = document.querySelector('[data-user-permission-savebar]');
+        const userPermissionStateTitle = document.querySelector('[data-user-permission-state-title]');
+        const userPermissionStateCopy = document.querySelector('[data-user-permission-state-copy]');
         const rolePermissionScopes = [
-            { input: 'perm_mensajes_scope', key: 'mensajes' },
-            { input: 'perm_horas_scope', key: 'horas_extra' },
-            { input: 'perm_historico_scope', key: 'historico_scope' },
+            { input: 'perm_mensajes_scope', key: 'mensajes', access: 'perm_mensajes_acceso' },
+            { input: 'perm_horas_scope', key: 'horas_extra', access: 'perm_horas_extra' },
+            { input: 'perm_historico_scope', key: 'historico_scope', access: 'perm_historico' },
         ];
-        const ignoredActivePermissionKeys = ['mensajes', 'horas_extra', 'historico_scope'];
         const userPermissionState = () => {
             if (!userPermissionForm) return '';
             const data = new FormData(userPermissionForm);
             data.delete('_token');
             data.delete('config_action');
+            rolePermissionScopes.forEach(({ input, access }) => {
+                const accessToggle = userPermissionForm.querySelector(`[name="${access}"]`);
+                if (!accessToggle?.checked) data.delete(input);
+            });
+            const configAccess = userPermissionForm.querySelector('[data-config-access-toggle]');
+            if (!configAccess?.checked) {
+                userPermissionForm.querySelectorAll('[data-config-dependent-panel] [name]').forEach((field) => {
+                    data.delete(field.name);
+                });
+            }
             return new URLSearchParams(data).toString();
         };
         const initialUserPermissionState = userPermissionState();
-        const syncUserPermissionDirty = () => {
-            if (userPermissionCancel) {
-                userPermissionCancel.hidden = userPermissionState() === initialUserPermissionState;
+        let isUserPermissionDirty = false;
+        const syncUserPermissionCounters = () => {
+            if (!userPermissionForm) return;
+            const activeCount = Array.from(userPermissionForm.querySelectorAll('input[name^="perm_"][type="checkbox"]:checked:not(:disabled)'))
+                .length;
+            document.querySelectorAll('[data-user-active-count]').forEach((countTarget) => {
+                countTarget.textContent = String(activeCount);
+            });
+            document.querySelectorAll('.rm-permission-group').forEach((group) => {
+                const countTarget = group.querySelector('[data-permission-group-count]');
+                if (!countTarget) return;
+                const accessToggles = Array.from(group.querySelectorAll('[data-role-access-toggle]'));
+                countTarget.textContent = `${accessToggles.filter((toggle) => toggle.checked).length}/${accessToggles.length}`;
+            });
+            const configCount = document.querySelector('[data-config-group-count]');
+            if (configCount) {
+                const configToggles = Array.from(document.querySelectorAll('[data-config-dependent-panel] input[type="checkbox"]'));
+                configCount.textContent = `${configToggles.filter((toggle) => toggle.checked).length}/${configToggles.length}`;
             }
+            document.querySelectorAll('[data-permission-card]').forEach((card) => {
+                card.classList.toggle('is-enabled', Boolean(card.querySelector('[data-role-access-toggle]')?.checked));
+            });
+        };
+        const syncUserPermissionDirty = () => {
+            isUserPermissionDirty = userPermissionState() !== initialUserPermissionState;
+            userPermissionSavebar?.classList.toggle('is-dirty', isUserPermissionDirty);
+            if (userPermissionReset) userPermissionReset.disabled = !isUserPermissionDirty;
+            if (userPermissionSave) userPermissionSave.disabled = !isUserPermissionDirty;
+            if (userPermissionStateTitle) userPermissionStateTitle.textContent = isUserPermissionDirty ? 'Cambios pendientes' : 'Todo guardado';
+            if (userPermissionStateCopy) userPermissionStateCopy.textContent = isUserPermissionDirty
+                ? 'Revisa y guarda los permisos del usuario.'
+                : 'No hay cambios pendientes.';
+            syncUserPermissionCounters();
         };
 
         const applyPermissionPayload = (permissions) => {
@@ -1444,42 +1725,150 @@
                 select.value = permissions[key] === 'todos' ? 'todos' : 'asignados';
             });
 
-            const count = Object.entries(permissions).filter(([key, value]) => {
-                return !ignoredActivePermissionKeys.includes(key) && value === true;
-            }).length;
-            document.querySelectorAll('[data-user-active-count]').forEach((countTarget) => {
-                countTarget.textContent = String(count);
-            });
-
             document.querySelectorAll('.rm-role-permission-item').forEach((item) => {
                 syncRoleDependentActions(item);
             });
             syncConfigDependentPanel();
+            syncUserPermissionCounters();
         };
 
+        const assignedRolePicker = document.querySelector('[data-assigned-role-picker]');
+        const assignedRoleSelect = assignedRolePicker?.querySelector('[data-user-role-select]');
+        const assignedRoleSearch = assignedRolePicker?.querySelector('[data-assigned-role-search]');
+        const assignedRoleToggle = assignedRolePicker?.querySelector('[data-assigned-role-toggle]');
+        const assignedRoleMenu = assignedRolePicker?.querySelector('[data-assigned-role-menu]');
+        const assignedRoleEmpty = assignedRolePicker?.querySelector('[data-assigned-role-empty]');
+        const assignedRoleOptions = Array.from(assignedRolePicker?.querySelectorAll('[data-assigned-role-option]') || []);
+        let highlightedAssignedRoleIndex = -1;
+        const visibleAssignedRoleOptions = () => assignedRoleOptions.filter((option) => !option.hidden);
+        const assignedRoleOptionForValue = (value) => assignedRoleOptions.find((option) => option.dataset.roleName === value);
+        const setAssignedRolePickerOpen = (open) => {
+            if (!assignedRolePicker || !assignedRoleMenu || !assignedRoleSearch || !assignedRoleToggle) return;
+            assignedRolePicker.classList.toggle('is-open', open);
+            assignedRoleMenu.hidden = !open;
+            assignedRoleSearch.setAttribute('aria-expanded', open ? 'true' : 'false');
+            assignedRoleToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (!open) {
+                assignedRoleOptions.forEach((option) => option.classList.remove('is-highlighted'));
+                assignedRoleSearch.removeAttribute('aria-activedescendant');
+                highlightedAssignedRoleIndex = -1;
+            }
+        };
+        const highlightAssignedRoleOption = (index) => {
+            const visible = visibleAssignedRoleOptions();
+            assignedRoleOptions.forEach((option) => option.classList.remove('is-highlighted'));
+            if (!assignedRoleSearch || visible.length === 0 || index < 0) {
+                highlightedAssignedRoleIndex = -1;
+                assignedRoleSearch?.removeAttribute('aria-activedescendant');
+                return;
+            }
+            highlightedAssignedRoleIndex = (index + visible.length) % visible.length;
+            const option = visible[highlightedAssignedRoleIndex];
+            option.classList.add('is-highlighted');
+            assignedRoleSearch.setAttribute('aria-activedescendant', option.id);
+            option.scrollIntoView({ block: 'nearest' });
+        };
+        const syncAssignedRolePicker = () => {
+            const currentOption = assignedRoleOptionForValue(assignedRoleSelect?.value || '');
+            if (assignedRoleSearch) assignedRoleSearch.value = currentOption?.dataset.roleLabel || '';
+            assignedRoleOptions.forEach((option) => {
+                const selected = option === currentOption;
+                option.classList.toggle('is-selected', selected);
+                option.setAttribute('aria-selected', selected ? 'true' : 'false');
+            });
+        };
+        const showAllAssignedRoles = () => {
+            assignedRoleOptions.forEach((option) => {
+                option.hidden = false;
+            });
+            if (assignedRoleEmpty) assignedRoleEmpty.hidden = assignedRoleOptions.length > 0;
+            setAssignedRolePickerOpen(true);
+            const selectedIndex = visibleAssignedRoleOptions().findIndex((option) => option.dataset.roleName === assignedRoleSelect?.value);
+            highlightAssignedRoleOption(selectedIndex >= 0 ? selectedIndex : 0);
+        };
+        const filterAssignedRoles = () => {
+            const term = (assignedRoleSearch?.value || '').trim().toLocaleLowerCase();
+            assignedRoleOptions.forEach((option) => {
+                const text = `${option.dataset.roleLabel || ''} ${option.dataset.roleName || ''}`.toLocaleLowerCase();
+                option.hidden = term !== '' && !text.includes(term);
+            });
+            const visible = visibleAssignedRoleOptions();
+            if (assignedRoleEmpty) assignedRoleEmpty.hidden = visible.length > 0;
+            setAssignedRolePickerOpen(true);
+            highlightAssignedRoleOption(visible.length > 0 ? 0 : -1);
+        };
+        const selectAssignedRole = (option) => {
+            if (!option || !assignedRoleSelect) return;
+            assignedRoleSelect.value = option.dataset.roleName || '';
+            syncAssignedRolePicker();
+            setAssignedRolePickerOpen(false);
+            assignedRoleSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        assignedRoleSearch?.addEventListener('focus', showAllAssignedRoles);
+        assignedRoleSearch?.addEventListener('input', filterAssignedRoles);
+        assignedRoleSearch?.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (assignedRoleMenu?.hidden) showAllAssignedRoles();
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                highlightAssignedRoleOption(highlightedAssignedRoleIndex < 0 ? 0 : highlightedAssignedRoleIndex + direction);
+                return;
+            }
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                selectAssignedRole(visibleAssignedRoleOptions()[highlightedAssignedRoleIndex]);
+                return;
+            }
+            if (event.key === 'Escape') {
+                syncAssignedRolePicker();
+                setAssignedRolePickerOpen(false);
+            }
+        });
+        assignedRoleToggle?.addEventListener('click', () => {
+            if (assignedRoleMenu?.hidden) {
+                showAllAssignedRoles();
+                assignedRoleSearch?.focus();
+                return;
+            }
+            setAssignedRolePickerOpen(false);
+        });
+        assignedRoleOptions.forEach((option) => {
+            option.addEventListener('mouseenter', () => {
+                highlightAssignedRoleOption(visibleAssignedRoleOptions().indexOf(option));
+            });
+            option.addEventListener('click', () => selectAssignedRole(option));
+        });
+        document.addEventListener('click', (event) => {
+            if (!assignedRolePicker?.contains(event.target)) {
+                syncAssignedRolePicker();
+                setAssignedRolePickerOpen(false);
+            }
+        });
+
         document.querySelector('[data-load-role-permissions]')?.addEventListener('click', () => {
-            const roleSelect = document.querySelector('[data-user-role-select]');
-            const roleName = roleSelect?.value || '';
-            if (rolePermissionPayloads[roleName]) {
+            const roleName = assignedRoleSelect?.value || '';
+            const permissions = rolePermissionPayloads[roleName];
+            if (!permissions) return;
+
+            const applySelectedRolePermissions = () => {
                 applyPermissionPayload(rolePermissionPayloads[roleName]);
                 if (applyRolePermissionsInput) applyRolePermissionsInput.value = '1';
                 syncUserPermissionDirty();
-            }
+            };
+            const message = `¿Aplicar la plantilla del rol ${roleName}? Se reemplazarán los permisos personalizados visibles.`;
+
+            if (!window.appUi?.confirmAction) return;
+            window.appUi.confirmAction(message, applySelectedRolePermissions, {
+                title: 'Aplicar plantilla',
+                acceptText: 'Aplicar plantilla',
+                tone: 'primary',
+            });
         });
 
-        document.querySelector('[data-user-role-select]')?.addEventListener('change', (event) => {
-            const roleName = event.target?.value || '';
-            if (rolePermissionPayloads[roleName]) {
-                applyPermissionPayload(rolePermissionPayloads[roleName]);
-                if (applyRolePermissionsInput) applyRolePermissionsInput.value = '1';
-                syncUserPermissionDirty();
-            }
-        });
-
-        document.querySelector('[data-reset-user-permissions]')?.addEventListener('click', () => {
-            const roleSelect = document.querySelector('[data-user-role-select]');
-            if (roleSelect) {
-                roleSelect.value = roleSelect.dataset.currentUserRole || roleSelect.value;
+        userPermissionReset?.addEventListener('click', () => {
+            if (assignedRoleSelect) {
+                assignedRoleSelect.value = assignedRoleSelect.dataset.currentUserRole || assignedRoleSelect.value;
+                syncAssignedRolePicker();
             }
             applyPermissionPayload(currentUserPermissionPayload);
             if (applyRolePermissionsInput) applyRolePermissionsInput.value = '0';
@@ -1493,49 +1882,166 @@
             });
         });
         userPermissionForm?.addEventListener('input', syncUserPermissionDirty);
-        userPermissionCancel?.addEventListener('click', () => {
-            const roleSelect = document.querySelector('[data-user-role-select]');
-            if (roleSelect) roleSelect.value = roleSelect.dataset.currentUserRole || roleSelect.value;
-            applyPermissionPayload(currentUserPermissionPayload);
-            if (applyRolePermissionsInput) applyRolePermissionsInput.value = '0';
-            syncUserPermissionDirty();
+        userPermissionForm?.addEventListener('submit', () => {
+            isUserPermissionDirty = false;
         });
 
-        const userPicker = document.querySelector('[data-user-permission-picker]');
-        const userSearch = userPicker?.querySelector('[data-user-permission-search]');
-        const userIdInput = userPicker?.querySelector('[data-user-permission-id]');
-        const userOptions = Array.from(document.querySelectorAll('#rm-user-permission-options option'));
-        const selectedUserId = @json($selectedUserId);
-        const findUserOption = () => userOptions.find((option) => option.value === userSearch?.value);
-        const syncUserPicker = () => {
-            if (!userSearch || !userIdInput) return null;
-            const option = findUserOption();
-            userSearch.setCustomValidity('');
-            if (option) {
-                userIdInput.value = option.dataset.userId || '';
+        const activeUserPicker = document.querySelector('[data-active-user-picker]');
+        const activeUserSearch = activeUserPicker?.querySelector('[data-active-user-search]');
+        const activeUserId = activeUserPicker?.querySelector('[data-active-user-id]');
+        const activeUserToggle = activeUserPicker?.querySelector('[data-active-user-toggle]');
+        const activeUserMenu = activeUserPicker?.querySelector('[data-active-user-menu]');
+        const activeUserEmpty = activeUserPicker?.querySelector('[data-active-user-empty]');
+        const activeUserOptions = Array.from(activeUserPicker?.querySelectorAll('[data-active-user-option]') || []);
+        const initialSelectedUserId = activeUserId?.value || '';
+        const initialSelectedUserValue = activeUserSearch?.value || '';
+        let highlightedUserIndex = -1;
+        const visibleActiveUserOptions = () => activeUserOptions.filter((option) => !option.hidden);
+        const selectedActiveUserOption = () => activeUserOptions.find((option) => (
+            (option.dataset.userLabel || '').toLocaleLowerCase() === (activeUserSearch?.value || '').trim().toLocaleLowerCase()
+        ));
+        const setActiveUserPickerOpen = (open) => {
+            if (!activeUserPicker || !activeUserMenu || !activeUserSearch || !activeUserToggle) return;
+            activeUserPicker.classList.toggle('is-open', open);
+            activeUserMenu.hidden = !open;
+            activeUserSearch.setAttribute('aria-expanded', open ? 'true' : 'false');
+            activeUserToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (!open) {
+                activeUserOptions.forEach((option) => option.classList.remove('is-highlighted'));
+                activeUserSearch.removeAttribute('aria-activedescendant');
+                highlightedUserIndex = -1;
             }
-            return option;
         };
-
-        userSearch?.addEventListener('input', syncUserPicker);
-        userSearch?.addEventListener('change', () => {
-            const option = syncUserPicker();
-            const nextUserId = option?.dataset.userId || '';
-            if (nextUserId !== '' && nextUserId !== selectedUserId) {
-                userPicker?.requestSubmit();
-            }
-        });
-        userPicker?.addEventListener('submit', (event) => {
-            const option = syncUserPicker();
-            if (!option || !userSearch || !userIdInput) {
-                event.preventDefault();
-                userSearch?.setCustomValidity('Selecciona un usuario de la lista.');
-                userSearch?.reportValidity();
+        const highlightActiveUserOption = (index) => {
+            const visible = visibleActiveUserOptions();
+            activeUserOptions.forEach((option) => option.classList.remove('is-highlighted'));
+            if (!activeUserSearch || visible.length === 0 || index < 0) {
+                highlightedUserIndex = -1;
+                activeUserSearch?.removeAttribute('aria-activedescendant');
                 return;
             }
-            userIdInput.value = option.dataset.userId || '';
+            highlightedUserIndex = (index + visible.length) % visible.length;
+            const option = visible[highlightedUserIndex];
+            option.classList.add('is-highlighted');
+            activeUserSearch.setAttribute('aria-activedescendant', option.id);
+            option.scrollIntoView({ block: 'nearest' });
+        };
+        const showAllActiveUsers = () => {
+            activeUserOptions.forEach((option) => {
+                option.hidden = false;
+            });
+            if (activeUserEmpty) activeUserEmpty.hidden = activeUserOptions.length > 0;
+            setActiveUserPickerOpen(true);
+            const selectedIndex = visibleActiveUserOptions().findIndex((option) => option.dataset.userId === initialSelectedUserId);
+            highlightActiveUserOption(selectedIndex >= 0 ? selectedIndex : 0);
+        };
+        const filterActiveUsers = () => {
+            const term = (activeUserSearch?.value || '').trim().toLocaleLowerCase();
+            activeUserOptions.forEach((option) => {
+                const text = (option.dataset.userSearch || '').toLocaleLowerCase();
+                option.hidden = term !== '' && !text.includes(term);
+            });
+            const visible = visibleActiveUserOptions();
+            if (activeUserEmpty) activeUserEmpty.hidden = visible.length > 0;
+            setActiveUserPickerOpen(true);
+            highlightActiveUserOption(visible.length > 0 ? 0 : -1);
+        };
+        const commitActiveUser = (option) => {
+            if (!activeUserPicker || !activeUserSearch || !activeUserId) return;
+            activeUserSearch.value = option.dataset.userLabel || '';
+            activeUserId.value = option.dataset.userId || '';
+            isUserPermissionDirty = false;
+            setActiveUserPickerOpen(false);
+            HTMLFormElement.prototype.submit.call(activeUserPicker);
+        };
+        const submitActiveUser = (option = selectedActiveUserOption()) => {
+            if (!option || !activeUserSearch || !activeUserId) {
+                activeUserSearch?.setCustomValidity('Selecciona un usuario activo de la lista.');
+                activeUserSearch?.reportValidity();
+                return;
+            }
+            const nextUserId = option.dataset.userId || '';
+            if (nextUserId === '' || nextUserId === initialSelectedUserId) {
+                activeUserSearch.value = initialSelectedUserValue;
+                setActiveUserPickerOpen(false);
+                return;
+            }
+            if (isUserPermissionDirty) {
+                activeUserSearch.value = initialSelectedUserValue;
+                activeUserId.value = initialSelectedUserId;
+                setActiveUserPickerOpen(false);
+                if (!window.appUi?.confirmAction) return;
+                window.appUi.confirmAction(
+                    'Hay cambios de permisos sin guardar. Al cambiar de usuario se descartarán.',
+                    () => commitActiveUser(option),
+                    {
+                        title: 'Cambiar de usuario',
+                        acceptText: 'Cambiar de usuario',
+                        tone: 'primary',
+                    }
+                );
+                return;
+            }
+            commitActiveUser(option);
+        };
+        activeUserSearch?.addEventListener('focus', showAllActiveUsers);
+        activeUserSearch?.addEventListener('input', () => {
+            activeUserSearch.setCustomValidity('');
+            filterActiveUsers();
+        });
+        activeUserSearch?.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (activeUserMenu?.hidden) showAllActiveUsers();
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                highlightActiveUserOption(highlightedUserIndex < 0 ? 0 : highlightedUserIndex + direction);
+                return;
+            }
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const visible = visibleActiveUserOptions();
+                submitActiveUser(visible[highlightedUserIndex] || selectedActiveUserOption());
+                return;
+            }
+            if (event.key === 'Escape') {
+                activeUserSearch.value = initialSelectedUserValue;
+                activeUserSearch.setCustomValidity('');
+                setActiveUserPickerOpen(false);
+            }
+        });
+        activeUserToggle?.addEventListener('click', () => {
+            if (activeUserMenu?.hidden) {
+                showAllActiveUsers();
+                activeUserSearch?.focus();
+                return;
+            }
+            setActiveUserPickerOpen(false);
+        });
+        activeUserOptions.forEach((option) => {
+            option.addEventListener('mouseenter', () => {
+                highlightActiveUserOption(visibleActiveUserOptions().indexOf(option));
+            });
+            option.addEventListener('click', () => submitActiveUser(option));
+        });
+        activeUserPicker?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            submitActiveUser();
+        });
+        document.addEventListener('click', (event) => {
+            if (!activeUserPicker?.contains(event.target)) {
+                if (!selectedActiveUserOption() && activeUserSearch) {
+                    activeUserSearch.value = initialSelectedUserValue;
+                }
+                setActiveUserPickerOpen(false);
+            }
+        });
+        window.addEventListener('beforeunload', (event) => {
+            if (!isUserPermissionDirty) return;
+            event.preventDefault();
+            event.returnValue = '';
         });
 
+        syncUserPermissionDirty();
     </script>
 @endif
 
@@ -1543,17 +2049,23 @@
     <script>
         const syncRoleDependentActions = (item) => {
             const access = item.querySelector('[data-role-access-toggle]');
-            const dependents = item.querySelector('[data-role-dependent-actions]');
-            if (!access || !dependents) return;
-            dependents.hidden = !access.checked;
-            dependents.querySelectorAll('input, select, button').forEach((control) => {
-                control.disabled = control.hasAttribute('data-permission-locked') || !access.checked;
+            const dependents = item.querySelectorAll('[data-role-dependent-actions]');
+            if (!access) return;
+            item.classList.toggle('is-enabled', access.checked);
+            dependents.forEach((dependent) => {
+                dependent.hidden = !access.checked;
+                dependent.querySelectorAll('input, select, button').forEach((control) => {
+                    control.disabled = control.hasAttribute('data-permission-locked') || !access.checked;
+                });
             });
         };
 
         document.querySelectorAll('.rm-role-permission-item').forEach((item) => {
             syncRoleDependentActions(item);
-            item.querySelector('[data-role-access-toggle]')?.addEventListener('change', () => syncRoleDependentActions(item));
+            item.querySelector('[data-role-access-toggle]')?.addEventListener('change', () => {
+                syncRoleDependentActions(item);
+                if (typeof syncUserPermissionCounters === 'function') syncUserPermissionCounters();
+            });
         });
 
         const syncConfigDependentPanel = () => {
@@ -1570,29 +2082,241 @@
             });
         };
         syncConfigDependentPanel();
+        if (typeof syncUserPermissionCounters === 'function') syncUserPermissionCounters();
         const roleForm = document.getElementById('rm-config-form-roles');
         const roleCancel = document.querySelector('[data-role-cancel]');
+        const roleSave = document.querySelector('[data-role-permission-save]');
+        const roleSavebar = document.querySelector('[data-role-permission-savebar]');
+        const roleStateTitle = document.querySelector('[data-role-permission-state-title]');
+        const roleStateCopy = document.querySelector('[data-role-permission-state-copy]');
+        let isRolePermissionDirty = false;
         if (roleForm && roleCancel) {
+            const rolePermissionScopes = [
+                { input: 'perm_mensajes_scope', access: 'perm_mensajes_acceso' },
+                { input: 'perm_horas_scope', access: 'perm_horas_extra' },
+                { input: 'perm_historico_scope', access: 'perm_historico' },
+            ];
             const roleState = () => {
                 const data = new FormData(roleForm);
                 data.delete('_token');
                 data.delete('config_action');
+                rolePermissionScopes.forEach(({ input, access }) => {
+                    const accessToggle = roleForm.querySelector(`[name="${access}"]`);
+                    if (!accessToggle?.checked) data.delete(input);
+                });
+                const configAccess = roleForm.querySelector('[data-config-access-toggle]');
+                if (!configAccess?.checked) {
+                    roleForm.querySelectorAll('[data-config-dependent-panel] [name]').forEach((field) => {
+                        data.delete(field.name);
+                    });
+                }
                 return new URLSearchParams(data).toString();
             };
             const initialRoleState = roleState();
+            const syncRoleCounters = () => {
+                const activeCount = roleForm.querySelectorAll('input[name^="perm_"][type="checkbox"]:checked:not(:disabled)').length;
+                document.querySelectorAll('[data-role-active-count]').forEach((target) => {
+                    target.textContent = String(activeCount);
+                });
+                roleForm.querySelectorAll('.rm-permission-group').forEach((group) => {
+                    const target = group.querySelector('[data-role-group-count]');
+                    if (!target) return;
+                    const accessToggles = Array.from(group.querySelectorAll('[data-role-access-toggle]'));
+                    target.textContent = `${accessToggles.filter((toggle) => toggle.checked).length}/${accessToggles.length}`;
+                });
+                const configTarget = roleForm.querySelector('[data-role-config-count]');
+                if (configTarget) {
+                    const configToggles = Array.from(roleForm.querySelectorAll('[data-config-dependent-panel] input[type="checkbox"]'));
+                    configTarget.textContent = `${configToggles.filter((toggle) => toggle.checked).length}/${configToggles.length}`;
+                }
+                roleForm.querySelectorAll('[data-role-permission-card]').forEach((card) => {
+                    card.classList.toggle('is-enabled', Boolean(card.querySelector('[data-role-access-toggle]')?.checked));
+                });
+            };
             const syncRoleDirty = () => {
-                roleCancel.hidden = roleState() === initialRoleState;
+                isRolePermissionDirty = roleState() !== initialRoleState;
+                roleSavebar?.classList.toggle('is-dirty', isRolePermissionDirty);
+                roleCancel.disabled = !isRolePermissionDirty;
+                if (roleSave) roleSave.disabled = !isRolePermissionDirty;
+                if (roleStateTitle) roleStateTitle.textContent = isRolePermissionDirty ? 'Cambios pendientes' : 'Todo guardado';
+                if (roleStateCopy) roleStateCopy.textContent = isRolePermissionDirty
+                    ? 'Revisa y guarda los permisos del rol.'
+                    : 'No hay cambios pendientes.';
+                syncRoleCounters();
             };
             roleForm.addEventListener('input', syncRoleDirty);
             roleForm.addEventListener('change', syncRoleDirty);
+            roleForm.addEventListener('submit', () => {
+                isRolePermissionDirty = false;
+            });
             roleCancel.addEventListener('click', () => {
                 roleForm.reset();
                 document.querySelectorAll('.rm-role-permission-item').forEach(syncRoleDependentActions);
                 syncConfigDependentPanel();
-                roleCancel.hidden = true;
+                syncRoleDirty();
             });
+            syncRoleDirty();
         }
-        document.querySelector('[data-config-access-toggle]')?.addEventListener('change', syncConfigDependentPanel);
+        document.querySelector('[data-config-access-toggle]')?.addEventListener('change', () => {
+            syncConfigDependentPanel();
+            if (typeof syncUserPermissionCounters === 'function') syncUserPermissionCounters();
+        });
+
+        const rolePicker = document.querySelector('[data-role-picker]');
+        const rolePickerSearch = rolePicker?.querySelector('[data-role-picker-search]');
+        const rolePickerValue = rolePicker?.querySelector('[data-role-picker-value]');
+        const rolePickerToggle = rolePicker?.querySelector('[data-role-picker-toggle]');
+        const rolePickerMenu = rolePicker?.querySelector('[data-role-picker-menu]');
+        const rolePickerEmpty = rolePicker?.querySelector('[data-role-picker-empty]');
+        const rolePickerOptions = Array.from(rolePicker?.querySelectorAll('[data-role-option]') || []);
+        const initialRoleName = rolePickerValue?.value || '';
+        const initialRoleLabel = rolePickerSearch?.value || '';
+        let highlightedRoleIndex = -1;
+        const visibleRoleOptions = () => rolePickerOptions.filter((option) => !option.hidden);
+        const selectedRoleOption = () => rolePickerOptions.find((option) => (
+            (option.dataset.roleLabel || '').toLocaleLowerCase() === (rolePickerSearch?.value || '').trim().toLocaleLowerCase()
+        ));
+        const setRolePickerOpen = (open) => {
+            if (!rolePicker || !rolePickerMenu || !rolePickerSearch || !rolePickerToggle) return;
+            rolePicker.classList.toggle('is-open', open);
+            rolePickerMenu.hidden = !open;
+            rolePickerSearch.setAttribute('aria-expanded', open ? 'true' : 'false');
+            rolePickerToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (!open) {
+                rolePickerOptions.forEach((option) => option.classList.remove('is-highlighted'));
+                rolePickerSearch.removeAttribute('aria-activedescendant');
+                highlightedRoleIndex = -1;
+            }
+        };
+        const highlightRoleOption = (index) => {
+            const visible = visibleRoleOptions();
+            rolePickerOptions.forEach((option) => option.classList.remove('is-highlighted'));
+            if (!rolePickerSearch || visible.length === 0 || index < 0) {
+                highlightedRoleIndex = -1;
+                rolePickerSearch?.removeAttribute('aria-activedescendant');
+                return;
+            }
+            highlightedRoleIndex = (index + visible.length) % visible.length;
+            const option = visible[highlightedRoleIndex];
+            option.classList.add('is-highlighted');
+            rolePickerSearch.setAttribute('aria-activedescendant', option.id);
+            option.scrollIntoView({ block: 'nearest' });
+        };
+        const showAllRoleOptions = () => {
+            rolePickerOptions.forEach((option) => {
+                option.hidden = false;
+            });
+            if (rolePickerEmpty) rolePickerEmpty.hidden = rolePickerOptions.length > 0;
+            setRolePickerOpen(true);
+            const selectedIndex = visibleRoleOptions().findIndex((option) => option.dataset.roleName === initialRoleName);
+            highlightRoleOption(selectedIndex >= 0 ? selectedIndex : 0);
+        };
+        const filterRoleOptions = () => {
+            const term = (rolePickerSearch?.value || '').trim().toLocaleLowerCase();
+            rolePickerOptions.forEach((option) => {
+                const text = `${option.dataset.roleLabel || ''} ${option.dataset.roleName || ''}`.toLocaleLowerCase();
+                option.hidden = term !== '' && !text.includes(term);
+            });
+            const visible = visibleRoleOptions();
+            if (rolePickerEmpty) rolePickerEmpty.hidden = visible.length > 0;
+            setRolePickerOpen(true);
+            highlightRoleOption(visible.length > 0 ? 0 : -1);
+        };
+        const commitSelectedRole = (option) => {
+            if (!rolePicker || !rolePickerSearch || !rolePickerValue) return;
+            rolePickerSearch.value = option.dataset.roleLabel || '';
+            rolePickerValue.value = option.dataset.roleName || '';
+            isRolePermissionDirty = false;
+            setRolePickerOpen(false);
+            HTMLFormElement.prototype.submit.call(rolePicker);
+        };
+        const submitSelectedRole = (option = selectedRoleOption()) => {
+            if (!option || !rolePickerSearch || !rolePickerValue) {
+                rolePickerSearch?.setCustomValidity('Selecciona un rol de la lista.');
+                rolePickerSearch?.reportValidity();
+                return;
+            }
+            const nextRoleName = option.dataset.roleName || '';
+            if (nextRoleName === '' || nextRoleName === initialRoleName) {
+                rolePickerSearch.value = initialRoleLabel;
+                setRolePickerOpen(false);
+                return;
+            }
+            if (isRolePermissionDirty) {
+                rolePickerSearch.value = initialRoleLabel;
+                rolePickerValue.value = initialRoleName;
+                setRolePickerOpen(false);
+                if (!window.appUi?.confirmAction) return;
+                window.appUi.confirmAction(
+                    'Hay cambios de permisos sin guardar. Al cambiar de rol se descartarán.',
+                    () => commitSelectedRole(option),
+                    {
+                        title: 'Cambiar de rol',
+                        acceptText: 'Cambiar de rol',
+                        tone: 'primary',
+                    }
+                );
+                return;
+            }
+            commitSelectedRole(option);
+        };
+        rolePickerSearch?.addEventListener('focus', showAllRoleOptions);
+        rolePickerSearch?.addEventListener('input', () => {
+            rolePickerSearch.setCustomValidity('');
+            filterRoleOptions();
+        });
+        rolePickerSearch?.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (rolePickerMenu?.hidden) showAllRoleOptions();
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                highlightRoleOption(highlightedRoleIndex < 0 ? 0 : highlightedRoleIndex + direction);
+                return;
+            }
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const visible = visibleRoleOptions();
+                submitSelectedRole(visible[highlightedRoleIndex] || selectedRoleOption());
+                return;
+            }
+            if (event.key === 'Escape') {
+                rolePickerSearch.value = initialRoleLabel;
+                rolePickerSearch.setCustomValidity('');
+                setRolePickerOpen(false);
+            }
+        });
+        rolePickerToggle?.addEventListener('click', () => {
+            if (rolePickerMenu?.hidden) {
+                showAllRoleOptions();
+                rolePickerSearch?.focus();
+                return;
+            }
+            setRolePickerOpen(false);
+        });
+        rolePickerOptions.forEach((option) => {
+            option.addEventListener('mouseenter', () => {
+                highlightRoleOption(visibleRoleOptions().indexOf(option));
+            });
+            option.addEventListener('click', () => submitSelectedRole(option));
+        });
+        rolePicker?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            submitSelectedRole();
+        });
+        document.addEventListener('click', (event) => {
+            if (!rolePicker?.contains(event.target)) {
+                if (!selectedRoleOption() && rolePickerSearch) rolePickerSearch.value = initialRoleLabel;
+                setRolePickerOpen(false);
+            }
+        });
+        document.querySelector('[data-role-delete-form]')?.addEventListener('submit', () => {
+            isRolePermissionDirty = false;
+        });
+        window.addEventListener('beforeunload', (event) => {
+            if (!isRolePermissionDirty) return;
+            event.preventDefault();
+            event.returnValue = '';
+        });
 
         document.querySelectorAll('[data-nova-modal-close]').forEach((button) => {
             button.addEventListener('click', () => {

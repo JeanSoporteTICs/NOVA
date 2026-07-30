@@ -89,9 +89,24 @@ class RedmineDashboardController extends Controller
         });
     }
 
-    public function index(Request $request, RedmineDataRepository $redmine): View
+    public function index(Request $request, RedmineDataRepository $redmine): View|RedirectResponse
     {
         $this->prepare($request, $redmine);
+        $permissions = $this->effectivePermissions($request, $redmine);
+
+        if (!$this->can($permissions, self::SECTION_PERMISSIONS['dashboard'])) {
+            foreach ($this->sectionsFor($redmine->projectKey()) as $section => $label) {
+                if ($section !== 'dashboard'
+                    && $this->can($permissions, self::SECTION_PERMISSIONS[$section] ?? '')) {
+                    return redirect()->route(
+                        'redmine.native.section',
+                        $this->routeParameters($redmine, ['section' => $section])
+                    );
+                }
+            }
+
+            abort(403);
+        }
 
         return $this->show($request, 'dashboard', $redmine);
     }
@@ -146,6 +161,7 @@ class RedmineDashboardController extends Controller
                 fn (string $permission): bool => $this->can($permissions, $permission)
             )),
             'effectivePermissions' => $permissions,
+            'canHistoryActionsPermission' => $this->can($permissions, 'historico_acciones'),
         ]));
     }
 
@@ -158,14 +174,23 @@ class RedmineDashboardController extends Controller
         }
 
         $action = (string) $request->input('dashboard_action', $request->input('action', ''));
+        $requiredPermission = match ($action) {
+            'delete', 'delete_selected' => 'reportes_eliminar',
+            'toggle_hours_extra' => 'horas_extra_editar',
+            default => 'reportes_editar',
+        };
         $this->authorizePermission(
             $request,
             $redmine,
-            in_array($action, ['delete', 'delete_selected'], true) ? 'reportes_eliminar' : 'reportes_editar'
+            $requiredPermission
         );
         $ids = $this->ids($request->input('ids', []));
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $user = is_array($user) ? $user : [];
+        $updatePayload = $request->all();
+        if (!$this->can($this->effectivePermissions($request, $redmine), 'horas_extra_editar')) {
+            unset($updatePayload['hora_extra'], $updatePayload['tiempo_estimado']);
+        }
 
         // Captured only for 'toggle_hours_extra', the one action currently submitted via AJAX
         // (optimistic UI toggle). Other actions still use the full-page redirect flow below and
@@ -173,7 +198,7 @@ class RedmineDashboardController extends Controller
         $toggleHoursExtraSuccess = null;
 
         $message = match ($action) {
-            'update' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->updateReport($request->all()) ? 'Solicitud actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
+            'update' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->updateReport($updatePayload) ? 'Solicitud actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
             'delete' => $redmine->deleteReport($redmine->canAccessActiveReport((string) $request->input('id'), $user) ? (string) $request->input('id') : '') . ' solicitud(es) eliminada(s).',
             'delete_selected' => $redmine->deleteReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) eliminada(s).',
             'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) archivada(s).',
@@ -340,6 +365,16 @@ class RedmineDashboardController extends Controller
                     $permissions = $rolePermissions;
                 }
             }
+            $novaRole = strtolower(trim((string) data_get($request->session()->get('nova_user'), 'role', 'usuario')));
+            $currentPermissions = [];
+            if ($novaRole !== 'root') {
+                $currentUser = collect($redmine->users())
+                    ->first(fn (array $user): bool => (string) ($user['id'] ?? '') === $userId);
+                $currentPermissions = is_array($currentUser['permisos'] ?? null)
+                    ? $currentUser['permisos']
+                    : [];
+            }
+            $permissions = $this->preserveRestrictedScopes($permissions, $currentPermissions, $novaRole);
             $updated = $redmine->saveUserPermissions(
                 $userId,
                 $userRole,
@@ -358,6 +393,14 @@ class RedmineDashboardController extends Controller
             if (strtolower($roleName) === 'root') {
                 $permissions['all'] = true;
             }
+            $novaRole = strtolower(trim((string) data_get($request->session()->get('nova_user'), 'role', 'usuario')));
+            $currentPermissions = [];
+            if ($novaRole !== 'root') {
+                $currentPermissions = is_array($redmine->roles()[$roleName] ?? null)
+                    ? $redmine->roles()[$roleName]
+                    : [];
+            }
+            $permissions = $this->preserveRestrictedScopes($permissions, $currentPermissions, $novaRole);
             $updated = $redmine->saveRolePermissions(
                 $roleName,
                 $permissions
@@ -375,8 +418,9 @@ class RedmineDashboardController extends Controller
             $result = $redmine->deleteRole($roleName);
 
             return redirect()
-                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'roles']))
-                ->with('redmine_status', $result['ok'] ? 'Rol eliminado.' : $result['error']);
+                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'roles']), 303)
+                ->with('redmine_status', $result['ok'] ? 'Rol eliminado.' : $result['error'])
+                ->with('redmine_status_type', $result['ok'] ? 'success' : 'danger');
         }
 
         $config = $redmine->configuration();
@@ -465,6 +509,32 @@ class RedmineDashboardController extends Controller
             return $blocked;
         }
 
+        if ((string) $request->input('action', 'delete') === 'update_redmine_status') {
+            $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+            $result = $redmine->updateHistoryIssueStatuses(
+                $this->ids($request->input('redmine_ids', [])),
+                (int) $request->input('status_id', 0),
+                is_array($user) ? $user : []
+            );
+
+            $message = $result['updated'].' reporte(s) actualizado(s)';
+            if ($result['status_name'] !== '') {
+                $message .= ' a “'.$result['status_name'].'” en Redmine';
+            }
+            $message .= '.';
+            if ($result['errors'] !== []) {
+                $visibleErrors = array_slice($result['errors'], 0, 5);
+                $message .= ' No actualizados: '.implode(' ', $visibleErrors);
+                if (count($result['errors']) > 5) {
+                    $message .= ' y '.(count($result['errors']) - 5).' más.';
+                }
+            }
+
+            return back()
+                ->with('redmine_status', $message)
+                ->with('redmine_status_type', $result['updated'] > 0 ? 'success' : 'danger');
+        }
+
         $deleted = $redmine->deleteArchivedReport((string) $request->input('id'));
 
         return back()->with('redmine_status', $deleted . ' registro(s) historico(s) eliminado(s).');
@@ -476,7 +546,11 @@ class RedmineDashboardController extends Controller
         $this->authorizePermission($request, $redmine, 'historico');
 
         $ids = collect(explode(',', (string) $request->query('ids', '')))
-            ->map(static fn (string $id): string => preg_replace('/\D+/', '', trim($id)) ?? '')
+            ->map(static function (string $id): string {
+                $id = trim($id);
+
+                return preg_match('/^\d+$/', $id) ? $id : '';
+            })
             ->filter()
             ->unique()
             ->take(100)
@@ -497,13 +571,9 @@ class RedmineDashboardController extends Controller
             return $blocked;
         }
 
-        $action = (string) $request->input('action', 'save');
-        $this->authorizePermission($request, $redmine, $action === 'delete' ? 'horas_extra_eliminar' : 'horas_extra_editar');
+        abort_unless((string) $request->input('action', 'save') === 'save', 422, 'Accion de horas extra no permitida.');
+        $this->authorizePermission($request, $redmine, 'horas_extra_editar');
         $source = (string) $request->input('_source_file');
-        if ($action === 'delete') {
-            $deleted = $redmine->deleteHoursGroup($source, (string) $request->input('fecha'));
-            return back()->with('redmine_status', $deleted . ' grupo(s) eliminado(s).');
-        }
 
         $redmine->saveHoursGroup($source, $request->all());
 
@@ -641,18 +711,23 @@ class RedmineDashboardController extends Controller
     /** @param array<string,mixed> $permissions */
     private function can(array $permissions, string $permission): bool
     {
+        // `all` is injected by ProjectAccessGuard only for NOVA root users.
+        // It must take precedence over stale or inherited per-action values
+        // from the TIC profile; otherwise the UI is visible to an admin but
+        // the POST action is rejected with 403.
+        if (!empty($permissions['all'])) {
+            return true;
+        }
+
         $explicitPermissions = [
             'actividad', 'actividad_eliminar', 'actividad_todos',
             'reportes_editar', 'reportes_eliminar',
-            'horas_extra_editar', 'horas_extra_eliminar',
+            'horas_extra_editar',
             'historico_acciones', 'usuarios_editar', 'usuarios_eliminar',
         ];
         if (in_array($permission, $explicitPermissions, true) && array_key_exists($permission, $permissions)) {
             $value = $permissions[$permission];
             return $value === true || $value === 1 || $value === '1' || $value === 'si';
-        }
-        if (!empty($permissions['all'])) {
-            return true;
         }
 
         $value = $permissions[$permission] ?? false;
@@ -792,7 +867,6 @@ class RedmineDashboardController extends Controller
             'reportes_editar' => $request->boolean('perm_reportes_editar'),
             'reportes_eliminar' => $request->boolean('perm_reportes_eliminar'),
             'horas_extra_editar' => $request->boolean('perm_horas_extra_editar'),
-            'horas_extra_eliminar' => $request->boolean('perm_horas_extra_eliminar'),
             'usuarios_editar' => $request->boolean('perm_usuarios_editar'),
             'usuarios_eliminar' => $request->boolean('perm_usuarios_eliminar'),
             'cfg_resumen' => $request->boolean('perm_cfg_resumen'),
@@ -811,6 +885,29 @@ class RedmineDashboardController extends Controller
             'actividad_todos' => $canViewActivity && $request->boolean('perm_actividad_todos'),
             'mis_integraciones' => $request->boolean('perm_mis_integraciones'),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $permissions
+     * @param array<string,mixed> $currentPermissions
+     * @return array<string,mixed>
+     */
+    private function preserveRestrictedScopes(array $permissions, array $currentPermissions, string $novaRole): array
+    {
+        if (strtolower(trim($novaRole)) === 'root') {
+            return $permissions;
+        }
+
+        $scope = static fn ($value): string => in_array($value, ['todos', 'asignados'], true)
+            ? $value
+            : 'asignados';
+        $permissions['mensajes'] = $scope($currentPermissions['mensajes'] ?? null);
+        $permissions['historico_scope'] = $scope($currentPermissions['historico_scope'] ?? null);
+        $permissions['horas_extra'] = ($permissions['horas_extra'] ?? '') !== ''
+            ? $scope($currentPermissions['horas_extra'] ?? null)
+            : '';
+
+        return $permissions;
     }
 
     /**

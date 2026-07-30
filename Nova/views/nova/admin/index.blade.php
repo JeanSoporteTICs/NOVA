@@ -13,6 +13,7 @@
     <link href="{{ asset('assets/nova-admin.css') }}?v={{ $novaAdminCssVersion }}" rel="stylesheet">
 </head>
 <body class="nova-page">
+    @php $currentNovaRole = strtolower((string) session('nova_user.role', 'usuario')); @endphp
     <div class="rm-shell">
         <nav class="navbar navbar-expand-lg navbar-dark rm-navbar">
             <div class="container-fluid px-4">
@@ -696,6 +697,9 @@
                             <select class="form-select" id="role" name="role" data-user-role>
                                 <option value="usuario">Usuario</option>
                                 <option value="admin">Admin</option>
+                                @if ($currentNovaRole === 'root')
+                                    <option value="root">Root</option>
+                                @endif
                             </select>
                         </div>
                         <div class="field">
@@ -741,6 +745,7 @@
                     </div>
                     <select class="form-select form-select-sm" style="width:auto;min-width:130px" data-role-filter aria-label="Filtrar rol NOVA">
                         <option value="">Rol: todos</option>
+                        <option value="root">Root</option>
                         <option value="admin">Admin</option>
                         <option value="usuario">Usuario</option>
                     </select>
@@ -775,7 +780,17 @@
                         <tbody>
                         @forelse ($users as $user)
                             @php
-                                $novaRole = in_array(($user['role'] ?? 'usuario'), ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
+                                $novaRole = match (strtolower(trim((string) ($user['role'] ?? 'usuario')))) {
+                                    'root' => 'root',
+                                    'admin', 'administrador' => 'admin',
+                                    default => 'usuario',
+                                };
+                                $novaRoleLabel = match ($novaRole) {
+                                    'root' => 'Root',
+                                    'admin' => 'Admin',
+                                    default => 'Usuario',
+                                };
+                                $novaRoleBadge = in_array($novaRole, ['root', 'admin'], true) ? 'is-admin' : 'is-usuario';
                                 $userStatus = $user['status'] ?? 'activo';
                                 $emachCredentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
                                 $hasEmachCredentials = trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '';
@@ -827,7 +842,7 @@
                                         </span>
                                     </div>
                                 </td>
-                                <td><span class="nova-badge {{ $novaRole === 'admin' ? 'is-admin' : 'is-usuario' }}">{{ $novaRole === 'admin' ? 'Admin' : 'Usuario' }}</span></td>
+                                <td><span class="nova-badge {{ $novaRoleBadge }}">{{ $novaRoleLabel }}</span></td>
                                 <td><span class="nova-badge {{ $userStatus === 'baneado' ? 'is-baneado' : 'is-activo' }}" data-user-status-badge>{{ $userStatus }}</span></td>
                                 <td class="nova-col-hide-md">
                                     @if ($ultimoLogin !== '')
@@ -838,7 +853,8 @@
                                 </td>
                                 <td>
                                     <div class="nova-table-actions">
-                                        <button class="btn-action btn-action-edit" type="button"
+                                        @if ($novaRole !== 'root' || $currentNovaRole === 'root')
+                                            <button class="btn-action btn-action-edit" type="button"
                                             data-user-edit
                                             data-id="{{ $user['id'] ?? '' }}"
                                             data-redmine-id="{{ $user['redmine_id'] ?? '' }}"
@@ -870,7 +886,12 @@
                                             @else
                                                 <button class="btn-action btn-action-ban" type="submit" title="Banear" aria-label="Banear usuario"><i class="bi bi-slash-circle"></i></button>
                                             @endif
-                                        </form>
+                                            </form>
+                                        @else
+                                            <span class="nova-badge is-admin" title="Solo otro root puede modificar esta cuenta">
+                                                <i class="bi bi-shield-lock"></i> Protegido
+                                            </span>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>

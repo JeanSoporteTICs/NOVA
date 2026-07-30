@@ -100,10 +100,13 @@ class RedmineTicPermissionsTest extends TestCase
         $this->assertArrayNotHasKey('rol_prueba_b2_delete', (array) $json);
     }
 
-    public function test_deleting_a_reserved_role_is_rejected(): void
+    public function test_only_user_and_administrator_are_base_roles(): void
     {
-        $result = $this->facade()->deleteRole('root');
-        $this->assertFalse($result['ok']);
+        $facade = $this->facade();
+
+        $this->assertSame(['administrador', 'usuario'], $facade->baseRoles());
+        $this->assertFalse($facade->deleteRole('administrador')['ok']);
+        $this->assertFalse($facade->deleteRole('usuario')['ok']);
     }
 
     public function test_cannot_delete_role_assigned_to_a_user(): void
@@ -113,7 +116,7 @@ class RedmineTicPermissionsTest extends TestCase
             $this->markTestSkipped('No hay usuarios TIC para probar esta regla.');
         }
         $assignedRole = (string) ($users[0]['rol'] ?? '');
-        if ($assignedRole === '' || in_array($assignedRole, ['root', 'administrador', 'gestor', 'usuario'], true)) {
+        if ($assignedRole === '' || in_array($assignedRole, $this->facade()->baseRoles(), true)) {
             $this->markTestSkipped('El primer usuario no tiene un rol custom no reservado para probar.');
         }
 

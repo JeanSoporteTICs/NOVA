@@ -26,6 +26,9 @@ $maintenanceFlash = handle_maintenance_request();
 [$nextcloudFlash, $nextcloudCfg, $nextcloudGroups] = handle_nextcloud();
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $role = auth_get_user_role();
+$novaSessionUser = function_exists('session') ? session('nova_user') : null;
+$isNovaRoot = is_array($novaSessionUser)
+  && strtolower(trim((string)($novaSessionUser['role'] ?? 'usuario'))) === 'root';
 $csrf = legacy_csrf_token();
 $maintenanceMode = maintenance_mode_enabled();
 $maintenanceSettings = maintenance_mode_settings();
@@ -68,15 +71,35 @@ $saveRolePermissions = function (string $role, array $permissions): void {
   });
 };
 
+$deleteRolePermissions = function (string $role): void {
+  if ($role === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) return;
+  \Illuminate\Support\Facades\DB::table('mantencion_permisos_rol')->where('rol', $role)->delete();
+};
+
 $saveUserRole = function (string $userId, string $role): void {
-  if ($userId === '' || $role === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) return;
-  \Illuminate\Support\Facades\DB::table('usuarios_nova')
+  if ($userId === '' || $role === '' || !class_exists(\Illuminate\Support\Facades\DB::class)
+      || !\Illuminate\Support\Facades\Schema::hasColumn('permisos_usuario_modulo', 'rol_modulo')) return;
+  $novaId = (int)\Illuminate\Support\Facades\DB::table('usuarios_nova')
     ->where(function ($query) use ($userId): void {
       $query->where('redmine_id', $userId)
         ->orWhere('uuid', $userId)
         ->orWhere('usuario', $userId);
     })
-    ->update(['rol' => $role, 'actualizado_at' => now()]);
+    ->value('id');
+  $moduleId = (int)\Illuminate\Support\Facades\DB::table('modulos_nova')
+    ->where('clave_modulo', 'redmine-mantencion')
+    ->value('id');
+  if ($novaId <= 0 || $moduleId <= 0) return;
+  \Illuminate\Support\Facades\DB::table('permisos_usuario_modulo')->updateOrInsert(
+    ['usuario_id' => $novaId, 'modulo_id' => $moduleId],
+    [
+      'permitido' => 1,
+      'rol_modulo' => function_exists('usuarios_normalize_module_role')
+        ? usuarios_normalize_module_role($role)
+        : $role,
+      'actualizado_at' => now(),
+    ]
+  );
 };
 
 $saveUserPermissions = function (string $userId, array $permissions): void {
@@ -111,6 +134,15 @@ foreach (array_keys($rolesData) as $roleName) {
   $ensureRolePermission((string)$roleName, 'integraciones_nextcloud', in_array((string)$roleName, ['root', 'gestor'], true));
   $ensureRolePermission((string)$roleName, 'actividad_eliminar', !empty($rolesData[$roleName]['actividad']));
   $ensureRolePermission((string)$roleName, 'actividad_todos', !empty($rolesData[$roleName]['actividad']));
+  $ensureRolePermission((string)$roleName, 'horas_extra_editar', !empty($rolesData[$roleName]['horas_extra']));
+  foreach (['reportes_editar', 'reportes_eliminar', 'reportes_importar_core'] as $reportPermission) {
+    $ensureRolePermission((string)$roleName, $reportPermission, !empty($rolesData[$roleName]['mensajes_acceso']));
+  }
+  $legacyHistoryActions = !empty($rolesData[$roleName]['historico_acciones']);
+  $ensureRolePermission((string)$roleName, 'historico_estado', $legacyHistoryActions);
+  $ensureRolePermission((string)$roleName, 'historico_eliminar', $legacyHistoryActions);
+  unset($rolesData[$roleName]['horas_extra_eliminar']);
+  unset($rolesData[$roleName]['historico_acciones']);
   $baseConfigAccess = !empty($rolesData[$roleName]['configuracion']);
   foreach (['cfg_resumen', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $configPermission) {
     $ensureRolePermission((string)$roleName, $configPermission, $configPermission === 'cfg_categorias' ? !empty($rolesData[$roleName]['categorias']) : $baseConfigAccess);
@@ -125,10 +157,15 @@ if (empty($rolesData)) {
       'all' => true,
       'mensajes' => 'todos',
       'mensajes_acceso' => true,
+      'reportes_editar' => true,
+      'reportes_eliminar' => true,
+      'reportes_importar_core' => true,
       'horas_extra' => 'todos',
+      'horas_extra_editar' => true,
       'historico' => true,
       'historico_scope' => 'todos',
-      'historico_acciones' => true,
+      'historico_estado' => true,
+      'historico_eliminar' => true,
       'configuracion' => true,
       'estadisticas' => true,
       'usuarios' => true,
@@ -148,10 +185,15 @@ if (empty($rolesData)) {
     'gestor' => [
       'mensajes' => 'asignados',
       'mensajes_acceso' => true,
+      'reportes_editar' => true,
+      'reportes_eliminar' => true,
+      'reportes_importar_core' => true,
       'horas_extra' => 'asignados',
+      'horas_extra_editar' => true,
       'historico' => true,
       'historico_scope' => 'asignados',
-      'historico_acciones' => true,
+      'historico_estado' => true,
+      'historico_eliminar' => true,
       'configuracion' => true,
       'estadisticas' => true,
       'usuarios' => true,
@@ -169,10 +211,15 @@ if (empty($rolesData)) {
     'administrador' => [
       'mensajes' => 'todos',
       'mensajes_acceso' => true,
+      'reportes_editar' => true,
+      'reportes_eliminar' => true,
+      'reportes_importar_core' => true,
       'horas_extra' => 'todos',
+      'horas_extra_editar' => true,
       'historico' => false,
       'historico_scope' => 'asignados',
-      'historico_acciones' => false,
+      'historico_estado' => false,
+      'historico_eliminar' => false,
       'configuracion' => true,
       'estadisticas' => true,
       'usuarios' => false,
@@ -192,10 +239,15 @@ if (empty($rolesData)) {
     'usuario' => [
       'mensajes' => 'asignados',
       'mensajes_acceso' => true,
+      'reportes_editar' => true,
+      'reportes_eliminar' => true,
+      'reportes_importar_core' => true,
       'horas_extra' => 'asignados',
+      'horas_extra_editar' => false,
       'historico' => false,
       'historico_scope' => 'asignados',
-      'historico_acciones' => false,
+      'historico_estado' => false,
+      'historico_eliminar' => false,
       'configuracion' => false,
       'estadisticas' => false,
       'usuarios' => false,
@@ -214,8 +266,11 @@ if (empty($rolesData)) {
 }
 
 $flashRoles = $_SESSION['mantencion_roles_flash'] ?? null;
-unset($_SESSION['mantencion_roles_flash']);
-$flashUsuarios = null;
+$flashRolesType = $_SESSION['mantencion_roles_flash_type'] ?? 'success';
+unset($_SESSION['mantencion_roles_flash'], $_SESSION['mantencion_roles_flash_type']);
+$flashUsuarios = $_SESSION['mantencion_usuarios_flash'] ?? null;
+$flashUsuariosType = $_SESSION['mantencion_usuarios_flash_type'] ?? 'success';
+unset($_SESSION['mantencion_usuarios_flash'], $_SESSION['mantencion_usuarios_flash_type']);
 $openRolesModal = false;
 $openUsersModal = false;
 $selectedRoleSel = $_POST['role_select']
@@ -223,11 +278,19 @@ $selectedRoleSel = $_POST['role_select']
   ?? $_GET['role']
   ?? 'gestor';
 unset($_SESSION['mantencion_roles_selected']);
-$newRoleName = trim($_POST['new_role'] ?? '');
+$newRoleName = strtolower(trim((string)($_POST['new_role'] ?? '')));
 $selectedRole = $newRoleName !== '' ? $newRoleName : $selectedRoleSel;
-$selectedUser = $_POST['user_select'] ?? '';
+$selectedUser = (string)($_POST['user_select'] ?? $_GET['user_id'] ?? '');
 $canManageRoles = auth_can('cfg_roles');
 $canManageUsers = auth_can('cfg_usuarios');
+$baseRoles = ['administrador', 'usuario'];
+
+if (!isset($rolesData[$selectedRole]) && $newRoleName === '') {
+  $selectedRole = (string)(array_key_first($rolesData) ?? 'usuario');
+}
+if (($selectedUser === '' || !isset($usuariosIndex[$selectedUser])) && $usuariosIndex !== []) {
+  $selectedUser = (string)array_key_first($usuariosIndex);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $action = $_POST['action'] ?? '';
@@ -240,20 +303,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $flash = null;
     $flashRoles = null;
     $openRolesModal = true;
+  } elseif ($action === 'delete_role' && $canManageRoles) {
+    if (function_exists('csrf_validate')) csrf_validate();
+    $roleToDelete = strtolower(trim((string)($_POST['role_select'] ?? '')));
+    $assignedUsers = array_filter($usuariosData, static fn($user): bool =>
+      is_array($user) && strtolower(trim((string)($user['rol'] ?? ''))) === $roleToDelete
+    );
+    if ($roleToDelete === '' || !isset($rolesData[$roleToDelete])) {
+      $_SESSION['mantencion_roles_flash'] = 'El rol seleccionado ya no existe.';
+      $_SESSION['mantencion_roles_flash_type'] = 'warning';
+    } elseif (in_array($roleToDelete, $baseRoles, true)) {
+      $_SESSION['mantencion_roles_flash'] = 'Administrador y Usuario son roles base y no se pueden eliminar.';
+      $_SESSION['mantencion_roles_flash_type'] = 'warning';
+    } elseif ($assignedUsers !== []) {
+      $_SESSION['mantencion_roles_flash'] = 'Reasigna los usuarios vinculados antes de eliminar este rol.';
+      $_SESSION['mantencion_roles_flash_type'] = 'warning';
+    } else {
+      $deleteRolePermissions($roleToDelete);
+      unset($rolesData[$roleToDelete]);
+      $_SESSION['mantencion_roles_flash'] = 'Rol eliminado correctamente.';
+      $_SESSION['mantencion_roles_flash_type'] = 'success';
+    }
+    $_SESSION['mantencion_roles_selected'] = (string)(array_key_first($rolesData) ?? 'usuario');
+    $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
+      . '/redmine-mantencion/app/configuracion?panel=roles';
+    header('Location: ' . $rolesRedirectUrl, true, 303);
+    exit;
   } elseif ($action === 'save_roles' && $canManageRoles) {
     if (function_exists('csrf_validate')) csrf_validate();
     $selectedRole = $newRoleName !== '' ? $newRoleName : trim($_POST['role_select'] ?? $selectedRole);
-    if ($selectedRole !== '') {
+    if ($selectedRole !== '' && preg_match('/^[a-z0-9_-]{2,40}$/', $selectedRole)) {
       if (!isset($rolesData[$selectedRole])) $rolesData[$selectedRole] = [];
+      $previousRoleConfig = $rolesData[$selectedRole];
       if ($selectedRole === 'root') {
         $rolesData['root'] = [
           'all' => true,
           'mensajes' => 'todos',
           'mensajes_acceso' => true,
+          'reportes_editar' => true,
+          'reportes_eliminar' => true,
+          'reportes_importar_core' => true,
           'horas_extra' => 'todos',
+          'horas_extra_editar' => true,
           'historico' => true,
-          'historico_scope' => ($_POST['historico_scope'] ?? 'todos'),
-          'historico_acciones' => isset($_POST['perm_historico_acciones']),
+          'historico_scope' => 'todos',
+          'historico_estado' => true,
+          'historico_eliminar' => true,
           'configuracion' => true,
           'estadisticas' => true,
           'usuarios' => true,
@@ -274,12 +369,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       } else {
         $roleCanViewHistorico = isset($_POST['perm_historico']);
         $rolesData[$selectedRole] = [
-          'mensajes' => ($_POST['mensajes_scope'] ?? 'asignados'),
+          'mensajes' => $isNovaRoot
+            ? ($_POST['mensajes_scope'] ?? 'asignados')
+            : ($previousRoleConfig['mensajes'] ?? 'asignados'),
           'mensajes_acceso' => isset($_POST['perm_mensajes']),
-          'horas_extra' => isset($_POST['perm_horas_extra']) ? ($_POST['horas_scope'] ?? 'asignados') : '',
+          'reportes_editar' => isset($_POST['perm_mensajes']) && isset($_POST['perm_reportes_editar']),
+          'reportes_eliminar' => isset($_POST['perm_mensajes']) && isset($_POST['perm_reportes_eliminar']),
+          'reportes_importar_core' => isset($_POST['perm_mensajes']) && isset($_POST['perm_reportes_importar_core']),
+          'horas_extra' => isset($_POST['perm_horas_extra'])
+            ? ($isNovaRoot ? ($_POST['horas_scope'] ?? 'asignados') : ($previousRoleConfig['horas_extra'] ?? 'asignados'))
+            : '',
+          'horas_extra_editar' => isset($_POST['perm_horas_extra'])
+            && isset($_POST['perm_horas_extra_editar']),
           'historico' => $roleCanViewHistorico,
-          'historico_scope' => ($_POST['historico_scope'] ?? 'asignados'),
-          'historico_acciones' => $roleCanViewHistorico && isset($_POST['perm_historico_acciones']),
+          'historico_scope' => $isNovaRoot
+            ? ($_POST['historico_scope'] ?? 'asignados')
+            : ($previousRoleConfig['historico_scope'] ?? 'asignados'),
+          'historico_estado' => $roleCanViewHistorico && isset($_POST['perm_historico_estado']),
+          'historico_eliminar' => $roleCanViewHistorico && isset($_POST['perm_historico_eliminar']),
           'configuracion' => (string)($_POST['perm_configuracion'] ?? '0') === '1',
           'estadisticas' => isset($_POST['perm_estadisticas']),
           'usuarios' => isset($_POST['perm_usuarios']),
@@ -308,7 +415,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       // PRG: fuerza una lectura fresca desde BD, evita reenvíos del formulario y
       // conserva el rol seleccionado al volver al panel.
       $_SESSION['mantencion_roles_flash'] = 'Permisos guardados correctamente.';
+      $_SESSION['mantencion_roles_flash_type'] = 'success';
       $_SESSION['mantencion_roles_selected'] = $selectedRole;
+      $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
+        . '/redmine-mantencion/app/configuracion?panel=roles';
+      header('Location: ' . $rolesRedirectUrl, true, 303);
+      exit;
+    } else {
+      $_SESSION['mantencion_roles_flash'] = 'El nombre del rol debe tener entre 2 y 40 caracteres y usar solo letras, números, guion o guion bajo.';
+      $_SESSION['mantencion_roles_flash_type'] = 'warning';
       $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
         . '/redmine-mantencion/app/configuracion?panel=roles';
       header('Location: ' . $rolesRedirectUrl, true, 303);
@@ -325,7 +440,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (function_exists('csrf_validate')) csrf_validate();
     $selectedUser = trim($_POST['user_select'] ?? $selectedUser);
     if ($selectedUser !== '' && isset($usuariosIndex[$selectedUser])) {
-      $newUserRole = trim($_POST['u_role'] ?? '');
+      $currentUserRole = (string)($usuariosIndex[$selectedUser]['rol'] ?? 'usuario');
+      $previousUserConfig = is_array($usuariosIndex[$selectedUser]['permisos'] ?? null)
+        ? $usuariosIndex[$selectedUser]['permisos']
+        : ($rolesData[$currentUserRole] ?? []);
+      $newUserRole = strtolower(trim((string)($_POST['u_role'] ?? '')));
+      if ($newUserRole !== '' && !isset($rolesData[$newUserRole])) {
+        $newUserRole = '';
+      }
       if ($newUserRole !== '') {
         foreach ($usuariosData as &$u) {
           if ((string)($u['id'] ?? '') === $selectedUser) {
@@ -338,12 +460,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       $userCanViewHistorico = isset($_POST['u_perm_historico']);
       $cfgUser = [
-        'mensajes' => ($_POST['u_mensajes_scope'] ?? 'asignados'),
+        'mensajes' => $isNovaRoot
+          ? ($_POST['u_mensajes_scope'] ?? 'asignados')
+          : ($previousUserConfig['mensajes'] ?? 'asignados'),
         'mensajes_acceso' => isset($_POST['u_perm_mensajes']),
-        'horas_extra' => isset($_POST['u_perm_horas_extra']) ? ($_POST['u_horas_scope'] ?? 'asignados') : '',
+        'reportes_editar' => isset($_POST['u_perm_mensajes']) && isset($_POST['u_perm_reportes_editar']),
+        'reportes_eliminar' => isset($_POST['u_perm_mensajes']) && isset($_POST['u_perm_reportes_eliminar']),
+        'reportes_importar_core' => isset($_POST['u_perm_mensajes']) && isset($_POST['u_perm_reportes_importar_core']),
+        'horas_extra' => isset($_POST['u_perm_horas_extra'])
+          ? ($isNovaRoot ? ($_POST['u_horas_scope'] ?? 'asignados') : ($previousUserConfig['horas_extra'] ?? 'asignados'))
+          : '',
+        'horas_extra_editar' => isset($_POST['u_perm_horas_extra'])
+          && isset($_POST['u_perm_horas_extra_editar']),
         'historico' => $userCanViewHistorico,
-        'historico_acciones' => $userCanViewHistorico && isset($_POST['u_perm_historico_acciones']),
-        'historico_scope' => ($_POST['u_historico_scope'] ?? 'asignados'),
+        'historico_estado' => $userCanViewHistorico && isset($_POST['u_perm_historico_estado']),
+        'historico_eliminar' => $userCanViewHistorico && isset($_POST['u_perm_historico_eliminar']),
+        'historico_scope' => $isNovaRoot
+          ? ($_POST['u_historico_scope'] ?? 'asignados')
+          : ($previousUserConfig['historico_scope'] ?? 'asignados'),
         'configuracion' => (string)($_POST['u_perm_configuracion'] ?? '0') === '1',
         'estadisticas' => isset($_POST['u_perm_estadisticas']),
         'usuarios' => isset($_POST['u_perm_usuarios']),
@@ -385,8 +519,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saveUserRole($selectedUser, $newUserRole);
       }
       $saveUserPermissions($selectedUser, $cfgUser);
-      $flashUsuarios = 'Permisos actualizados para el usuario ID ' . $h($selectedUser);
-      $openUsersModal = true;
+      $_SESSION['mantencion_usuarios_flash'] = 'Permisos actualizados para el usuario ID ' . $selectedUser;
+      $_SESSION['mantencion_usuarios_flash_type'] = 'success';
+      $usersRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
+        . '/redmine-mantencion/app/configuracion?panel=usuarios&user_id=' . rawurlencode($selectedUser);
+      header('Location: ' . $usersRedirectUrl, true, 303);
+      exit;
     }
   }
 }
@@ -456,7 +594,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $configPanelUrl = fn($panel) => $configBaseUrl . '?panel=' . rawurlencode((string)$panel);
     include __DIR__ . '/../partials/hero.php'; ?>
 <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
-<?php if ($flashRoles): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flashRoles) ?>" hidden></div><?php endif; ?>
+<?php if ($flashRoles): ?><div data-nova-flash="<?= $h($flashRolesType) ?>" data-nova-flash-message="<?= $h($flashRoles) ?>" hidden></div><?php endif; ?>
+<?php if ($flashUsuarios): ?><div data-nova-flash="<?= $h($flashUsuariosType) ?>" data-nova-flash-message="<?= $h($flashUsuarios) ?>" hidden></div><?php endif; ?>
 <?php if ($maintenanceFlash): ?><div data-nova-flash="info" data-nova-flash-message="<?= $h($maintenanceFlash) ?>" hidden></div><?php endif; ?>
 <?php if (!empty($nextcloudFlash)): ?><div data-nova-flash="nextcloud" data-nova-flash-message="<?= $h($nextcloudFlash) ?>" hidden></div><?php endif; ?>
 <?php
@@ -940,7 +1079,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   </div>
 </div>
 
-<?php if ($canManageRoles || $canManageUsers):
+<?php $usersList = []; ?>
+<?php include __DIR__ . '/_permissions_panels.php'; ?>
+<?php /* Implementación anterior conservada temporalmente como referencia durante la migración visual. */ ?>
+<?php if (false && ($canManageRoles || $canManageUsers)):
   $rolesList = array_keys($rolesData ?: []);
   sort($rolesList);
   if ($canManageRoles):
@@ -1442,7 +1584,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!allowed) {
         form.querySelectorAll('input, select, textarea, button').forEach(control => {
           const isModalClose = control.matches('[data-bs-dismiss="modal"]');
-          const isSearchField = control.matches('#user-search, #cat-filter');
+          const isSearchField = control.matches('#user-search, #cat-filter, [data-navigation-picker] input, [data-navigation-picker] button');
           const isLoadOnlyAction = action === 'load_role' || action === 'load_user_perms';
           if (isModalClose || isSearchField || isLoadOnlyAction) {
             return;
@@ -1464,7 +1606,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const getModal = (id) => {
     const el = document.getElementById(id);
-    if (!el || !window.bootstrap || !window.bootstrap.Modal) return null;
+    if (!el?.classList.contains('modal') || !window.bootstrap || !window.bootstrap.Modal) return null;
     return window.bootstrap.Modal.getOrCreateInstance(el);
   };
   const rolesEl = document.getElementById('rolesModal');
@@ -1681,6 +1823,236 @@ document.addEventListener('DOMContentLoaded', () => {
       actUser.value = 'save_user_perms';
     });
   }
+
+  const normalizePermissionPickerText = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const closePermissionPicker = (picker) => {
+    const menu = picker?.querySelector('[data-picker-menu]');
+    const search = picker?.querySelector('[data-picker-search]');
+    const toggle = picker?.querySelector('[data-picker-toggle]');
+    if (!picker || !menu) return;
+    menu.hidden = true;
+    picker.classList.remove('is-open');
+    search?.setAttribute('aria-expanded', 'false');
+    toggle?.setAttribute('aria-expanded', 'false');
+    picker.querySelectorAll('[data-picker-option].is-highlighted').forEach(option => option.classList.remove('is-highlighted'));
+  };
+  const openPermissionPicker = (picker) => {
+    const menu = picker?.querySelector('[data-picker-menu]');
+    const search = picker?.querySelector('[data-picker-search]');
+    const toggle = picker?.querySelector('[data-picker-toggle]');
+    if (!picker || !menu) return;
+    menu.hidden = false;
+    picker.classList.add('is-open');
+    search?.setAttribute('aria-expanded', 'true');
+    toggle?.setAttribute('aria-expanded', 'true');
+  };
+  const syncPermissionPickerSelection = (picker) => {
+    const value = picker?.querySelector('[data-picker-value]')?.value || '';
+    picker?.querySelectorAll('[data-picker-option]').forEach(option => {
+      const selected = option.dataset.value === value;
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
+      if (selected && picker.matches('[data-value-picker]')) {
+        const search = picker.querySelector('[data-picker-search]');
+        if (search) search.value = option.dataset.label || option.textContent.trim();
+      }
+    });
+  };
+  const confirmPermissionNavigation = async (picker) => {
+    const editorId = picker.dataset.editorTarget || '';
+    const editor = editorId ? document.getElementById(editorId) : null;
+    if (!editor || editor.dataset.dirty !== 'true') return true;
+    if (!window.appModal?.confirm) return false;
+    return window.appModal.confirm({
+      title: 'Descartar cambios',
+      message: 'Hay cambios sin guardar. ¿Deseas descartarlos y cambiar la selección?',
+      tone: 'warning',
+      confirmText: 'Cambiar selección',
+      cancelText: 'Seguir editando',
+    });
+  };
+  document.querySelectorAll('.rm-picker-combobox').forEach(picker => {
+    const search = picker.querySelector('[data-picker-search]');
+    const toggle = picker.querySelector('[data-picker-toggle]');
+    const menu = picker.querySelector('[data-picker-menu]');
+    const valueInput = picker.querySelector('[data-picker-value]');
+    const empty = picker.querySelector('[data-picker-empty]');
+    if (!search || !menu || !valueInput) return;
+
+    const visibleOptions = () => [...picker.querySelectorAll('[data-picker-option]')].filter(option => !option.hidden);
+    const filterOptions = () => {
+      const term = normalizePermissionPickerText(search.value);
+      let matches = 0;
+      picker.querySelectorAll('[data-picker-option]').forEach(option => {
+        const haystack = normalizePermissionPickerText(option.dataset.search || option.dataset.label || option.textContent);
+        option.hidden = term !== '' && !haystack.includes(term);
+        if (!option.hidden) matches++;
+      });
+      if (empty) empty.hidden = matches !== 0;
+      openPermissionPicker(picker);
+    };
+    const chooseOption = async (option) => {
+      if (!option) return;
+      if (picker.matches('[data-navigation-picker]') && !(await confirmPermissionNavigation(picker))) return;
+      valueInput.value = option.dataset.value || '';
+      search.value = option.dataset.label || option.textContent.trim();
+      valueInput.dispatchEvent(new Event('change', { bubbles: true }));
+      syncPermissionPickerSelection(picker);
+      closePermissionPicker(picker);
+      if (picker.matches('[data-navigation-picker]')) {
+        picker.requestSubmit();
+      }
+    };
+
+    search.addEventListener('focus', filterOptions);
+    search.addEventListener('input', filterOptions);
+    toggle?.addEventListener('click', () => {
+      if (menu.hidden) {
+        filterOptions();
+        search.focus();
+      } else {
+        closePermissionPicker(picker);
+      }
+    });
+    picker.querySelectorAll('[data-picker-option]').forEach(option => option.addEventListener('click', () => chooseOption(option)));
+    search.addEventListener('keydown', event => {
+      const options = visibleOptions();
+      const current = options.findIndex(option => option.classList.contains('is-highlighted'));
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const direction = event.key === 'ArrowDown' ? 1 : -1;
+        const next = current < 0 ? (direction > 0 ? 0 : options.length - 1) : (current + direction + options.length) % options.length;
+        options.forEach(option => option.classList.remove('is-highlighted'));
+        options[next]?.classList.add('is-highlighted');
+        options[next]?.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter') {
+        const highlighted = options.find(option => option.classList.contains('is-highlighted')) || options[0];
+        if (highlighted) {
+          event.preventDefault();
+          chooseOption(highlighted);
+        }
+      } else if (event.key === 'Escape') {
+        closePermissionPicker(picker);
+      }
+    });
+    syncPermissionPickerSelection(picker);
+  });
+  document.addEventListener('click', event => {
+    document.querySelectorAll('.rm-picker-combobox.is-open').forEach(picker => {
+      if (!picker.contains(event.target)) closePermissionPicker(picker);
+    });
+  });
+
+  const permissionFormState = (form) => {
+    const data = new FormData(form);
+    data.delete('csrf_token');
+    data.delete('action');
+    return new URLSearchParams(data).toString();
+  };
+  const syncPermissionFormUi = (form, clearDisabledChildren = false) => {
+    form.querySelectorAll('[data-permission-card]').forEach(card => {
+      const access = card.querySelector('[data-access-toggle]');
+      if (!access) return;
+      card.classList.toggle('is-enabled', access.checked);
+      card.querySelectorAll('[data-dependent-actions] input, [data-dependent-actions] select').forEach(control => {
+        if (clearDisabledChildren && !access.checked && control.type === 'checkbox') control.checked = false;
+        control.disabled = !access.checked;
+      });
+    });
+    const configToggle = form.querySelector('[data-config-access-toggle]');
+    const configPanel = form.querySelector('[data-config-dependent-panel]');
+    if (configToggle && configPanel) {
+      configPanel.classList.toggle('is-disabled', !configToggle.checked);
+      configPanel.querySelectorAll('input').forEach(control => {
+        if (clearDisabledChildren && !configToggle.checked) control.checked = false;
+        control.disabled = !configToggle.checked;
+      });
+    }
+    form.querySelectorAll('.rm-permission-group:not(.is-config)').forEach(group => {
+      const toggles = [...group.querySelectorAll('[data-access-toggle]')];
+      const active = toggles.filter(toggle => toggle.checked).length;
+      const count = group.querySelector('[data-permission-group-count]');
+      if (count) count.textContent = `${active}/${toggles.length}`;
+    });
+    if (configPanel) {
+      const configInputs = [...configPanel.querySelectorAll('input[type="checkbox"]')];
+      const count = configPanel.querySelector('[data-config-group-count]');
+      if (count) count.textContent = `${configInputs.filter(input => input.checked).length}/${configInputs.length}`;
+    }
+    const section = form.closest('.rm-permissions-page');
+    const activeCounter = section?.querySelector('[data-active-permission-count]');
+    if (activeCounter) {
+      activeCounter.textContent = [...form.querySelectorAll('input.rm-switch[type="checkbox"]')]
+        .filter(input => input.checked && !input.disabled).length;
+    }
+  };
+  document.querySelectorAll('[data-permission-editor-form]').forEach(form => {
+    syncPermissionFormUi(form);
+    const initialState = permissionFormState(form);
+    const savebar = form.parentElement?.querySelector('[data-permission-savebar]');
+    const saveButton = savebar?.querySelector('[data-permission-save]');
+    const resetButton = savebar?.querySelector('[data-permission-reset]');
+    const stateTitle = savebar?.querySelector('[data-permission-state-title]');
+    const stateCopy = savebar?.querySelector('[data-permission-state-copy]');
+    const syncDirty = () => {
+      const dirty = permissionFormState(form) !== initialState;
+      form.dataset.dirty = dirty ? 'true' : 'false';
+      savebar?.classList.toggle('is-dirty', dirty);
+      if (saveButton) saveButton.disabled = !dirty;
+      if (resetButton) resetButton.disabled = !dirty;
+      if (stateTitle) stateTitle.textContent = dirty ? 'Cambios pendientes' : 'Todo guardado';
+      if (stateCopy) stateCopy.textContent = dirty ? 'Guarda o descarta los cambios realizados.' : 'No hay cambios pendientes.';
+    };
+    form.addEventListener('change', event => {
+      syncPermissionFormUi(form, event.target.matches('[data-access-toggle], [data-config-access-toggle]'));
+      syncDirty();
+    });
+    form.addEventListener('input', syncDirty);
+    resetButton?.addEventListener('click', () => {
+      form.reset();
+      form.querySelectorAll('[data-value-picker]').forEach(syncPermissionPickerSelection);
+      syncPermissionFormUi(form);
+      syncDirty();
+    });
+    syncDirty();
+  });
+
+  const mantencionRoleTemplates = <?= json_encode($rolesData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  const applyRoleTemplateButton = document.querySelector('[data-apply-role-template]');
+  applyRoleTemplateButton?.addEventListener('click', async () => {
+    const form = applyRoleTemplateButton.closest('[data-permission-editor-form]');
+    const roleName = form?.querySelector('[name="u_role"]')?.value || '';
+    const template = mantencionRoleTemplates[roleName];
+    if (!form || !template || !window.appModal?.confirm) return;
+    const accepted = await window.appModal.confirm({
+      title: 'Aplicar plantilla del rol',
+      message: `Se reemplazarán los permisos actuales por la plantilla del rol ${roleName}.`,
+      tone: 'info',
+      confirmText: 'Aplicar plantilla',
+      cancelText: 'Cancelar',
+    });
+    if (!accepted) return;
+    form.querySelectorAll('input.rm-switch[type="checkbox"]').forEach(input => {
+      const suffix = input.name.replace(/^u_perm_/, '');
+      const key = suffix === 'mensajes' ? 'mensajes_acceso' : suffix;
+      input.checked = key === 'horas_extra'
+        ? ['todos', 'asignados'].includes(template[key])
+        : Boolean(template[key] || template.all);
+    });
+    [
+      ['u_mensajes_scope', 'mensajes'],
+      ['u_horas_scope', 'horas_extra'],
+      ['u_historico_scope', 'historico_scope'],
+    ].forEach(([inputName, key]) => {
+      const select = form.querySelector(`[name="${inputName}"]`);
+      if (select) select.value = template[key] === 'todos' ? 'todos' : 'asignados';
+    });
+    syncPermissionFormUi(form, true);
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 });
 </script>
 </body>

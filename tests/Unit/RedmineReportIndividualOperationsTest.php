@@ -118,6 +118,26 @@ class RedmineReportIndividualOperationsTest extends TestCase
         $this->assertTrue(DB::table('redmine_tic_reportes')->where('id', $keepId)->exists());
     }
 
+    public function test_update_archived_redmine_status_touches_only_the_matching_ticket(): void
+    {
+        $keepId = $this->makeReport([
+            'estado' => 'archivado',
+            'redmine_id' => 880001,
+            'estado_redmine' => 'Nueva',
+        ]);
+        $targetId = $this->makeReport([
+            'estado' => 'archivado',
+            'redmine_id' => 880002,
+            'estado_redmine' => 'Nueva',
+        ]);
+
+        $updated = $this->repo()->updateArchivedRedmineStatus('880002', 'Cerrada');
+
+        $this->assertSame(1, $updated);
+        $this->assertSame('Nueva', DB::table('redmine_tic_reportes')->where('id', $keepId)->value('estado_redmine'));
+        $this->assertSame('Cerrada', DB::table('redmine_tic_reportes')->where('id', $targetId)->value('estado_redmine'));
+    }
+
     public function test_insert_report_creates_a_row_and_returns_merged_array_with_id(): void
     {
         $repo = $this->repo();

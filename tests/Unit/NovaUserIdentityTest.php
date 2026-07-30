@@ -121,6 +121,7 @@ class NovaUserIdentityTest extends TestCase
         $this->assertSame('12345678', $service->normalizeRutUsername('12.345.678-5'));
         $this->assertSame('usuario', $service->normalizeNovaRole('gestor'));
         $this->assertSame('admin', $service->normalizeNovaRole('administrador'));
+        $this->assertSame('root', $service->normalizeNovaRole('root'));
     }
 
     private function validRut(int $body): string

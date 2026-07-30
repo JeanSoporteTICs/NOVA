@@ -38,7 +38,7 @@ final class NovaNotificationService
             return [];
         }
 
-        $roles = array_map('strval', config('nova.module_admin_roles', ['admin', 'root', 'gestor', 'administrador']));
+        $roles = array_map('strval', config('nova.module_admin_roles', ['admin', 'root']));
 
         try {
             return DB::table('usuarios_nova')

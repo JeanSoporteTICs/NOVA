@@ -162,12 +162,12 @@
                 </div>
                 <div class="modal-footer rm-confirm-actions">
                     <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="modal" data-confirm-cancel>
-                        <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
+                        <i class="bi bi-x-lg"></i>
                         <span data-confirm-cancel-label>Cancelar</span>
                     </button>
                     <button class="btn-nova btn-nova-danger" type="button" data-confirm-accept>
-                        <span class="btn-nova-icon"><i class="bi bi-check2"></i></span>
-                        <span>Aceptar</span>
+                        <i class="bi bi-check2"></i>
+                        <span data-confirm-accept-label>Aceptar</span>
                     </button>
                 </div>
             </div>
@@ -232,6 +232,7 @@
         const confirmModal = document.getElementById('rmConfirmModal');
         const confirmMessage = confirmModal?.querySelector('[data-confirm-message]');
         const confirmAccept = confirmModal?.querySelector('[data-confirm-accept]');
+        const confirmAcceptLabel = confirmModal?.querySelector('[data-confirm-accept-label]');
         const confirmTitle = confirmModal?.querySelector('#rmConfirmModalTitle');
         const confirmCancelLabel = confirmModal?.querySelector('[data-confirm-cancel-label]');
         let pendingConfirmForm = null;
@@ -244,7 +245,10 @@
             if (confirmAccept) {
                 confirmAccept.hidden = options.accept === false;
                 confirmAccept.disabled = options.accept === false;
+                confirmAccept.classList.toggle('btn-nova-danger', (options.tone || 'danger') === 'danger');
+                confirmAccept.classList.toggle('btn-nova-primary', (options.tone || 'danger') !== 'danger');
             }
+            if (confirmAcceptLabel) confirmAcceptLabel.textContent = options.acceptText || 'Aceptar';
             if (confirmCancelLabel) {
                 confirmCancelLabel.textContent = options.accept === false ? 'Entendido' : 'Cancelar';
             }
@@ -271,7 +275,12 @@
             pendingConfirmForm = null;
             pendingConfirmSubmitter = null;
             pendingConfirmCallback = typeof onAccept === 'function' ? onAccept : null;
-            showConfirmModal(message, { title: options.title || 'Confirmar accion', accept: true });
+            showConfirmModal(message, {
+                title: options.title || 'Confirmar accion',
+                accept: true,
+                acceptText: options.acceptText || 'Aceptar',
+                tone: options.tone || 'danger',
+            });
         };
 
         document.addEventListener('submit', (event) => {
@@ -293,7 +302,12 @@
 
             pendingConfirmForm = form;
             pendingConfirmSubmitter = event.submitter || document.activeElement?.closest?.('button, input[type="submit"]') || null;
-            showConfirmModal(message, { title: 'Confirmar accion', accept: true });
+            showConfirmModal(message, {
+                title: form.dataset.appConfirmTitle || 'Confirmar accion',
+                accept: true,
+                acceptText: form.dataset.appConfirmText || 'Aceptar',
+                tone: form.dataset.appConfirmTone || 'danger',
+            });
             if (confirmModal && window.bootstrap?.Modal) return;
 
             pendingConfirmForm.dataset.confirmAccepted = '1';

@@ -21,6 +21,9 @@
         return '';
     };
     $fmtTime = static fn ($value): string => trim((string) $value) !== '' ? substr((string) $value, 0, 5) : '-';
+    $hoursPermissions = (array) ($effectivePermissions ?? []);
+    $canEditHours = !empty($hoursPermissions['all'])
+        || in_array($hoursPermissions['horas_extra_editar'] ?? false, [true, 1, '1', 'si'], true);
     $minutesDiff = static function ($start, $end): ?int {
         $start = trim((string) $start);
         $end = trim((string) $end);
@@ -120,20 +123,22 @@
                                             | Total de horas: {{ $groupTotal }}
                                         @endif
                                     </span>
-                                    <button class="btn-nova btn-nova-primary" type="button"
-                                        data-nova-modal-open="editar-horas"
-                                        data-source-file="{{ $row['_source_file'] ?? '' }}"
-                                        data-fecha="{{ $row['fecha'] ?? '' }}"
-                                        data-display-fecha="{{ $fmtDate($row['fecha'] ?? '') }}"
-                                        data-hora-inicio="{{ substr((string) ($row['hora_inicio'] ?? ''), 0, 5) }}"
-                                        data-hora-fin="{{ substr((string) ($row['hora_fin'] ?? ''), 0, 5) }}"
-                                        data-emach-ok="{{ !empty($emachSuggestion['ok']) ? '1' : '0' }}"
-                                        data-emach-hora-inicio="{{ $emachSuggestion['hora_inicio'] ?? '' }}"
-                                        data-emach-hora-fin="{{ $emachSuggestion['hora_fin'] ?? '' }}"
-                                        data-emach-total="{{ $emachSuggestion['total'] ?? '' }}"
-                                        data-emach-status="{{ $emachSuggestion['status'] ?? 'Sin datos EMACH para calcular esta fecha.' }}">
-                                        <i class="bi bi-pencil-square"></i>Editar horas
-                                    </button>
+                                    @if ($canEditHours)
+                                        <button class="btn-nova btn-nova-primary" type="button"
+                                            data-nova-modal-open="editar-horas"
+                                            data-source-file="{{ $row['_source_file'] ?? '' }}"
+                                            data-fecha="{{ $row['fecha'] ?? '' }}"
+                                            data-display-fecha="{{ $fmtDate($row['fecha'] ?? '') }}"
+                                            data-hora-inicio="{{ substr((string) ($row['hora_inicio'] ?? ''), 0, 5) }}"
+                                            data-hora-fin="{{ substr((string) ($row['hora_fin'] ?? ''), 0, 5) }}"
+                                            data-emach-ok="{{ !empty($emachSuggestion['ok']) ? '1' : '0' }}"
+                                            data-emach-hora-inicio="{{ $emachSuggestion['hora_inicio'] ?? '' }}"
+                                            data-emach-hora-fin="{{ $emachSuggestion['hora_fin'] ?? '' }}"
+                                            data-emach-total="{{ $emachSuggestion['total'] ?? '' }}"
+                                            data-emach-status="{{ $emachSuggestion['status'] ?? 'Sin datos EMACH para calcular esta fecha.' }}">
+                                            <i class="bi bi-pencil-square"></i>Editar horas
+                                        </button>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -153,6 +158,7 @@
     </div>
 </section>
 
+@if ($canEditHours)
 <div class="modal fade detail-drawer-modal" id="editar-horas" tabindex="-1" aria-labelledby="editar-horas-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable detail-drawer-dialog">
         <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.hours.action') }}">
@@ -198,6 +204,7 @@
         </form>
     </div>
 </div>
+@endif
 
 <script>
     document.querySelectorAll('[data-nova-modal-open="editar-horas"]').forEach((button) => {

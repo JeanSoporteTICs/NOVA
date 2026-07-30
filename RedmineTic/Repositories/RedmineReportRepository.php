@@ -579,6 +579,37 @@ class RedmineReportRepository
         }
     }
 
+    public function updateArchivedRedmineStatus(string $redmineId, string $statusName): int
+    {
+        $redmineId = trim($redmineId);
+        $statusName = trim($statusName);
+        if (
+            !$this->tableAvailable()
+            || !preg_match('/^\d+$/', $redmineId)
+            || $statusName === ''
+        ) {
+            return 0;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return 0;
+        }
+
+        try {
+            return DB::table('redmine_tic_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('redmine_id', (int) $redmineId)
+                ->where('estado', 'archivado')
+                ->update([
+                    'estado_redmine' => $statusName,
+                    'actualizado_at' => now(),
+                ]);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
     /**
      * Hard-deletes all active (non-archived) report rows not in $keepIds.
      */

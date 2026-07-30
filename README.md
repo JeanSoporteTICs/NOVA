@@ -139,8 +139,13 @@ se resuelven mediante contratos en `app/Contracts` y enlaces del contenedor.
   `redmine_id` se reconcilia únicamente mediante una coincidencia única entre
   el `login` remoto y el usuario de acceso/RUT central; nunca por nombre.
 - `integraciones_usuario` guarda cuentas y secretos externos por usuario.
-- `modulos_nova` y `permisos_usuario_modulo` controlan el acceso global.
-- Cada módulo conserva sus permisos y tablas operativas específicas.
+- `modulos_nova` y `permisos_usuario_modulo` controlan el acceso global;
+  `rol_modulo` conserva el rol interno de Mantención sin modificar
+  `usuarios_nova.rol`.
+- Los roles globales son `usuario`, `admin` y `root`. `admin` administra NOVA
+  pero respeta los permisos internos de cada módulo; solo `root` obtiene
+  acceso total automático.
+- Cada módulo conserva sus permisos, roles y tablas operativas específicas.
 - Las reimportaciones desde CORE identifican la solicitud por `id_core`: si el
   reporte sigue pendiente, actualizan sus datos modificados; los reportes
   procesados, con error o archivados no se sobrescriben.

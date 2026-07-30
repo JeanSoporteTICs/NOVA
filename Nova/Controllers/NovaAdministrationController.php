@@ -282,6 +282,7 @@ class NovaAdministrationController extends Controller
     public function updateUsers(Request $request, NovaUserRepository $users, NovaAuditRepository $audit): RedirectResponse|JsonResponse
     {
         $this->authorizeAdmin($request);
+        $this->authorizeRootUserMutation($request, $users);
 
         $action = (string) $request->input('action', 'save');
         if ($action === 'delete') {
@@ -359,6 +360,32 @@ class NovaAdministrationController extends Controller
         $allowed = config('nova.module_admin_roles', []);
 
         abort_unless(in_array($role, $allowed, true), 403);
+    }
+
+    private function authorizeRootUserMutation(Request $request, NovaUserRepository $users): void
+    {
+        $actorRole = strtolower(trim((string) data_get(
+            $request->session()->get('nova_user'),
+            'role',
+            'usuario'
+        )));
+        if ($actorRole === 'root') {
+            return;
+        }
+
+        $targetId = trim((string) $request->input('id', ''));
+        $targetRole = '';
+        if ($targetId !== '') {
+            foreach ($users->all() as $user) {
+                if ((string) ($user['id'] ?? '') === $targetId) {
+                    $targetRole = strtolower(trim((string) ($user['role'] ?? 'usuario')));
+                    break;
+                }
+            }
+        }
+
+        $requestedRole = strtolower(trim((string) $request->input('role', '')));
+        abort_if($targetRole === 'root' || $requestedRole === 'root', 403);
     }
 
 }

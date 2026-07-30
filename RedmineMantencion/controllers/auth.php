@@ -75,6 +75,9 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
         $moduleId = \Illuminate\Support\Facades\DB::table('modulos_nova')
             ->where('clave_modulo', 'redmine-mantencion')
             ->value('id');
+        $moduleRoleColumn = \Illuminate\Support\Facades\Schema::hasColumn('permisos_usuario_modulo', 'rol_modulo')
+            ? 'permisos_usuario_modulo.rol_modulo'
+            : \Illuminate\Support\Facades\DB::raw('NULL as rol_modulo');
 
         $selectColumns = [
             'usuarios_nova.id as nova_id',
@@ -97,24 +100,27 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
         }
 
         $rows = \Illuminate\Support\Facades\DB::table('usuarios_nova')
-            ->leftJoin('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
+            ->leftJoin('permisos_usuario_modulo', function ($join) use ($moduleId): void {
+                $join->on('permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id');
+                if ($moduleId !== null) {
+                    $join->where('permisos_usuario_modulo.modulo_id', '=', (int)$moduleId);
+                } else {
+                    $join->whereRaw('1 = 0');
+                }
+            })
             ->distinct()
-            ->select($selectColumns)
+            ->select(array_merge($selectColumns, [$moduleRoleColumn]))
             ->where(function ($where) use ($moduleId, $includeModuleAdmins): void {
                 if ($includeModuleAdmins) {
                     $where->whereIn('usuarios_nova.rol', ['admin', 'administrador', 'root']);
                     if ($moduleId !== null) {
-                        $where->orWhere(function ($access) use ($moduleId): void {
-                            $access->where('permisos_usuario_modulo.modulo_id', (int)$moduleId)
-                                ->where('permisos_usuario_modulo.permitido', 1);
-                        });
+                        $where->orWhere('permisos_usuario_modulo.permitido', 1);
                     }
                     return;
                 }
 
                 if ($moduleId !== null) {
-                    $where->where('permisos_usuario_modulo.modulo_id', (int)$moduleId)
-                        ->where('permisos_usuario_modulo.permitido', 1);
+                    $where->where('permisos_usuario_modulo.permitido', 1);
                     return;
                 }
 
@@ -145,8 +151,13 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
             $redmine = $byType['redmine_mantencion'] ?? null;
             $core = $byType['core'] ?? null;
             $nextcloud = $byType['nextcloud'] ?? null;
-            $role = strtolower(trim((string)($row->rol ?? 'usuario')));
-            $legacyRole = in_array($role, ['admin', 'administrador', 'root'], true) ? 'root' : $role;
+            $globalRole = strtolower(trim((string)($row->rol ?? 'usuario')));
+            $storedModuleRole = strtolower(trim((string)($row->rol_modulo ?? '')));
+            $legacyRole = $globalRole === 'root'
+                ? 'root'
+                : ($storedModuleRole !== ''
+                    ? $storedModuleRole
+                    : (in_array($globalRole, ['admin', 'administrador'], true) ? 'administrador' : 'usuario'));
             $api = trim((string)($redmine->valor_secreto ?? ''));
             if ($api !== '') {
                 try {
@@ -338,6 +349,14 @@ function auth_require_login($redirect = '/redmine-mantencion/login.php') {
 
 function auth_get_user_role() {
     auth_start_session();
+    $sessionUserId = (string)($_SESSION['user']['id'] ?? '');
+    if ($sessionUserId !== '') {
+        $user = auth_find_user_by_id($sessionUserId);
+        if (is_array($user) && trim((string)($user['rol'] ?? '')) !== '') {
+            return (string)$user['rol'];
+        }
+    }
+
     return $_SESSION['user']['rol'] ?? 'usuario';
 }
 
@@ -362,6 +381,22 @@ function auth_apply_role_permission_defaults(array $roles): array {
         if (!array_key_exists('actividad_todos', $cfg)) {
             $cfg['actividad_todos'] = !empty($cfg['actividad']);
         }
+        if (!array_key_exists('horas_extra_editar', $cfg)) {
+            $cfg['horas_extra_editar'] = !empty($cfg['horas_extra']);
+        }
+        foreach (['reportes_editar', 'reportes_eliminar', 'reportes_importar_core'] as $permission) {
+            if (!array_key_exists($permission, $cfg)) {
+                $cfg[$permission] = !empty($cfg['mensajes_acceso']);
+            }
+        }
+        $legacyHistoryActions = !empty($cfg['historico_acciones']);
+        foreach (['historico_estado', 'historico_eliminar'] as $permission) {
+            if (!array_key_exists($permission, $cfg)) {
+                $cfg[$permission] = $legacyHistoryActions;
+            }
+        }
+        unset($cfg['horas_extra_eliminar']);
+        unset($cfg['historico_acciones']);
         $configAccess = !empty($cfg['configuracion']);
         foreach (['cfg_resumen', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $permission) {
             if (!array_key_exists($permission, $cfg)) {

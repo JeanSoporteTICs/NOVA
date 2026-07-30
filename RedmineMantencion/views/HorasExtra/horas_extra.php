@@ -8,6 +8,7 @@ if (!auth_can('horas_extra')) {
 require_once __DIR__ . '/../../controllers/dashboard.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
 $maintenanceMode = maintenance_mode_enabled();
+$canEditHours = auth_can('horas_extra_editar');
 
 function load_hours_extra_all(): array {
     $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
@@ -154,6 +155,10 @@ $uid = auth_get_user_id();
 $grupos = filter_hours_groups_for_user($grupos, (string)$uid);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_extra') {
+    if (!$canEditHours) {
+        http_response_code(403);
+        exit('No tienes permiso para editar Horas extra.');
+    }
     if (function_exists('csrf_validate')) csrf_validate();
     if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
     $fecha = trim($_POST['fecha'] ?? '');
@@ -559,7 +564,9 @@ $emachSuggestions = mantencion_emach_overtime_suggestions($grupos);
                   <td colspan="3">
                     <div class="d-flex justify-content-between align-items-center w-100">
                       <span><strong><?= $h(fmt_fecha($fechaKey)) ?></strong> &middot; Hora inicio: <?= $h($horaIni) ?> | Hora término: <?= $h($horaFin) ?><?= $totalGrupo ? ' | Total de horas: ' . $h($totalGrupo) : '' ?></span>
-                      <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal" data-bs-target="#editModal" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>" data-emach-ok="<?= !empty($emachSuggestion['ok']) ? '1' : '0' ?>" data-emach-hora-inicio="<?= $h($emachSuggestion['hora_inicio'] ?? '') ?>" data-emach-hora-fin="<?= $h($emachSuggestion['hora_fin'] ?? '') ?>" data-emach-total="<?= $h($emachSuggestion['total'] ?? '') ?>" data-emach-status="<?= $h($emachSuggestion['status'] ?? 'Sin datos EMACH para calcular esta fecha.') ?>" title="Editar horas" aria-label="Editar horas"><i class="bi bi-pencil-square"></i></button>
+                      <?php if ($canEditHours): ?>
+                        <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal" data-bs-target="#editModal" data-fecha="<?= $h(fmt_fecha($fechaKey)) ?>" data-horaini="<?= $h($horaIni) ?>" data-horafin="<?= $h($horaFin) ?>" data-emach-ok="<?= !empty($emachSuggestion['ok']) ? '1' : '0' ?>" data-emach-hora-inicio="<?= $h($emachSuggestion['hora_inicio'] ?? '') ?>" data-emach-hora-fin="<?= $h($emachSuggestion['hora_fin'] ?? '') ?>" data-emach-total="<?= $h($emachSuggestion['total'] ?? '') ?>" data-emach-status="<?= $h($emachSuggestion['status'] ?? 'Sin datos EMACH para calcular esta fecha.') ?>" title="Editar horas" aria-label="Editar horas"><i class="bi bi-pencil-square"></i></button>
+                      <?php endif; ?>
                     </div>
                   </td>
                 </tr>
@@ -590,6 +597,7 @@ $emachSuggestions = mantencion_emach_overtime_suggestions($grupos);
 </div>
 
 <!-- Modal editar horas -->
+<?php if ($canEditHours): ?>
 <div class="modal fade detail-drawer-modal" id="editModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog detail-drawer-dialog">
     <div class="modal-content">
@@ -630,6 +638,7 @@ $emachSuggestions = mantencion_emach_overtime_suggestions($grupos);
     </div>
   </div>
 </div>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 <script>

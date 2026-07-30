@@ -27,8 +27,8 @@ final class ProjectAccessGuard
      */
     public function projectUser(string $projectKey, array $sessionUser): ?array
     {
-        if ($this->isAdmin($sessionUser)) {
-            return $this->adminProjectUser($projectKey, $sessionUser);
+        if ($this->isSuperuser($sessionUser)) {
+            return $this->superuserProjectUser($projectKey, $sessionUser);
         }
 
         $explicitAccess = null;
@@ -47,7 +47,7 @@ final class ProjectAccessGuard
             // El acceso central habilita el modulo, pero los permisos internos
             // siguen perteneciendo al perfil del proyecto.
             return $this->findProjectUser($projectKey, $needles)
-                ?? $this->sessionProjectUser($sessionUser);
+                ?? $this->sessionProjectUser($projectKey, $sessionUser);
         }
 
         $user = $this->findProjectUser($projectKey, $needles);
@@ -62,9 +62,15 @@ final class ProjectAccessGuard
      * @param array<string,mixed> $sessionUser
      * @return array<string,mixed>
      */
-    private function sessionProjectUser(array $sessionUser): array
+    private function sessionProjectUser(string $projectKey, array $sessionUser): array
     {
-        $isAdmin = $this->isAdmin($sessionUser);
+        $role = strtolower(trim((string) ($sessionUser['role'] ?? $sessionUser['rol'] ?? 'usuario')));
+        $isSuperuser = $this->isSuperuser($sessionUser);
+        $projectRole = $isSuperuser
+            ? 'root'
+            : (in_array($projectKey, ['redmine_tic', 'redmine-mantencion'], true) && $role === 'admin'
+                ? 'administrador'
+                : $role);
 
         return [
             'id'             => (string) ($sessionUser['redmine_id']     ?? $sessionUser['id'] ?? ''),
@@ -75,10 +81,10 @@ final class ProjectAccessGuard
             'api'            => (string) ($sessionUser['api']            ?? ''),
             'core_user'      => (string) ($sessionUser['core_user']      ?? ''),
             'nextcloud_user' => (string) ($sessionUser['nextcloud_user'] ?? ''),
-            'rol'            => $isAdmin ? 'root' : (string) ($sessionUser['role'] ?? 'usuario'),
+            'rol'            => $projectRole,
             'estado_usuario' => (string) ($sessionUser['status']         ?? 'activo'),
             'estado'         => (string) ($sessionUser['status']         ?? 'activo'),
-            'permisos'       => $isAdmin ? ['all' => true] : [],
+            'permisos'       => $isSuperuser ? ['all' => true] : [],
             '_nova_user_id'  => (string) ($sessionUser['id']             ?? ''),
         ];
     }
@@ -87,10 +93,10 @@ final class ProjectAccessGuard
      * @param array<string,mixed> $sessionUser
      * @return array<string,mixed>
      */
-    private function adminProjectUser(string $projectKey, array $sessionUser): array
+    private function superuserProjectUser(string $projectKey, array $sessionUser): array
     {
         $projectUser = $this->findProjectUser($projectKey, $this->sessionNeedles($sessionUser));
-        $fallback    = $this->sessionProjectUser($sessionUser);
+        $fallback    = $this->sessionProjectUser($projectKey, $sessionUser);
 
         if ($projectUser === null) {
             return $fallback;
@@ -125,11 +131,11 @@ final class ProjectAccessGuard
     /**
      * @param array<string,mixed> $user
      */
-    private function isAdmin(array $user): bool
+    private function isSuperuser(array $user): bool
     {
         $role = strtolower(trim((string) ($user['role'] ?? $user['rol'] ?? 'usuario')));
 
-        return in_array($role, config('nova.module_admin_roles', []), true);
+        return in_array($role, config('nova.module_superuser_roles', ['root']), true);
     }
 
     /**

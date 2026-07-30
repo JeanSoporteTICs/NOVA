@@ -39,10 +39,16 @@ $dashboardActionUrl = function_exists('legacy_app_url')
 $chileToday = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
 $coreDesde = $_GET['core_desde'] ?? $chileToday;
 $coreHasta = $_GET['core_hasta'] ?? $chileToday;
-$coreAssignedName = dashboard_can_assign_other_users()
+$coreAssignedName = dashboard_can_select_core_assignee()
     ? (string)($_GET['core_assigned_name'] ?? dashboard_default_core_assigned_name())
     : dashboard_default_core_assigned_name();
 $currentRole = auth_get_user_role();
+$canEditReports = auth_can('reportes_editar');
+$canDeleteReports = auth_can('reportes_eliminar');
+$canImportCore = auth_can('reportes_importar_core');
+$canEditHoursExtra = auth_can('horas_extra_editar');
+$canSelectReports = $canEditReports || $canDeleteReports;
+$canUnlockProcessedActions = $canSelectReports || $canEditHoursExtra;
 $hasSavedCoreCredentials = dashboard_core_has_saved_credentials();
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
 
@@ -212,6 +218,7 @@ $csrf = legacy_csrf_token();
     <div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div>
   <?php endif; ?>
 
+  <?php if ($canImportCore): ?>
   <form method="post" class="dashboard-panel" id="core-import-form" data-app-no-loading="1" data-no-page-loader="true">
     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
     <input type="hidden" name="action" value="import_core_history">
@@ -236,7 +243,7 @@ $csrf = legacy_csrf_token();
       </div>
       <div class="col-md-4">
         <label class="form-label">Asignado CORE</label>
-        <?php if (dashboard_can_assign_other_users()): ?>
+        <?php if (dashboard_can_select_core_assignee()): ?>
           <select name="core_assigned_name" class="form-select">
             <?php foreach ($userOptions as $userOption): ?>
               <?php $optionName = trim((string)($userOption['nombre'] ?? '')); ?>
@@ -265,6 +272,7 @@ $csrf = legacy_csrf_token();
       </div>
     </div>
   </form>
+  <?php endif; ?>
 
 
 
@@ -316,28 +324,38 @@ $csrf = legacy_csrf_token();
 
       <div class="dashboard-active-chips" id="dashboard-active-chips" aria-live="polite"></div>
 
+      <?php if ($canUnlockProcessedActions): ?>
       <div class="dashboard-toolbar px-3 pt-3">
         <div class="dashboard-toolbar__actions">
+          <?php if ($canSelectReports): ?>
           <span class="dashboard-selection"><i class="bi bi-check2-square"></i> Seleccionados: <strong id="selection-count">0</strong></span>
+          <?php endif; ?>
           <div class="dashboard-toolbar__button-group">
             <button type="button" id="processed-edit-toggle" class="btn-nova btn-nova-primary btn-icon d-none" aria-pressed="false" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
-              <i class="bi bi-unlock"></i> Habilitar edición
+              <i class="bi bi-unlock"></i> Habilitar acciones
             </button>
+            <?php if ($canEditReports): ?>
             <button type="button" id="process-btn" class="btn-nova btn-nova-success btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
               <i class="bi bi-check2-circle"></i> Enviar reportes a Redmine
             </button>
             <button type="button" id="archive-btn" class="btn-nova btn-nova-warning btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
               <i class="bi bi-archive"></i> Archivar
             </button>
+            <?php endif; ?>
+            <?php if ($canDeleteReports): ?>
             <button type="button" id="delete-selected-btn" class="btn-nova btn-nova-danger btn-icon" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
               <i class="bi bi-trash3"></i> Eliminar seleccionados
             </button>
+            <?php endif; ?>
+            <?php if ($canEditReports): ?>
             <button type="button" id="reset-errors-btn" class="btn-nova btn-nova-secondary btn-icon d-none" disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
               <i class="bi bi-arrow-counterclockwise"></i> Reintentar errores (marcar pendientes)
             </button>
+            <?php endif; ?>
           </div>
         </div>
       </div>
+      <?php endif; ?>
 
       <div class="table-responsive rm-table-wrap dashboard-table-wrap">
 
@@ -347,7 +365,13 @@ $csrf = legacy_csrf_token();
 
             <tr>
 
-              <th><input type="checkbox" id="sel-all-top"></th>
+              <?php if ($canSelectReports): ?>
+              <th class="dashboard-select-cell">
+                <div class="dashboard-select-control">
+                  <input type="checkbox" id="sel-all-top">
+                </div>
+              </th>
+              <?php endif; ?>
               <th>Redmine ID</th>
 
               <th>Asunto</th>
@@ -362,7 +386,7 @@ $csrf = legacy_csrf_token();
 
               <th>Estado local</th>
 
-              <th class="nova-col-actions">Acciones</th>
+              <th class="nova-col-actions text-center">Acciones</th>
 
             </tr>
 
@@ -371,7 +395,7 @@ $csrf = legacy_csrf_token();
           <tbody>
 
           <?php if (!$messages): ?>
-            <tr id="dashboard-empty-row"><td colspan="9" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes. Usa el formulario de importación para traer datos desde CORE.</td></tr>
+            <tr id="dashboard-empty-row"><td colspan="<?= $canSelectReports ? 9 : 8 ?>" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes disponibles.</td></tr>
           <?php endif; ?>
           <?php foreach ($messages as $m): ?>
 
@@ -384,6 +408,8 @@ $csrf = legacy_csrf_token();
               $displayAsignado = $asignadoNombre;
               $displayDepartamento = dashboard_resolve_department_value($m);
               $coreStatusIndicator = dashboard_core_status_indicator($m);
+              $isManualSource = dashboard_normalize_text((string)($m['fuente'] ?? '')) === 'manual'
+                || str_starts_with((string)($m['id'] ?? ''), 'manual-');
             ?>
 
             <tr
@@ -396,8 +422,9 @@ $csrf = legacy_csrf_token();
               data-text="<?= $h(strtolower($asunto . ' ' . ($m['solicitante'] ?? '') . ' ' . ($m['numero'] ?? ''))) ?>"
             >
 
-              <td>
-                <div class="d-inline-flex align-items-center gap-2">
+              <?php if ($canSelectReports): ?>
+              <td class="dashboard-select-cell">
+                <div class="dashboard-select-control">
                   <input type="checkbox" class="msg-check" value="<?= $h($m['id'] ?? '') ?>">
                   <?php if ($coreStatusIndicator): ?>
                     <span class="badge rounded-circle text-bg-<?= $h($coreStatusIndicator['badge']) ?> p-2 action-tooltip"
@@ -406,9 +433,17 @@ $csrf = legacy_csrf_token();
                           aria-label="CORE: <?= $h($coreStatusIndicator['label']) ?>">
                       <i class="bi <?= $h($coreStatusIndicator['icon']) ?>"></i>
                     </span>
+                  <?php elseif ($isManualSource): ?>
+                    <span class="badge rounded-circle p-2 action-tooltip dashboard-source-indicator is-manual"
+                          data-bs-placement="top"
+                          title="Origen: Creación manual"
+                          aria-label="Origen: Creación manual">
+                      <i class="bi bi-pencil-fill"></i>
+                    </span>
                   <?php endif; ?>
                 </div>
               </td>
+              <?php endif; ?>
               <td><?= $h($m['redmine_id'] ?? '') ?></td>
 
               <td>
@@ -433,7 +468,7 @@ $csrf = legacy_csrf_token();
                 </span>
               </td>
 
-              <td>
+              <td class="nova-col-actions">
                 <div class="dashboard-row-actions">
 
                 <?php
@@ -441,7 +476,7 @@ $csrf = legacy_csrf_token();
                   $previewRowsJson = $h((string)json_encode(array_values($previewRows), JSON_UNESCAPED_UNICODE));
                   $previewColumnsJson = $h((string)json_encode(dashboard_core_detail_table_schema($m), JSON_UNESCAPED_UNICODE));
                 ?>
-                <button type="button" class="btn-action btn-action-view action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="Detalle" aria-label="Detalle" data-processed-action
+                <button type="button" class="btn-action btn-action-view action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="<?= $canEditReports ? 'Detalle / Editar' : 'Detalle' ?>" aria-label="<?= $canEditReports ? 'Detalle / Editar' : 'Detalle' ?>" <?= $canEditReports ? 'data-processed-action' : '' ?>
 
                   data-id="<?= $h($m['id'] ?? '') ?>"
 
@@ -492,10 +527,11 @@ $csrf = legacy_csrf_token();
                   data-preview_rows="<?= $previewRowsJson ?>"
                   data-preview_columns="<?= $previewColumnsJson ?>"
 
-                ><i class="bi bi-pencil-square"></i></button>
+                ><i class="bi <?= $canEditReports ? 'bi-pencil-square' : 'bi-eye' ?>"></i></button>
                 <?php
                   $hasHoraExtra = function_exists('normalize_hour_extra_value') && normalize_hour_extra_value($m['hora_extra'] ?? '') === '1';
                 ?>
+                <?php if ($canEditHoursExtra): ?>
                 <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-no-loading="1" data-no-page-loader="true"
                       data-optimistic-toggle
                       data-toggle-active-icon="bi-clock-fill" data-toggle-inactive-icon="bi-clock"
@@ -516,6 +552,7 @@ $csrf = legacy_csrf_token();
                     <i class="bi <?= $hasHoraExtra ? 'bi-clock-fill' : 'bi-clock' ?>"></i>
                   </button>
                 </form>
+                <?php endif; ?>
                 <?php if (strtolower($m['estado'] ?? '') === 'error'): ?>
                   <?php
                     $logText = '';
@@ -526,12 +563,14 @@ $csrf = legacy_csrf_token();
                   <button type="button" class="btn-action btn-action-view log-btn action-tooltip" data-log="<?= $h($logText) ?>" data-bs-toggle="modal" data-bs-target="#logModal" data-bs-placement="top" title="Log" aria-label="Log"><i class="bi bi-journal-text"></i></button>
                 <?php endif; ?>
 
+                <?php if ($canDeleteReports): ?>
                 <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-confirm="¿Eliminar este mensaje?" data-dashboard-ajax="row" data-app-no-loading="1">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="delete">
                   <button class="btn-action btn-action-delete action-tooltip" type="submit" data-processed-action data-bs-placement="top" title="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" aria-label="<?= $maintenanceMode ? 'Plataforma en mantención' : 'Eliminar' ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-trash3"></i></button>
                 </form>
+                <?php endif; ?>
                 </div>
               </td>
 
@@ -717,8 +756,8 @@ $csrf = legacy_csrf_token();
           <div>
             <p class="detail-drawer-kicker">Reporte seleccionado</p>
             <h5 class="modal-title">
-              <span class="detail-drawer-icon"><i class="bi bi-pencil-square"></i></span>
-              Detalle / Editar
+              <span class="detail-drawer-icon"><i class="bi <?= $canEditReports ? 'bi-pencil-square' : 'bi-eye' ?>"></i></span>
+              <?= $canEditReports ? 'Detalle / Editar' : 'Detalle' ?>
             </h5>
           </div>
 
@@ -781,17 +820,20 @@ $csrf = legacy_csrf_token();
 
             <div class="col-md-3">
               <label class="form-label">Hora extra</label>
-              <select name="hora_extra" id="md-hora_extra" class="form-select">
+              <select name="hora_extra" id="md-hora_extra" class="form-select" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>>
                 <option value="0" selected>No</option>
                 <option value="1">Sí</option>
               </select>
+              <?php if ($canEditReports && !$canEditHoursExtra): ?>
+                <div class="form-text"><i class="bi bi-lock"></i> Requiere el permiso Editar de Horas extra.</div>
+              <?php endif; ?>
             </div>
 
             <div class="col-md-3"><label class="form-label">Fecha Inicio</label><input type="date" name="fecha_inicio" id="md-fecha_inicio" class="form-control"></div>
 
             <div class="col-md-3"><label class="form-label">Fecha Fin</label><input type="date" name="fecha_fin" id="md-fecha_fin" class="form-control"></div>
 
-            <div class="col-md-3"><label class="form-label">Tiempo Estimado</label><input name="tiempo_estimado" id="md-tiempo_estimado" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Tiempo Estimado</label><input name="tiempo_estimado" id="md-tiempo_estimado" class="form-control" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>></div>
 
             <div class="col-md-3"><label class="form-label">Fecha</label><input type="date" name="fecha" id="md-fecha" class="form-control"></div>
 
@@ -805,7 +847,7 @@ $csrf = legacy_csrf_token();
               <label class="form-label d-block">Descripción</label>
               <input type="hidden" name="descripcion" id="md-descripcion">
               <button type="button" class="btn btn-outline-secondary" id="open-descripcion-modal-btn" data-bs-toggle="modal" data-bs-target="#descripcionModal">
-                <i class="bi bi-text-paragraph"></i> Editar descripción
+                <i class="bi bi-text-paragraph"></i> <?= $canEditReports ? 'Editar descripción' : 'Ver descripción' ?>
               </button>
             </div>
 
@@ -855,9 +897,11 @@ $csrf = legacy_csrf_token();
             <i class="bi bi-x-lg"></i> Cerrar
           </button>
 
-          <button type="submit" class="btn-nova btn-nova-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
-            <i class="bi bi-check2-circle"></i> Guardar cambios
-          </button>
+          <?php if ($canEditReports): ?>
+            <button type="submit" class="btn-nova btn-nova-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+              <i class="bi bi-check2-circle"></i> Guardar cambios
+            </button>
+          <?php endif; ?>
 
         </div>
 
@@ -873,23 +917,25 @@ $csrf = legacy_csrf_token();
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Editar descripción</h5>
+        <h5 class="modal-title"><?= $canEditReports ? 'Editar descripción' : 'Ver descripción' ?></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <div class="nova-description-tabs" role="tablist" aria-label="Vista de descripción">
-          <button type="button" class="nova-description-tab is-active" id="dashboard-description-edit-tab" role="tab" aria-selected="true"><i class="bi bi-pencil"></i> Modificar</button>
+          <button type="button" class="nova-description-tab is-active" id="dashboard-description-edit-tab" role="tab" aria-selected="true"><i class="bi <?= $canEditReports ? 'bi-pencil' : 'bi-text-paragraph' ?>"></i> <?= $canEditReports ? 'Modificar' : 'Contenido' ?></button>
           <button type="button" class="nova-description-tab" id="dashboard-description-preview-tab" role="tab" aria-selected="false"><i class="bi bi-table"></i> Previsualizar</button>
         </div>
         <div id="dashboard-description-edit-panel" role="tabpanel" aria-labelledby="dashboard-description-edit-tab">
           <label class="form-label" for="md-descripcion-editor">Descripción</label>
-          <textarea id="md-descripcion-editor" class="form-control nova-description-editor" rows="10"></textarea>
+          <textarea id="md-descripcion-editor" class="form-control nova-description-editor" rows="10" <?= $canEditReports ? '' : 'readonly' ?>></textarea>
         </div>
         <div class="nova-description-preview" id="dashboard-description-preview" role="tabpanel" aria-labelledby="dashboard-description-preview-tab" hidden></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-        <button type="button" class="btn-nova btn-nova-primary" id="save-descripcion-btn" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>Guardar descripción</button>
+        <?php if ($canEditReports): ?>
+          <button type="button" class="btn-nova btn-nova-primary" id="save-descripcion-btn" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>Guardar descripción</button>
+        <?php endif; ?>
       </div>
     </div>
   </div>
@@ -912,6 +958,7 @@ $csrf = legacy_csrf_token();
   </div>
 </div>
 
+<?php if ($canDeleteReports): ?>
 <div class="modal fade" id="deleteSelectedModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -931,6 +978,7 @@ $csrf = legacy_csrf_token();
     </div>
   </div>
  </div>
+<?php endif; ?>
 
 <button type="button" class="btn btn-primary dashboard-scroll-top" id="dashboard-scroll-top" aria-label="Volver arriba" title="Volver arriba">
   <i class="bi bi-arrow-up"></i>
@@ -941,6 +989,7 @@ $csrf = legacy_csrf_token();
 <script>
 
   const dashboardMaintenanceMode = <?= $maintenanceMode ? 'true' : 'false' ?>;
+  const dashboardCanEditReports = <?= $canEditReports ? 'true' : 'false' ?>;
   const dashboardScrollKey = 'nova:mantencion-dashboard:scroll-y';
   const dashboardProcessedEditKey = 'nova:mantencion-dashboard:processed-edit';
 
@@ -970,6 +1019,11 @@ $csrf = legacy_csrf_token();
   });
 
   const detalleModal = document.getElementById('detalleModal');
+  if (detalleModal && !dashboardCanEditReports) {
+    detalleModal.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(control => {
+      control.disabled = true;
+    });
+  }
   let currentPreviewRows = [];
   let currentPreviewColumns = [];
   const openPreviewModalBtn = document.getElementById('open-preview-modal-btn');
@@ -1392,8 +1446,8 @@ function syncProcessedActionControls() {
     processedEditToggleBtn.classList.toggle('d-none', currentDashboardFilter !== 'procesado');
     processedEditToggleBtn.setAttribute('aria-pressed', processedEditEnabled ? 'true' : 'false');
     processedEditToggleBtn.innerHTML = processedEditEnabled
-      ? '<i class="bi bi-lock"></i> Desactivar edición'
-      : '<i class="bi bi-unlock"></i> Habilitar edición';
+      ? '<i class="bi bi-lock"></i> Bloquear acciones'
+      : '<i class="bi bi-unlock"></i> Habilitar acciones';
   }
 }
 

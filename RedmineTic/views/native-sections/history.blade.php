@@ -99,6 +99,17 @@
     $visibleRows = count($pagedRows);
     $hoursRows = count(array_filter($filtered, static fn ($row): bool => is_array($row) && !empty($row['_history_is_hours_extra'])));
     $archivedRows = max(0, $totalFiltered - $hoursRows);
+    $canHistoryActions = empty($redmineMaintenance['enabled'])
+        && !empty($canHistoryActionsPermission);
+    $redmineStatusOptions = [];
+    foreach ((array) ($config['estados'] ?? []) as $statusOption) {
+        if (!is_array($statusOption)) continue;
+        $statusId = filter_var($statusOption['id'] ?? null, FILTER_VALIDATE_INT);
+        $statusName = trim((string) ($statusOption['nombre'] ?? $statusOption['name'] ?? ''));
+        if ($statusId === false || $statusId <= 0 || $statusName === '') continue;
+        $redmineStatusOptions[$statusId] = ['id' => $statusId, 'name' => $statusName];
+    }
+    $redmineStatusOptions = array_values($redmineStatusOptions);
 
     $baseHistoryUrl = $redmineRoute('redmine.native.section', ['section' => 'historico']);
     $urlWithQuery = static function (array $changes = []) use ($query, $baseHistoryUrl): string {
@@ -125,7 +136,7 @@
     if ($fDescripcion !== '') $chips[] = ['icon' => 'bi-card-text', 'label' => 'Descripcion ' . $fDescripcion, 'remove' => 'descripcion'];
     if ($fCategoria !== '') $chips[] = ['icon' => 'bi-tags', 'label' => 'Categoria ' . $fCategoria, 'remove' => 'categoria'];
 
-    $tableColspan = 9;
+    $tableColspan = $canHistoryActions ? 10 : 9;
 @endphp
 
 <section class="rm-module-head">
@@ -201,6 +212,42 @@
             <span class="text-muted ms-2">Mostrando {{ $visibleRows }} de {{ $totalFiltered }} registros</span>
         </div>
         <div class="historico-summary__tools">
+            @if ($canHistoryActions)
+                <div class="dropdown historico-bulk-status">
+                    <button
+                        type="button"
+                        class="btn-nova btn-nova-primary historico-bulk-status__button dropdown-toggle"
+                        id="historico-bulk-status-button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        disabled>
+                        <i class="bi bi-arrow-left-right"></i>
+                        Cambiar estado
+                        <span class="historico-selection-count" id="historico-selection-count">0</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end historico-status-menu" aria-labelledby="historico-bulk-status-button">
+                        <li class="dropdown-header">Aplicar a seleccionados</li>
+                        @foreach ($redmineStatusOptions as $statusOption)
+                            <li class="js-bulk-status-option">
+                                <button
+                                    type="button"
+                                    class="dropdown-item js-bulk-status-choice"
+                                    data-status-id="{{ $statusOption['id'] }}"
+                                    data-status-name="{{ $statusOption['name'] }}">
+                                    <span class="historico-status-dot is-status-{{ $statusOption['id'] }}"></span>
+                                    {{ $statusOption['name'] }}
+                                </button>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+                <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" id="historico-bulk-status-form" class="d-none">
+                    @csrf
+                    <input type="hidden" name="action" value="update_redmine_status">
+                    <input type="hidden" name="redmine_ids" id="historico-bulk-redmine-ids" value="">
+                    <input type="hidden" name="status_id" id="historico-bulk-status-id" value="">
+                </form>
+            @endif
             <span class="historico-source-badge"><i class="bi bi-archive"></i>Archivados: {{ $archivedRows }}</span>
             <label class="form-check form-switch m-0">
                 <input class="form-check-input" type="checkbox" role="switch" id="historico-compact-toggle">
@@ -237,6 +284,7 @@
             </div>
             <table class="table table-hover historico-table align-middle mb-0" role="grid" aria-label="Historico de reportes" aria-busy="false">
                 <colgroup>
+                    @if ($canHistoryActions)<col class="historico-col-select">@endif
                     <col class="historico-col-fecha">
                     <col class="historico-col-redmine">
                     <col class="historico-col-estado">
@@ -249,6 +297,16 @@
                 </colgroup>
                 <thead class="table-light">
                     <tr>
+                        @if ($canHistoryActions)
+                            <th class="historico-select-cell">
+                                <input
+                                    class="form-check-input js-history-select-all"
+                                    type="checkbox"
+                                    id="historico-select-all"
+                                    aria-label="Seleccionar todos los reportes abiertos"
+                                    disabled>
+                            </th>
+                        @endif
                         <th>Fecha</th>
                         <th>Redmine ID</th>
                         <th>Estado Redmine</th>
@@ -257,7 +315,7 @@
                         <th>Asunto</th>
                         <th>Fuente</th>
                         <th>Detalle</th>
-                        <th>Acciones</th>
+                        <th class="historico-actions-cell">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -294,7 +352,22 @@
                                 'chat_id_telegram' => $row['chat_id_telegram'] ?? '',
                             ];
                         @endphp
-                        <tr>
+                        <tr data-redmine-row="{{ $redmineId }}">
+                            @if ($canHistoryActions)
+                                <td class="historico-select-cell">
+                                    @if ($redmineId !== '')
+                                        <input
+                                            class="form-check-input js-history-select"
+                                            type="checkbox"
+                                            value="{{ $redmineId }}"
+                                            data-redmine-id="{{ $redmineId }}"
+                                            aria-label="Seleccionar ticket Redmine {{ $redmineId }}"
+                                            disabled>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                            @endif
                             <td><span class="historico-date"><i class="bi bi-calendar3"></i>{{ $fmtDate($row['_history_date_norm'] ?? $row['fecha_inicio'] ?? $row['fecha'] ?? '') }}</span></td>
                             <td>
                                 @if ($redmineId !== '' && $issueUrl !== '')
@@ -328,16 +401,60 @@
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </td>
-                            <td>
-                                @if (!empty($row['_history_can_delete']))
-                                    <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="Eliminar este registro del historico?">
-                                        @csrf
-                                        <input type="hidden" name="id" value="{{ $row['id'] ?? '' }}">
-                                        <button type="submit" class="btn-action btn-action-delete" title="Eliminar registro" aria-label="Eliminar registro"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                @else
-                                    <span class="text-muted">-</span>
-                                @endif
+                            <td class="historico-actions-cell">
+                                <div class="historico-row-actions">
+                                    @if ($canHistoryActions && $redmineId !== '')
+                                        <div class="dropdown">
+                                            <button
+                                                type="button"
+                                                class="btn-action btn-action-sync dropdown-toggle no-caret js-redmine-status-menu d-none"
+                                                data-redmine-id="{{ $redmineId }}"
+                                                data-bs-toggle="dropdown"
+                                                data-bs-boundary="viewport"
+                                                aria-expanded="false"
+                                                title="Cambiar estado en Redmine"
+                                                aria-label="Cambiar estado del ticket {{ $redmineId }}">
+                                                <i class="bi bi-arrow-left-right"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end historico-status-menu">
+                                                <li class="dropdown-header">Cambiar estado #{{ $redmineId }}</li>
+                                                @foreach ($redmineStatusOptions as $statusOption)
+                                                    <li
+                                                        class="js-row-status-option"
+                                                        data-status-id="{{ $statusOption['id'] }}"
+                                                        data-status-name="{{ $statusOption['name'] }}">
+                                                        <form
+                                                            method="post"
+                                                            action="{{ $redmineRoute('redmine.native.history.action') }}"
+                                                            class="m-0"
+                                                            data-app-confirm="¿Cambiar el ticket #{{ $redmineId }} a {{ $statusOption['name'] }}?"
+                                                            data-app-confirm-title="Cambiar estado en Redmine"
+                                                            data-app-confirm-tone="info"
+                                                            data-app-confirm-text="Cambiar estado">
+                                                            @csrf
+                                                            <input type="hidden" name="action" value="update_redmine_status">
+                                                            <input type="hidden" name="redmine_ids" value="{{ $redmineId }}">
+                                                            <input type="hidden" name="status_id" value="{{ $statusOption['id'] }}">
+                                                            <button type="submit" class="dropdown-item">
+                                                                <span class="historico-status-dot is-status-{{ $statusOption['id'] }}"></span>
+                                                                {{ $statusOption['name'] }}
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+                                    @if ($canHistoryActions && !empty($row['_history_can_delete']))
+                                        <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="Eliminar este registro del historico?">
+                                            @csrf
+                                            <input type="hidden" name="id" value="{{ $row['id'] ?? '' }}">
+                                            <button type="submit" class="btn-action btn-action-delete" title="Eliminar registro" aria-label="Eliminar registro"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    @elseif (!$canHistoryActions || $redmineId === '')
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -460,9 +577,106 @@ document.addEventListener('DOMContentLoaded', () => {
         if (key.includes('rechaz') || key.includes('reject')) return 'historico-redmine-status--rejected';
         return 'historico-redmine-status--open';
     };
+    const selectAll = document.getElementById('historico-select-all');
+    const rowCheckboxes = Array.from(document.querySelectorAll('.js-history-select[data-redmine-id]'));
+    const bulkStatusButton = document.getElementById('historico-bulk-status-button');
+    const selectionCount = document.getElementById('historico-selection-count');
+    const bulkStatusForm = document.getElementById('historico-bulk-status-form');
+    const bulkRedmineIds = document.getElementById('historico-bulk-redmine-ids');
+    const bulkStatusId = document.getElementById('historico-bulk-status-id');
+    const bulkStatusOptions = Array.from(document.querySelectorAll('.js-bulk-status-option'));
+
+    document.querySelectorAll('.js-redmine-status-menu').forEach(trigger => {
+        const dropdown = trigger.closest('.dropdown');
+        const menu = dropdown?.querySelector('.historico-status-menu');
+        if (!dropdown || !menu || !window.bootstrap?.Dropdown) return;
+
+        trigger.addEventListener('show.bs.dropdown', () => {
+            menu.classList.add('is-portal');
+            document.body.appendChild(menu);
+        });
+        trigger.addEventListener('hidden.bs.dropdown', () => {
+            menu.classList.remove('is-portal');
+            dropdown.appendChild(menu);
+        });
+        window.bootstrap.Dropdown.getOrCreateInstance(trigger, {
+            boundary: 'viewport',
+            popperConfig(defaultConfig) {
+                return { ...defaultConfig, strategy: 'fixed' };
+            },
+        });
+    });
+
+    const isOpenOptionName = name => ['abierto', 'abiertos', 'open'].includes(normalizeStatus(name).trim());
+    const optionMatchesCheckbox = (option, checkbox) => {
+        const statusId = option.getAttribute('data-status-id') || '';
+        const statusName = normalizeStatus(option.getAttribute('data-status-name') || '').trim();
+        const currentId = checkbox.dataset.currentStatusId || '';
+        const currentName = normalizeStatus(checkbox.dataset.currentStatusName || '').trim();
+        return (statusId !== '' && statusId === currentId)
+            || (statusName !== '' && statusName === currentName);
+    };
+    const selectedOpenCheckboxes = () => rowCheckboxes.filter(checkbox => !checkbox.disabled && checkbox.checked);
+    const refreshBulkOptions = selected => {
+        bulkStatusOptions.forEach(option => {
+            const statusName = option.getAttribute('data-status-name') || '';
+            const allAlreadySelected = selected.length > 0
+                && selected.every(checkbox => optionMatchesCheckbox(option, checkbox));
+            const allAreOpen = selected.length > 0
+                && selected.every(checkbox => checkbox.dataset.remoteOpen === '1');
+            option.classList.toggle('d-none', allAlreadySelected || (allAreOpen && isOpenOptionName(statusName)));
+        });
+    };
+    const refreshSelectionState = () => {
+        const enabled = rowCheckboxes.filter(checkbox => !checkbox.disabled);
+        const selected = selectedOpenCheckboxes();
+        const selectedIds = [...new Set(selected.map(checkbox => checkbox.value).filter(Boolean))];
+        if (selectionCount) selectionCount.textContent = String(selectedIds.length);
+        refreshBulkOptions(selected);
+        const hasVisibleOption = bulkStatusOptions.some(option => !option.classList.contains('d-none'));
+        if (bulkStatusButton) bulkStatusButton.disabled = selectedIds.length === 0 || !hasVisibleOption;
+        if (selectAll) {
+            selectAll.disabled = enabled.length === 0;
+            selectAll.checked = enabled.length > 0 && enabled.every(checkbox => checkbox.checked);
+            selectAll.indeterminate = selected.length > 0 && selected.length < enabled.length;
+        }
+    };
+
+    rowCheckboxes.forEach(checkbox => checkbox.addEventListener('change', refreshSelectionState));
+    selectAll?.addEventListener('change', () => {
+        rowCheckboxes.forEach(checkbox => {
+            if (!checkbox.disabled) checkbox.checked = selectAll.checked;
+        });
+        refreshSelectionState();
+    });
+    document.querySelectorAll('.js-bulk-status-choice').forEach(choice => {
+        choice.addEventListener('click', () => {
+            const selectedIds = [...new Set(selectedOpenCheckboxes().map(checkbox => checkbox.value).filter(Boolean))];
+            const statusId = choice.getAttribute('data-status-id') || '';
+            const statusName = choice.getAttribute('data-status-name') || '';
+            if (!selectedIds.length || !statusId || !bulkStatusForm || !bulkRedmineIds || !bulkStatusId) return;
+            const submitBulkStatus = () => {
+                bulkRedmineIds.value = selectedIds.join(',');
+                bulkStatusId.value = statusId;
+                bulkStatusForm.submit();
+            };
+            const message = `¿Cambiar ${selectedIds.length} ticket(s) seleccionado(s) a “${statusName}”?`;
+            if (window.appUi?.confirmAction) {
+                window.appUi.confirmAction(message, submitBulkStatus, {
+                    title: 'Cambiar estado en Redmine',
+                    acceptText: 'Cambiar estado',
+                    tone: 'info',
+                });
+                return;
+            }
+            if (window.confirm(message)) submitBulkStatus();
+        });
+    });
+
     const setBadgeStatus = (badge, status) => {
         const available = Boolean(status && status.available);
         const closed = Boolean(status && status.closed);
+        const statusId = String((status && status.id) || '');
         const statusName = String((status && status.name) || '');
         const message = String((status && status.message) || '');
         const cssClass = !available ? 'historico-redmine-status--unknown' : (closed ? 'historico-redmine-status--closed' : redmineStatusTone(statusName));
@@ -472,6 +686,31 @@ document.addEventListener('DOMContentLoaded', () => {
         badge.className = `historico-redmine-status js-redmine-status ${cssClass}`;
         badge.title = available ? `Redmine: ${statusName}` : message;
         badge.innerHTML = `<i class="bi ${iconClass}"></i><span>${escapeHtml(label)}</span>${detail}`;
+
+        const redmineId = badge.getAttribute('data-redmine-id') || '';
+        if (!redmineId) return;
+
+        const open = available && !closed;
+        document.querySelectorAll(`.js-history-select[data-redmine-id="${CSS.escape(redmineId)}"]`).forEach(checkbox => {
+            checkbox.disabled = !open;
+            checkbox.dataset.currentStatusId = statusId;
+            checkbox.dataset.currentStatusName = statusName;
+            checkbox.dataset.remoteOpen = open ? '1' : '0';
+            if (!open) checkbox.checked = false;
+        });
+        document.querySelectorAll(`.js-redmine-status-menu[data-redmine-id="${CSS.escape(redmineId)}"]`).forEach(trigger => {
+            const menu = trigger.closest('.dropdown')?.querySelector('.historico-status-menu');
+            const options = Array.from(menu?.querySelectorAll('.js-row-status-option') || []);
+            options.forEach(option => {
+                const sameStatus = (option.getAttribute('data-status-id') || '') === statusId
+                    || normalizeStatus(option.getAttribute('data-status-name') || '').trim() === normalizeStatus(statusName).trim();
+                const redundantOpenOption = open && isOpenOptionName(option.getAttribute('data-status-name') || '');
+                option.classList.toggle('d-none', sameStatus || redundantOpenOption);
+            });
+            const hasVisibleOption = options.some(option => !option.classList.contains('d-none'));
+            trigger.classList.toggle('d-none', !open || !hasVisibleOption);
+        });
+        refreshSelectionState();
     };
 
     const statusBadges = Array.from(document.querySelectorAll('.js-redmine-status[data-redmine-id]'));

@@ -171,6 +171,25 @@ class RedmineTicUsersTest extends TestCase
         $this->assertSame('si', $storedValue);
     }
 
+    public function test_save_user_permissions_does_not_reactivate_banned_nova_users(): void
+    {
+        $selectedId = $this->newRedmineId();
+        $otherId = $this->newRedmineId();
+        $facade = $this->facade();
+        $facade->saveUser(['_creating' => true, 'id' => $selectedId, 'rut_sin_dv' => 'b3selected' . $selectedId, 'nombre' => 'Seleccionado', 'apellido' => 'B3']);
+        $facade->saveUser(['_creating' => true, 'id' => $otherId, 'rut_sin_dv' => 'b3other' . $otherId, 'nombre' => 'Otro', 'apellido' => 'B3']);
+
+        DB::table('usuarios_nova')
+            ->whereIn('redmine_id', [$selectedId, $otherId])
+            ->update(['estado' => 'baneado']);
+
+        $ok = $facade->saveUserPermissions($selectedId, 'usuario', ['estadisticas' => true]);
+
+        $this->assertTrue($ok);
+        $this->assertSame('baneado', DB::table('usuarios_nova')->where('redmine_id', $selectedId)->value('estado'));
+        $this->assertSame('baneado', DB::table('usuarios_nova')->where('redmine_id', $otherId)->value('estado'));
+    }
+
     public function test_deleting_a_user_revokes_project_access(): void
     {
         $id = $this->newRedmineId();

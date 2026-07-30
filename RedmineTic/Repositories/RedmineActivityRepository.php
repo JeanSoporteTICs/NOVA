@@ -46,7 +46,8 @@ class RedmineActivityRepository
     {
         $moduleId = $this->moduleId();
         $page = max(1, (int)($filters['page'] ?? 1));
-        $perPage = in_array((int)($filters['per_page'] ?? 50), [25, 50, 100], true) ? (int)$filters['per_page'] : 50;
+        $requestedPerPage = (int)($filters['per_page'] ?? 50);
+        $perPage = in_array($requestedPerPage, [25, 50, 100], true) ? $requestedPerPage : 50;
         if (!$this->tableAvailable() || $moduleId === null) {
             return ['entries' => [], 'total' => 0, 'page' => 1, 'per_page' => $perPage, 'pages' => 1, 'events' => []];
         }

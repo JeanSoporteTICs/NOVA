@@ -127,6 +127,37 @@ final class MantencionReportRepository
         }
     }
 
+    public function updateRedmineStatus(string $ticketId, int $statusId, string $statusName): int
+    {
+        if (! $this->tableReady()) {
+            return 0;
+        }
+
+        $moduleId = $this->resolveModuleId();
+        $ticketId = trim($ticketId);
+        if (
+            $moduleId === null
+            || ! preg_match('/^\d+$/', $ticketId)
+            || $statusId <= 0
+            || trim($statusName) === ''
+        ) {
+            return 0;
+        }
+
+        try {
+            return DB::table('redmine_mantencion_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('numero_ticket_redmine', (int) $ticketId)
+                ->update([
+                    'estado_id' => (string) $statusId,
+                    'estado_redmine' => trim($statusName),
+                    'actualizado_at' => now(),
+                ]);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
     /** @param array<int,array<string,mixed>> $messages */
     public function syncMessages(array $messages, array $config = []): void
     {

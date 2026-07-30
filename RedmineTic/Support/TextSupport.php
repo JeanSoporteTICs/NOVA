@@ -67,7 +67,7 @@ final class TextSupport
     public static function isClosedIssueStatus(string $statusName): bool
     {
         $statusKey = strtolower(trim($statusName));
-        foreach (['cerrad', 'closed', 'resuelt', 'resolved', 'finaliz', 'complet', 'terminad'] as $needle) {
+        foreach (['cerrad', 'closed', 'resuelt', 'resolved', 'finaliz', 'complet', 'terminad', 'rechaz', 'reject'] as $needle) {
             if (str_contains($statusKey, $needle)) {
                 return true;
             }

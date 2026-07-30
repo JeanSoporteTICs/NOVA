@@ -30,6 +30,16 @@ function dashboard_is_ajax_request(): bool {
         || (string)($_POST['ajax'] ?? '') === '1';
 }
 
+function dashboard_required_permission_for_action(string $action): ?string {
+    return match ($action) {
+        'update', 'process_selected', 'archive_selected', 'reset_errors' => 'reportes_editar',
+        'delete', 'delete_selected' => 'reportes_eliminar',
+        'import_core_history' => 'reportes_importar_core',
+        'toggle_hora_extra' => 'horas_extra_editar',
+        default => null,
+    };
+}
+
 function dashboard_status_counts(array $messages): array {
     $counts = [
         'pendiente' => 0,
@@ -846,9 +856,8 @@ function dashboard_catalog_similarity_score(string $needle, string $candidate): 
 
 function dashboard_core_category_aliases(): array {
     return [
-        'modificar usuario' => 'Modificar Perfil CORE',
-        'creacion de usuario' => 'Credencial CORE',
-        'creacion usuario' => 'Credencial CORE',
+        'modificar usuario' => 'modificar perfil core',
+        'creacion usuario' => 'creacion de usuario',
     ];
 }
 
@@ -860,7 +869,7 @@ function dashboard_core_resolve_category(string $tipoSolicitud, array $catalog):
     $normalizedType = dashboard_normalize_text($tipoSolicitud);
     $aliases = dashboard_core_category_aliases();
     if (isset($aliases[$normalizedType])) {
-        return $aliases[$normalizedType];
+        $normalizedType = $aliases[$normalizedType];
     }
     $bestCandidate = '';
     $bestScore = 0.0;
@@ -1122,10 +1131,36 @@ function dashboard_can_assign_other_users(): bool {
     return strtolower(trim((string)$scope)) === 'todos';
 }
 
+function dashboard_can_select_core_assignee(?array $novaUser = null): bool {
+    if ($novaUser === null) {
+        $novaUser = [];
+        if (function_exists('session')) {
+            try {
+                $candidate = session('nova_user');
+                if (is_array($candidate)) {
+                    $novaUser = $candidate;
+                }
+            } catch (Throwable) {
+            }
+        }
+        if ($novaUser === [] && function_exists('request')) {
+            try {
+                $candidate = request()->session()->get('nova_user');
+                if (is_array($candidate)) {
+                    $novaUser = $candidate;
+                }
+            } catch (Throwable) {
+            }
+        }
+    }
+
+    return strtolower(trim((string)($novaUser['role'] ?? 'usuario'))) === 'root';
+}
+
 function dashboard_enforced_assigned_name(string $submitted = ''): string {
     $current = dashboard_current_user_full_name();
-    if (!dashboard_can_assign_other_users()) {
-        return $current !== '' ? $current : trim($submitted);
+    if (!dashboard_can_select_core_assignee()) {
+        return $current;
     }
     $submitted = trim($submitted);
     if ($submitted !== '' && dashboard_find_active_user_by_name($submitted) !== null) {
@@ -1150,7 +1185,7 @@ function dashboard_find_active_user_by_name(string $name): ?array {
 
 function dashboard_apply_import_assignment(array $message, array $filters): array {
     $targetUser = null;
-    if (!dashboard_can_assign_other_users()) {
+    if (!dashboard_can_select_core_assignee()) {
         $targetUser = dashboard_current_user();
     } else {
         $assigned = trim((string)($filters['assigned'] ?? ''));
@@ -3309,6 +3344,22 @@ function handle_request(): array {
             'message' => '',
             'ids' => [],
         ];
+        $requiredPermission = dashboard_required_permission_for_action((string)$action);
+        if ($requiredPermission !== null && !auth_can($requiredPermission)) {
+            $permissionLabels = [
+                'reportes_editar' => 'editar reportes',
+                'reportes_eliminar' => 'eliminar reportes',
+                'reportes_importar_core' => 'importar reportes desde CORE',
+                'horas_extra_editar' => 'editar Horas extra',
+            ];
+            $flashMsg = 'No tienes permiso para ' . ($permissionLabels[$requiredPermission] ?? 'ejecutar esta acción') . '.';
+            $ajaxPayload['ok'] = false;
+            if ($ajaxAction) {
+                dashboard_json_response(array_merge($ajaxPayload, ['message' => $flashMsg]), 403);
+            }
+            http_response_code(403);
+            exit($flashMsg);
+        }
         switch ($action) {
             case 'update':
                 $id = $_POST['id'] ?? '';
@@ -3328,6 +3379,9 @@ function handle_request(): array {
                     'hora_extra','fecha_inicio','fecha_fin','tiempo_estimado',
                     'fecha','hora','numero','descripcion','core_email'
                 ];
+                if (!auth_can('horas_extra_editar')) {
+                    $fields = array_values(array_diff($fields, ['hora_extra', 'tiempo_estimado']));
+                }
                 $updatedMessage = null;
                 foreach ($messages as &$message) {
                     if (($message['id'] ?? '') !== $id) {
@@ -3505,7 +3559,13 @@ function handle_request(): array {
                 }
                 $desde = trim((string)($_POST['core_desde'] ?? ''));
                 $hasta = trim((string)($_POST['core_hasta'] ?? ''));
+                $canSelectCoreAssignee = dashboard_can_select_core_assignee();
                 $assigned = dashboard_enforced_assigned_name((string)($_POST['core_assigned_name'] ?? ''));
+                if (!$canSelectCoreAssignee && $assigned === '') {
+                    $flashMsg = 'No se pudo identificar al usuario conectado para filtrar las solicitudes de CORE.';
+                    $ajaxPayload['ok'] = false;
+                    break;
+                }
                 $coreUser = trim((string)($_POST['core_runtime_user'] ?? ''));
                 $corePass = trim((string)($_POST['core_runtime_pass'] ?? ''));
                 $rememberCore = !empty($_POST['core_remember_credentials']);
@@ -3524,7 +3584,7 @@ function handle_request(): array {
                     'desde' => $desde,
                     'hasta' => $hasta,
                     'assigned' => $assigned,
-                    '_current_user' => !dashboard_can_assign_other_users() && is_array($currentUserData) ? $currentUserData : [],
+                    '_current_user' => !$canSelectCoreAssignee && is_array($currentUserData) ? $currentUserData : [],
                 ], true, [
                     'user' => $coreUser,
                     'pass' => $corePass,

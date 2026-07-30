@@ -79,7 +79,11 @@ Artisan::command('nova:consolidate-users', function () {
         return in_array(strtolower(trim($status)), ['baneado', 'bloqueado', 'inactivo'], true) ? 'baneado' : 'activo';
     };
     $normalizeRole = static function (string $role): string {
-        return in_array(strtolower(trim($role)), ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
+        return match (strtolower(trim($role))) {
+            'root' => 'root',
+            'admin', 'administrador' => 'admin',
+            default => 'usuario',
+        };
     };
     $splitPerson = static function (string $name, string $lastName = ''): array {
         $name = preg_replace('/\s+/', ' ', trim($name)) ?? '';

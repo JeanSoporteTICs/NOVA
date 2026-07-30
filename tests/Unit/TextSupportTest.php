@@ -44,6 +44,7 @@ class TextSupportTest extends TestCase
     {
         $this->assertTrue(TextSupport::isClosedIssueStatus('Cerrada'));
         $this->assertTrue(TextSupport::isClosedIssueStatus('Resolved'));
+        $this->assertTrue(TextSupport::isClosedIssueStatus('Rechazada'));
         $this->assertFalse(TextSupport::isClosedIssueStatus('Nueva'));
     }
 

@@ -11,6 +11,7 @@ if (!auth_can('historico')) {
 
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $maintenanceMode = maintenance_mode_enabled();
+$csrf = legacy_csrf_token();
 
 // --- Helpers para eliminar registros ---
 function delete_reporte(string $base, string $id): bool {
@@ -31,16 +32,15 @@ function delete_horas_extra(string $base, string $id): bool {
 $alert = '';
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'], $_POST['id'], $_POST['fuente']) && $_POST['action'] === 'delete') {
   if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
+  if (function_exists('csrf_validate')) csrf_validate();
+  if ($maintenanceMode || !auth_can('historico_eliminar')) {
+    http_response_code(403);
+    exit('No tienes permiso para eliminar registros del histórico.');
+  }
   $id = trim($_POST['id']);
   $src = $_POST['fuente'];
   $ok = false;
-  $deleteRoles = auth_load_roles();
-  $deleteRoleName = auth_get_user_role();
-  $deleteRoleCfg = $deleteRoles[$deleteRoleName] ?? [];
-  $deleteCanAct = !$maintenanceMode && auth_can('historico_acciones');
-  if (!$maintenanceMode && !$deleteCanAct && $deleteRoleName === 'gestor' && !array_key_exists('historico_acciones', $deleteRoleCfg)) {
-    $deleteCanAct = true;
-  }
+  $deleteCanAct = true;
   $deleteScope = 'asignados';
   $deleteUserId = (string)auth_get_user_id();
   $deleteUserNames = array_values(array_filter([
@@ -87,40 +87,23 @@ function historico_format_date(string $str): string {
 }
 
 function historico_redmine_issue_url(string $platformUrl, string $redmineId): string {
-  $redmineId = trim($redmineId);
-  if ($redmineId === '' || !preg_match('/^\d+$/', $redmineId)) {
-    return '';
-  }
-  $platformUrl = trim($platformUrl);
-  if ($platformUrl === '') {
-    return '';
-  }
-  $base = preg_replace('#/projects/[^/]+/issues(?:\.json)?(?:\?.*)?$#i', '', $platformUrl);
-  if ($base === $platformUrl) {
-    $base = preg_replace('#/issues(?:\.json)?(?:\?.*)?$#i', '', $platformUrl);
-  }
-  $base = rtrim((string)$base, '/');
-  return $base !== '' ? $base . '/issues/' . rawurlencode($redmineId) : '';
+  return historico_redmine_status_service()->issueUrl($platformUrl, $redmineId);
 }
 
 function historico_redmine_issue_api_url(string $platformUrl, string $redmineId): string {
-  $issueUrl = historico_redmine_issue_url($platformUrl, $redmineId);
-  return $issueUrl !== '' ? $issueUrl . '.json' : '';
+  return historico_redmine_status_service()->issueApiUrl($platformUrl, $redmineId);
 }
 
 function historico_redmine_is_closed_status(string $statusName): bool {
-  $statusKey = dashboard_normalize_text($statusName);
-  if ($statusKey === '') {
-    return false;
-  }
+  return historico_redmine_status_service()->isClosedStatus($statusName);
+}
 
-  foreach (['cerrad', 'closed', 'resuelt', 'resolved', 'finaliz', 'complet', 'terminad'] as $closedNeedle) {
-    if (str_contains($statusKey, $closedNeedle)) {
-      return true;
-    }
+function historico_redmine_status_service(): \App\Modulos\RedmineMantencion\Services\RedmineIssueStatusService {
+  static $service = null;
+  if (!$service instanceof \App\Modulos\RedmineMantencion\Services\RedmineIssueStatusService) {
+    $service = app(\App\Modulos\RedmineMantencion\Services\RedmineIssueStatusService::class);
   }
-
-  return false;
+  return $service;
 }
 
 function historico_fetch_redmine_status(string $platformUrl, string $redmineId, string $token): array {
@@ -132,77 +115,7 @@ function historico_fetch_redmine_status(string $platformUrl, string $redmineId, 
     return $cache[$cacheKey];
   }
 
-  $empty = [
-    'name' => '',
-    'closed' => false,
-    'available' => false,
-    'message' => 'Sin Redmine ID',
-  ];
-  if ($redmineId === '') {
-    return $cache[$cacheKey] = $empty;
-  }
-
-  $url = historico_redmine_issue_api_url($platformUrl, $redmineId);
-  if ($url === '') {
-    return $cache[$cacheKey] = [
-      'name' => '',
-      'closed' => false,
-      'available' => false,
-      'message' => 'URL Redmine no configurada',
-    ];
-  }
-  if (!function_exists('curl_init')) {
-    return $cache[$cacheKey] = [
-      'name' => '',
-      'closed' => false,
-      'available' => false,
-      'message' => 'cURL no disponible',
-    ];
-  }
-
-  $headers = ['Accept: application/json'];
-  if ($token !== '') {
-    $headers[] = 'X-Redmine-API-Key: ' . $token;
-  }
-
-  $ch = curl_init($url);
-  curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => $headers,
-    CURLOPT_CONNECTTIMEOUT => 2,
-    CURLOPT_TIMEOUT => 4,
-  ]);
-  $body = curl_exec($ch);
-  $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  $curlError = curl_error($ch);
-  curl_close($ch);
-
-  if ($body === false || $curlError !== '' || $httpCode < 200 || $httpCode >= 300) {
-    return $cache[$cacheKey] = [
-      'name' => '',
-      'closed' => false,
-      'available' => false,
-      'message' => $curlError !== '' ? $curlError : 'HTTP ' . $httpCode,
-    ];
-  }
-
-  $payload = json_decode((string)$body, true);
-  $statusName = trim((string)($payload['issue']['status']['name'] ?? ''));
-  if ($statusName === '') {
-    return $cache[$cacheKey] = [
-      'name' => '',
-      'closed' => false,
-      'available' => false,
-      'message' => 'Estado no informado por Redmine',
-    ];
-  }
-
-  return $cache[$cacheKey] = [
-    'name' => $statusName,
-    'closed' => historico_redmine_is_closed_status($statusName),
-    'available' => true,
-    'message' => '',
-  ];
+  return $cache[$cacheKey] = historico_redmine_status_service()->fetchStatus($platformUrl, $redmineId, $token);
 }
 
 function historico_matches_search(array $row, string $needle): bool {
@@ -324,17 +237,12 @@ if (!in_array($perPage, $perPageOptions, true)) {
   $perPage = 25;
 }
 $currentPage = max(1, (int)($_GET['page'] ?? 1));
-$roles       = auth_load_roles();
-$roleName    = auth_get_user_role();
-$roleCfg     = $roles[$roleName] ?? [];
 $scopePermitido = 'asignados';
 $scopeBloqueado = ($scopePermitido === 'asignados');
-$showActions = !$maintenanceMode && auth_can('historico_acciones');
-if (!$maintenanceMode && !$showActions && $roleName === 'gestor' && !array_key_exists('historico_acciones', $roleCfg)) {
-  // compatibilidad con roles antiguos sin la clave
-  $showActions = true;
-}
-$tableColspan = $showActions ? 10 : 9;
+$canChangeHistoryStatus = !$maintenanceMode && auth_can('historico_estado');
+$canDeleteHistory = !$maintenanceMode && auth_can('historico_eliminar');
+$showActions = $canChangeHistoryStatus || $canDeleteHistory;
+$tableColspan = 9 + ($canChangeHistoryStatus ? 1 : 0) + ($showActions ? 1 : 0);
 $f_scope = $_GET['mensajes_scope'] ?? ($scopePermitido === 'todos' ? 'todos' : 'asignados');
 if (!in_array($f_scope, ['todos','asignados'], true)) $f_scope = 'asignados';
 if ($scopePermitido === 'asignados') {
@@ -349,11 +257,101 @@ $userNames = array_values(array_filter([
 $cfg = load_platform_config();
 $redminePlatformUrl = (string)($cfg['platform_url'] ?? '');
 $redmineToken = load_user_api_token($userId);
+$redmineStatusService = historico_redmine_status_service();
+$redmineStatusOptions = $redmineStatusService->statusOptions();
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'update_redmine_status') {
+  if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
+  if (function_exists('csrf_validate')) csrf_validate();
+
+  $ok = false;
+  $statusId = (int)($_POST['status_id'] ?? 0);
+  $statusName = $redmineStatusService->statusName($statusId);
+  $requestedIds = is_array($_POST['redmine_ids'] ?? null)
+    ? $_POST['redmine_ids']
+    : explode(',', (string)($_POST['redmine_ids'] ?? ''));
+  $requestedIds = array_slice(array_values(array_unique(array_filter(array_map(
+    static function ($id): string {
+      $id = trim((string)$id);
+      return preg_match('/^\d+$/', $id) ? $id : '';
+    },
+    $requestedIds
+  )))), 0, 100);
+
+  if (!$canChangeHistoryStatus) {
+    http_response_code(403);
+    $alert = 'No tienes permiso para cambiar estados desde el histórico.';
+  } elseif ($statusName === null) {
+    $alert = 'Selecciona un estado Redmine válido.';
+  } elseif ($requestedIds === []) {
+    $alert = 'Selecciona al menos un reporte abierto.';
+  } elseif (trim($redmineToken) === '') {
+    $alert = 'Configura tu API Key personal de Redmine en Mis integraciones antes de cambiar estados.';
+  } else {
+    $reportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+    $allowedTickets = [];
+    foreach ($reportRepo?->archivedMessages() ?? [] as $archivedRow) {
+      if (!is_array($archivedRow) || !historico_record_matches_current_user($archivedRow, $userId, $userNames)) {
+        continue;
+      }
+      $ticketId = trim((string)($archivedRow['redmine_id'] ?? ''));
+      if (preg_match('/^\d+$/', $ticketId)) {
+        $allowedTickets[$ticketId] = true;
+      }
+    }
+
+    $updated = 0;
+    $errors = [];
+    foreach ($requestedIds as $ticketId) {
+      if (!isset($allowedTickets[$ticketId])) {
+        $errors[] = '#' . $ticketId . ': no pertenece a tu histórico disponible.';
+        continue;
+      }
+
+      $currentStatus = historico_fetch_redmine_status($redminePlatformUrl, $ticketId, $redmineToken);
+      if (!($currentStatus['available'] ?? false)) {
+        $errors[] = '#' . $ticketId . ': no se pudo confirmar el estado actual.';
+        continue;
+      }
+      if ($currentStatus['closed'] ?? false) {
+        $errors[] = '#' . $ticketId . ': ya está cerrado en Redmine.';
+        continue;
+      }
+
+      $result = $redmineStatusService->updateStatus($redminePlatformUrl, $ticketId, $statusId, $redmineToken);
+      if (!($result['ok'] ?? false)) {
+        $errors[] = '#' . $ticketId . ': ' . trim((string)($result['error'] ?? 'no se pudo actualizar.'));
+        continue;
+      }
+
+      $reportRepo?->updateRedmineStatus($ticketId, $statusId, $statusName);
+      $updated++;
+    }
+
+    $ok = $updated > 0;
+    $alert = $updated . ' reporte(s) actualizado(s) a “' . $statusName . '” en Redmine.';
+    if ($errors !== []) {
+      $alert .= ' No actualizados: ' . implode(' ', array_slice($errors, 0, 5));
+      if (count($errors) > 5) {
+        $alert .= ' y ' . (count($errors) - 5) . ' más.';
+      }
+    }
+
+    dashboard_log_action(
+      'REDMINE_STATUS_UPDATE',
+      'Estado "' . $statusName . '" solicitado para ' . count($requestedIds)
+        . ' ticket(s); actualizados=' . $updated . '; fallidos=' . count($errors)
+    );
+  }
+}
 
 if (($_GET['ajax'] ?? '') === 'redmine_statuses') {
   header('Content-Type: application/json; charset=utf-8');
   $ids = array_values(array_unique(array_filter(array_map(
-    static fn($id) => preg_replace('/\D+/', '', trim((string)$id)),
+    static function ($id): string {
+      $id = trim((string)$id);
+      return preg_match('/^\d+$/', $id) ? $id : '';
+    },
     explode(',', (string)($_GET['ids'] ?? ''))
   ))));
   $ids = array_slice($ids, 0, 100);
@@ -549,6 +547,42 @@ ksort($catsSel);
         <span class="text-muted ms-2">Mostrando <?= $h($visibleRows) ?> de <?= $h($totalFiltered) ?> registros</span>
       </div>
       <div class="historico-summary__tools">
+        <?php if ($canChangeHistoryStatus): ?>
+          <div class="dropdown historico-bulk-status">
+            <button
+              type="button"
+              class="btn-nova btn-nova-primary historico-bulk-status__button dropdown-toggle"
+              id="historico-bulk-status-button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              disabled>
+              <i class="bi bi-kanban"></i>
+              Cambiar estado
+              <span class="historico-selection-count" id="historico-selection-count">0</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end historico-status-menu" aria-labelledby="historico-bulk-status-button">
+              <li class="dropdown-header">Aplicar a seleccionados</li>
+              <?php foreach ($redmineStatusOptions as $statusId => $statusLabel): ?>
+                <li>
+                  <button
+                    type="button"
+                    class="dropdown-item js-bulk-status-choice"
+                    data-status-id="<?= $h($statusId) ?>"
+                    data-status-label="<?= $h($statusLabel) ?>">
+                    <span class="historico-status-dot is-status-<?= $h($statusId) ?>"></span>
+                    <?= $h($statusLabel) ?>
+                  </button>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+          <form method="post" id="historico-bulk-status-form" class="d-none">
+            <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+            <input type="hidden" name="action" value="update_redmine_status">
+            <input type="hidden" name="redmine_ids" id="historico-bulk-redmine-ids" value="">
+            <input type="hidden" name="status_id" id="historico-bulk-status-id" value="">
+          </form>
+        <?php endif; ?>
         <label class="form-check form-switch m-0">
           <input class="form-check-input" type="checkbox" role="switch" id="historico-compact-toggle">
           <span class="form-check-label fw-semibold">Modo compacto</span>
@@ -588,6 +622,7 @@ ksort($catsSel);
         </div>
         <table class="table table-hover historico-table align-middle mb-0" role="grid" aria-label="Histórico de reportes" aria-busy="false">
           <colgroup>
+            <?php if ($canChangeHistoryStatus): ?><col class="historico-col-select"><?php endif; ?>
             <col class="historico-col-date">
             <col class="historico-col-id">
             <col class="historico-col-redmine-status">
@@ -601,6 +636,16 @@ ksort($catsSel);
           </colgroup>
           <thead class="table-light">
             <tr class="position-sticky top-0 bg-light">
+              <?php if ($canChangeHistoryStatus): ?>
+                <th scope="col" class="historico-select-cell">
+                  <input
+                    class="form-check-input js-history-select-all"
+                    type="checkbox"
+                    id="historico-select-all"
+                    aria-label="Seleccionar todos los reportes abiertos"
+                    disabled>
+                </th>
+              <?php endif; ?>
               <th scope="col">Fecha</th>
               <th scope="col">Redmine ID</th>
               <th scope="col">Estado Redmine</th>
@@ -611,7 +656,7 @@ ksort($catsSel);
               <th scope="col">Fuente</th>
               <th scope="col">Detalle</th>
               <?php if ($showActions): ?>
-                <th scope="col">Acciones</th>
+                <th scope="col" class="historico-actions-cell">Acciones</th>
               <?php endif; ?>
             </tr>
           </thead>
@@ -634,7 +679,22 @@ ksort($catsSel);
                   $redmineId = trim((string)($row['redmine_id'] ?? ''));
                   $redmineIssueUrl = historico_redmine_issue_url($redminePlatformUrl, $redmineId);
                 ?>
-                <tr>
+                <tr data-redmine-row="<?= $h($redmineId) ?>">
+                  <?php if ($canChangeHistoryStatus): ?>
+                    <td class="historico-select-cell">
+                      <?php if ($redmineId !== ''): ?>
+                        <input
+                          class="form-check-input js-history-select"
+                          type="checkbox"
+                          value="<?= $h($redmineId) ?>"
+                          data-redmine-id="<?= $h($redmineId) ?>"
+                          aria-label="Seleccionar ticket Redmine <?= $h($redmineId) ?>"
+                          disabled>
+                      <?php else: ?>
+                        <span class="text-muted">—</span>
+                      <?php endif; ?>
+                    </td>
+                  <?php endif; ?>
                   <td><span class="historico-date"><i class="bi bi-calendar3"></i><?= $h(historico_format_date($row['_fecha_norm'] ?? '')) ?></span></td>
                   <td>
                     <?php if ($redmineId !== '' && $redmineIssueUrl !== ''): ?>
@@ -707,15 +767,58 @@ ksort($catsSel);
                     </button>
                   </td>
                   <?php if ($showActions): ?>
-                    <td>
-                      <form method="post" class="m-0" data-app-confirm="Eliminar este registro del histórico?">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="id" value="<?= $h($row['id'] ?? '') ?>">
-                        <input type="hidden" name="fuente" value="<?= $h($row['_fuente'] ?? '') ?>">
-                        <button type="submit" class="btn-action btn-action-delete" title="Eliminar" aria-label="Eliminar">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </form>
+                    <td class="historico-actions-cell">
+                      <div class="historico-row-actions">
+                        <?php if ($canChangeHistoryStatus && $redmineId !== ''): ?>
+                          <div class="dropdown">
+                            <button
+                              type="button"
+                              class="btn-action btn-action-sync dropdown-toggle no-caret js-redmine-status-menu d-none"
+                              data-redmine-id="<?= $h($redmineId) ?>"
+                              data-bs-toggle="dropdown"
+                              data-bs-boundary="viewport"
+                              aria-expanded="false"
+                              title="Cambiar estado en Redmine"
+                              aria-label="Cambiar estado del ticket <?= $h($redmineId) ?>">
+                              <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end historico-status-menu">
+                              <li class="dropdown-header">Cambiar estado #<?= $h($redmineId) ?></li>
+                              <?php foreach ($redmineStatusOptions as $statusId => $statusLabel): ?>
+                                <li>
+                                  <form
+                                    method="post"
+                                    class="m-0"
+                                    data-app-confirm="¿Cambiar el ticket #<?= $h($redmineId) ?> a <?= $h($statusLabel) ?>?"
+                                    data-app-confirm-title="Cambiar estado en Redmine"
+                                    data-app-confirm-tone="info"
+                                    data-app-confirm-text="Cambiar estado">
+                                    <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                                    <input type="hidden" name="action" value="update_redmine_status">
+                                    <input type="hidden" name="redmine_ids" value="<?= $h($redmineId) ?>">
+                                    <input type="hidden" name="status_id" value="<?= $h($statusId) ?>">
+                                    <button type="submit" class="dropdown-item">
+                                      <span class="historico-status-dot is-status-<?= $h($statusId) ?>"></span>
+                                      <?= $h($statusLabel) ?>
+                                    </button>
+                                  </form>
+                                </li>
+                              <?php endforeach; ?>
+                            </ul>
+                          </div>
+                        <?php endif; ?>
+                        <?php if ($canDeleteHistory): ?>
+                          <form method="post" class="m-0" data-app-confirm="Eliminar este registro del histórico?">
+                            <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="id" value="<?= $h($row['id'] ?? '') ?>">
+                            <input type="hidden" name="fuente" value="<?= $h($row['_fuente'] ?? '') ?>">
+                            <button type="submit" class="btn-action btn-action-delete" title="Eliminar" aria-label="Eliminar">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          </form>
+                        <?php endif; ?>
+                      </div>
                     </td>
                   <?php endif; ?>
                 </tr>
@@ -868,6 +971,75 @@ ksort($catsSel);
       const historicoTableCard = document.getElementById('historico-table-card');
       const historicoCompactToggle = document.getElementById('historico-compact-toggle');
       const historicoCompactKey = 'redmine-mantencion-historico-compact';
+      const selectAll = document.getElementById('historico-select-all');
+      const rowCheckboxes = Array.from(document.querySelectorAll('.js-history-select[data-redmine-id]'));
+      const bulkStatusButton = document.getElementById('historico-bulk-status-button');
+      const selectionCount = document.getElementById('historico-selection-count');
+      const bulkStatusForm = document.getElementById('historico-bulk-status-form');
+      const bulkRedmineIds = document.getElementById('historico-bulk-redmine-ids');
+      const bulkStatusId = document.getElementById('historico-bulk-status-id');
+
+      if (window.bootstrap?.Dropdown) {
+        document.querySelectorAll('.js-redmine-status-menu').forEach(trigger => {
+          const dropdown = trigger.closest('.dropdown');
+          const menu = dropdown?.querySelector('.historico-status-menu');
+          if (!dropdown || !menu) return;
+
+          trigger.addEventListener('show.bs.dropdown', () => {
+            menu.classList.add('is-portal');
+            document.body.appendChild(menu);
+          });
+          trigger.addEventListener('hidden.bs.dropdown', () => {
+            menu.classList.remove('is-portal');
+            dropdown.appendChild(menu);
+          });
+
+          window.bootstrap.Dropdown.getOrCreateInstance(trigger, {
+            boundary: 'viewport',
+            popperConfig(defaultConfig) {
+              return { ...defaultConfig, strategy: 'fixed' };
+            },
+          });
+        });
+      }
+
+      const selectedOpenIds = () => [...new Set(
+        rowCheckboxes
+          .filter(checkbox => !checkbox.disabled && checkbox.checked)
+          .map(checkbox => checkbox.value)
+          .filter(Boolean)
+      )];
+      const refreshSelectionState = () => {
+        const enabled = rowCheckboxes.filter(checkbox => !checkbox.disabled);
+        const selected = selectedOpenIds();
+        if (selectionCount) selectionCount.textContent = String(selected.length);
+        if (bulkStatusButton) bulkStatusButton.disabled = selected.length === 0;
+        if (selectAll) {
+          selectAll.disabled = enabled.length === 0;
+          selectAll.checked = enabled.length > 0 && enabled.every(checkbox => checkbox.checked);
+          selectAll.indeterminate = selected.length > 0 && selected.length < enabled.length;
+        }
+      };
+
+      rowCheckboxes.forEach(checkbox => checkbox.addEventListener('change', refreshSelectionState));
+      selectAll?.addEventListener('change', () => {
+        rowCheckboxes.forEach(checkbox => {
+          if (!checkbox.disabled) checkbox.checked = selectAll.checked;
+        });
+        refreshSelectionState();
+      });
+      document.querySelectorAll('.js-bulk-status-choice').forEach(choice => {
+        choice.addEventListener('click', () => {
+          const ids = selectedOpenIds();
+          const statusId = choice.getAttribute('data-status-id') || '';
+          const statusLabel = choice.getAttribute('data-status-label') || '';
+          if (!ids.length || !statusId || !bulkStatusForm || !bulkRedmineIds || !bulkStatusId) return;
+          if (!window.confirm(`¿Cambiar ${ids.length} ticket(s) seleccionado(s) a “${statusLabel}”?`)) return;
+          bulkRedmineIds.value = ids.join(',');
+          bulkStatusId.value = statusId;
+          bulkStatusForm.submit();
+        });
+      });
 
       if (historicoTableCard && historicoCompactToggle) {
         const savedCompact = localStorage.getItem(historicoCompactKey) === '1';
@@ -913,6 +1085,19 @@ ksort($catsSel);
         badge.className = `historico-redmine-status js-redmine-status ${cssClass}`;
         badge.title = available ? `Redmine: ${statusName}` : message;
         badge.innerHTML = `<i class="bi ${iconClass}"></i><span>${escapeHtml(label)}</span>${detail}`;
+
+        const redmineId = badge.getAttribute('data-redmine-id') || '';
+        if (redmineId) {
+          const open = available && !closed;
+          document.querySelectorAll(`.js-history-select[data-redmine-id="${CSS.escape(redmineId)}"]`).forEach(checkbox => {
+            checkbox.disabled = !open;
+            if (!open) checkbox.checked = false;
+          });
+          document.querySelectorAll(`.js-redmine-status-menu[data-redmine-id="${CSS.escape(redmineId)}"]`).forEach(menu => {
+            menu.classList.toggle('d-none', !open);
+          });
+          refreshSelectionState();
+        }
       };
 
       const syncRedmineStatuses = async () => {

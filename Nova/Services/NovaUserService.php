@@ -107,7 +107,11 @@ final class NovaUserService
 
         // "gestor" is a module-specific role and must never grant global
         // NOVA administration privileges.
-        return in_array($role, ['admin', 'administrador', 'root'], true) ? 'admin' : 'usuario';
+        return match ($role) {
+            'root' => 'root',
+            'admin', 'administrador' => 'admin',
+            default => 'usuario',
+        };
     }
 
     public function normalizeStatus(string $status): string
@@ -346,9 +350,11 @@ final class NovaUserService
             (string) ($duplicate['source'] ?? ''),
         );
 
-        if ($this->normalizeNovaRole((string) ($duplicate['role'] ?? 'usuario')) === 'admin') {
-            $merged['role'] = 'admin';
-        }
+        $primaryRole = $this->normalizeNovaRole((string) ($merged['role'] ?? 'usuario'));
+        $duplicateRole = $this->normalizeNovaRole((string) ($duplicate['role'] ?? 'usuario'));
+        $merged['role'] = in_array('root', [$primaryRole, $duplicateRole], true)
+            ? 'root'
+            : (in_array('admin', [$primaryRole, $duplicateRole], true) ? 'admin' : 'usuario');
         if ($this->normalizeStatus((string) ($duplicate['status'] ?? 'activo')) === 'activo') {
             $merged['status'] = 'activo';
         }

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RedmineTic\Services\RedmineIssueSenderService;
+use RedmineTic\Services\RedmineIssueStatusService;
 use RedmineTic\Services\RedmineMembershipSyncService;
 use RedmineTic\Support\ArraySupport;
 use RedmineTic\Support\CatalogMatchSupport;
@@ -22,6 +23,8 @@ final class RedmineDataRepository
 {
     /** Permission keys that carry a string scope value instead of a boolean. */
     private const PERMISSION_SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
+    /** Roles required as the minimum permission templates for the TIC module. */
+    private const BASE_ROLES = ['administrador', 'usuario'];
 
     private string $projectKey = 'redmine_tic';
     private ?array $assignedUserNames = null;
@@ -37,6 +40,7 @@ final class RedmineDataRepository
     private ?RedmineReportRepository      $reportRepoInst      = null;
     private ?RedmineUserRepository        $userRepoInst        = null;
     private ?RedmineIssueSenderService    $issueSenderInst     = null;
+    private ?RedmineIssueStatusService    $issueStatusInst     = null;
     private ?RedmineStatisticsRepository  $statisticsRepoInst  = null;
     private ?RedmineMembershipSyncService $membershipSyncInst  = null;
     private ?RedmineIdentityService       $redmineIdentityInst = null;
@@ -113,6 +117,11 @@ final class RedmineDataRepository
     private function issueSender(): RedmineIssueSenderService
     {
         return $this->issueSenderInst ??= new RedmineIssueSenderService();
+    }
+
+    private function issueStatus(): RedmineIssueStatusService
+    {
+        return $this->issueStatusInst ??= new RedmineIssueStatusService();
     }
 
     private function statisticsRepo(): RedmineStatisticsRepository
@@ -559,6 +568,12 @@ final class RedmineDataRepository
         return $this->permissionRepo()->roles();
     }
 
+    /** @return string[] */
+    public function baseRoles(): array
+    {
+        return self::BASE_ROLES;
+    }
+
     /**
      * @param array<string,mixed> $permissions
      */
@@ -579,7 +594,7 @@ final class RedmineDataRepository
             return ['ok' => false, 'error' => 'Rol no valido.'];
         }
 
-        if (in_array($role, ['root', 'administrador', 'gestor', 'usuario'], true)) {
+        if (in_array($role, self::BASE_ROLES, true)) {
             return ['ok' => false, 'error' => 'No se puede eliminar un rol base.'];
         }
 
@@ -1101,73 +1116,143 @@ final class RedmineDataRepository
 
     /**
      * @param array<int,string> $redmineIds
-     * @return array<string,array{name:string,closed:bool,available:bool,message:string}>
+     * @return array<string,array{id:int,name:string,closed:bool,available:bool,message:string}>
      */
     public function issueStatuses(array $redmineIds, ?string $userId = null): array
     {
-        $config = $this->configuration();
         $token = $this->userApiToken($userId);
         $statuses = [];
 
         foreach ($redmineIds as $redmineId) {
-            $id = preg_replace('/\D+/', '', trim((string) $redmineId)) ?? '';
-            if ($id === '') {
+            $id = trim((string) $redmineId);
+            if (! preg_match('/^\d+$/', $id)) {
                 continue;
             }
 
             $issueUrl = $this->redmineIssueUrl($id);
-            if ($issueUrl === '') {
-                $statuses[$id] = [
-                    'name' => '',
-                    'closed' => false,
-                    'available' => false,
-                    'message' => 'URL Redmine no configurada',
-                ];
-                continue;
-            }
-
-            if ($token === '') {
-                $statuses[$id] = [
-                    'name' => '',
-                    'closed' => false,
-                    'available' => false,
-                    'message' => 'Token API no configurado',
-                ];
-                continue;
-            }
-
-            $response = $this->getRedmineJson($issueUrl . '.json', $token);
-            if ($response['error'] !== '' || $response['http_code'] < 200 || $response['http_code'] >= 300) {
-                $statuses[$id] = [
-                    'name' => '',
-                    'closed' => false,
-                    'available' => false,
-                    'message' => $response['error'] !== '' ? $response['error'] : 'HTTP ' . $response['http_code'],
-                ];
-                continue;
-            }
-
-            $payload = json_decode($response['body'], true);
-            $statusName = trim((string) data_get($payload, 'issue.status.name', ''));
-            if ($statusName === '') {
-                $statuses[$id] = [
-                    'name' => '',
-                    'closed' => false,
-                    'available' => false,
-                    'message' => 'Estado no informado por Redmine',
-                ];
-                continue;
-            }
-
-            $statuses[$id] = [
-                'name' => $statusName,
-                'closed' => TextSupport::isClosedIssueStatus($statusName),
-                'available' => true,
-                'message' => '',
-            ];
+            $statuses[$id] = $this->issueStatus()->fetch($issueUrl, $token);
         }
 
         return $statuses;
+    }
+
+    /**
+     * @return array<int,array{id:int,name:string}>
+     */
+    public function issueStatusOptions(): array
+    {
+        return $this->issueStatus()->options((array) ($this->configuration()['estados'] ?? []));
+    }
+
+    /**
+     * @param  array<int,string>  $redmineIds
+     * @param  array<string,mixed>  $user
+     * @return array{updated:int,requested:int,status_name:string,errors:array<int,string>}
+     */
+    public function updateHistoryIssueStatuses(array $redmineIds, int $statusId, array $user): array
+    {
+        $options = $this->issueStatusOptions();
+        $statusName = $this->issueStatus()->statusName($options, $statusId);
+        $requested = array_slice(array_values(array_unique(array_filter(array_map(
+            static function ($id): string {
+                $id = trim((string) $id);
+
+                return preg_match('/^\d+$/', $id) ? $id : '';
+            },
+            $redmineIds
+        )))), 0, 100);
+
+        if ($statusName === null) {
+            return [
+                'updated' => 0,
+                'requested' => count($requested),
+                'status_name' => '',
+                'errors' => ['Selecciona un estado Redmine válido.'],
+            ];
+        }
+        if ($requested === []) {
+            return [
+                'updated' => 0,
+                'requested' => 0,
+                'status_name' => $statusName,
+                'errors' => ['Selecciona al menos un reporte abierto.'],
+            ];
+        }
+
+        $accessible = [];
+        foreach ($this->history($user) as $report) {
+            $redmineId = trim((string) ($report['redmine_id'] ?? ''));
+            if (preg_match('/^\d+$/', $redmineId)) {
+                $accessible[$redmineId] = true;
+            }
+        }
+
+        $userId = (string) ($user['id'] ?? '');
+        $token = $this->userApiToken($userId);
+        if ($token === '') {
+            return [
+                'updated' => 0,
+                'requested' => count($requested),
+                'status_name' => $statusName,
+                'errors' => ['Configura tu API Key personal de Redmine en Mis integraciones.'],
+            ];
+        }
+
+        $updated = 0;
+        $errors = [];
+        foreach ($requested as $redmineId) {
+            if (! isset($accessible[$redmineId])) {
+                $errors[] = '#'.$redmineId.': no pertenece a tu histórico disponible.';
+
+                continue;
+            }
+
+            $current = $this->issueStatus()->fetch($this->redmineIssueUrl($redmineId), $token);
+            if (! $current['available']) {
+                $errors[] = '#'.$redmineId.': no se pudo confirmar el estado actual.';
+
+                continue;
+            }
+            if ($current['closed']) {
+                $errors[] = '#'.$redmineId.': ya está cerrado en Redmine.';
+
+                continue;
+            }
+            if ($this->issueStatus()->isCurrentStatus($current, $statusId, $statusName)) {
+                $errors[] = '#'.$redmineId.': ya tiene el estado '.$statusName.'.';
+
+                continue;
+            }
+
+            $result = $this->issueStatus()->update($this->redmineIssueUrl($redmineId), $statusId, $token);
+            if (! $result['ok']) {
+                $errors[] = '#'.$redmineId.': '.($result['error'] ?: 'no se pudo actualizar.');
+
+                continue;
+            }
+
+            $this->reportRepo()->updateArchivedRedmineStatus($redmineId, $statusName);
+            $updated++;
+        }
+
+        if ($updated > 0) {
+            $this->archivedReportsCache = null;
+        }
+        $this->appendActivityLog('historico_estado_redmine_actualizado', [
+            'user_id' => $userId,
+            'redmine_ids' => $requested,
+            'status_id' => $statusId,
+            'status_name' => $statusName,
+            'updated' => $updated,
+            'failed' => count($errors),
+        ]);
+
+        return [
+            'updated' => $updated,
+            'requested' => count($requested),
+            'status_name' => $statusName,
+            'errors' => $errors,
+        ];
     }
 
     public function deleteArchivedReport(string $id): int
@@ -1421,7 +1506,7 @@ final class RedmineDataRepository
             'horas-extra' => $this->hoursExtraData($filters, $user),
             'historico' => ['rows' => $this->history($user), 'config' => $this->configuration()],
             'usuarios' => ['users' => $this->users(), 'roles' => $this->roles()],
-            'configuracion' => ['config' => $this->configuration(), 'roles' => $this->roles(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units(), 'webhookUrl' => $this->webhookUrl()],
+            'configuracion' => ['config' => $this->configuration(), 'roles' => $this->roles(), 'baseRoles' => $this->baseRoles(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units(), 'webhookUrl' => $this->webhookUrl()],
             'estadisticas' => ['stats' => $this->statistics($filters)],
             'actividad' => ['users' => $this->users()],
             default => [],
