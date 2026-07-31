@@ -82,6 +82,7 @@
                         'telegram' => 'bi-telegram',
                         'administracion' => 'bi-person-gear',
                         'procedimientos' => 'bi-journal-richtext',
+                        'monitoreo-servidores' => 'bi-hdd-network',
                     ];
                     $projectType = $project['type'] ?? 'legacy';
                     $projectIcon = $project['icon'] ?? ($moduleIcons[$key] ?? ($projectType === 'native' ? 'bi-window-stack' : 'bi-window-sidebar'));
@@ -95,6 +96,7 @@
                         'administracion' => route('administracion.index'),
                         'procedimientos' => route('procedimientos.index'),
                         'horas-extra' => route('horas-extra.index'),
+                        'monitoreo-servidores' => route('monitor.dashboard'),
                         default => url($key),
                     };
                 @endphp

@@ -1,8 +1,8 @@
 # NOVA
 
 NOVA es la plataforma interna que centraliza autenticación, usuarios, permisos e
-integraciones para los módulos Redmine TIC, Redmine Mantención, EMACH, Telegram y
-Procedimientos.
+integraciones para los módulos Redmine TIC, Redmine Mantención, EMACH, Telegram,
+Procedimientos y Monitor de Servidores.
 
 El proyecto funciona sobre Laravel 12 y PHP 8.2. Conserva algunos flujos PHP
 legacy detrás del enrutador de Laravel, pero la identidad, la configuración y los
@@ -19,6 +19,8 @@ y respaldos locales usados durante la migración ya no forman parte del runtime.
 - **EMACH:** consulta de marcaciones, horarios y monitoreo.
 - **Telegram:** bot, listener, cola y configuración de comandos.
 - **Procedimientos:** gestión documental integrada con Nextcloud.
+- **Monitor de Servidores:** comprobaciones Ping/ICMP, TCP, HTTP y HTTPS, historial de
+  caídas y recuperaciones, y alertas Telegram a administradores y suscriptores.
 
 ## Requisitos
 
@@ -27,7 +29,7 @@ y respaldos locales usados durante la migración ya no forman parte del runtime.
 - MySQL o MariaDB.
 - Node.js y npm para compilar los recursos Vite.
 - Servidor web con el `DocumentRoot` apuntando exclusivamente a `public/`.
-- Opcional: Docker Compose para el listener de Telegram.
+- Docker Compose para el listener de Telegram y el monitor de servidores.
 
 ## Instalación local
 
@@ -83,6 +85,7 @@ php artisan nova:consolidate-users
 php artisan redmine:mantencion-repair-user-names
 php artisan redmine:archive-processed
 php artisan nova:health-alerts
+php artisan nova:monitor-servers
 ```
 
 Telegram puede administrarse con:
@@ -91,6 +94,15 @@ Telegram puede administrarse con:
 docker compose -f docker-compose.telegram.yml ps
 docker compose -f docker-compose.telegram.yml logs
 docker compose -f docker-compose.telegram.yml restart
+```
+
+El monitor se ejecuta como un contenedor separado. Antes de iniciarlo deben
+estar aplicadas las migraciones y configurado el bot de Telegram de NOVA:
+
+```bash
+docker compose -f docker-compose.monitor.yml up -d --build
+docker compose -f docker-compose.monitor.yml ps
+docker compose -f docker-compose.monitor.yml logs
 ```
 
 El comando `/tic problema, unidad, solicitante` crea un reporte pendiente de
@@ -118,6 +130,7 @@ RedmineMantencion/      Módulo Redmine Mantención y bridge legacy
 Emach/                  Módulo EMACH
 Procedimientos/         Módulo documental
 telegram/               Listener y librería del bot
+app/Modulos/MonitorServidores/  Inventario, comprobaciones y alertas
 database/migrations/    Evolución versionada del esquema
 resources/              Vistas y recursos fuente
 public/                 Única raíz pública del servidor web

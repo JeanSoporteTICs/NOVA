@@ -9,6 +9,7 @@ use App\Modulos\Telegram\Controllers\TelegramController;
 use App\Modulos\Shared\Controllers\ModuleLogController;
 use App\Modulos\Nova\Controllers\UserIntegrationController;
 use App\Modulos\Procedimientos\Controllers\ProcedimientosController;
+use App\Modulos\MonitorServidores\Controllers\ServerMonitorController;
 use App\Modulos\Nova\Repositories\ModuleRegistry;
 use App\Modulos\Nova\Repositories\NovaAccessRepository;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
@@ -69,6 +70,16 @@ Route::get('/', function (ModuleRegistry $modules, NovaAccessRepository $access)
 
 Route::get('/horas-extra', [HoursExtraController::class, 'index'])->name('horas-extra.index');
 Route::post('/horas-extra', [HoursExtraController::class, 'update'])->name('horas-extra.update');
+Route::get('/monitoreo-servidores', [ServerMonitorController::class, 'dashboard'])->name('monitor.dashboard');
+Route::get('/monitoreo-servidores/estado', [ServerMonitorController::class, 'status'])->name('monitor.status');
+Route::get('/monitoreo-servidores/servidores', [ServerMonitorController::class, 'servers'])->name('monitor.servers');
+Route::post('/monitoreo-servidores/servidores', [ServerMonitorController::class, 'store'])->name('monitor.servers.store');
+Route::post('/monitoreo-servidores/servidores/comprobar-todos', [ServerMonitorController::class, 'checkAll'])->name('monitor.servers.check-all');
+Route::put('/monitoreo-servidores/servidores/{server}', [ServerMonitorController::class, 'update'])->whereNumber('server')->name('monitor.servers.update');
+Route::delete('/monitoreo-servidores/servidores/{server}', [ServerMonitorController::class, 'destroy'])->whereNumber('server')->name('monitor.servers.destroy');
+Route::post('/monitoreo-servidores/servidores/{server}/comprobar', [ServerMonitorController::class, 'check'])->whereNumber('server')->name('monitor.servers.check');
+Route::get('/monitoreo-servidores/destinatarios', [ServerMonitorController::class, 'recipients'])->name('monitor.recipients');
+Route::post('/monitoreo-servidores/destinatarios', [ServerMonitorController::class, 'updateRecipients'])->name('monitor.recipients.update');
 Route::get('/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'nova')->name('integrations.nova');
 Route::post('/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'nova')->name('integrations.nova.update');
 Route::get('/procedimientos', [ProcedimientosController::class, 'index'])->name('procedimientos.index');

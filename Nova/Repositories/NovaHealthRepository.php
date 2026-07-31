@@ -40,6 +40,7 @@ final class NovaHealthRepository
 
         $checks[] = $this->telegram->healthCheck();
         $checks[] = $this->dockerTelegramCheck();
+        $checks[] = $this->serverMonitorWorkerCheck();
         $checks[] = $this->coreCheck();
         $checks[] = $this->emachCheck();
         $checks[] = $this->nextcloudCheck();
@@ -159,6 +160,46 @@ final class NovaHealthRepository
                 'name' => 'Docker Telegram',
                 'status' => 'warn',
                 'detail' => 'No se pudo consultar Docker: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    private function serverMonitorWorkerCheck(): array
+    {
+        try {
+            if (!Schema::hasTable('monitoreo_workers')) {
+                return [
+                    'name' => 'Docker Monitor de Servidores',
+                    'status' => 'warn',
+                    'detail' => 'La tabla de heartbeat aún no existe.',
+                ];
+            }
+
+            $worker = DB::table('monitoreo_workers')->orderByDesc('ultimo_ciclo_at')->first();
+            if (!$worker || empty($worker->ultimo_ciclo_at)) {
+                return [
+                    'name' => 'Docker Monitor de Servidores',
+                    'status' => 'error',
+                    'detail' => 'El contenedor todavía no registra heartbeat.',
+                ];
+            }
+
+            $age = now()->diffInSeconds(\Illuminate\Support\Carbon::parse($worker->ultimo_ciclo_at));
+            $healthy = $age <= 90 && trim((string) ($worker->ultimo_error ?? '')) === '';
+
+            return [
+                'name' => 'Docker Monitor de Servidores',
+                'status' => $healthy ? 'ok' : 'error',
+                'detail' => $healthy
+                    ? 'Heartbeat activo hace ' . $age . 's | ' . (int) ($worker->servidores_comprobados ?? 0) . ' chequeo(s) en el último ciclo.'
+                    : 'Heartbeat vencido o con error hace ' . $age . 's'
+                        . (trim((string) ($worker->ultimo_error ?? '')) !== '' ? ': ' . trim((string) $worker->ultimo_error) : '.'),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'name' => 'Docker Monitor de Servidores',
+                'status' => 'warn',
+                'detail' => 'No se pudo consultar el heartbeat: ' . $e->getMessage(),
             ];
         }
     }

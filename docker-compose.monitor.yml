@@ -1,0 +1,28 @@
+services:
+  nova-monitor:
+    build:
+      context: .
+      dockerfile: docker/monitor/Dockerfile
+    container_name: nova-monitor
+    working_dir: /app
+    restart: unless-stopped
+    volumes:
+      - ./:/app
+    environment:
+      APP_ENV: production
+      APP_TIMEZONE: ${APP_TIMEZONE:-America/Santiago}
+      DB_CONNECTION: ${DB_CONNECTION:-mysql}
+      DB_HOST: ${MONITOR_DB_HOST:-${DB_HOST:-host.docker.internal}}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE:-nova}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}
+    command: ["php", "artisan", "nova:monitor-servers", "--daemon", "--sleep=10"]
+    healthcheck:
+      test: ["CMD", "php", "artisan", "nova:monitor-servers", "--healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

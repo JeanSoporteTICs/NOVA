@@ -88,6 +88,16 @@ return [
         'allowed_static_roots' => [],
         'allowed_php_roots' => [],
     ],
+    'monitoreo-servidores' => [
+        'name' => 'Monitor de Servidores',
+        'description' => 'Supervisa servidores y alerta por Telegram ante caídas y recuperaciones.',
+        'icon' => 'bi-hdd-network',
+        'type' => 'native',
+        'path' => base_path('app/Modulos/MonitorServidores'),
+        'entry' => 'laravel:monitor.dashboard',
+        'allowed_static_roots' => [],
+        'allowed_php_roots' => [],
+    ],
     'integraciones' => [
         'name' => 'Mis integraciones',
         'description' => 'Administra las credenciales personales utilizadas por los módulos NOVA.',
