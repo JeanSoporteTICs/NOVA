@@ -75,6 +75,8 @@ Route::get('/monitoreo-servidores/estado', [ServerMonitorController::class, 'sta
 Route::get('/monitoreo-servidores/servidores', [ServerMonitorController::class, 'servers'])->name('monitor.servers');
 Route::post('/monitoreo-servidores/servidores', [ServerMonitorController::class, 'store'])->name('monitor.servers.store');
 Route::post('/monitoreo-servidores/servidores/comprobar-todos', [ServerMonitorController::class, 'checkAll'])->name('monitor.servers.check-all');
+Route::post('/monitoreo-servidores/servidores/probar-destino', [ServerMonitorController::class, 'testDestination'])->middleware('throttle:10,1')->name('monitor.servers.test');
+Route::get('/monitoreo-servidores/servidores/{server}', [ServerMonitorController::class, 'show'])->whereNumber('server')->name('monitor.servers.show');
 Route::put('/monitoreo-servidores/servidores/{server}', [ServerMonitorController::class, 'update'])->whereNumber('server')->name('monitor.servers.update');
 Route::delete('/monitoreo-servidores/servidores/{server}', [ServerMonitorController::class, 'destroy'])->whereNumber('server')->name('monitor.servers.destroy');
 Route::post('/monitoreo-servidores/servidores/{server}/comprobar', [ServerMonitorController::class, 'check'])->whereNumber('server')->name('monitor.servers.check');

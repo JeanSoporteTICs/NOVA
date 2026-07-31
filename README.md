@@ -19,8 +19,9 @@ y respaldos locales usados durante la migración ya no forman parte del runtime.
 - **EMACH:** consulta de marcaciones, horarios y monitoreo.
 - **Telegram:** bot, listener, cola y configuración de comandos.
 - **Procedimientos:** gestión documental integrada con Nextcloud.
-- **Monitor de Servidores:** comprobaciones Ping/ICMP, TCP, HTTP y HTTPS, historial de
-  caídas y recuperaciones, y alertas Telegram a administradores y suscriptores.
+- **Monitor de Servidores:** comprobaciones Ping/ICMP, TCP, HTTP y HTTPS, prueba de
+  destinos antes de guardarlos, ventanas de mantenimiento, historial de incidentes
+  y alertas Telegram a administradores y suscriptores.
 
 ## Requisitos
 
@@ -96,14 +97,89 @@ docker compose -f docker-compose.telegram.yml logs
 docker compose -f docker-compose.telegram.yml restart
 ```
 
-El monitor se ejecuta como un contenedor separado. Antes de iniciarlo deben
-estar aplicadas las migraciones y configurado el bot de Telegram de NOVA:
+### Monitor de Servidores con Docker
+
+El monitor se ejecuta como un contenedor separado y comparte el código del
+proyecto mediante el volumen `./:/app`. Antes de iniciarlo deben estar aplicadas
+las migraciones, disponible la base de datos desde Docker y configurado el bot de
+Telegram de NOVA.
+
+Variables relevantes en `.env`:
+
+- `MONITOR_DB_HOST`: host de MySQL visto desde el contenedor. En Docker Desktop
+  normalmente es `host.docker.internal` si MySQL corre en el mismo servidor.
+- `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` y `DB_PASSWORD`: conexión de NOVA.
+- `TELEGRAM_BOT_TOKEN` y `TELEGRAM_PROXY_URL`: envío de alertas.
+- `APP_TIMEZONE`: usar `America/Santiago` para las fechas operacionales.
+
+No use `localhost` como `MONITOR_DB_HOST` cuando MySQL se encuentre fuera del
+contenedor: dentro de Docker, `localhost` identifica al propio contenedor.
+
+#### Instalación inicial
+
+Desde la raíz del proyecto en Windows/XAMPP:
+
+```powershell
+C:\xampp\php\php.exe artisan migrate --force
+C:\xampp\php\php.exe artisan optimize:clear
+docker compose -f docker-compose.monitor.yml up -d --build
+docker compose -f docker-compose.monitor.yml ps
+docker compose -f docker-compose.monitor.yml logs --tail=100 nova-monitor
+```
+
+En Linux sustituya `C:\xampp\php\php.exe` por el binario PHP del servidor, por
+ejemplo `/opt/lampp/bin/php`.
+
+La primera construcción descarga `php:8.2-cli-alpine` desde Docker Hub. Si aparece
+`context deadline exceeded`, compruebe la salida HTTPS del servidor, DNS y proxy:
+
+```powershell
+Test-NetConnection registry-1.docker.io -Port 443
+docker pull php:8.2-cli-alpine
+```
+
+Después de recuperar la conectividad, repita `docker compose ... up -d --build`.
+
+#### Actualización del código
+
+El volumen entrega al contenedor los archivos actualizados sin reconstruir la
+imagen, pero el daemon PHP mantiene las clases cargadas en memoria. Después de
+publicar cambios ejecute:
+
+```powershell
+C:\xampp\php\php.exe artisan migrate --force
+C:\xampp\php\php.exe artisan optimize:clear
+docker compose -f docker-compose.monitor.yml restart nova-monitor
+```
+
+No es necesario usar `--build` mientras no cambien `docker/monitor/Dockerfile`,
+las extensiones PHP o las dependencias del contenedor. Si alguno de esos elementos
+cambia, use nuevamente:
 
 ```bash
 docker compose -f docker-compose.monitor.yml up -d --build
-docker compose -f docker-compose.monitor.yml ps
-docker compose -f docker-compose.monitor.yml logs
 ```
+
+#### Verificación operacional
+
+```powershell
+docker compose -f docker-compose.monitor.yml ps
+docker compose -f docker-compose.monitor.yml logs --tail=100 nova-monitor
+docker compose -f docker-compose.monitor.yml exec nova-monitor php artisan nova:monitor-servers --healthcheck
+```
+
+La verificación es correcta cuando:
+
+- `nova-monitor` figura `Up` y `healthy`.
+- `--healthcheck` finaliza con código `0`.
+- La portada del módulo muestra `Servicio Docker: Monitoreando` y un ciclo reciente.
+- `Comprobar` actualiza estado y latencia sin errores.
+- Una caída y recuperación controladas generan una sola alerta de cada tipo en el
+  canal de prueba autorizado.
+
+Las ventanas de mantenimiento continúan comprobando el destino, pero suspenden
+las alertas hasta finalizar. Al terminar, el contador de fallos comienza nuevamente
+desde cero.
 
 El comando `/tic problema, unidad, solicitante` crea un reporte pendiente de
 forma directa. El modo diario permite enviar después mensajes sin comando:
@@ -204,6 +280,24 @@ El artefacto de producción se construye desde un commit o tag limpio mediante
 los scripts de `ops/production`. El despliegue debe publicar solo `public/`,
 instalar dependencias desde los lockfiles, ejecutar las migraciones aprobadas y
 mantener un mecanismo de rollback.
+
+### Lista previa a liberar el Monitor de Servidores
+
+- Confirmar `APP_ENV=production`, `APP_DEBUG=false`, zona horaria y URL pública.
+- Respaldar la base de datos y registrar la versión/tag que se desplegará.
+- Ejecutar `artisan migrate --force` y confirmar cero migraciones pendientes.
+- Verificar que Apache publique exclusivamente el directorio `public/`.
+- Confirmar que el contenedor alcance MySQL y Telegram sin exponer secretos en logs.
+- Revisar permisos: usuarios con acceso pueden ver el resumen y solo administradores
+  pueden gestionar servidores y destinatarios.
+- Probar Ping/ICMP, TCP y al menos una URL HTTPS con certificado válido.
+- Probar una caída y recuperación sobre un destino controlado; confirmar Telegram.
+- Programar una ventana breve y confirmar que no genera alertas durante ella.
+- Verificar `docker compose ... ps`, healthcheck, logs y heartbeat en la interfaz.
+- Mantener disponible la versión anterior y seguir el runbook ante cualquier NO-GO.
+
+No realice la prueba de caída contra un servidor productivo real. Use un destino
+controlado y destinatarios de Telegram autorizados para la liberación.
 
 Documentación operativa vigente:
 

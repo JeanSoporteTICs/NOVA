@@ -40,5 +40,13 @@ final class ServerMonitorAccessTest extends TestCase
             '/monitoreo-servidores/servidores/comprobar-todos',
             parse_url(route('monitor.servers.check-all'), PHP_URL_PATH)
         );
+        $this->assertSame(
+            '/monitoreo-servidores/servidores/1',
+            parse_url(route('monitor.servers.show', 1), PHP_URL_PATH)
+        );
+        $this->assertSame(
+            '/monitoreo-servidores/servidores/probar-destino',
+            parse_url(route('monitor.servers.test'), PHP_URL_PATH)
+        );
     }
 }

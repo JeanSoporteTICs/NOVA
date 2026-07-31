@@ -5,6 +5,7 @@ namespace App\Modulos\MonitorServidores\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modulos\MonitorServidores\Repositories\ServerMonitorRepository;
 use App\Modulos\MonitorServidores\Services\ServerMonitorService;
+use App\Modulos\MonitorServidores\Services\ServerProbeService;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -52,6 +53,19 @@ final class ServerMonitorController extends Controller
         return $this->render($request, $repository, $monitor, 'recipients');
     }
 
+    public function show(
+        Request $request,
+        ProjectAccessGuard $access,
+        ServerMonitorRepository $repository,
+        ServerMonitorService $monitor,
+        int $server,
+    ): View {
+        $this->authorizeAccess($request, $access);
+        abort_unless($repository->server($server), 404);
+
+        return $this->render($request, $repository, $monitor, 'detail', $server);
+    }
+
     public function status(
         Request $request,
         ProjectAccessGuard $access,
@@ -69,14 +83,14 @@ final class ServerMonitorController extends Controller
                 'checks' => (int) ($worker?->servidores_comprobados ?? 0),
                 'error' => trim((string) ($worker?->ultimo_error ?? '')),
             ],
-            'servers' => collect($repository->servers(true))->map(static function (object $server) use ($monitor): array {
+            'servers' => collect($repository->servers(true))->map(function (object $server) use ($monitor): array {
                 return [
                     'id' => (int) $server->id,
                     'state' => (string) $server->estado,
                     'latency_ms' => $server->latencia_ms !== null ? (int) $server->latencia_ms : null,
                     'last_check' => $server->ultimo_chequeo_at,
                     'last_check_text' => $server->ultimo_chequeo_at
-                        ? Carbon::parse($server->ultimo_chequeo_at)->diffForHumans()
+                        ? $this->relativeTime((string) $server->ultimo_chequeo_at)
                         : 'Sin comprobar',
                     'failures' => (int) $server->fallos_consecutivos,
                     'target' => $monitor->targetLabel($server),
@@ -99,6 +113,29 @@ final class ServerMonitorController extends Controller
         return redirect()->route('monitor.servers')->with('monitor_status', 'Servidor agregado. El Docker lo comprobará en el próximo ciclo.');
     }
 
+    public function testDestination(
+        Request $request,
+        ProjectAccessGuard $access,
+        ServerProbeService $probe,
+        ServerMonitorService $monitor,
+    ): JsonResponse {
+        $this->authorizeAccess($request, $access);
+        $this->authorizeManager($request);
+        $values = $this->validatedServer($request);
+        $server = (object) $values;
+        $result = $probe->probe($server);
+
+        return response()->json([
+            'ok' => (bool) $result['ok'],
+            'latency_ms' => (int) $result['latency_ms'],
+            'http_code' => $result['http_code'],
+            'target' => $monitor->targetLabel($server),
+            'message' => $result['ok']
+                ? 'El destino respondió correctamente en '.(int) $result['latency_ms'].' ms.'
+                : trim((string) $result['error']),
+        ]);
+    }
+
     public function update(
         Request $request,
         ProjectAccessGuard $access,
@@ -114,9 +151,14 @@ final class ServerMonitorController extends Controller
         $resetState = collect($connectivityFields)->contains(
             static fn (string $field): bool => (string) ($current->{$field} ?? '') !== (string) ($values[$field] ?? '')
         );
-        $repository->updateServer($server, $values, $resetState);
+        $incidentClosed = $repository->updateServer($server, $values, $resetState);
 
-        return redirect()->route('monitor.servers')->with('monitor_status', 'Servidor actualizado.');
+        return redirect()->route('monitor.servers')->with(
+            'monitor_status',
+            $incidentClosed
+                ? 'Servidor actualizado. El incidente anterior quedó cerrado por cambio de configuración; la nueva dirección se comprobará desde cero.'
+                : 'Servidor actualizado.'
+        );
     }
 
     public function destroy(
@@ -141,14 +183,17 @@ final class ServerMonitorController extends Controller
     ): RedirectResponse {
         $this->authorizeAccess($request, $access);
         $this->authorizeManager($request);
+        $redirect = static fn () => $request->boolean('detalle')
+            ? redirect()->route('monitor.servers.show', $server)
+            : redirect()->route('monitor.servers');
 
         try {
             $result = $monitor->checkServer($server);
             $key = $result['ok'] ? 'monitor_status' : 'monitor_warning';
 
-            return redirect()->route('monitor.servers')->with($key, $result['message']);
+            return $redirect()->with($key, $result['message']);
         } catch (\Throwable $e) {
-            return redirect()->route('monitor.servers')->with('monitor_error', 'No se pudo comprobar: '.$e->getMessage());
+            return $redirect()->with('monitor_error', 'No se pudo comprobar: '.$e->getMessage());
         }
     }
 
@@ -199,12 +244,18 @@ final class ServerMonitorController extends Controller
         ServerMonitorRepository $repository,
         ServerMonitorService $monitor,
         string $section,
+        ?int $detailId = null,
     ): View {
         $role = strtolower(trim((string) data_get($request->session()->get('nova_user'), 'role', 'usuario')));
         $canManage = in_array($role, config('nova.module_admin_roles', []), true);
         $servers = $repository->servers();
         $editId = max(0, (int) $request->query('editar', 0));
         $editing = $editId > 0 ? $repository->server($editId) : null;
+        $detailServer = $detailId !== null ? $repository->server($detailId) : null;
+        $worker = $repository->latestWorker();
+        if ($detailId !== null) {
+            abort_unless($detailServer, 404);
+        }
 
         return view('monitor-servidores.index', [
             'section' => $section,
@@ -212,11 +263,24 @@ final class ServerMonitorController extends Controller
             'servers' => $servers,
             'stats' => $repository->stats(),
             'events' => $repository->recentEvents(),
-            'worker' => $repository->latestWorker(),
+            'worker' => $worker,
+            'workerLastCycleText' => ! empty($worker?->ultimo_ciclo_at)
+                ? $this->relativeTime((string) $worker->ultimo_ciclo_at)
+                : 'Aún no registra actividad',
             'workerHealthy' => $repository->workerIsHealthy(),
             'automaticAdmins' => $canManage ? $repository->automaticAdministrators() : [],
             'recipientUsers' => $canManage ? $repository->selectableRecipients() : [],
             'editing' => $editing,
+            'detailServer' => $detailServer,
+            'detailEvents' => $detailServer ? $repository->serverEvents((int) $detailServer->id, 100) : [],
+            'detailMaintenanceActive' => $detailServer ? $monitor->isMaintenanceActive($detailServer) : false,
+            'serverLastCheckTexts' => collect($servers)->mapWithKeys(
+                fn (object $server): array => [
+                    (int) $server->id => ! empty($server->ultimo_chequeo_at)
+                        ? $this->relativeTime((string) $server->ultimo_chequeo_at)
+                        : 'Sin comprobar',
+                ]
+            )->all(),
             'targetLabels' => collect($servers)->mapWithKeys(
                 static fn (object $server): array => [(int) $server->id => $monitor->targetLabel($server)]
             )->all(),
@@ -236,8 +300,14 @@ final class ServerMonitorController extends Controller
             'intervalo_segundos' => ['required', 'integer', 'min:30', 'max:86400'],
             'timeout_segundos' => ['required', 'integer', 'min:1', 'max:30'],
             'fallos_para_alertar' => ['required', 'integer', 'min:1', 'max:10'],
+            'mantenimiento_desde' => ['nullable', 'date', 'required_with:mantenimiento_hasta'],
+            'mantenimiento_hasta' => ['nullable', 'date', 'required_with:mantenimiento_desde', 'after:mantenimiento_desde'],
+            'mantenimiento_motivo' => ['nullable', 'string', 'max:255'],
         ], [
             'puerto.required_if' => 'El puerto es obligatorio para comprobaciones TCP.',
+            'mantenimiento_desde.required_with' => 'Indica el inicio de la ventana de mantenimiento.',
+            'mantenimiento_hasta.required_with' => 'Indica el término de la ventana de mantenimiento.',
+            'mantenimiento_hasta.after' => 'El término del mantenimiento debe ser posterior al inicio.',
         ]);
 
         $type = strtolower(trim((string) $validated['tipo']));
@@ -258,6 +328,13 @@ final class ServerMonitorController extends Controller
             'timeout_segundos' => (int) $validated['timeout_segundos'],
             'fallos_para_alertar' => (int) $validated['fallos_para_alertar'],
             'activo' => $request->boolean('activo') ? 1 : 0,
+            'mantenimiento_desde' => ! empty($validated['mantenimiento_desde'])
+                ? Carbon::parse((string) $validated['mantenimiento_desde'])
+                : null,
+            'mantenimiento_hasta' => ! empty($validated['mantenimiento_hasta'])
+                ? Carbon::parse((string) $validated['mantenimiento_hasta'])
+                : null,
+            'mantenimiento_motivo' => trim((string) ($validated['mantenimiento_motivo'] ?? '')) ?: null,
         ];
     }
 
@@ -270,6 +347,19 @@ final class ServerMonitorController extends Controller
             if (mb_strlen($destination) > 255 || preg_match('/^[A-Za-z0-9._:-]+$/', $destination) !== 1) {
                 throw ValidationException::withMessages([
                     'host' => 'Para '.strtoupper($type).' ingresa solo la IP o el host, sin protocolo ni ruta.',
+                ]);
+            }
+
+            if (preg_match('/^[0-9.]+$/', $destination) === 1
+                && filter_var($destination, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+                throw ValidationException::withMessages([
+                    'host' => 'La dirección IPv4 no es válida. Revisa cada bloque; deben existir cuatro valores entre 0 y 255.',
+                ]);
+            }
+            if (str_contains($destination, ':')
+                && filter_var($destination, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+                throw ValidationException::withMessages([
+                    'host' => 'La dirección IPv6 no es válida.',
                 ]);
             }
 
@@ -305,6 +395,18 @@ final class ServerMonitorController extends Controller
         }
         if (mb_strlen($host) > 255) {
             throw ValidationException::withMessages(['host' => 'El host de la URL es demasiado largo.']);
+        }
+        if (preg_match('/^[0-9.]+$/', $host) === 1
+            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            throw ValidationException::withMessages([
+                'host' => 'La dirección IPv4 de la URL no es válida.',
+            ]);
+        }
+        if (str_contains($host, ':')
+            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+            throw ValidationException::withMessages([
+                'host' => 'La dirección IPv6 de la URL no es válida.',
+            ]);
         }
 
         $path = (string) ($parts['path'] ?? '/');
@@ -345,5 +447,15 @@ final class ServerMonitorController extends Controller
         $id = DB::table('usuarios_nova')->where('uuid', $uuid)->value('id');
 
         return $id !== null ? (int) $id : null;
+    }
+
+    private function relativeTime(string $value): string
+    {
+        $date = Carbon::parse($value);
+        if ($date->diffInSeconds(now()) < 5) {
+            return 'Ahora mismo';
+        }
+
+        return $date->locale('es')->diffForHumans();
     }
 }

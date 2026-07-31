@@ -107,6 +107,42 @@ final class ServerMonitorService
                 'latencia_ms' => max(0, (int) ($probeResult['latency_ms'] ?? 0)),
             ];
 
+            if ($this->isMaintenanceActive($current, $now)) {
+                $values = array_merge($values, [
+                    'estado' => 'mantenimiento',
+                    'fallos_consecutivos' => 0,
+                    'ultimo_error' => $probeResult['ok']
+                        ? null
+                        : mb_substr(trim((string) ($probeResult['error'] ?? 'Sin respuesta.')), 0, 4000),
+                    'caido_desde' => null,
+                    'alertado_caida_at' => null,
+                ]);
+                if ($probeResult['ok']) {
+                    $values['ultima_respuesta_at'] = $now;
+                }
+                $this->repository->saveProbeState($serverId, $values);
+
+                if ($previous === 'abajo') {
+                    $this->repository->createEvent([
+                        'servidor_id' => $serverId,
+                        'tipo' => 'configuracion',
+                        'estado_anterior' => 'abajo',
+                        'estado_nuevo' => 'mantenimiento',
+                        'detalle' => 'Incidente cerrado al comenzar una ventana de mantenimiento programado.',
+                        'latencia_ms' => max(0, (int) ($probeResult['latency_ms'] ?? 0)),
+                        'ocurrido_at' => $now,
+                    ]);
+                }
+
+                return [
+                    'event' => null,
+                    'event_id' => null,
+                    'state' => 'mantenimiento',
+                    'failures' => 0,
+                    'current' => $current,
+                ];
+            }
+
             if ($probeResult['ok']) {
                 $newState = 'arriba';
                 $values = array_merge($values, [
@@ -174,10 +210,27 @@ final class ServerMonitorService
             'ok' => (bool) $probeResult['ok'],
             'event' => $transition['event'],
             'state' => (string) $transition['state'],
-            'message' => $probeResult['ok']
-                ? 'Servidor disponible en '.(int) $probeResult['latency_ms'].' ms.'
-                : (string) $probeResult['error'],
+            'message' => $transition['state'] === 'mantenimiento'
+                ? 'Comprobación registrada durante mantenimiento; las alertas están suspendidas para este destino.'
+                : ($probeResult['ok']
+                    ? 'Servidor disponible en '.(int) $probeResult['latency_ms'].' ms.'
+                    : (string) $probeResult['error']),
         ];
+    }
+
+    public function isMaintenanceActive(object $server, ?Carbon $at = null): bool
+    {
+        $fromValue = trim((string) ($server->mantenimiento_desde ?? ''));
+        $untilValue = trim((string) ($server->mantenimiento_hasta ?? ''));
+        if ($fromValue === '' || $untilValue === '') {
+            return false;
+        }
+
+        $moment = ($at ?? now())->copy();
+        $from = Carbon::parse($fromValue);
+        $until = Carbon::parse($untilValue);
+
+        return $moment->greaterThanOrEqualTo($from) && $moment->lessThanOrEqualTo($until);
     }
 
     /**
@@ -215,7 +268,7 @@ final class ServerMonitorService
 
         if ($eventType === 'recuperacion') {
             $downSince = ! empty($server->caido_desde)
-                ? Carbon::parse($server->caido_desde)->diffForHumans(now(), true)
+                ? Carbon::parse($server->caido_desde)->locale('es')->diffForHumans(now(), true)
                 : 'sin duración registrada';
 
             return "✅ [NOVA] SERVIDOR RECUPERADO\n"

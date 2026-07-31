@@ -1,6 +1,7 @@
 (() => {
     const script = document.currentScript;
     const statusUrl = script?.dataset.monitorStatusUrl || '';
+    const testUrl = script?.dataset.monitorTestUrl || '';
 
     function initServerForm() {
         const form = document.querySelector('[data-monitor-server-form]');
@@ -105,6 +106,54 @@
         if (drawerElement.hasAttribute('data-monitor-drawer-auto-open')) {
             bootstrap.Offcanvas.getOrCreateInstance(drawerElement).show();
         }
+    }
+
+    function initDestinationTest() {
+        const form = document.querySelector('[data-monitor-server-form]');
+        const button = form?.querySelector('[data-monitor-test-destination]');
+        const status = form?.querySelector('[data-monitor-test-status]');
+        if (!form || !button || !status || !testUrl) return;
+
+        button.addEventListener('click', async () => {
+            if (!form.reportValidity()) return;
+
+            const formData = new FormData(form);
+            formData.delete('_method');
+            button.disabled = true;
+            button.classList.add('is-loading');
+            button.setAttribute('aria-busy', 'true');
+            status.className = 'monitor-destination-test-status is-loading';
+            status.textContent = 'Probando conexión…';
+
+            try {
+                const response = await fetch(testUrl, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                    throw new Error(validationMessage || payload.message || `No se pudo probar el destino (${response.status}).`);
+                }
+
+                status.className = `monitor-destination-test-status ${payload.ok ? 'is-success' : 'is-error'}`;
+                status.textContent = payload.ok
+                    ? `${payload.message} ${payload.target}`
+                    : payload.message || 'El destino no respondió.';
+            } catch (error) {
+                status.className = 'monitor-destination-test-status is-error';
+                status.textContent = error instanceof Error ? error.message : 'No fue posible probar el destino.';
+            } finally {
+                button.disabled = false;
+                button.classList.remove('is-loading');
+                button.removeAttribute('aria-busy');
+            }
+        });
     }
 
     function bindFilter(inputSelector, itemSelector, dataKey) {
@@ -241,15 +290,87 @@
         update();
     }
 
-    function initCheckAll() {
-        const form = document.querySelector('[data-monitor-check-all]');
-        const button = form?.querySelector('button[type="submit"]');
-        if (!form || !button) return;
+    function initCheckActions() {
+        const overlay = document.querySelector('[data-monitor-check-overlay]');
+        const serverLabel = overlay?.querySelector('[data-monitor-check-server]');
+        const status = overlay?.querySelector('[data-monitor-check-status]');
+        const elapsedLabel = overlay?.querySelector('[data-monitor-check-elapsed]');
+        if (!overlay || !serverLabel || !status || !elapsedLabel) return;
 
-        form.addEventListener('submit', () => {
-            button.disabled = true;
-            button.setAttribute('aria-busy', 'true');
-            button.innerHTML = '<span class="nova-spinner" aria-hidden="true"></span><span>Comprobando…</span>';
+        const minimumDuration = 2000;
+        const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+        const forms = document.querySelectorAll('[data-monitor-check-one], [data-monitor-check-all]');
+
+        forms.forEach((form) => {
+            const button = form.querySelector('button[type="submit"]');
+            if (!button) return;
+
+            form.addEventListener('submit', async (event) => {
+                if (form.dataset.monitorSubmitting === '1') return;
+                event.preventDefault();
+                form.dataset.monitorSubmitting = '1';
+
+                const started = performance.now();
+                const wasDisabled = button.disabled;
+                const serverName = form.dataset.monitorServerName || 'Servidor';
+                button.disabled = true;
+                button.classList.add('is-loading');
+                button.setAttribute('aria-busy', 'true');
+                serverLabel.textContent = serverName;
+                status.textContent = serverName === 'Todos los servidores'
+                    ? 'Comprobando todos los destinos activos…'
+                    : `Esperando respuesta de ${serverName}…`;
+                elapsedLabel.textContent = '0.0 s';
+                overlay.classList.remove('is-error');
+                overlay.hidden = false;
+                window.requestAnimationFrame(() => overlay.classList.add('is-visible'));
+
+                const elapsedTimer = window.setInterval(() => {
+                    elapsedLabel.textContent = `${((performance.now() - started) / 1000).toFixed(1)} s`;
+                }, 100);
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'text/html',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                    const elapsed = performance.now() - started;
+                    status.textContent = elapsed < minimumDuration
+                        ? 'Respuesta recibida. Completando comprobación…'
+                        : 'Respuesta recibida. Actualizando estado…';
+                    await delay(Math.max(0, minimumDuration - elapsed));
+                    window.clearInterval(elapsedTimer);
+                    elapsedLabel.textContent = `${((performance.now() - started) / 1000).toFixed(1)} s`;
+
+                    if (!response.ok) {
+                        throw new Error(`La comprobación respondió con estado ${response.status}.`);
+                    }
+
+                    window.location.assign(response.redirected ? response.url : window.location.href);
+                } catch (error) {
+                    const elapsed = performance.now() - started;
+                    await delay(Math.max(0, minimumDuration - elapsed));
+                    window.clearInterval(elapsedTimer);
+                    elapsedLabel.textContent = `${((performance.now() - started) / 1000).toFixed(1)} s`;
+                    overlay.classList.add('is-error');
+                    status.textContent = error instanceof Error
+                        ? error.message
+                        : 'No fue posible completar la comprobación.';
+                    form.dataset.monitorSubmitting = '0';
+                    button.disabled = wasDisabled;
+                    button.classList.remove('is-loading');
+                    button.removeAttribute('aria-busy');
+                    await delay(1800);
+                    overlay.classList.remove('is-visible', 'is-error');
+                    await delay(180);
+                    overlay.hidden = true;
+                }
+            });
         });
     }
 
@@ -259,6 +380,7 @@
             abajo: 'Caído',
             degradado: 'Inestable',
             pendiente: 'Pendiente',
+            mantenimiento: 'Mantenimiento',
             inactivo: 'Pausado',
         }[state] || state;
     }
@@ -275,12 +397,12 @@
             const payload = await response.json();
 
             Object.entries(payload.stats || {}).forEach(([key, value]) => {
-                const targetKey = key === 'degraded' ? null : key;
+                const targetKey = ['degraded', 'maintenance'].includes(key) ? null : key;
                 if (targetKey) {
                     const element = document.querySelector(`[data-monitor-stat="${targetKey}"]`);
                     if (element) {
                         const total = key === 'pending'
-                            ? Number(value || 0) + Number(payload.stats?.degraded || 0)
+                            ? Number(value || 0) + Number(payload.stats?.degraded || 0) + Number(payload.stats?.maintenance || 0)
                             : Number(value || 0);
                         element.textContent = String(total);
                     }
@@ -324,9 +446,10 @@
     document.addEventListener('DOMContentLoaded', () => {
         initServerForm();
         initServerDrawer();
+        initDestinationTest();
         initDeleteModal();
         initRecipientCount();
-        initCheckAll();
+        initCheckActions();
         initServerInventory();
         bindFilter('[data-monitor-recipient-search]', '[data-monitor-recipient-filter]', 'monitorRecipientFilter');
         refreshDashboard();

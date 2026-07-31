@@ -28,7 +28,7 @@ final class ServerProbeService
     {
         $host = trim((string) ($server->host ?? ''));
         $timeout = max(1, min((int) ($server->timeout_segundos ?? 5), 30));
-        if ($host === '' || mb_strlen($host) > 255 || preg_match('/^[A-Za-z0-9._:-]+$/', $host) !== 1) {
+        if (! $this->isValidHost($host)) {
             return [
                 'ok' => false,
                 'latency_ms' => 0,
@@ -98,6 +98,14 @@ final class ServerProbeService
     {
         $host = trim((string) ($server->host ?? ''));
         $port = (int) ($server->puerto ?? 0);
+        if (! $this->isValidHost($host) || $port < 1 || $port > 65535) {
+            return [
+                'ok' => false,
+                'latency_ms' => 0,
+                'error' => 'El host o puerto TCP no es válido.',
+                'http_code' => null,
+            ];
+        }
         $timeout = max(1, min((int) ($server->timeout_segundos ?? 5), 30));
         $targetHost = str_contains($host, ':') && ! str_starts_with($host, '[') ? '['.$host.']' : $host;
         $started = microtime(true);
@@ -173,5 +181,20 @@ final class ServerProbeService
         }
 
         return ['ok' => false, 'latency_ms' => $latency, 'error' => $error, 'http_code' => $httpCode ?: null];
+    }
+
+    private function isValidHost(string $host): bool
+    {
+        if ($host === '' || mb_strlen($host) > 255 || preg_match('/^[A-Za-z0-9._:-]+$/', $host) !== 1) {
+            return false;
+        }
+        if (preg_match('/^[0-9.]+$/', $host) === 1) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+        }
+        if (str_contains($host, ':')) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+        }
+
+        return true;
     }
 }

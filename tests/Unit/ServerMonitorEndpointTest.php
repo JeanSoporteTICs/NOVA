@@ -3,8 +3,11 @@
 namespace Tests\Unit;
 
 use App\Modulos\MonitorServidores\Controllers\ServerMonitorController;
+use App\Modulos\MonitorServidores\Services\ServerMonitorService;
 use App\Modulos\MonitorServidores\Services\ServerProbeService;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use ReflectionClass;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -59,6 +62,48 @@ final class ServerMonitorEndpointTest extends TestCase
         $this->expectException(ValidationException::class);
 
         $this->normalize('https', 'http://www.hbvaldivia.cl/', null);
+    }
+
+    public function test_numeric_ipv4_typo_is_rejected_before_probe(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        $this->normalize('icmp', '10.6.61.1444', null);
+    }
+
+    public function test_valid_ipv6_is_accepted_for_icmp(): void
+    {
+        $endpoint = $this->normalize('icmp', '2001:db8::1', null);
+
+        $this->assertSame('2001:db8::1', $endpoint['host']);
+    }
+
+    public function test_maintenance_window_is_active_only_between_its_limits(): void
+    {
+        $service = (new ReflectionClass(ServerMonitorService::class))->newInstanceWithoutConstructor();
+        $server = (object) [
+            'mantenimiento_desde' => '2026-07-31 10:00:00',
+            'mantenimiento_hasta' => '2026-07-31 12:00:00',
+        ];
+
+        $this->assertFalse($service->isMaintenanceActive($server, Carbon::parse('2026-07-31 09:59:59')));
+        $this->assertTrue($service->isMaintenanceActive($server, Carbon::parse('2026-07-31 11:00:00')));
+        $this->assertFalse($service->isMaintenanceActive($server, Carbon::parse('2026-07-31 12:00:01')));
+    }
+
+    public function test_monitor_relative_times_are_rendered_in_spanish(): void
+    {
+        Carbon::setTestNow('2026-07-31 14:00:00');
+        $method = new ReflectionMethod(ServerMonitorController::class, 'relativeTime');
+        $method->setAccessible(true);
+        $controller = new ServerMonitorController;
+
+        try {
+            $this->assertSame('Ahora mismo', $method->invoke($controller, '2026-07-31 13:59:58'));
+            $this->assertSame('hace 2 minutos', $method->invoke($controller, '2026-07-31 13:58:00'));
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     /**

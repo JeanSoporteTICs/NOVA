@@ -13,7 +13,7 @@ final class ServerMonitorRepository
      */
     public function servers(bool $onlyActive = false): array
     {
-        if (!Schema::hasTable('monitoreo_servidores')) {
+        if (! Schema::hasTable('monitoreo_servidores')) {
             return [];
         }
 
@@ -30,7 +30,7 @@ final class ServerMonitorRepository
 
     public function server(int $id): ?object
     {
-        if ($id <= 0 || !Schema::hasTable('monitoreo_servidores')) {
+        if ($id <= 0 || ! Schema::hasTable('monitoreo_servidores')) {
             return null;
         }
 
@@ -47,7 +47,7 @@ final class ServerMonitorRepository
      */
     public function dueServers(int $limit = 100): array
     {
-        if (!Schema::hasTable('monitoreo_servidores')) {
+        if (! Schema::hasTable('monitoreo_servidores')) {
             return [];
         }
 
@@ -65,7 +65,7 @@ final class ServerMonitorRepository
     }
 
     /**
-     * @param array<string,mixed> $values
+     * @param  array<string,mixed>  $values
      */
     public function createServer(array $values): int
     {
@@ -76,24 +76,46 @@ final class ServerMonitorRepository
     }
 
     /**
-     * @param array<string,mixed> $values
+     * @param  array<string,mixed>  $values
      */
-    public function updateServer(int $id, array $values, bool $resetState = false): void
+    public function updateServer(int $id, array $values, bool $resetState = false): bool
     {
-        if ($resetState) {
-            $values = array_merge($values, [
-                'estado' => 'pendiente',
-                'fallos_consecutivos' => 0,
-                'latencia_ms' => null,
-                'ultimo_error' => null,
-                'ultimo_chequeo_at' => null,
-                'ultima_respuesta_at' => null,
-                'caido_desde' => null,
-                'alertado_caida_at' => null,
-            ]);
-        }
-        $values['actualizado_at'] = now();
-        DB::table('monitoreo_servidores')->where('id', $id)->update($values);
+        return DB::transaction(function () use ($id, $values, $resetState): bool {
+            $current = $this->lockServer($id);
+            if (! $current) {
+                throw new \RuntimeException('El servidor solicitado ya no existe.');
+            }
+
+            $incidentClosed = $resetState && strtolower(trim((string) $current->estado)) === 'abajo';
+            if ($resetState) {
+                $values = array_merge($values, [
+                    'estado' => 'pendiente',
+                    'fallos_consecutivos' => 0,
+                    'latencia_ms' => null,
+                    'ultimo_error' => null,
+                    'ultimo_chequeo_at' => null,
+                    'ultima_respuesta_at' => null,
+                    'caido_desde' => null,
+                    'alertado_caida_at' => null,
+                ]);
+            }
+            $values['actualizado_at'] = now();
+            DB::table('monitoreo_servidores')->where('id', $id)->update($values);
+
+            if ($incidentClosed) {
+                $this->createEvent([
+                    'servidor_id' => $id,
+                    'tipo' => 'configuracion',
+                    'estado_anterior' => 'abajo',
+                    'estado_nuevo' => 'pendiente',
+                    'detalle' => 'Incidente cerrado por cambio del destino o de su configuración de conectividad.',
+                    'latencia_ms' => null,
+                    'ocurrido_at' => now(),
+                ]);
+            }
+
+            return $incidentClosed;
+        });
     }
 
     public function deleteServer(int $id): void
@@ -102,7 +124,7 @@ final class ServerMonitorRepository
     }
 
     /**
-     * @param array<string,mixed> $values
+     * @param  array<string,mixed>  $values
      */
     public function saveProbeState(int $id, array $values): void
     {
@@ -111,7 +133,7 @@ final class ServerMonitorRepository
     }
 
     /**
-     * @param array<string,mixed> $values
+     * @param  array<string,mixed>  $values
      */
     public function createEvent(array $values): int
     {
@@ -133,7 +155,7 @@ final class ServerMonitorRepository
 
     public function saveWorkerHeartbeat(string $instance, int $checks, ?string $error = null): void
     {
-        if (!Schema::hasTable('monitoreo_workers')) {
+        if (! Schema::hasTable('monitoreo_workers')) {
             return;
         }
 
@@ -149,7 +171,7 @@ final class ServerMonitorRepository
     }
 
     /**
-     * @return array{total:int,up:int,down:int,pending:int,degraded:int}
+     * @return array{total:int,up:int,down:int,pending:int,degraded:int,maintenance:int}
      */
     public function stats(): array
     {
@@ -161,6 +183,7 @@ final class ServerMonitorRepository
             'down' => $rows->where('estado', 'abajo')->count(),
             'pending' => $rows->where('estado', 'pendiente')->count(),
             'degraded' => $rows->where('estado', 'degradado')->count(),
+            'maintenance' => $rows->where('estado', 'mantenimiento')->count(),
         ];
     }
 
@@ -169,7 +192,7 @@ final class ServerMonitorRepository
      */
     public function recentEvents(int $limit = 20): array
     {
-        if (!Schema::hasTable('monitoreo_servidor_eventos')) {
+        if (! Schema::hasTable('monitoreo_servidor_eventos')) {
             return [];
         }
 
@@ -182,9 +205,26 @@ final class ServerMonitorRepository
             ->all();
     }
 
+    /**
+     * @return array<int,object>
+     */
+    public function serverEvents(int $serverId, int $limit = 100): array
+    {
+        if ($serverId <= 0 || ! Schema::hasTable('monitoreo_servidor_eventos')) {
+            return [];
+        }
+
+        return DB::table('monitoreo_servidor_eventos')
+            ->where('servidor_id', $serverId)
+            ->orderByDesc('ocurrido_at')
+            ->limit(max(1, min($limit, 500)))
+            ->get()
+            ->all();
+    }
+
     public function latestWorker(): ?object
     {
-        if (!Schema::hasTable('monitoreo_workers')) {
+        if (! Schema::hasTable('monitoreo_workers')) {
             return null;
         }
 
@@ -196,7 +236,7 @@ final class ServerMonitorRepository
      */
     public function automaticAdministrators(): array
     {
-        if (!Schema::hasTable('usuarios_nova')) {
+        if (! Schema::hasTable('usuarios_nova')) {
             return [];
         }
 
@@ -216,7 +256,7 @@ final class ServerMonitorRepository
      */
     public function selectableRecipients(): array
     {
-        if (!Schema::hasTable('usuarios_nova')) {
+        if (! Schema::hasTable('usuarios_nova')) {
             return [];
         }
 
@@ -242,11 +282,11 @@ final class ServerMonitorRepository
     }
 
     /**
-     * @param array<int,int> $userIds
+     * @param  array<int,int>  $userIds
      */
     public function syncAdditionalRecipients(array $userIds): void
     {
-        if (!Schema::hasTable('monitoreo_alerta_usuarios')) {
+        if (! Schema::hasTable('monitoreo_alerta_usuarios')) {
             return;
         }
 
@@ -283,7 +323,7 @@ final class ServerMonitorRepository
      */
     public function alertRecipients(string $eventType): array
     {
-        if (!Schema::hasTable('usuarios_nova')) {
+        if (! Schema::hasTable('usuarios_nova')) {
             return [];
         }
 
@@ -295,7 +335,7 @@ final class ServerMonitorRepository
             ->where(function ($query) use ($adminRoles, $eventColumn): void {
                 $query->whereIn('usuarios.rol', $adminRoles)
                     ->orWhere(function ($extra) use ($eventColumn): void {
-                        $extra->where('alertas.activo', 1)->where('alertas.' . $eventColumn, 1);
+                        $extra->where('alertas.activo', 1)->where('alertas.'.$eventColumn, 1);
                     });
             })
             ->where(function ($query): void {
@@ -313,7 +353,7 @@ final class ServerMonitorRepository
     public function workerIsHealthy(int $maxAgeSeconds = 90): bool
     {
         $worker = $this->latestWorker();
-        if (!$worker || empty($worker->ultimo_ciclo_at)) {
+        if (! $worker || empty($worker->ultimo_ciclo_at)) {
             return false;
         }
 

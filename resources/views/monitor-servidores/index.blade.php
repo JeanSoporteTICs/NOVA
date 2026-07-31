@@ -8,7 +8,8 @@
     @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
+    @php $monitorCssVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1'; @endphp
+    <link href="{{ asset('assets/nova-ui.css') }}?v={{ $monitorCssVersion }}" rel="stylesheet">
 </head>
 <body class="nova-page monitor-page">
     <main class="nova-shell nova-shell-fluid">
@@ -55,13 +56,13 @@
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
                 </div>
                 <nav class="nova-sidebar-body" aria-label="Secciones del monitor">
-                    <a class="nova-sidebar-link {{ $section === 'dashboard' ? 'active' : '' }}" href="{{ route('monitor.dashboard') }}"
-                       @if ($section === 'dashboard') aria-current="page" @endif>
+                    <a class="nova-sidebar-link {{ $section === 'dashboard' || ($section === 'detail' && ! $canManage) ? 'active' : '' }}" href="{{ route('monitor.dashboard') }}"
+                       @if ($section === 'dashboard' || ($section === 'detail' && ! $canManage)) aria-current="page" @endif>
                         <i class="bi bi-speedometer2 nova-sidebar-icon"></i><span>Resumen</span>
                     </a>
                     @if ($canManage)
-                        <a class="nova-sidebar-link {{ $section === 'servers' ? 'active' : '' }}" href="{{ route('monitor.servers') }}"
-                           @if ($section === 'servers') aria-current="page" @endif>
+                        <a class="nova-sidebar-link {{ in_array($section, ['servers', 'detail'], true) ? 'active' : '' }}" href="{{ route('monitor.servers') }}"
+                           @if (in_array($section, ['servers', 'detail'], true)) aria-current="page" @endif>
                             <i class="bi bi-server nova-sidebar-icon"></i><span>Servidores</span>
                         </a>
                         <a class="nova-sidebar-link {{ $section === 'recipients' ? 'active' : '' }}" href="{{ route('monitor.recipients') }}"
@@ -77,7 +78,7 @@
             <div class="monitor-hero-copy">
                 <span class="monitor-eyebrow"><i class="bi bi-broadcast-pin"></i> Centro de disponibilidad</span>
                 <h1>Estado de la infraestructura</h1>
-                <p>El contenedor comprueba cada destino y Telegram avisa únicamente cuando se confirma una caída o una recuperación.</p>
+                <!-- <p>El contenedor comprueba cada destino y Telegram avisa únicamente cuando se confirma una caída o una recuperación.</p> -->
             </div>
             <div class="monitor-worker {{ $workerHealthy ? 'is-online' : 'is-offline' }}" data-monitor-worker>
                 <span class="monitor-worker-pulse" aria-hidden="true"></span>
@@ -86,9 +87,9 @@
                     <strong data-monitor-worker-label>{{ $workerHealthy ? 'Monitoreando' : 'Sin actividad' }}</strong>
                     <span data-monitor-worker-detail>
                         @if ($worker?->ultimo_ciclo_at)
-                            Último ciclo {{ \Illuminate\Support\Carbon::parse($worker->ultimo_ciclo_at)->diffForHumans() }}
+                            Último ciclo: {{ $workerLastCycleText }}
                         @else
-                            Aún no registra heartbeat
+                            Aún no registra actividad
                         @endif
                     </span>
                 </div>
@@ -111,7 +112,7 @@
                 </article>
                 <article class="monitor-stat is-pending">
                     <span><i class="bi bi-hourglass-split"></i></span>
-                    <div><small>Pendientes / inestables</small><strong data-monitor-stat="pending">{{ $stats['pending'] + $stats['degraded'] }}</strong></div>
+                    <div><small>Pendientes / especiales</small><strong data-monitor-stat="pending">{{ $stats['pending'] + $stats['degraded'] + $stats['maintenance'] }}</strong></div>
                 </article>
             </section>
 
@@ -127,10 +128,10 @@
                         @forelse ($servers as $server)
                             @php
                                 $state = $server->activo ? (string) $server->estado : 'inactivo';
-                                $stateLabels = ['arriba' => 'Disponible', 'abajo' => 'Caído', 'degradado' => 'Inestable', 'pendiente' => 'Pendiente', 'inactivo' => 'Pausado'];
+                                $stateLabels = ['arriba' => 'Disponible', 'abajo' => 'Caído', 'degradado' => 'Inestable', 'pendiente' => 'Pendiente', 'mantenimiento' => 'Mantenimiento', 'inactivo' => 'Pausado'];
                                 $stateLabel = $stateLabels[$state] ?? ucfirst($state);
                             @endphp
-                            <article class="monitor-server-overview" data-monitor-server="{{ $server->id }}">
+                            <a class="monitor-server-overview" href="{{ route('monitor.servers.show', $server->id) }}" data-monitor-server="{{ $server->id }}" aria-label="Ver detalle de {{ $server->nombre }}">
                                 <span class="monitor-server-overview-icon is-{{ $state }}"
                                       data-monitor-state
                                       role="img"
@@ -140,7 +141,7 @@
                                     <span class="monitor-server-status-dot" aria-hidden="true"></span>
                                 </span>
                                 <strong>{{ $server->nombre }}</strong>
-                            </article>
+                            </a>
                         @empty
                             <div class="nova-empty-state monitor-empty">
                                 <div class="nova-empty-state-icon"><i class="bi bi-server"></i></div>
@@ -161,11 +162,15 @@
                     </header>
                     <div class="monitor-timeline">
                         @forelse ($events as $event)
+                            @php
+                                $eventLabels = ['recuperacion' => 'Servidor recuperado', 'caida' => 'Caída confirmada', 'configuracion' => 'Incidente cerrado por configuración'];
+                                $eventIcons = ['recuperacion' => 'bi-check-lg', 'caida' => 'bi-exclamation-lg', 'configuracion' => 'bi-sliders'];
+                            @endphp
                             <article class="monitor-event is-{{ $event->tipo }}">
-                                <span class="monitor-event-dot"><i class="bi {{ $event->tipo === 'recuperacion' ? 'bi-check-lg' : 'bi-exclamation-lg' }}"></i></span>
+                                <span class="monitor-event-dot"><i class="bi {{ $eventIcons[$event->tipo] ?? 'bi-activity' }}"></i></span>
                                 <div>
                                     <strong>{{ $event->servidor_nombre }}</strong>
-                                    <span>{{ $event->tipo === 'recuperacion' ? 'Servidor recuperado' : 'Caída confirmada' }}</span>
+                                    <span>{{ $eventLabels[$event->tipo] ?? ucfirst($event->tipo) }}</span>
                                     <small>{{ \Illuminate\Support\Carbon::parse($event->ocurrido_at)->format('d-m-Y H:i:s') }} · {{ $event->destinatarios_notificados }} aviso(s)</small>
                                 </div>
                             </article>
@@ -200,18 +205,18 @@
                                 <i class="bi bi-search"></i>
                                 <input type="search" placeholder="Buscar servidor" data-monitor-search>
                             </div>
-                            <form method="POST" action="{{ route('monitor.servers.check-all') }}" data-monitor-check-all>
+                            <form method="POST" action="{{ route('monitor.servers.check-all') }}" data-monitor-check-all data-monitor-server-name="Todos los servidores">
                                 @csrf
-                                <button class="btn-nova btn-nova-secondary" type="submit" @disabled(collect($servers)->where('activo', 1)->isEmpty())>
+                                <button class="btn-nova monitor-bulk-check-btn" type="submit" @disabled(collect($servers)->where('activo', 1)->isEmpty())>
                                     <i class="bi bi-arrow-repeat"></i><span>Comprobar todos</span>
                                 </button>
                             </form>
                             @if ($formServer)
-                                <a class="btn-nova btn-nova-primary" href="{{ route('monitor.servers', ['nuevo' => 1]) }}">
+                                <a class="btn-nova monitor-add-server-btn" href="{{ route('monitor.servers', ['nuevo' => 1]) }}">
                                     <i class="bi bi-plus-lg"></i>Añadir servidor
                                 </a>
                             @else
-                                <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#monitor-server-drawer" aria-controls="monitor-server-drawer">
+                                <button class="btn-nova monitor-add-server-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#monitor-server-drawer" aria-controls="monitor-server-drawer">
                                     <i class="bi bi-plus-lg"></i>Añadir servidor
                                 </button>
                             @endif
@@ -221,15 +226,17 @@
                         @forelse ($servers as $server)
                             @php
                                 $state = $server->activo ? (string) $server->estado : 'inactivo';
-                                $stateLabels = ['arriba' => 'Disponible', 'abajo' => 'Caído', 'degradado' => 'Inestable', 'pendiente' => 'Pendiente', 'inactivo' => 'Pausado'];
+                                $stateLabels = ['arriba' => 'Disponible', 'abajo' => 'Caído', 'degradado' => 'Inestable', 'pendiente' => 'Pendiente', 'mantenimiento' => 'Mantenimiento', 'inactivo' => 'Pausado'];
                             @endphp
                             <article class="monitor-server-card" data-monitor-filter="{{ strtolower($server->nombre . ' ' . $server->host . ' ' . ($targetLabels[$server->id] ?? '')) }}">
                                 <div class="monitor-server-card-main">
                                     <span class="monitor-server-icon is-{{ $state }}"><i class="bi bi-server"></i></span>
                                     <div>
-                                        <strong>{{ $server->nombre }}</strong>
+                                        <div class="monitor-server-title-row">
+                                            <strong>{{ $server->nombre }}</strong>
+                                            <span class="monitor-state is-{{ $state }}"><i class="bi bi-circle-fill"></i>{{ $stateLabels[$state] ?? ucfirst($state) }}</span>
+                                        </div>
                                         <code>{{ $targetLabels[$server->id] ?? $server->host }}</code>
-                                        <span class="monitor-state is-{{ $state }}"><i class="bi bi-circle-fill"></i>{{ $stateLabels[$state] ?? ucfirst($state) }}</span>
                                     </div>
                                 </div>
                                 <div class="monitor-card-metrics">
@@ -237,17 +244,23 @@
                                     <span><small>Latencia</small><strong>{{ $server->latencia_ms !== null ? $server->latencia_ms . ' ms' : '—' }}</strong></span>
                                     <span><small>Fallos</small><strong>{{ $server->fallos_consecutivos }}/{{ $server->fallos_para_alertar }}</strong></span>
                                 </div>
-                                <div class="monitor-card-actions">
-                                    <form method="POST" action="{{ route('monitor.servers.check', $server->id) }}">
+                                <div class="monitor-card-actions" role="group" aria-label="Acciones de {{ $server->nombre }}">
+                                    <a class="monitor-action-button is-view" href="{{ route('monitor.servers.show', $server->id) }}"
+                                       title="Ver detalle" aria-label="Ver detalle de {{ $server->nombre }}"><i class="bi bi-eye" aria-hidden="true"></i></a>
+                                    <form method="POST" action="{{ route('monitor.servers.check', $server->id) }}"
+                                          data-monitor-check-one data-monitor-server-name="{{ $server->nombre }}">
                                         @csrf
-                                        <button class="btn-nova btn-nova-secondary btn-nova-icon-only" type="submit" title="Comprobar ahora"><i class="bi bi-arrow-repeat"></i></button>
+                                        <button class="monitor-action-button is-check" type="submit" title="Comprobar ahora" aria-label="Comprobar {{ $server->nombre }}">
+                                            <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                                        </button>
                                     </form>
-                                    <a class="btn-nova btn-nova-secondary btn-nova-icon-only" href="{{ route('monitor.servers', ['editar' => $server->id]) }}" title="Editar"><i class="bi bi-pencil"></i></a>
-                                    <button class="btn-nova btn-nova-danger btn-nova-icon-only" type="button"
+                                    <a class="monitor-action-button is-edit" href="{{ route('monitor.servers', ['editar' => $server->id]) }}"
+                                       title="Editar" aria-label="Editar {{ $server->nombre }}"><i class="bi bi-pencil" aria-hidden="true"></i></a>
+                                    <button class="monitor-action-button is-delete" type="button"
                                             data-monitor-delete
                                             data-monitor-delete-name="{{ $server->nombre }}"
                                             data-monitor-delete-url="{{ route('monitor.servers.destroy', $server->id) }}"
-                                            title="Eliminar"><i class="bi bi-trash"></i></button>
+                                            title="Eliminar" aria-label="Eliminar {{ $server->nombre }}"><i class="bi bi-trash" aria-hidden="true"></i></button>
                                 </div>
                             </article>
                         @empty
@@ -292,7 +305,7 @@
                             <p>{{ $formServer ? 'Actualiza la comprobación y sus tiempos.' : 'Configura dónde y con qué frecuencia comprobar.' }}</p>
                         </div>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                    <button type="button" class="btn-close monitor-drawer-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
                 </div>
                 <form method="POST" action="{{ $formServer ? route('monitor.servers.update', $formServer->id) : route('monitor.servers.store') }}" class="monitor-server-form monitor-drawer-form" data-monitor-server-form>
                     @csrf
@@ -321,6 +334,12 @@
                             <label class="form-label" for="monitor-host" data-monitor-destination-label>Host o IP</label>
                             <input class="form-control" id="monitor-host" name="host" value="{{ $formDestination }}" maxlength="760" required placeholder="10.63.123.249" data-monitor-destination>
                             <small class="monitor-destination-help" data-monitor-destination-help>Ingresa la IP o nombre del servidor; el puerto se configura arriba.</small>
+                            <div class="monitor-destination-test-row">
+                                <button class="monitor-test-destination-btn" type="button" data-monitor-test-destination>
+                                    <i class="bi bi-wifi" aria-hidden="true"></i><span>Probar destino</span>
+                                </button>
+                                <span class="monitor-destination-test-status" data-monitor-test-status aria-live="polite"></span>
+                            </div>
                         </div>
                         <div class="monitor-form-row is-three">
                             <div>
@@ -358,11 +377,37 @@
                                 <span>Validar certificado SSL</span>
                             </label>
                         </div>
+                        <section class="monitor-maintenance-form" aria-labelledby="monitor-maintenance-title">
+                            <div class="monitor-maintenance-heading">
+                                <span><i class="bi bi-tools"></i></span>
+                                <div>
+                                    <strong id="monitor-maintenance-title">Ventana de mantenimiento</strong>
+                                    <small>Durante este período se comprueba el destino, pero no se envían alertas.</small>
+                                </div>
+                            </div>
+                            <div class="monitor-form-row">
+                                <div>
+                                    <label class="form-label" for="monitor-maintenance-from">Desde</label>
+                                    <input class="form-control" id="monitor-maintenance-from" name="mantenimiento_desde" type="datetime-local"
+                                           value="{{ old('mantenimiento_desde', ! empty($formServer?->mantenimiento_desde) ? \Illuminate\Support\Carbon::parse($formServer->mantenimiento_desde)->format('Y-m-d\\TH:i') : '') }}">
+                                </div>
+                                <div>
+                                    <label class="form-label" for="monitor-maintenance-until">Hasta</label>
+                                    <input class="form-control" id="monitor-maintenance-until" name="mantenimiento_hasta" type="datetime-local"
+                                           value="{{ old('mantenimiento_hasta', ! empty($formServer?->mantenimiento_hasta) ? \Illuminate\Support\Carbon::parse($formServer->mantenimiento_hasta)->format('Y-m-d\\TH:i') : '') }}">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label" for="monitor-maintenance-reason">Motivo</label>
+                                <input class="form-control" id="monitor-maintenance-reason" name="mantenimiento_motivo" maxlength="255"
+                                       value="{{ old('mantenimiento_motivo', $formServer->mantenimiento_motivo ?? '') }}" placeholder="Ej.: actualización del sistema operativo">
+                            </div>
+                        </section>
                         <p class="monitor-form-help"><i class="bi bi-info-circle"></i><span data-monitor-method-help>TCP comprueba si el puerto acepta conexiones.</span></p>
                     </div>
                     <div class="monitor-drawer-actions">
-                        <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg"></i>Cancelar</button>
-                        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>{{ $formServer ? 'Guardar cambios' : 'Añadir servidor' }}</button>
+                        <button class="btn-nova monitor-drawer-cancel-btn" type="button" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg"></i>Cancelar</button>
+                        <button class="btn-nova monitor-add-server-btn monitor-drawer-primary-btn" type="submit"><i class="bi bi-save"></i>{{ $formServer ? 'Guardar cambios' : 'Añadir servidor' }}</button>
                     </div>
                 </form>
             </div>
@@ -388,6 +433,83 @@
                         </div>
                     </form>
                 </div>
+            </div>
+        @elseif ($section === 'detail' && $detailServer)
+            @php
+                $detailState = $detailServer->activo ? (string) $detailServer->estado : 'inactivo';
+                $detailStateLabels = ['arriba' => 'Disponible', 'abajo' => 'Caído', 'degradado' => 'Inestable', 'pendiente' => 'Pendiente', 'mantenimiento' => 'Mantenimiento', 'inactivo' => 'Pausado'];
+                $detailEventLabels = ['recuperacion' => 'Servidor recuperado', 'caida' => 'Caída confirmada', 'configuracion' => 'Incidente cerrado por configuración'];
+                $detailEventIcons = ['recuperacion' => 'bi-check-lg', 'caida' => 'bi-exclamation-lg', 'configuracion' => 'bi-sliders'];
+            @endphp
+            <div class="monitor-detail-shell">
+                <nav class="monitor-detail-nav" aria-label="Navegación del detalle">
+                    <a class="monitor-detail-back" href="{{ $canManage ? route('monitor.servers') : route('monitor.dashboard') }}">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        <span>{{ $canManage ? 'Servidores' : 'Resumen' }}</span>
+                    </a>
+                    <span class="monitor-detail-nav-separator" aria-hidden="true"></span>
+                    <span>Detalle del servidor</span>
+                </nav>
+                <header class="nova-card monitor-detail-head">
+                    <div class="monitor-detail-identity">
+                        <span class="monitor-server-icon is-{{ $detailState }}"><i class="bi bi-server"></i></span>
+                        <div>
+                            <div class="monitor-server-title-row">
+                                <h2>{{ $detailServer->nombre }}</h2>
+                                <span class="monitor-state is-{{ $detailState }}"><i class="bi bi-circle-fill"></i>{{ $detailStateLabels[$detailState] ?? ucfirst($detailState) }}</span>
+                            </div>
+                            <code>{{ $targetLabels[$detailServer->id] ?? $detailServer->host }}</code>
+                        </div>
+                    </div>
+                    @if ($canManage)
+                        <div class="monitor-detail-actions">
+                            <form method="POST" action="{{ route('monitor.servers.check', $detailServer->id) }}" data-monitor-check-one data-monitor-server-name="{{ $detailServer->nombre }}">
+                                @csrf
+                                <input type="hidden" name="detalle" value="1">
+                                <button class="btn-nova monitor-bulk-check-btn" type="submit"><i class="bi bi-arrow-repeat"></i>Comprobar</button>
+                            </form>
+                            <a class="btn-nova monitor-add-server-btn" href="{{ route('monitor.servers', ['editar' => $detailServer->id]) }}"><i class="bi bi-pencil"></i>Editar</a>
+                        </div>
+                    @endif
+                </header>
+
+                @if (! empty($detailServer->mantenimiento_desde) && ! empty($detailServer->mantenimiento_hasta))
+                    <section class="monitor-maintenance-banner {{ $detailMaintenanceActive ? 'is-active' : 'is-scheduled' }}">
+                        <span><i class="bi bi-tools"></i></span>
+                        <div>
+                            <strong>{{ $detailMaintenanceActive ? 'Mantenimiento activo: alertas suspendidas' : 'Mantenimiento programado' }}</strong>
+                            <p>{{ \Illuminate\Support\Carbon::parse($detailServer->mantenimiento_desde)->format('d-m-Y H:i') }} → {{ \Illuminate\Support\Carbon::parse($detailServer->mantenimiento_hasta)->format('d-m-Y H:i') }}{{ $detailServer->mantenimiento_motivo ? ' · '.$detailServer->mantenimiento_motivo : '' }}</p>
+                        </div>
+                    </section>
+                @endif
+
+                <section class="monitor-detail-metrics" aria-label="Métricas del servidor">
+                    <article><span><i class="bi bi-speedometer"></i></span><div><small>Latencia</small><strong>{{ $detailServer->latencia_ms !== null ? $detailServer->latencia_ms.' ms' : '—' }}</strong></div></article>
+                    <article><span><i class="bi bi-clock-history"></i></span><div><small>Último chequeo</small><strong>{{ $serverLastCheckTexts[$detailServer->id] ?? 'Sin comprobar' }}</strong></div></article>
+                    <article><span><i class="bi bi-arrow-repeat"></i></span><div><small>Intervalo</small><strong>{{ $detailServer->intervalo_segundos }} s</strong></div></article>
+                    <article><span><i class="bi bi-exclamation-triangle"></i></span><div><small>Fallos</small><strong>{{ $detailServer->fallos_consecutivos }}/{{ $detailServer->fallos_para_alertar }}</strong></div></article>
+                </section>
+
+                <section class="nova-card monitor-detail-history">
+                    <header class="monitor-panel-head">
+                        <div><span>Historial del destino</span><h2>Incidentes y recuperaciones</h2></div>
+                        <i class="bi bi-activity monitor-panel-icon"></i>
+                    </header>
+                    <div class="monitor-detail-timeline">
+                        @forelse ($detailEvents as $event)
+                            <article class="monitor-event is-{{ $event->tipo }}">
+                                <span class="monitor-event-dot"><i class="bi {{ $detailEventIcons[$event->tipo] ?? 'bi-activity' }}"></i></span>
+                                <div>
+                                    <strong>{{ $detailEventLabels[$event->tipo] ?? ucfirst($event->tipo) }}</strong>
+                                    <span>{{ $event->detalle ?: 'Sin detalle adicional.' }}</span>
+                                    <small>{{ \Illuminate\Support\Carbon::parse($event->ocurrido_at)->format('d-m-Y H:i:s') }}{{ $event->latencia_ms !== null ? ' · '.$event->latencia_ms.' ms' : '' }} · {{ $event->destinatarios_notificados }} aviso(s)</small>
+                                </div>
+                            </article>
+                        @empty
+                            <div class="nova-empty-state monitor-empty"><div class="nova-empty-state-icon"><i class="bi bi-heart-pulse"></i></div><h3>Sin incidentes</h3><p>Este servidor aún no registra transiciones de estado.</p></div>
+                        @endforelse
+                    </div>
+                </section>
             </div>
         @elseif ($section === 'recipients')
             @php
@@ -476,10 +598,47 @@
         </div>
     </main>
 
+    <div class="monitor-check-overlay" data-monitor-check-overlay hidden
+         role="status" aria-live="polite" aria-atomic="true">
+        <div class="monitor-check-dialog">
+            <header class="monitor-check-heading">
+                <span class="monitor-check-heading-icon"><i class="bi bi-broadcast-pin"></i></span>
+                <div>
+                    <small>Comprobación en curso</small>
+                    <h2>Verificando disponibilidad</h2>
+                </div>
+            </header>
+
+            <div class="monitor-check-route" aria-hidden="true">
+                <div class="monitor-check-endpoint is-nova">
+                    <span><i class="bi bi-grid-fill"></i></span>
+                    <strong>NOVA</strong>
+                </div>
+                <div class="monitor-check-connection">
+                    <div class="monitor-check-track">
+                        <span class="monitor-check-signal"><i class="bi bi-chevron-right"></i></span>
+                    </div>
+                    <span>NOVA <i class="bi bi-arrow-right"></i> SERVIDOR</span>
+                </div>
+                <div class="monitor-check-endpoint is-server">
+                    <span><i class="bi bi-server"></i></span>
+                    <strong data-monitor-check-server>Servidor</strong>
+                </div>
+            </div>
+
+            <div class="monitor-check-feedback">
+                <span data-monitor-check-status>Enviando comprobación…</span>
+                <strong data-monitor-check-elapsed>0.0 s</strong>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('assets/nova-ui.js') }}"></script>
-    <script src="{{ asset('assets/server-monitor.js') }}"
+    @php $monitorJsVersion = @filemtime(public_path('assets/server-monitor.js')) ?: '1'; @endphp
+    <script src="{{ asset('assets/server-monitor.js') }}?v={{ $monitorJsVersion }}"
             data-monitor-status-url="{{ route('monitor.status') }}"
+            data-monitor-test-url="{{ route('monitor.servers.test') }}"
             defer></script>
 </body>
 </html>
