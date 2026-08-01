@@ -36,11 +36,27 @@ docker compose -f docker-compose.telegram.yml logs -f nova-telegram
 docker compose -f docker-compose.telegram.yml stop nova-telegram
 ```
 
-Si el token y proxy ya estan guardados desde NOVA, el contenedor los lee desde `storage/app/telegram/config.json`.
-Tambien puedes pasarlos como variables de entorno:
+El token global se guarda exclusivamente como `TELEGRAM_BOT_TOKEN` en el
+archivo `.env` de NOVA. `storage/app/telegram/config.json` no contiene el
+token. El proxy puede definirse con `TELEGRAM_PROXY_URL`.
 
 ```bash
-TELEGRAM_BOT_TOKEN=xxx TELEGRAM_PROXY_URL=10.6.206.80:8080 docker compose -f docker-compose.telegram.yml up -d --build
+docker compose -f docker-compose.telegram.yml up -d --build --force-recreate
+```
+
+Al cambiar el token, recrea los contenedores de Telegram y del monitor para
+que Docker vuelva a cargar las variables de `.env`:
+
+```bash
+docker compose -f docker-compose.telegram.yml up -d --force-recreate
+docker compose -f docker-compose.monitor.yml up -d --force-recreate
+```
+
+Para actualizar una instalacion antigua que aun tenga `bot_token` en
+`storage/app/telegram/config.json`, ejecuta una sola vez:
+
+```bash
+php artisan telegram:migrate-token-env
 ```
 
 ## Encolar mensajes desde codigo PHP

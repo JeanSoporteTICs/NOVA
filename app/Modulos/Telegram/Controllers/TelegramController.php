@@ -77,12 +77,12 @@ class TelegramController extends Controller
         }
 
         if (!$this->telegram->saveConfig($config)) {
-            return back()->withInput()->with('telegram_error', 'No se pudo guardar la configuracion Telegram.');
+            return back()->withInput()->with('telegram_error', 'No se pudo guardar TELEGRAM_BOT_TOKEN en el archivo .env. Revisa sus permisos de escritura.');
         }
 
         $this->log($request, 'configuracion_global_guardada');
 
-        return redirect()->route('telegram.admin')->with('telegram_status', 'Configuracion global Telegram guardada.');
+        return redirect()->route('telegram.admin')->with('telegram_status', 'Configuración global guardada. El token quedó protegido en .env.');
     }
 
     public function test(Request $request, UserIntegrationRepository $integrations, TelegramCommandSettingsRepository $settings): RedirectResponse

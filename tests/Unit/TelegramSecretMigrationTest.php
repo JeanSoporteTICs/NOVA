@@ -2,25 +2,37 @@
 
 namespace Tests\Unit;
 
-use App\Modulos\Nova\Support\SecretValue;
 use Tests\TestCase;
 
 /**
- * Covers the ETAPA A / Lote A6 migration of the Telegram bot_token stored in
- * storage/app/telegram/config.json onto SecretValue. Every test uses a
- * throwaway path (telegram_read_config()/telegram_save_config() both accept
- * an explicit $path) — the real config.json is never read from or written
- * to by this suite.
+ * Verifica que TELEGRAM_BOT_TOKEN tenga una sola fuente de verdad: .env.
+ * Todos los archivos usados por estas pruebas son temporales.
  */
 class TelegramSecretMigrationTest extends TestCase
 {
     /** @var array<int,string> */
     private array $scratchFiles = [];
 
+    private string|false $originalProcessToken;
+
+    private bool $hadEnvToken = false;
+
+    private mixed $originalEnvToken = null;
+
+    private bool $hadServerToken = false;
+
+    private mixed $originalServerToken = null;
+
     protected function setUp(): void
     {
         parent::setUp();
         require_once base_path('telegram/lib/telegram.php');
+
+        $this->originalProcessToken = getenv('TELEGRAM_BOT_TOKEN');
+        $this->hadEnvToken = array_key_exists('TELEGRAM_BOT_TOKEN', $_ENV);
+        $this->originalEnvToken = $_ENV['TELEGRAM_BOT_TOKEN'] ?? null;
+        $this->hadServerToken = array_key_exists('TELEGRAM_BOT_TOKEN', $_SERVER);
+        $this->originalServerToken = $_SERVER['TELEGRAM_BOT_TOKEN'] ?? null;
     }
 
     protected function tearDown(): void
@@ -28,13 +40,31 @@ class TelegramSecretMigrationTest extends TestCase
         foreach ($this->scratchFiles as $file) {
             @unlink($file);
         }
+
+        if ($this->originalProcessToken === false) {
+            putenv('TELEGRAM_BOT_TOKEN');
+        } else {
+            putenv('TELEGRAM_BOT_TOKEN=' . $this->originalProcessToken);
+        }
+
+        if ($this->hadEnvToken) {
+            $_ENV['TELEGRAM_BOT_TOKEN'] = $this->originalEnvToken;
+        } else {
+            unset($_ENV['TELEGRAM_BOT_TOKEN']);
+        }
+        if ($this->hadServerToken) {
+            $_SERVER['TELEGRAM_BOT_TOKEN'] = $this->originalServerToken;
+        } else {
+            unset($_SERVER['TELEGRAM_BOT_TOKEN']);
+        }
+
         $this->scratchFiles = [];
         parent::tearDown();
     }
 
-    private function scratchPath(): string
+    private function scratchPath(string $extension): string
     {
-        $path = sys_get_temp_dir() . '/nova_telegram_config_test_' . bin2hex(random_bytes(6)) . '.json';
+        $path = sys_get_temp_dir() . '/nova_telegram_' . bin2hex(random_bytes(6)) . $extension;
         $this->scratchFiles[] = $path;
 
         return $path;
@@ -54,176 +84,130 @@ class TelegramSecretMigrationTest extends TestCase
         ]));
     }
 
-    public function test_reads_laravel_encrypted_bot_token(): void
+    public function test_json_token_is_never_used_as_runtime_configuration(): void
     {
-        $path = $this->scratchPath();
-        $this->writeRawConfig($path, [
-            'bot_token' => encrypt('123456:REAL-TOKEN'),
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        $this->writeRawConfig($configPath, [
+            'bot_token' => encrypt('123456:LEGACY-FILE-TOKEN'),
             'chat_id' => '999',
-            'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
         ]);
 
-        $config = telegram_read_config($path);
+        $config = telegram_read_config($configPath, $envPath);
 
-        $this->assertSame('123456:REAL-TOKEN', $config['bot_token']);
+        $this->assertSame('', $config['bot_token']);
         $this->assertSame('999', $config['chat_id']);
     }
 
-    public function test_reads_plaintext_legacy_bot_token_without_rewriting_file(): void
+    public function test_env_is_the_only_source_for_the_global_token(): void
     {
-        $path = $this->scratchPath();
-        $this->writeRawConfig($path, [
-            'bot_token' => '123456:LEGACY-PLAINTEXT-TOKEN',
-            'chat_id' => '999',
-            'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
-        ]);
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        $this->writeRawConfig($configPath, ['bot_token' => '123456:FILE-TOKEN']);
+        file_put_contents($envPath, "APP_ENV=testing\nTELEGRAM_BOT_TOKEN=\"999999:ENV-TOKEN\"\n");
 
-        $config = telegram_read_config($path);
-        $this->assertSame('123456:LEGACY-PLAINTEXT-TOKEN', $config['bot_token']);
+        $config = telegram_read_config($configPath, $envPath);
 
-        // Lote A6 explicitly rewrites only on the next save, never on read
-        // (config.json is read from hot paths, including inside the bot's
-        // polling loop — rewriting on every read would mean writing the
-        // file constantly).
-        $stillOnDisk = json_decode((string) file_get_contents($path), true);
-        $this->assertSame('123456:LEGACY-PLAINTEXT-TOKEN', $stillOnDisk['bot_token']);
+        $this->assertSame('999999:ENV-TOKEN', $config['bot_token']);
     }
 
-    public function test_corrupted_bot_token_is_never_exposed(): void
+    public function test_saving_writes_token_to_env_and_removes_it_from_json(): void
     {
-        $path = $this->scratchPath();
-        $corrupted = $this->fakeCorruptedLaravelPayload();
-        $this->writeRawConfig($path, [
-            'bot_token' => $corrupted,
-            'chat_id' => '999',
-            'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
-        ]);
-
-        $config = telegram_read_config($path);
-
-        $this->assertSame('', $config['bot_token']);
-        $stillOnDisk = json_decode((string) file_get_contents($path), true);
-        $this->assertSame($corrupted, $stillOnDisk['bot_token']);
-    }
-
-    public function test_absent_bot_token_reads_as_empty(): void
-    {
-        $path = $this->scratchPath();
-        $this->writeRawConfig($path, [
-            'bot_token' => '',
-            'chat_id' => '',
-            'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
-        ]);
-
-        $config = telegram_read_config($path);
-        $this->assertSame('', $config['bot_token']);
-        $this->assertFalse(telegram_is_configured($config));
-    }
-
-    public function test_missing_file_reads_as_empty_config(): void
-    {
-        $path = $this->scratchPath();
-        // Deliberately never created.
-
-        $config = telegram_read_config($path);
-        $this->assertSame('', $config['bot_token'] ?? '');
-    }
-
-    public function test_saving_a_new_token_stores_it_encrypted_on_disk(): void
-    {
-        $path = $this->scratchPath();
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        file_put_contents($envPath, "APP_ENV=testing\n");
 
         $ok = telegram_save_config([
             'bot_token' => '123456:BRAND-NEW-TOKEN',
             'chat_id' => '111',
             'proxy_url' => '10.0.0.1:3128',
-        ], $path);
+        ], $configPath, $envPath);
 
         $this->assertTrue($ok);
+        $this->assertSame('123456:BRAND-NEW-TOKEN', telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath));
 
-        $raw = json_decode((string) file_get_contents($path), true);
-        $this->assertNotSame('123456:BRAND-NEW-TOKEN', $raw['bot_token']);
-        $this->assertSame('laravel_encrypted', SecretValue::inspect($raw['bot_token'])['status']);
-        $this->assertSame('123456:BRAND-NEW-TOKEN', SecretValue::decryptSecret($raw['bot_token']));
-
-        // Non-secret fields stay readable on disk, unchanged structure.
+        $raw = json_decode((string) file_get_contents($configPath), true);
+        $this->assertArrayNotHasKey('bot_token', $raw);
         $this->assertSame('111', $raw['chat_id']);
         $this->assertSame('10.0.0.1:3128', $raw['proxy_url']);
-        $this->assertArrayHasKey('updated_at', $raw);
-        $this->assertArrayHasKey('default_parse_mode', $raw);
 
-        $reread = telegram_read_config($path);
+        $reread = telegram_read_config($configPath, $envPath);
         $this->assertSame('123456:BRAND-NEW-TOKEN', $reread['bot_token']);
     }
 
-    public function test_resaving_an_already_encrypted_token_does_not_double_encrypt(): void
+    public function test_saving_replaces_existing_env_value_without_duplicates(): void
     {
-        $path = $this->scratchPath();
-        $this->writeRawConfig($path, [
-            'bot_token' => encrypt('123456:STABLE-TOKEN'),
-            'chat_id' => '999',
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        file_put_contents($envPath, "TELEGRAM_BOT_TOKEN=\"111111:OLD-TOKEN\"\nAPP_ENV=testing\n");
+
+        $ok = telegram_save_config([
+            'bot_token' => '222222:NEW-TOKEN',
+            'chat_id' => '',
             'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
-        ]);
+        ], $configPath, $envPath);
 
-        // Simulates TelegramController::updateAdmin() leaving the token field
-        // blank ("keep current") — it reads the config first, then saves the
-        // (already-decrypted-in-memory) token back unchanged.
-        $current = telegram_read_config($path);
-        telegram_save_config(['bot_token' => $current['bot_token'], 'chat_id' => '999', 'proxy_url' => ''], $path);
-
-        $raw = json_decode((string) file_get_contents($path), true);
-        $this->assertSame('laravel_encrypted', SecretValue::inspect($raw['bot_token'])['status']);
-        $this->assertSame('123456:STABLE-TOKEN', SecretValue::decryptSecret($raw['bot_token']));
+        $this->assertTrue($ok);
+        $contents = (string) file_get_contents($envPath);
+        $this->assertSame(1, substr_count($contents, 'TELEGRAM_BOT_TOKEN='));
+        $this->assertSame('222222:NEW-TOKEN', telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath));
     }
 
-    public function test_saving_upgrades_a_plaintext_legacy_token_to_encrypted(): void
+    public function test_migrates_encrypted_legacy_token_and_cleans_json(): void
     {
-        $path = $this->scratchPath();
-        $this->writeRawConfig($path, [
-            'bot_token' => '123456:LEGACY-PLAINTEXT-TOKEN',
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        file_put_contents($envPath, "APP_ENV=testing\n");
+        $this->writeRawConfig($configPath, [
+            'bot_token' => encrypt('123456:MIGRATED-TOKEN'),
             'chat_id' => '999',
             'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
         ]);
 
-        // Admin only changes chat_id via the form, leaving bot_token blank
-        // ("keep current") — TelegramController falls back to the decrypted
-        // current value read a moment earlier, then saves.
-        $current = telegram_read_config($path);
-        telegram_save_config(['bot_token' => $current['bot_token'], 'chat_id' => '555', 'proxy_url' => ''], $path);
+        $result = telegram_migrate_legacy_token_to_env($configPath, $envPath);
 
-        $raw = json_decode((string) file_get_contents($path), true);
-        $this->assertSame('laravel_encrypted', SecretValue::inspect($raw['bot_token'])['status']);
-        $this->assertSame('123456:LEGACY-PLAINTEXT-TOKEN', SecretValue::decryptSecret($raw['bot_token']));
-        $this->assertSame('555', $raw['chat_id']);
+        $this->assertTrue($result['ok']);
+        $this->assertTrue($result['migrated']);
+        $this->assertTrue($result['removed']);
+        $this->assertSame('123456:MIGRATED-TOKEN', telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath));
+        $raw = json_decode((string) file_get_contents($configPath), true);
+        $this->assertArrayNotHasKey('bot_token', $raw);
+        $this->assertSame('999', $raw['chat_id']);
     }
 
-    public function test_env_override_still_takes_priority_over_file(): void
+    public function test_existing_env_token_wins_and_legacy_copy_is_removed(): void
     {
-        $path = $this->scratchPath();
-        $this->writeRawConfig($path, [
-            'bot_token' => encrypt('123456:FILE-TOKEN'),
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        file_put_contents($envPath, "TELEGRAM_BOT_TOKEN=\"999999:DEPLOYED-TOKEN\"\n");
+        $this->writeRawConfig($configPath, [
+            'bot_token' => encrypt('123456:OLD-FILE-TOKEN'),
             'chat_id' => '999',
-            'proxy_url' => '',
-            'default_parse_mode' => '',
-            'updated_at' => date(DATE_ATOM),
         ]);
 
-        putenv('TELEGRAM_BOT_TOKEN=999999:ENV-OVERRIDE-TOKEN');
-        $config = telegram_read_config($path);
-        putenv('TELEGRAM_BOT_TOKEN');
+        $result = telegram_migrate_legacy_token_to_env($configPath, $envPath);
 
-        $this->assertSame('999999:ENV-OVERRIDE-TOKEN', $config['bot_token']);
+        $this->assertTrue($result['ok']);
+        $this->assertFalse($result['migrated']);
+        $this->assertTrue($result['removed']);
+        $this->assertSame('999999:DEPLOYED-TOKEN', telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath));
+        $raw = json_decode((string) file_get_contents($configPath), true);
+        $this->assertArrayNotHasKey('bot_token', $raw);
+    }
+
+    public function test_corrupted_legacy_token_is_preserved_when_migration_fails(): void
+    {
+        $configPath = $this->scratchPath('.json');
+        $envPath = $this->scratchPath('.env');
+        file_put_contents($envPath, "APP_ENV=testing\n");
+        $corrupted = $this->fakeCorruptedLaravelPayload();
+        $this->writeRawConfig($configPath, ['bot_token' => $corrupted]);
+
+        $result = telegram_migrate_legacy_token_to_env($configPath, $envPath);
+
+        $this->assertFalse($result['ok']);
+        $raw = json_decode((string) file_get_contents($configPath), true);
+        $this->assertSame($corrupted, $raw['bot_token']);
+        $this->assertSame('', telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath));
     }
 }

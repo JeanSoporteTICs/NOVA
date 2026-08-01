@@ -85,11 +85,15 @@
                             </div>
                         </div>
                     @else
+                    <p class="text-muted fw-semibold mb-3">
+                        <i class="bi bi-file-earmark-lock me-1"></i>
+                        El token global se guarda exclusivamente como <code>TELEGRAM_BOT_TOKEN</code> en el archivo <code>.env</code>; nunca se almacena en JSON.
+                    </p>
                     <form class="row g-3" method="post" action="{{ route('telegram.admin.update') }}">
                         @csrf
                         <div class="col-12">
                             <label class="form-label fw-bold" for="bot-token">TELEGRAM_BOT_TOKEN</label>
-                            <input class="form-control" id="bot-token" name="bot_token" type="password" autocomplete="off" placeholder="{{ $configured ? 'Dejar en blanco para conservar' : 'Token de BotFather' }}">
+                            <input class="form-control" id="bot-token" name="bot_token" type="password" autocomplete="new-password" placeholder="{{ $configured ? 'Dejar en blanco para conservar el valor de .env' : 'Token de BotFather' }}">
                         </div>
                         <div class="col-12">
                             <label class="form-label fw-bold" for="proxy-url">TELEGRAM_PROXY_URL</label>

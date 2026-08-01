@@ -22,6 +22,21 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Artisan::command('telegram:migrate-token-env', function () {
+    require_once base_path('telegram/lib/telegram.php');
+
+    $result = telegram_migrate_legacy_token_to_env();
+    if (!($result['ok'] ?? false)) {
+        $this->error((string) ($result['message'] ?? 'No se pudo migrar el token Telegram.'));
+
+        return 1;
+    }
+
+    $this->info((string) ($result['message'] ?? 'Migracion completada.'));
+
+    return 0;
+})->purpose('Move the legacy Telegram bot token from config.json to .env');
+
 Artisan::command('redmine:archive-processed', function (RedmineDataRepository $redmine) {
     $archived = $redmine->archiveExpiredProcessedReports();
     $this->info($archived . ' reporte(s) procesado(s) archivado(s) por retencion.');

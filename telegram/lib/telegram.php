@@ -16,26 +16,166 @@ function telegram_config_path(): string
     return telegram_storage_path('config.json');
 }
 
-function telegram_read_config(?string $path = null): array
+function telegram_env_path(): string
+{
+    return function_exists('base_path')
+        ? base_path('.env')
+        : dirname(__DIR__, 2) . '/.env';
+}
+
+function telegram_env_file_value(string $key, ?string $path = null): string
+{
+    $path = $path ?: telegram_env_path();
+    if (!is_file($path)) {
+        return '';
+    }
+
+    $contents = @file_get_contents($path);
+    if (!is_string($contents)) {
+        return '';
+    }
+
+    $pattern = '/^(?:export[ \t]+)?' . preg_quote($key, '/') . '[ \t]*=[ \t]*(.*)$/m';
+    if (preg_match($pattern, $contents, $matches) !== 1) {
+        return '';
+    }
+
+    $value = trim((string) ($matches[1] ?? ''));
+    if (strlen($value) >= 2) {
+        $first = $value[0];
+        $last = $value[strlen($value) - 1];
+        if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+            $value = substr($value, 1, -1);
+            if ($first === '"') {
+                $value = str_replace(['\\"', '\\\\'], ['"', '\\'], $value);
+            }
+        }
+    }
+
+    return trim($value);
+}
+
+function telegram_runtime_env_value(string $key): string
+{
+    $processValue = getenv($key);
+    if (is_string($processValue) && trim($processValue) !== '') {
+        return trim($processValue);
+    }
+
+    foreach ([$_ENV[$key] ?? null, $_SERVER[$key] ?? null] as $value) {
+        if (is_scalar($value) && trim((string) $value) !== '') {
+            return trim((string) $value);
+        }
+    }
+
+    return '';
+}
+
+function telegram_bot_token(?string $envPath = null): string
+{
+    if ($envPath !== null) {
+        return telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath);
+    }
+
+    $runtimeToken = telegram_runtime_env_value('TELEGRAM_BOT_TOKEN');
+
+    return $runtimeToken !== ''
+        ? $runtimeToken
+        : telegram_env_file_value('TELEGRAM_BOT_TOKEN');
+}
+
+function telegram_write_env_value(string $key, string $value, ?string $path = null): bool
+{
+    $path = $path ?: telegram_env_path();
+    $value = trim($value);
+    if ($key !== 'TELEGRAM_BOT_TOKEN' || $value === '' || str_contains($value, "\n") || str_contains($value, "\r")) {
+        return false;
+    }
+
+    $directory = dirname($path);
+    if (!is_dir($directory) || (!is_file($path) && !is_writable($directory))) {
+        return false;
+    }
+
+    $contents = is_file($path) ? @file_get_contents($path) : '';
+    if (!is_string($contents)) {
+        return false;
+    }
+
+    $encoded = '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
+    $line = $key . '=' . $encoded;
+    $pattern = '/^(?:export[ \t]+)?' . preg_quote($key, '/') . '[ \t]*=.*$/m';
+    $count = 0;
+    $updated = preg_replace_callback($pattern, static fn (): string => $line, $contents, 1, $count);
+    if (!is_string($updated)) {
+        return false;
+    }
+    if ($count === 0) {
+        $updated = rtrim($updated, "\r\n") . ($updated === '' ? '' : PHP_EOL) . $line . PHP_EOL;
+    }
+
+    $temporary = @tempnam($directory, '.nova-env-');
+    if (!is_string($temporary) || $temporary === '') {
+        return false;
+    }
+
+    $written = @file_put_contents($temporary, $updated, LOCK_EX);
+    if ($written === false) {
+        @unlink($temporary);
+        return false;
+    }
+
+    if (is_file($path)) {
+        $permissions = @fileperms($path);
+        if (is_int($permissions)) {
+            @chmod($temporary, $permissions & 0777);
+        }
+    }
+
+    if (!@rename($temporary, $path)) {
+        $written = @file_put_contents($path, $updated, LOCK_EX);
+        @unlink($temporary);
+        if ($written === false) {
+            return false;
+        }
+    }
+
+    putenv($key . '=' . $value);
+    $_ENV[$key] = $value;
+    $_SERVER[$key] = $value;
+
+    return true;
+}
+
+function telegram_write_config_payload(array $payload, string $path): bool
+{
+    $directory = dirname($path);
+    if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
+        return false;
+    }
+
+    $written = @file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
+    if ($written === false) {
+        return false;
+    }
+
+    @chmod($path, 0666);
+
+    return true;
+}
+
+function telegram_read_config(?string $path = null, ?string $envPath = null): array
 {
     $path = $path ?: telegram_config_path();
     $config = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
     $config = is_array($config) ? $config : [];
 
-    // bot_token is the only secret field in this file. It may be stored
-    // Laravel-encrypted (current format going forward), plaintext (legacy,
-    // read transparently and upgraded on the next telegram_save_config()
-    // call — never rewritten here on a hot read path), or absent.
-    $storedToken = (string) ($config['bot_token'] ?? '');
-    $config['bot_token'] = $storedToken !== ''
-        ? (\App\Modulos\Nova\Support\SecretValue::decryptSecret($storedToken) ?? '')
-        : '';
+    // El token global nunca se lee desde config.json. La unica fuente de
+    // verdad es TELEGRAM_BOT_TOKEN en el entorno/.env.
+    unset($config['bot_token']);
+    $config['bot_token'] = telegram_bot_token($envPath);
 
-    $envToken = trim((string) getenv('TELEGRAM_BOT_TOKEN'));
     $envChatId = trim((string) getenv('TELEGRAM_CHAT_ID'));
-    if ($envToken !== '') {
-        $config['bot_token'] = $envToken;
-    }
     if ($envChatId !== '') {
         $config['chat_id'] = $envChatId;
     }
@@ -47,40 +187,61 @@ function telegram_read_config(?string $path = null): array
     return $config;
 }
 
-function telegram_save_config(array $config, ?string $path = null): bool
+function telegram_save_config(array $config, ?string $path = null, ?string $envPath = null): bool
 {
     $path = $path ?: telegram_config_path();
-    $directory = dirname($path);
-    if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
-        return false;
-    }
-
-    try {
-        $encryptedToken = \App\Modulos\Nova\Support\SecretValue::encryptSecret((string) ($config['bot_token'] ?? ''));
-    } catch (\Throwable) {
-        // Never persist plaintext nor touch the file on a real encryption failure.
+    $token = trim((string) ($config['bot_token'] ?? ''));
+    if ($token !== '' && !telegram_write_env_value('TELEGRAM_BOT_TOKEN', $token, $envPath)) {
         return false;
     }
 
     $payload = [
-        'bot_token' => $encryptedToken,
         'chat_id' => (string) ($config['chat_id'] ?? ''),
         'proxy_url' => (string) ($config['proxy_url'] ?? ''),
         'default_parse_mode' => '',
         'updated_at' => date(DATE_ATOM),
     ];
 
-    $written = @file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL, LOCK_EX);
-    if ($written === false) {
-        return false;
+    return telegram_write_config_payload($payload, $path);
+}
+
+/**
+ * Migra una copia legacy de bot_token desde config.json a .env y elimina el
+ * secreto del JSON solo despues de confirmar que existe en el entorno.
+ *
+ * @return array{ok:bool,migrated:bool,removed:bool,message:string}
+ */
+function telegram_migrate_legacy_token_to_env(?string $configPath = null, ?string $envPath = null): array
+{
+    $configPath = $configPath ?: telegram_config_path();
+    $envPath = $envPath ?: telegram_env_path();
+    $raw = is_file($configPath) ? json_decode((string) file_get_contents($configPath), true) : [];
+    $raw = is_array($raw) ? $raw : [];
+    $storedToken = trim((string) ($raw['bot_token'] ?? ''));
+
+    if ($storedToken === '') {
+        return ['ok' => true, 'migrated' => false, 'removed' => false, 'message' => 'No existe un token legacy en config.json.'];
     }
 
-    // NOTE (Lote A6): still 0666 here — see delivery notes. Apache (daemon)
-    // and this file's CLI/Docker owners share no common group today, so a
-    // tighter mode would need an explicit chown first or it silently locks
-    // Apache out on the very next save. Not applied without confirmation.
-    @chmod($path, 0666);
-    return true;
+    $migrated = false;
+    if (telegram_env_file_value('TELEGRAM_BOT_TOKEN', $envPath) === '') {
+        $token = \App\Modulos\Nova\Support\SecretValue::decryptSecret($storedToken);
+        if (!is_string($token) || trim($token) === '') {
+            return ['ok' => false, 'migrated' => false, 'removed' => false, 'message' => 'No se pudo descifrar el token legacy.'];
+        }
+        if (!telegram_write_env_value('TELEGRAM_BOT_TOKEN', $token, $envPath)) {
+            return ['ok' => false, 'migrated' => false, 'removed' => false, 'message' => 'No se pudo escribir TELEGRAM_BOT_TOKEN en .env.'];
+        }
+        $migrated = true;
+    }
+
+    unset($raw['bot_token']);
+    $raw['updated_at'] = date(DATE_ATOM);
+    if (!telegram_write_config_payload($raw, $configPath)) {
+        return ['ok' => false, 'migrated' => $migrated, 'removed' => false, 'message' => 'El token esta en .env, pero no se pudo limpiar config.json.'];
+    }
+
+    return ['ok' => true, 'migrated' => $migrated, 'removed' => true, 'message' => 'Token migrado a .env y eliminado de config.json.'];
 }
 
 function telegram_is_configured(?array $config = null): bool

@@ -23,9 +23,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       $error = 'Completa BOT_TOKEN y CHAT_ID.';
     } elseif (telegram_save_config($config, $configPath)) {
       $config = telegram_read_config($configPath);
-      $message = 'Configuracion Telegram guardada.';
+      $message = 'Configuracion Telegram guardada. El token quedo protegido en .env.';
     } else {
-      $error = 'No se pudo guardar la configuracion Telegram.';
+      $error = 'No se pudo guardar TELEGRAM_BOT_TOKEN en .env. Revisa sus permisos de escritura.';
     }
   }
   if ($action === 'test_message') {
@@ -73,7 +73,7 @@ $storageDir = telegram_storage_path();
         <article class="card telegram-card h-100">
           <div class="card-body p-4">
             <h2 class="h5 fw-black mb-1">Configuracion central</h2>
-            <p class="text-muted fw-semibold">El token se guarda en storage local y no se muestra despues de guardarlo.</p>
+            <p class="text-muted fw-semibold">El token global se guarda exclusivamente como <code>TELEGRAM_BOT_TOKEN</code> en <code>.env</code>; nunca se almacena en JSON.</p>
 
             <form class="row g-3" method="post">
               <input type="hidden" name="action" value="save_config">
@@ -82,7 +82,7 @@ $storageDir = telegram_storage_path();
               <?php endif; ?>
               <div class="col-12">
                 <label class="form-label fw-bold" for="bot-token">TELEGRAM_BOT_TOKEN</label>
-                <input class="form-control" id="bot-token" name="bot_token" type="password" autocomplete="off" placeholder="<?= $configured ? 'Dejar en blanco para conservar' : 'Token de BotFather' ?>">
+                <input class="form-control" id="bot-token" name="bot_token" type="password" autocomplete="new-password" placeholder="<?= $configured ? 'Dejar en blanco para conservar el valor de .env' : 'Token de BotFather' ?>">
               </div>
               <div class="col-12">
                 <label class="form-label fw-bold" for="chat-id">TELEGRAM_CHAT_ID</label>

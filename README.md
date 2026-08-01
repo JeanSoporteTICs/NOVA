@@ -97,6 +97,17 @@ docker compose -f docker-compose.telegram.yml logs
 docker compose -f docker-compose.telegram.yml restart
 ```
 
+El token global de Telegram tiene una sola fuente de verdad:
+`TELEGRAM_BOT_TOKEN` en `.env`. Nunca se guarda en
+`storage/app/telegram/config.json`. Al actualizar una instalacion antigua,
+ejecute una vez `php artisan telegram:migrate-token-env`; luego recree los
+contenedores para que relean el entorno:
+
+```bash
+docker compose -f docker-compose.telegram.yml up -d --force-recreate
+docker compose -f docker-compose.monitor.yml up -d --force-recreate
+```
+
 ### Monitor de Servidores con Docker
 
 El monitor se ejecuta como un contenedor separado y comparte el código del
