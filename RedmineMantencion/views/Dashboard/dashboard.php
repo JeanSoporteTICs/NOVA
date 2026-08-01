@@ -219,7 +219,7 @@ $csrf = legacy_csrf_token();
   <?php endif; ?>
 
   <?php if ($canImportCore): ?>
-  <form method="post" class="dashboard-panel" id="core-import-form" data-app-no-loading="1" data-no-page-loader="true">
+  <form method="post" action="<?= $h($dashboardActionUrl) ?>" class="dashboard-panel" id="core-import-form" data-app-no-loading="1" data-no-page-loader="true">
     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
     <input type="hidden" name="action" value="import_core_history">
     <input type="hidden" name="core_runtime_user" id="core-runtime-user-hidden" value="">

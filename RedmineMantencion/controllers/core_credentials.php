@@ -67,6 +67,30 @@ function core_credentials_central_user_id(string $userId): ?int {
         if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova') || !\Illuminate\Support\Facades\Schema::hasTable('integraciones_usuario')) {
             return null;
         }
+
+        // Los IDs numericos de NOVA y Redmine pueden coincidir entre usuarios
+        // distintos. Los prefijos permiten que los flujos autenticados indiquen
+        // de forma inequívoca qué identidad están entregando.
+        foreach ([
+            'nova:' => 'id',
+            'uuid:' => 'uuid',
+            'redmine:' => 'redmine_id',
+            'usuario:' => 'usuario',
+        ] as $prefix => $column) {
+            if (!str_starts_with($userId, $prefix)) {
+                continue;
+            }
+            $identity = trim(substr($userId, strlen($prefix)));
+            if ($identity === '' || ($column === 'id' && !ctype_digit($identity))) {
+                return null;
+            }
+            $rowId = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+                ->where($column, $column === 'id' ? (int)$identity : $identity)
+                ->value('id');
+
+            return $rowId === null ? null : (int)$rowId;
+        }
+
         $rowId = \Illuminate\Support\Facades\DB::table('usuarios_nova')
             ->where('redmine_id', $userId)
             ->orWhere('uuid', $userId)

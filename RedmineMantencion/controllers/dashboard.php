@@ -1236,19 +1236,29 @@ function dashboard_core_current_credential_user_key(array $currentUser = []): st
     if (empty($currentUser)) {
         $currentUser = dashboard_current_user();
     }
-    $candidates = [
-        $currentUser['_nova_user_id'] ?? '',
-        $currentUser['uuid'] ?? '',
-        $currentUser['redmine_id'] ?? '',
-        $currentUser['id'] ?? '',
-        function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '',
-    ];
-    foreach ($candidates as $candidate) {
-        $candidate = trim((string)$candidate);
-        if ($candidate !== '') {
-            return $candidate;
+
+    $novaId = trim((string)($currentUser['_nova_user_id'] ?? ''));
+    if ($novaId !== '') {
+        return ctype_digit($novaId) ? 'nova:' . $novaId : 'uuid:' . $novaId;
+    }
+
+    $uuid = trim((string)($currentUser['uuid'] ?? ''));
+    if ($uuid !== '') {
+        return 'uuid:' . $uuid;
+    }
+
+    foreach ([$currentUser['redmine_id'] ?? '', $currentUser['id'] ?? ''] as $redmineId) {
+        $redmineId = trim((string)$redmineId);
+        if ($redmineId !== '') {
+            return 'redmine:' . $redmineId;
         }
     }
+
+    $authenticatedId = function_exists('auth_get_user_id') ? trim((string)auth_get_user_id()) : '';
+    if ($authenticatedId !== '') {
+        return 'redmine:' . $authenticatedId;
+    }
+
     return '';
 }
 
@@ -3589,8 +3599,12 @@ function handle_request(): array {
                     'user' => $coreUser,
                     'pass' => $corePass,
                 ]);
+                $coreCredentialsSaved = null;
                 if ($rememberCore && $coreUser !== '' && $corePass !== '' && (empty($result['error']) || !empty($result['authenticated']))) {
-                    core_credentials_save_for_user($coreCredentialUserKey, $coreUser, $corePass);
+                    $coreCredentialsSaved = core_credentials_save_for_user($coreCredentialUserKey, $coreUser, $corePass);
+                    if (!$coreCredentialsSaved) {
+                        dashboard_log_action('CORE_CREDENTIALS_SAVE_FAIL', 'No se pudieron guardar las credenciales CORE del usuario conectado.');
+                    }
                 }
                 if (!empty($result['error'])) {
                     $flashMsg = $result['error'];
@@ -3600,9 +3614,17 @@ function handle_request(): array {
                         $_SESSION['dashboard_open_core_credentials_modal'] = true;
                         $_SESSION['dashboard_core_runtime_user'] = $coreUser;
                     }
+                    if ($coreCredentialsSaved === false) {
+                        $flashMsg .= ' Además, no se pudieron guardar las credenciales en tu cuenta NOVA.';
+                    }
                     dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE desde ' . $desde . ' hasta ' . $hasta . ': ' . $result['error']);
                 } else {
                     $flashMsg = 'Importación CORE completada. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
+                    if ($coreCredentialsSaved === true) {
+                        $flashMsg .= ' | Credenciales guardadas en tu cuenta.';
+                    } elseif ($coreCredentialsSaved === false) {
+                        $flashMsg .= ' | No se pudieron guardar las credenciales.';
+                    }
                     if ((int)($result['imported'] ?? 0) === 0 && (int)($result['updated'] ?? 0) === 0 && is_array($result['trace'] ?? null)) {
                         $trace = $result['trace'];
                         $flashMsg .= ' | Diagnostico: rows_raw=' . (int)($trace['rows_raw'] ?? 0)
