@@ -3,7 +3,7 @@
 $h = $h ?? static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 $activeNav = $activeNav ?? '';
 $baseUrl = function_exists('url') ? rtrim(url('/telegram'), '/') : '/telegram';
-$homeUrl = function_exists('url') ? url('/') : '/NOVA/public';
+$homeUrl = function_exists('route') ? route('home') : '/NOVA/public/index.php';
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $currentUser = $_SESSION['user'] ?? [];

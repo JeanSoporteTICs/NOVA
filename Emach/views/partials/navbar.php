@@ -10,7 +10,7 @@ $lastActivity = function_exists('session')
   : (int) ($_SESSION['last_activity'] ?? time());
 $remaining = max(0, $sessionTimeout - (time() - $lastActivity));
 $emachBaseUrl = function_exists('url') ? rtrim(url('/emach'), '/') : '/emach';
-$homeUrl = function_exists('url') ? url('/') : '/NOVA/public';
+$homeUrl = function_exists('route') ? route('home') : '/NOVA/public/index.php';
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $sessionExtendUrl = function_exists('route') ? route('session.extend') : '/NOVA/public/session/extend';
 $loginUrl = function_exists('route') ? route('login') : '/NOVA/public/login';

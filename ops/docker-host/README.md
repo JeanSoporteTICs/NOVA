@@ -10,5 +10,8 @@
 OnlyOffice se publica exclusivamente detrás de Apache en `/onlyoffice/`.
 MariaDB y phpMyAdmin no publican puertos al host.
 
+Apache acepta `/nova` y `/NOVA`; la variante minúscula redirige a `/NOVA`
+para mantener una sola URL canónica y una única sesión de aplicación.
+
 Los archivos de este directorio son las copias auditables de la configuración
 operativa instalada bajo `/opt/docker` y `/home/odin/docker/compose`.
