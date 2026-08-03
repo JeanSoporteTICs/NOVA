@@ -780,17 +780,41 @@ const NovaOptimisticToggle = (() => {
         button.classList.add('is-submitting');
 
         try {
+            const formData = new FormData(form);
+            // Do not rely only on request headers: some reverse proxies strip them,
+            // which makes the legacy controller redirect with an HTML page instead
+            // of returning its JSON action result.
+            formData.set('ajax', '1');
+            // Every form handled by this component is the hour-extra toggle. Set the
+            // discriminator explicitly because HTML table/form repair performed by
+            // browsers can detach hidden inputs from their visual form.
+            formData.set('action', 'toggle_hora_extra');
+            const laravelToken = formData.get('_token')
+                || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                || '';
             const response = await fetch(form.getAttribute('action') || window.location.href, {
                 method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    ...(laravelToken ? { 'X-CSRF-TOKEN': laravelToken } : {}),
+                },
+                body: formData,
             });
             const raw = await response.text();
             let payload = {};
             try {
                 payload = raw ? JSON.parse(raw) : {};
             } catch (parseError) {
-                throw new Error('El servidor respondio en un formato inesperado.');
+                if (response.redirected || /<\s*!doctype|<\s*html/i.test(raw)) {
+                    const destination = response.redirected
+                        ? ` Destino: ${new URL(response.url, window.location.href).pathname}.`
+                        : '';
+                    throw new Error(response.status === 419
+                        ? 'La sesión venció. Recarga la página e inténtalo nuevamente.'
+                        : `El servidor redirigió la acción a una página HTML (HTTP ${response.status}).${destination}`);
+                }
+                throw new Error(`El servidor respondió en un formato inesperado (HTTP ${response.status}).`);
             }
             if (!response.ok || payload.ok === false) {
                 throw new Error(payload.message || 'No se pudo actualizar el estado.');
@@ -825,6 +849,37 @@ const NovaOptimisticToggle = (() => {
 })();
 
 window.NovaOptimisticToggle = NovaOptimisticToggle;
+
+// Keep every regular POST form compatible with Laravel and the legacy modules.
+// Mantención still renders a number of server-side forms with its legacy
+// `csrf_token`; adding `_token` centrally prevents individual actions from
+// failing when the legacy PHP session is renewed between page load and submit.
+const NovaCsrfForms = (() => {
+    function ensureToken(form) {
+        if (!(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post') return;
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        if (!token) return;
+        let input = form.querySelector('input[name="_token"]');
+        if (!input) {
+            input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = '_token';
+            form.prepend(input);
+        }
+        input.value = token;
+    }
+
+    function initialize(root = document) {
+        root.querySelectorAll?.('form[method="post"], form[method="POST"]').forEach(ensureToken);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => initialize());
+    document.addEventListener('submit', event => ensureToken(event.target), true);
+
+    return { initialize, ensureToken };
+})();
+
+window.NovaCsrfForms = NovaCsrfForms;
 
 // Shared "back to top" button — wires up any .nova-scroll-top button on the
 // page (moves it to <body>, toggles visibility past 220px of scroll, smooth-

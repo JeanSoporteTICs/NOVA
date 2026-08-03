@@ -525,13 +525,34 @@ function csrf_validate() {
     // Las rutas legacy se despachan dentro de Laravel y mantienen dos sesiones:
     // la sesión NOVA y NOVALEGACY. Aceptar también el token Laravel evita falsos
     // negativos cuando el bridge reconstruye la sesión legacy entre GET y POST.
-    $laravelSubmitted = trim((string)($_POST['_token'] ?? ''));
+    $laravelSubmitted = trim((string)(
+        $_POST['_token']
+        ?? $_SERVER['HTTP_X_CSRF_TOKEN']
+        ?? $_SERVER['HTTP_X_XSRF_TOKEN']
+        ?? ''
+    ));
     $laravelExpected = function_exists('csrf_token') ? trim((string)csrf_token()) : '';
     $laravelValid = $laravelSubmitted !== ''
         && $laravelExpected !== ''
         && hash_equals($laravelExpected, $laravelSubmitted);
 
     if (!$legacyValid && !$laravelValid) {
+        $expectsJson = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+            || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+            || (string)($_POST['ajax'] ?? '') === '1';
+        if ($expectsJson) {
+            if (ob_get_level() > 0) {
+                ob_clean();
+            }
+            http_response_code(419);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'ok' => false,
+                'message' => 'La validación de seguridad venció. Recarga la página e inténtalo nuevamente.',
+                'reason' => 'csrf_validation_failed',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
         // Cierra sesión para evitar estados inconsistentes y redirige a login
         auth_logout();
         header('Location: ' . legacy_app_url('login.php?err=csrf'));

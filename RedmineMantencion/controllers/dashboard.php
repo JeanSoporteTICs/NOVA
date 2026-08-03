@@ -56,9 +56,20 @@ function dashboard_status_counts(array $messages): array {
 }
 
 function dashboard_json_response(array $payload, int $statusCode = 200): void {
+    // The legacy module runs inside Laravel's output buffer. A PHP warning or
+    // incidental whitespace emitted by an included legacy file would otherwise
+    // be prepended to this payload and make response.json()/JSON.parse() fail.
+    if (ob_get_level() > 0) {
+        ob_clean();
+    }
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        http_response_code(500);
+        $json = '{"ok":false,"message":"No se pudo codificar la respuesta del servidor."}';
+    }
+    echo $json;
     exit;
 }
 
@@ -659,6 +670,7 @@ function dashboard_update_message_hora_extra(array $message): bool {
 
     $values = [
         'hora_extra' => normalize_hour_extra_value($message['hora_extra'] ?? '') === '1' ? 1 : 0,
+        'tiempo_estimado' => normalize_hour_extra_value($message['hora_extra'] ?? '') === '1' ? 1 : null,
         'actualizado_at' => function_exists('now') ? now() : date('Y-m-d H:i:s'),
     ];
 
@@ -3386,7 +3398,7 @@ function handle_request(): array {
             ];
             $flashMsg = 'No tienes permiso para ' . ($permissionLabels[$requiredPermission] ?? 'ejecutar esta acción') . '.';
             $ajaxPayload['ok'] = false;
-            if ($ajaxAction) {
+            if ($ajaxAction || $action === 'toggle_hora_extra') {
                 dashboard_json_response(array_merge($ajaxPayload, ['message' => $flashMsg]), 403);
             }
             http_response_code(403);
@@ -3787,7 +3799,12 @@ function handle_request(): array {
                 . ' | fallas ' . max(0, (int)($result['attempts'] ?? 0) - (int)($result['success'] ?? 0))
             );
         }
-        if ($ajaxAction && $action !== 'process_selected' && $action !== 'import_core_history') {
+        // The hour-extra toggle is an AJAX-only UI action. Always return its JSON
+        // contract even when a proxy/legacy bridge does not preserve the AJAX
+        // indicators; otherwise the generic legacy redirect below returns the full
+        // dashboard HTML and the optimistic toggle rolls itself back.
+        $mustReturnJson = $ajaxAction || $action === 'toggle_hora_extra';
+        if ($mustReturnJson && $action !== 'process_selected' && $action !== 'import_core_history') {
             $scopedMessages = dashboard_filter_messages_by_scope($messages);
             $ajaxPayload['message'] = $flashMsg ?? '';
             $ajaxPayload['counts'] = dashboard_status_counts($scopedMessages);

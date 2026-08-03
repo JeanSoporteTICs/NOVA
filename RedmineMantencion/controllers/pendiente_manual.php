@@ -224,7 +224,7 @@ function manual_pending_default_form(array $cfg, array $users): array {
         'status_id' => (string)($cfg['status_id'] ?? 1),
         'priority_id' => (string)($cfg['priority_id'] ?? 2),
         'fecha_inicio' => $today,
-        'fecha_fin' => '',
+        'fecha_fin' => $today,
         'tiempo_estimado' => '',
         'asignado_a' => $currentUserId,
         'categoria' => '',
@@ -263,6 +263,9 @@ function manual_pending_build_record(array $input, array $cfg, array $users): ar
     $solicitante = trim((string)($input['solicitante'] ?? ''));
     $asunto = trim((string)($input['asunto'] ?? ''));
     $descripcion = trim((string)($input['descripcion'] ?? ''));
+    $fechaInicio = manual_pending_normalize_date($input['fecha_inicio'] ?? '');
+    $fechaInicioDate = DateTimeImmutable::createFromFormat('!Y-m-d', $fechaInicio, new DateTimeZone('America/Santiago'));
+    $fechaCreacion = $fechaInicioDate instanceof DateTimeImmutable ? $fechaInicioDate->format('d-m-Y') : $now->format('d-m-Y');
     return [
         'id' => 'manual-' . uniqid('', true),
         'fuente' => 'manual',
@@ -270,10 +273,10 @@ function manual_pending_build_record(array $input, array $cfg, array $users): ar
         'numero' => dashboard_normalize_phone($anexo),
         'mensaje' => $asunto,
         'descripcion' => $descripcion,
-        'fecha' => $now->format('d-m-Y'),
+        'fecha' => $fechaCreacion,
         'hora' => $now->format('H:i'),
-        'fecha_inicio' => manual_pending_normalize_date($input['fecha_inicio'] ?? ''),
-        'fecha_fin' => manual_pending_normalize_date($input['fecha_fin'] ?? ''),
+        'fecha_inicio' => $fechaInicio,
+        'fecha_fin' => manual_pending_normalize_date($input['fecha_fin'] ?? $fechaInicio),
         'tipo' => $trackerName !== '' ? $trackerName : 'Soporte',
         'tipo_id' => trim((string)($input['tracker_id'] ?? '')),
         'prioridad' => $priorityName !== '' ? $priorityName : 'Normal',
@@ -296,7 +299,7 @@ function manual_pending_build_record(array $input, array $cfg, array $users): ar
         'anexo' => $anexo,
         'redmine_id' => '',
         'procesado_ts' => '',
-        'core_fecha_creacion' => $now->format('d-m-Y H:i'),
+        'core_fecha_creacion' => $fechaCreacion . ' ' . $now->format('H:i'),
         'core_tipo_solicitud' => $categoria !== '' ? $categoria : ($trackerName !== '' ? $trackerName : 'Soporte'),
         'core_establecimiento' => $unidad,
         'core_departamento' => $unidad,

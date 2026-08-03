@@ -151,6 +151,8 @@ Route::get('/redmine-mantencion/health.php', fn () => response()->json([
     'base_path' => data_get(config('modules.redmine-mantencion', []), 'path', base_path('redmine-mantencion')),
 ]))->name('redmine.mantencion.health');
 Route::get('/redmine-mantencion', fn () => redirect()->route('redmine.mantencion.dashboard'));
+Route::post('/redmine-mantencion/app/dashboard/hora-extra', [LegacyProjectController::class, 'toggleMantencionHoursExtra'])
+    ->name('redmine.mantencion.dashboard.hours-extra');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Dashboard/dashboard.php'))
     ->name('redmine.mantencion.dashboard');
 Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');

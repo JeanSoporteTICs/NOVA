@@ -33,9 +33,12 @@ $cfg = load_platform_config();
 $mantencionBaseUrl = function_exists('legacy_app_url')
     ? rtrim(legacy_app_url(), '/')
     : (function_exists('url') ? rtrim(url('/redmine-mantencion'), '/') : '/redmine-mantencion');
-$dashboardActionUrl = function_exists('url')
-    ? url('/redmine-mantencion/app/dashboard')
+$dashboardActionUrl = function_exists('route')
+    ? route('redmine.mantencion.section', ['section' => 'dashboard'], false)
     : $mantencionBaseUrl . '/app/dashboard';
+$dashboardHoursExtraActionUrl = function_exists('route')
+    ? route('redmine.mantencion.dashboard.hours-extra', [], false)
+    : $dashboardActionUrl;
 $chileToday = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
 $coreDesde = $_GET['core_desde'] ?? $chileToday;
 $coreHasta = $_GET['core_hasta'] ?? $chileToday;
@@ -533,12 +536,14 @@ $csrf = legacy_csrf_token();
                   $hasHoraExtra = function_exists('normalize_hour_extra_value') && normalize_hour_extra_value($m['hora_extra'] ?? '') === '1';
                 ?>
                 <?php if ($canEditHoursExtra): ?>
-                <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-no-loading="1" data-no-page-loader="true"
+                <form method="post" action="<?= $h($dashboardHoursExtraActionUrl) ?>" data-app-no-loading="1" data-no-page-loader="true"
                       data-optimistic-toggle
                       data-toggle-active-icon="bi-clock-fill" data-toggle-inactive-icon="bi-clock"
                       data-toggle-active-class="btn-hora-extra--on" data-toggle-inactive-class="btn-hora-extra--off"
                       data-toggle-active-title="Hora extra: Sí. Cambiar a No" data-toggle-inactive-title="Hora extra: No. Cambiar a Sí">
+                  <input type="hidden" name="_token" value="<?= $h(function_exists('csrf_token') ? csrf_token() : '') ?>">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                  <input type="hidden" name="ajax" value="1">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="toggle_hora_extra">
                   <button
@@ -566,6 +571,7 @@ $csrf = legacy_csrf_token();
 
                 <?php if ($canDeleteReports): ?>
                 <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-app-confirm="¿Eliminar este mensaje?" data-dashboard-ajax="row" data-app-no-loading="1">
+                  <input type="hidden" name="_token" value="<?= $h(function_exists('csrf_token') ? csrf_token() : '') ?>">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <input type="hidden" name="id" value="<?= $h($m['id'] ?? '') ?>">
                   <input type="hidden" name="action" value="delete">
@@ -749,7 +755,8 @@ $csrf = legacy_csrf_token();
 
     <div class="modal-content">
 
-      <form method="post" action="<?= $h($dashboardActionUrl) ?>">
+      <form method="post" action="<?= $h($dashboardActionUrl) ?>" data-dashboard-ajax="row" data-app-no-loading="1" data-no-page-loader="true">
+        <input type="hidden" name="_token" value="<?= $h(function_exists('csrf_token') ? csrf_token() : '') ?>">
         <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
 
         <div class="modal-header">
@@ -992,7 +999,10 @@ $csrf = legacy_csrf_token();
   const dashboardMaintenanceMode = <?= $maintenanceMode ? 'true' : 'false' ?>;
   const dashboardCanEditReports = <?= $canEditReports ? 'true' : 'false' ?>;
   const dashboardScrollKey = 'nova:mantencion-dashboard:scroll-y';
+  const dashboardFilterKey = 'nova:mantencion-dashboard:filter';
   const dashboardProcessedEditKey = 'nova:mantencion-dashboard:processed-edit';
+  const savedDashboardFilter = sessionStorage.getItem(dashboardFilterKey) || '';
+  sessionStorage.removeItem(dashboardFilterKey);
 
   const savedDashboardScroll = Number(sessionStorage.getItem(dashboardScrollKey) || '');
   if (Number.isFinite(savedDashboardScroll) && savedDashboardScroll >= 0) {
@@ -1691,11 +1701,16 @@ async function submitDashboardAction(form) {
   const submitter = form.querySelector('button[type="submit"], input[type="submit"]');
   const data = new FormData(form);
   data.set('ajax', '1');
+  const csrfToken = String(data.get('_token') || document.querySelector('meta[name="csrf-token"]')?.content || '');
   row?.classList.add('is-row-updating');
   try {
     const response = await fetch(form.getAttribute('action') || window.location.href, {
       method: 'POST',
-      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {})
+      },
       body: data
     });
     const raw = await response.text();
@@ -1710,6 +1725,29 @@ async function submitDashboardAction(form) {
     }
     applyDashboardActionResult(payload, form, row);
     showDashboardToast(payload.message || 'Acción completada.');
+    if ((data.get('action') || '') === 'update' && form.closest('#detalleModal')) {
+      const reportId = String(data.get('id') || '');
+      const reportRow = reportId ? document.querySelector(`tr[data-id="${escapeDashboardId(reportId)}"]`) : null;
+      const detailButton = reportRow?.querySelector('[data-bs-target="#detalleModal"]');
+      const fieldAttributes = {
+        tipo: 'data-tipo', estado: 'data-estado', prioridad: 'data-prioridad', asunto: 'data-asunto',
+        categoria: 'data-categoria', asignado_a: 'data-asignado_a', solicitante: 'data-solicitante',
+        establecimiento: 'data-establecimiento', departamento: 'data-departamento', hora_extra: 'data-hora_extra',
+        fecha_inicio: 'data-fecha_inicio', fecha_fin: 'data-fecha_fin', tiempo_estimado: 'data-tiempo_estimado',
+        fecha: 'data-fecha', hora: 'data-hora', numero: 'data-numero', descripcion: 'data-descripcion',
+        core_email: 'data-core_email'
+      };
+      Object.entries(fieldAttributes).forEach(([field, attribute]) => {
+        if (data.has(field)) detailButton?.setAttribute(attribute, String(data.get(field) ?? ''));
+      });
+      const assignedDisplay = form.querySelector('#md-asignado-display');
+      if (assignedDisplay) detailButton?.setAttribute('data-asignado_nombre', assignedDisplay.value);
+      reportRow?.setAttribute('data-horaextra', String(data.get('hora_extra') || '0'));
+      bootstrap.Modal.getInstance(document.getElementById('detalleModal'))?.hide();
+      sessionStorage.setItem(dashboardScrollKey, String(window.scrollY || 0));
+      sessionStorage.setItem(dashboardFilterKey, currentDashboardFilter || 'pendiente');
+      window.location.reload();
+    }
   } catch (error) {
     row?.classList.remove('is-row-updating');
     showDashboardToast(error.message || 'No se pudo completar la acción.', 'danger');
@@ -1790,19 +1828,19 @@ document.querySelectorAll('form[data-dashboard-ajax="row"]').forEach(form => {
 
 // Keep the row's "detalle" button in sync with the Hora Extra toggle so opening
 // the detail modal right after toggling doesn't show the pre-toggle value.
-// Note: the estimated-time default assigned server-side on activation is not
-// re-synced here (the optimistic toggle intentionally doesn't wait on/depend on
-// server-computed values) — it will show its previous value until the next page load.
 document.addEventListener('nova-optimistic-toggle:change', (event) => {
   const row = event.target.closest('tr');
   row?.setAttribute('data-horaextra', event.detail.active ? '1' : '0');
   const detailBtn = row?.querySelector('[data-bs-target="#detalleModal"]');
   detailBtn?.setAttribute('data-hora_extra', event.detail.active ? '1' : '0');
+  detailBtn?.setAttribute('data-tiempo_estimado', event.detail.active ? '1' : '');
 });
 
 if (filterNav) {
 
-  const initialFilter = filterNav.querySelector('[data-filter].is-active')?.getAttribute('data-filter') || 'pendiente';
+  const initialFilter = savedDashboardFilter
+    || filterNav.querySelector('[data-filter].is-active')?.getAttribute('data-filter')
+    || 'pendiente';
   filterRows(initialFilter);
   applyFilterButtons(initialFilter);
 

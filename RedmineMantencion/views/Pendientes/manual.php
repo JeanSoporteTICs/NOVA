@@ -120,7 +120,7 @@ $categoryOptionsJson = htmlspecialchars(
             </div>
             <div class="field-label">Fecha de inicio</div>
             <div>
-              <input type="date" name="fecha_inicio" class="form-control" value="<?= $h(manual_pending_date_for_input($form['fecha_inicio'] ?? '')) ?>">
+              <input type="date" name="fecha_inicio" id="manual-fecha-inicio" class="form-control" value="<?= $h(manual_pending_date_for_input($form['fecha_inicio'] ?? '')) ?>">
             </div>
           </div>
 
@@ -137,7 +137,7 @@ $categoryOptionsJson = htmlspecialchars(
             </div>
             <div class="field-label">Fecha fin</div>
             <div>
-              <input type="date" name="fecha_fin" class="form-control" value="<?= $h(manual_pending_date_for_input($form['fecha_fin'] ?? '')) ?>">
+              <input type="date" name="fecha_fin" id="manual-fecha-fin" class="form-control" value="<?= $h(manual_pending_date_for_input($form['fecha_fin'] ?? $form['fecha_inicio'] ?? '')) ?>">
             </div>
           </div>
 
@@ -223,6 +223,15 @@ $categoryOptionsJson = htmlspecialchars(
     }
 
     window.NovaSearchSelect?.init(document);
+    const startDateInput = document.getElementById('manual-fecha-inicio');
+    const endDateInput = document.getElementById('manual-fecha-fin');
+    const syncManualDates = () => {
+      if (startDateInput && endDateInput) endDateInput.value = startDateInput.value;
+    };
+    startDateInput?.addEventListener('input', syncManualDates);
+    startDateInput?.addEventListener('change', syncManualDates);
+    syncManualDates();
+
     const descriptionInput = document.getElementById('manual-descripcion');
     const descriptionPreview = document.getElementById('manual-description-preview');
     const descriptionEditTab = document.getElementById('description-edit-tab');

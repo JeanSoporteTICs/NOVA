@@ -94,6 +94,67 @@ class LegacyProjectController extends Controller
         return $response;
     }
 
+    public function toggleMantencionHoursExtra(Request $request, ProjectAccessGuard $access)
+    {
+        $config = $this->projectConfig('redmine-mantencion');
+        $this->abortIfDisabled($config);
+        if (!$this->userCanAccessProject('redmine-mantencion', $config, $access)) {
+            return response()->json(['ok' => false, 'message' => 'No tienes acceso a Redmine Mantención.'], 403);
+        }
+
+        $submittedToken = (string) $request->input('_token', $request->header('X-CSRF-TOKEN', ''));
+        if ($submittedToken === '' || !hash_equals((string) $request->session()->token(), $submittedToken)) {
+            return response()->json(['ok' => false, 'message' => 'La validación de seguridad venció. Recarga la página.'], 419);
+        }
+
+        $this->prepareLegacyRuntime('redmine-mantencion', $config);
+        require_once $config['path'] . '/controllers/dashboard.php';
+
+        if (!auth_can('horas_extra_editar')) {
+            return response()->json(['ok' => false, 'message' => 'No tienes permiso para editar Horas extra.'], 403);
+        }
+
+        $id = trim((string) $request->input('id', ''));
+        $messages = load_messages();
+        if ($id === '' || !dashboard_can_access_message($messages, $id)) {
+            return response()->json(['ok' => false, 'message' => 'No se encontró la solicitud o no tienes acceso.'], 404);
+        }
+
+        $updatedMessage = null;
+        $enabled = false;
+        foreach ($messages as $message) {
+            if ((string) ($message['id'] ?? '') !== $id) {
+                continue;
+            }
+            $enabled = normalize_hour_extra_value($message['hora_extra'] ?? '') !== '1';
+            $message['hora_extra'] = $enabled ? '1' : '0';
+            $message['tiempo_estimado'] = $enabled ? '1' : '';
+            $updatedMessage = $message;
+            break;
+        }
+
+        if (!is_array($updatedMessage) || !dashboard_update_message_hora_extra($updatedMessage)) {
+            return response()->json(['ok' => false, 'message' => 'No se pudo actualizar la hora extra.'], 422);
+        }
+
+        if ($enabled) {
+            append_hours_extra_record($updatedMessage);
+        } else {
+            remove_hours_extra_record_by_id($id);
+        }
+        dashboard_log_action('HORA_EXTRA', ($enabled ? 'Activo' : 'Desactivo') . ' hora extra en reporte ID ' . $id);
+
+        return response()->json([
+            'ok' => true,
+            'message' => $enabled ? 'Hora extra activada.' : 'Hora extra desactivada.',
+            'row' => [
+                'id' => $id,
+                'hora_extra' => $enabled ? '1' : '0',
+                'tiempo_estimado' => $updatedMessage['tiempo_estimado'],
+            ],
+        ]);
+    }
+
     public function asset(Request $request, string $project, string $path)
     {
         return $this->passthrough($request, $project, 'assets/' . $path);

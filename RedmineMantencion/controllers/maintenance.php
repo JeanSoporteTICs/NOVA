@@ -68,6 +68,13 @@ function maintenance_mode_block_if_enabled(): void {
         return;
     }
     $message = maintenance_mode_block_message();
+    if (strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+        || (string)($_POST['ajax'] ?? '') === '1') {
+        if (function_exists('dashboard_json_response')) {
+            dashboard_json_response(['ok' => false, 'message' => $message, 'reason' => 'maintenance_mode'], 503);
+        }
+    }
     $notified = false;
     if (function_exists('dashboard_set_flash')) {
         dashboard_set_flash($message);
