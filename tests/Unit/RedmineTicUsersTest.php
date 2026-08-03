@@ -97,7 +97,7 @@ class RedmineTicUsersTest extends TestCase
         // The API token round-trips (stored encrypted, returned decrypted).
         $this->assertSame('token-plano-b3', $created['api']);
         $storedSecret = DB::table('integraciones_usuario')
-            ->where('usuario_id', $novaId)->where('tipo', 'redmine_tic')->value('valor_secreto');
+            ->where('usuario_id', $novaId)->where('tipo', 'redmine')->value('valor_secreto');
         $this->assertNotSame('token-plano-b3', $storedSecret);
     }
 

@@ -148,7 +148,10 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
         return $rows->map(function ($row) use ($integrations, $userPermissions): array {
             $rowIntegrations = $integrations[(int)$row->nova_id] ?? collect();
             $byType = $rowIntegrations->keyBy('tipo');
-            $redmine = $byType['redmine_mantencion'] ?? null;
+            $redmine = collect(['redmine', 'redmine_mantencion', 'redmine_tic'])
+                ->map(fn (string $type) => $byType[$type] ?? null)
+                ->first(fn ($integration) => trim((string)($integration->valor_secreto ?? '')) !== '')
+                ?? ($byType['redmine'] ?? $byType['redmine_mantencion'] ?? $byType['redmine_tic'] ?? null);
             $core = $byType['core'] ?? null;
             $nextcloud = $byType['nextcloud'] ?? null;
             $globalRole = strtolower(trim((string)($row->rol ?? 'usuario')));
@@ -238,27 +241,14 @@ function auth_find_user_by_id($id) {
     return null;
 }
 
-function auth_central_redmine_api_token($redmineId, string $type = 'redmine_mantencion'): string {
+function auth_central_redmine_api_token($redmineId, string $type = 'redmine'): string {
     $redmineId = trim((string)$redmineId);
     if ($redmineId === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) {
         return '';
     }
     try {
-        $row = \Illuminate\Support\Facades\DB::table('usuarios_nova')
-            ->join('integraciones_usuario', 'integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
-            ->where('usuarios_nova.redmine_id', $redmineId)
-            ->where('integraciones_usuario.tipo', $type)
-            ->select('integraciones_usuario.valor_secreto')
-            ->first();
-        $secret = trim((string)($row->valor_secreto ?? ''));
-        if ($secret === '') {
-            return '';
-        }
-        try {
-            return (string)decrypt($secret);
-        } catch (\Throwable) {
-            return $secret;
-        }
+        return app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)
+            ->redmineTokenForRedmineId($redmineId);
     } catch (\Throwable) {
         return '';
     }

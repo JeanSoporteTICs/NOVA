@@ -47,7 +47,7 @@ $currentUserId = auth_get_user_id();
 $userToken = '';
 if ($currentUserId) {
   if (function_exists('auth_central_redmine_api_token')) {
-    $userToken = auth_central_redmine_api_token($currentUserId, 'redmine_mantencion');
+    $userToken = auth_central_redmine_api_token($currentUserId);
   }
 }
 $apiKey = $userToken;

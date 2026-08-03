@@ -264,6 +264,9 @@ se resuelven mediante contratos en `app/Contracts` y enlaces del contenedor.
   `redmine_id` se reconcilia únicamente mediante una coincidencia única entre
   el `login` remoto y el usuario de acceso/RUT central; nunca por nombre.
 - `integraciones_usuario` guarda cuentas y secretos externos por usuario.
+- Redmine Mantención y Redmine TIC comparten una única API key personal en la
+  integración `tipo=redmine`; los tipos históricos `redmine_mantencion` y
+  `redmine_tic` solo se aceptan como compatibilidad durante la consolidación.
 - `modulos_nova` y `permisos_usuario_modulo` controlan el acceso global;
   `rol_modulo` conserva el rol interno de Mantención sin modificar
   `usuarios_nova.rol`.

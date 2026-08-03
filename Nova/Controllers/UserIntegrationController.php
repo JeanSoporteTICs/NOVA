@@ -89,9 +89,9 @@ class UserIntegrationController extends Controller
             'home_route' => 'redmine.mantencion.dashboard',
             'theme' => 'mantencion',
             'types' => [
-                'redmine_mantencion' => [
+                'redmine' => [
                     'label' => 'Redmine',
-                    'description' => 'Token personal usado al enviar o sincronizar datos con Redmine Mantencion.',
+                    'description' => 'API Key personal compartida por Redmine Mantencion y Redmine TIC.',
                     'icon' => 'bi-key',
                     'external_label' => '',
                     'secret_label' => 'API Key',
@@ -118,9 +118,9 @@ class UserIntegrationController extends Controller
             'home_route' => 'redmine.native.dashboard',
             'theme' => 'tic',
             'types' => [
-                'redmine_tic' => [
+                'redmine' => [
                     'label' => 'Redmine API Key',
-                    'description' => 'Token personal usado por acciones de Redmine TIC.',
+                    'description' => 'API Key personal compartida por Redmine Mantencion y Redmine TIC.',
                     'icon' => 'bi-key',
                     'external_label' => '',
                     'secret_label' => 'API Key',

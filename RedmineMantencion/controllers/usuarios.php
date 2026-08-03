@@ -316,7 +316,7 @@ function usuarios_user_api_token(): string {
         return '';
     }
     if (function_exists('auth_central_redmine_api_token')) {
-        $central = auth_central_redmine_api_token($userId, 'redmine_mantencion');
+        $central = auth_central_redmine_api_token($userId);
         if ($central !== '') {
             return $central;
         }
@@ -347,18 +347,14 @@ function usuarios_central_decrypt_secret(string $secret): string {
     }
 }
 
-function usuarios_central_user_api(string $redmineId, string $type = 'redmine_mantencion'): string {
+function usuarios_central_user_api(string $redmineId, string $type = 'redmine'): string {
     $redmineId = trim($redmineId);
     if ($redmineId === '' || !class_exists(\Illuminate\Support\Facades\DB::class)) {
         return '';
     }
     try {
-        $secret = (string)\Illuminate\Support\Facades\DB::table('usuarios_nova')
-            ->join('integraciones_usuario', 'integraciones_usuario.usuario_id', '=', 'usuarios_nova.id')
-            ->where('usuarios_nova.redmine_id', $redmineId)
-            ->where('integraciones_usuario.tipo', $type)
-            ->value('integraciones_usuario.valor_secreto');
-        return usuarios_central_decrypt_secret($secret);
+        return app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)
+            ->redmineTokenForRedmineId($redmineId);
     } catch (\Throwable) {
         return '';
     }
@@ -624,7 +620,7 @@ function usuarios_central_upsert(array $user, string $moduleKey = 'redmine-mante
         if ($redmineId !== '') {
             $identityService->syncRedmineIdAndIntegrations($userId, $redmineId);
         }
-        usuarios_central_save_integration($userId, 'redmine_mantencion', trim((string)($user['api'] ?? '')), $redmineId);
+        usuarios_central_save_integration($userId, 'redmine', trim((string)($user['api'] ?? '')), $redmineId);
         usuarios_central_save_integration_encrypted($userId, 'core', trim((string)($user['core_pass_enc'] ?? '')), trim((string)($user['core_user'] ?? '')));
         usuarios_central_save_integration_encrypted($userId, 'nextcloud', trim((string)($user['nextcloud_pass_enc'] ?? '')), trim((string)($user['nextcloud_user'] ?? '')));
         usuarios_central_grant_access($userId, $moduleKey, $moduleRole);
@@ -675,7 +671,7 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
         try {
             $integrationRows = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
                 ->whereIn('usuario_id', $centralIds)
-                ->whereIn('tipo', ['redmine_mantencion', 'core', 'nextcloud'])
+                ->whereIn('tipo', ['redmine', 'redmine_mantencion', 'redmine_tic', 'core', 'nextcloud'])
                 ->get(['usuario_id', 'tipo', 'usuario_externo', 'valor_secreto']);
             foreach ($integrationRows as $integrationRow) {
                 $integrationsByUser[(int)$integrationRow->usuario_id][(string)$integrationRow->tipo] = [
@@ -697,7 +693,16 @@ function usuarios_merge_central_access(array $rows, string $moduleKey = 'redmine
         $userIntegrations = $integrationsByUser[(int)($user->id ?? 0)] ?? [];
         // usuarios_central_user_api() returned '' immediately when $redmineId === '';
         // preserved here so central-only users keep the exact same 'api' value.
-        $apiSecret = $redmineId !== '' ? (string)($userIntegrations['redmine_mantencion']['valor_secreto'] ?? '') : '';
+        $apiSecret = '';
+        if ($redmineId !== '') {
+            foreach (['redmine', 'redmine_mantencion', 'redmine_tic'] as $redmineType) {
+                $candidate = trim((string)($userIntegrations[$redmineType]['valor_secreto'] ?? ''));
+                if ($candidate !== '') {
+                    $apiSecret = $candidate;
+                    break;
+                }
+            }
+        }
         $coreExternal = trim((string)($userIntegrations['core']['usuario_externo'] ?? ''));
         $coreSecret = trim((string)($userIntegrations['core']['valor_secreto'] ?? ''));
         $nextcloudExternal = trim((string)($userIntegrations['nextcloud']['usuario_externo'] ?? ''));

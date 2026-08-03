@@ -20,9 +20,6 @@
         if (!$stored) {
             return ['class' => 'is-empty', 'label' => 'Sin configurar', 'icon' => 'bi-circle'];
         }
-        if ($type === 'redmine_mantencion') {
-            return ['class' => 'is-ready', 'label' => 'Configurada', 'icon' => 'bi-circle-fill'];
-        }
         if (!$hasSecret || ($needsExternal && !$hasExternal)) {
             return ['class' => 'is-warning', 'label' => 'Requiere actualizacion', 'icon' => 'bi-circle-fill'];
         }

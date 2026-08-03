@@ -174,7 +174,7 @@ class RedmineTicReportsBaselineTest extends TestCase
         $id = $this->makeReport();
         $facade = $this->facade();
 
-        // No integraciones_usuario row of type redmine_tic exists for this
+        // No shared integraciones_usuario row of type redmine exists for this
         // fake user id, so userApiToken() resolves to '' — the contract
         // requires this to short-circuit before any outbound HTTP call.
         $result = $facade->sendReportsToRedmine([(string) $id], 'no-such-user-b5');

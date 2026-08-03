@@ -63,7 +63,7 @@ class RedmineSendReportsTargetedPersistenceTest extends TestCase
     }
 
     /**
-     * Creates a real usuarios_nova + integraciones_usuario(redmine_tic) row
+     * Creates a real usuarios_nova + integraciones_usuario(redmine) row
      * so userApiToken() resolves to a non-empty value, letting the send flow
      * proceed past the "no token" short-circuit.
      */

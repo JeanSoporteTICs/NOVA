@@ -80,7 +80,7 @@ function user_api_token_fallback($usersFile) {
     $uid = auth_get_user_id();
     if (!$uid) return '';
     if (function_exists('auth_central_redmine_api_token')) {
-        $central = auth_central_redmine_api_token($uid, 'redmine_mantencion');
+        $central = auth_central_redmine_api_token($uid);
         if ($central !== '') {
             return $central;
         }

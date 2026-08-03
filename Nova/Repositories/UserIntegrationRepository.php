@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Schema;
 
 final class UserIntegrationRepository
 {
+    public const REDMINE_TYPE = 'redmine';
+
+    private const LEGACY_REDMINE_TYPES = ['redmine_mantencion', 'redmine_tic'];
+
     /**
      * @return array<int,array<string,mixed>>
      */
@@ -213,24 +217,21 @@ final class UserIntegrationRepository
         }
 
         try {
-            $rows = DB::table('integraciones_usuario')
-                ->where('usuario_id', $userId)
-                ->whereIn('tipo', $types)
-                ->get()
-                ->keyBy('tipo');
-
             $result = [];
             foreach ($types as $type) {
-                $row = $rows[$type] ?? null;
+                $row = $this->integrationRowForUser($userId, $type);
                 $externalUser = trim((string) ($row->usuario_externo ?? ''));
                 $secret = trim((string) ($row->valor_secreto ?? ''));
                 $hasSecret = $secret !== '' && SecretValue::inspect($secret)['decryptable'];
+                $stored = $this->isRedmineType($type)
+                    ? $secret !== ''
+                    : ($externalUser !== '' || $hasSecret);
                 $result[$type] = [
                     'type' => $type,
                     'external_user' => $externalUser,
                     'has_external_user' => $externalUser !== '',
                     'has_secret' => $hasSecret,
-                    'stored' => $externalUser !== '' || $hasSecret,
+                    'stored' => $stored,
                     'updated_at' => (string) ($row->actualizado_at ?? ''),
                     'masked_external_user' => $this->mask($externalUser),
                 ];
@@ -270,24 +271,55 @@ final class UserIntegrationRepository
             return ['user' => '', 'secret' => '', 'stored' => false];
         }
 
+        return $this->credentialForUserId($userId, $type);
+    }
+
+    /**
+     * Returns a decrypted credential for an already resolved NOVA user.
+     * Redmine Mantencion and TIC intentionally share the same personal key.
+     *
+     * @return array{user:string,secret:string,stored:bool}
+     */
+    public function credentialForUserId(int $userId, string $type = self::REDMINE_TYPE): array
+    {
+        if ($userId <= 0 || !$this->tablesAvailable()) {
+            return ['user' => '', 'secret' => '', 'stored' => false];
+        }
+
         try {
-            $row = DB::table('integraciones_usuario')
-                ->where('usuario_id', $userId)
-                ->where('tipo', trim($type))
-                ->first();
+            $row = $this->integrationRowForUser($userId, $type);
             $user = trim((string) ($row->usuario_externo ?? ''));
             $secret = SecretValue::decryptSecret((string) ($row->valor_secreto ?? '')) ?? '';
+            $stored = $this->isRedmineType($type)
+                ? $secret !== ''
+                : ($user !== '' && $secret !== '');
 
-            return ['user' => $user, 'secret' => $secret, 'stored' => $user !== '' && $secret !== ''];
+            return ['user' => $user, 'secret' => $secret, 'stored' => $stored];
         } catch (\Throwable) {
             return ['user' => '', 'secret' => '', 'stored' => false];
+        }
+    }
+
+    public function redmineTokenForRedmineId(string $redmineId): string
+    {
+        $redmineId = trim($redmineId);
+        if ($redmineId === '' || !$this->tablesAvailable()) {
+            return '';
+        }
+
+        try {
+            $userId = (int) DB::table('usuarios_nova')->where('redmine_id', $redmineId)->value('id');
+
+            return $this->credentialForUserId($userId, self::REDMINE_TYPE)['secret'];
+        } catch (\Throwable) {
+            return '';
         }
     }
 
     public function saveCredentialForSession(array $sessionUser, string $type, string $externalUser, string $secret): bool
     {
         $userId = $this->databaseUserIdForSession($sessionUser);
-        $type = trim($type);
+        $type = $this->canonicalType($type);
         $externalUser = trim($externalUser);
         if ($userId === null || $type === '' || !$this->tablesAvailable()) {
             return false;
@@ -295,10 +327,7 @@ final class UserIntegrationRepository
 
         $currentSecret = '';
         try {
-            $currentSecret = (string) DB::table('integraciones_usuario')
-                ->where('usuario_id', $userId)
-                ->where('tipo', $type)
-                ->value('valor_secreto');
+            $currentSecret = (string) ($this->integrationRowForUser($userId, $type)->valor_secreto ?? '');
         } catch (\Throwable) {
             return false;
         }
@@ -319,22 +348,27 @@ final class UserIntegrationRepository
             return false;
         }
 
-        return $this->writeIntegration($userId, $type, $externalUser, $storedSecret, '');
+        $saved = $this->writeIntegration($userId, $type, $externalUser, $storedSecret, '');
+        if ($saved && $type === self::REDMINE_TYPE) {
+            $this->deleteLegacyRedmineRows($userId);
+        }
+
+        return $saved;
     }
 
     public function deleteCredentialForSession(array $sessionUser, string $type): bool
     {
         $userId = $this->databaseUserIdForSession($sessionUser);
-        $type = trim($type);
+        $type = $this->canonicalType($type);
         if ($userId === null || $type === '' || !$this->tablesAvailable()) {
             return false;
         }
 
         try {
-            DB::table('integraciones_usuario')
-                ->where('usuario_id', $userId)
-                ->where('tipo', $type)
-                ->delete();
+            $query = DB::table('integraciones_usuario')->where('usuario_id', $userId);
+            $this->isRedmineType($type)
+                ? $query->whereIn('tipo', $this->redmineTypes())->delete()
+                : $query->where('tipo', $type)->delete();
 
             return true;
         } catch (\Throwable) {
@@ -480,6 +514,62 @@ final class UserIntegrationRepository
             return true;
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    private function canonicalType(string $type): string
+    {
+        $type = trim($type);
+
+        return $this->isRedmineType($type) ? self::REDMINE_TYPE : $type;
+    }
+
+    private function isRedmineType(string $type): bool
+    {
+        return in_array(trim($type), $this->redmineTypes(), true);
+    }
+
+    /** @return array<int,string> */
+    private function redmineTypes(): array
+    {
+        return array_merge([self::REDMINE_TYPE], self::LEGACY_REDMINE_TYPES);
+    }
+
+    private function integrationRowForUser(int $userId, string $type): ?object
+    {
+        $type = trim($type);
+        $query = DB::table('integraciones_usuario')->where('usuario_id', $userId);
+        if (!$this->isRedmineType($type)) {
+            return $query->where('tipo', $type)->first();
+        }
+
+        $rows = $query->whereIn('tipo', $this->redmineTypes())->get();
+        $canonical = $rows->firstWhere('tipo', self::REDMINE_TYPE);
+        if ($canonical !== null && $this->rowHasDecryptableSecret($canonical)) {
+            return $canonical;
+        }
+
+        return $rows
+            ->filter(fn (object $row): bool => $this->rowHasDecryptableSecret($row))
+            ->sortByDesc(fn (object $row): string => (string) ($row->actualizado_at ?? $row->creado_at ?? ''))
+            ->first() ?? $canonical ?? $rows->first();
+    }
+
+    private function rowHasDecryptableSecret(object $row): bool
+    {
+        $secret = trim((string) ($row->valor_secreto ?? ''));
+
+        return $secret !== '' && SecretValue::inspect($secret)['decryptable'];
+    }
+
+    private function deleteLegacyRedmineRows(int $userId): void
+    {
+        try {
+            DB::table('integraciones_usuario')
+                ->where('usuario_id', $userId)
+                ->whereIn('tipo', self::LEGACY_REDMINE_TYPES)
+                ->delete();
+        } catch (\Throwable) {
         }
     }
 

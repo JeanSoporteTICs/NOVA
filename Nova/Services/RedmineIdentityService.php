@@ -117,7 +117,7 @@ final class RedmineIdentityService
 
         DB::table('integraciones_usuario')
             ->where('usuario_id', $userId)
-            ->whereIn('tipo', ['redmine_tic', 'redmine_mantencion'])
+            ->whereIn('tipo', ['redmine', 'redmine_tic', 'redmine_mantencion'])
             ->update([
                 'usuario_externo' => $newRedmineId !== '' ? $newRedmineId : null,
                 'actualizado_at' => now(),

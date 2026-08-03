@@ -2,6 +2,7 @@
 
 namespace RedmineTic\Repositories;
 
+use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\Nova\Services\RedmineIdentityService;
 use App\Support\StringNormalizer;
 use Illuminate\Support\Facades\DB;
@@ -78,7 +79,7 @@ class RedmineUserRepository
                 'numero_celular'        => '',
                 'telegram_chat_id'      => $telegramChatId,
                 'telegram_source'       => $telegramChatId !== '' ? 'nova' : '',
-                'api'                   => $this->integrationSecret((int) ($nova->id ?? 0), 'redmine_tic'),
+                'api'                   => $this->integrationSecret((int) ($nova->id ?? 0), UserIntegrationRepository::REDMINE_TYPE),
                 'rol'                   => trim((string) ($profile->rol ?? $nova->rol ?? 'usuario')) ?: 'usuario',
                 'rol_nova'              => strtolower(trim((string) ($nova->rol ?? 'usuario'))),
                 'estado_nova'           => strtolower(trim((string) ($nova->estado ?? 'activo'))) ?: 'activo',
@@ -448,7 +449,7 @@ class RedmineUserRepository
             $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
 
             if ($nova !== null) {
-                $this->saveUserIntegration($nova, 'redmine_tic', $apiToken, (string) $redmineId);
+                $this->saveUserIntegration($nova, UserIntegrationRepository::REDMINE_TYPE, $apiToken, (string) $redmineId);
                 $this->saveTelegramChatId($nova, $telegramChatId);
                 $this->grantProjectAccess($nova);
             }
@@ -658,6 +659,11 @@ class RedmineUserRepository
         }
 
         try {
+            if (in_array($type, [UserIntegrationRepository::REDMINE_TYPE, 'redmine_tic', 'redmine_mantencion'], true)) {
+                return app(UserIntegrationRepository::class)
+                    ->credentialForUserId($novaUserId, UserIntegrationRepository::REDMINE_TYPE)['secret'];
+            }
+
             $secret = (string) DB::table('integraciones_usuario')
                 ->where('usuario_id', $novaUserId)
                 ->where('tipo', $type)
