@@ -530,7 +530,18 @@ function csrf_validate() {
     $token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     $token = trim($token);
     $sess  = $_SESSION['csrf_token'] ?? '';
-    if (!$token || !$sess || !hash_equals($sess, $token)) {
+    $legacyValid = $token !== '' && $sess !== '' && hash_equals($sess, $token);
+
+    // Las rutas legacy se despachan dentro de Laravel y mantienen dos sesiones:
+    // la sesión NOVA y NOVALEGACY. Aceptar también el token Laravel evita falsos
+    // negativos cuando el bridge reconstruye la sesión legacy entre GET y POST.
+    $laravelSubmitted = trim((string)($_POST['_token'] ?? ''));
+    $laravelExpected = function_exists('csrf_token') ? trim((string)csrf_token()) : '';
+    $laravelValid = $laravelSubmitted !== ''
+        && $laravelExpected !== ''
+        && hash_equals($laravelExpected, $laravelSubmitted);
+
+    if (!$legacyValid && !$laravelValid) {
         // Cierra sesión para evitar estados inconsistentes y redirige a login
         auth_logout();
         header('Location: ' . legacy_app_url('login.php?err=csrf'));

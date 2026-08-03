@@ -221,6 +221,13 @@ class LegacyProjectController extends Controller
 
         $projectUser = app(ProjectAccessGuard::class)->projectUser($project, $novaUser);
 
+        if (is_array($projectUser)) {
+            // El perfil del modulo puede usar como `id` el identificador de
+            // Redmine. Conservamos aparte la identidad central para que las
+            // integraciones personales siempre resuelvan usuarios_nova.
+            $projectUser['_nova_user_id'] = (string) ($novaUser['id'] ?? $projectUser['_nova_user_id'] ?? '');
+        }
+
         $_SESSION['user'] = is_array($projectUser) ? $projectUser : ($novaUser['legacy'] ?? [
             'id' => $novaUser['id'] ?? '',
             'nombre' => $novaUser['name'] ?? '',

@@ -1,0 +1,37 @@
+services:
+  mariadb:
+    image: mariadb:${MARIADB_IMAGE_TAG:-12.3}
+    container_name: mariadb
+    restart: unless-stopped
+    env_file: /home/odin/docker/compose/mariadb/.env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - backend
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2
+    container_name: phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mariadb
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
+    name: nova_backend
+    external: true
+
+volumes:
+  mariadb_data:
+    external: true

@@ -189,7 +189,7 @@ class UserIntegrationController extends Controller
         $type = (string) $request->input('type', '');
         $definition = $config['types'][$type] ?? null;
         if (!is_array($definition)) {
-            return back()->with('integration_error', 'Integracion no permitida para este modulo.');
+            return $this->integrationRedirect($module)->with('integration_error', 'Integracion no permitida para este modulo.');
         }
 
         $sessionUser = $this->sessionUser($request);
@@ -214,7 +214,8 @@ class UserIntegrationController extends Controller
                 }
             }
 
-            return back()->with($ok ? 'integration_status' : 'integration_error', $ok ? 'Credencial eliminada.' : 'No se pudo eliminar la credencial.');
+            return $this->integrationRedirect($module)
+                ->with($ok ? 'integration_status' : 'integration_error', $ok ? 'Credencial eliminada.' : 'No se pudo eliminar la credencial.');
         }
 
         $current = $type === 'telegram'
@@ -223,14 +224,14 @@ class UserIntegrationController extends Controller
         $externalUser = trim((string) $request->input('external_user', ''));
         $secret = (string) $request->input('secret', '');
         if (!empty($definition['external_required']) && $externalUser === '' && empty($current['has_external_user'])) {
-            return back()->withInput()->with('integration_error', 'Completa ' . $definition['external_label'] . '.');
+            return $this->integrationRedirect($module)->withInput()->with('integration_error', 'Completa ' . $definition['external_label'] . '.');
         }
         if (!empty($definition['secret_required']) && $secret === '' && empty($current['has_secret'])) {
-            return back()->withInput()->with('integration_error', 'Completa ' . $definition['secret_label'] . '.');
+            return $this->integrationRedirect($module)->withInput()->with('integration_error', 'Completa ' . $definition['secret_label'] . '.');
         }
 
         if ($type === 'telegram' && $secret === '' && !empty($current['has_secret'])) {
-            return back()->with('integration_status', 'Chat ID conservado sin cambios.');
+            return $this->integrationRedirect($module)->with('integration_status', 'Chat ID conservado sin cambios.');
         }
 
         $ok = $type === 'telegram'
@@ -252,7 +253,8 @@ class UserIntegrationController extends Controller
             }
         }
 
-        return back()->with($ok ? 'integration_status' : 'integration_error', $ok ? 'Cuentas actualizadas correctamente.' : 'No se pudo guardar la credencial.');
+        return $this->integrationRedirect($module)
+            ->with($ok ? 'integration_status' : 'integration_error', $ok ? 'Cuentas actualizadas correctamente.' : 'No se pudo guardar la credencial.');
     }
 
     public function emachOvertimeSuggestion(Request $request, UserIntegrationRepository $integrations, EmachClientService $emach, EmachOvertimeService $overtime): JsonResponse
@@ -456,6 +458,19 @@ class UserIntegrationController extends Controller
         return url('/emach');
     }
 
+    private function integrationRedirect(string $module): RedirectResponse
+    {
+        $route = match ($module) {
+            'nova' => 'integrations.nova',
+            'emach' => 'integrations.emach',
+            'redmine-mantencion' => 'integrations.redmine_mantencion',
+            'redmine_tic' => 'integrations.redmine_tic',
+            default => 'home',
+        };
+
+        return redirect()->route($route);
+    }
+
     private function syncMantencionLegacySession(Request $request): void
     {
         $novaUser = $this->sessionUser($request);
@@ -468,6 +483,7 @@ class UserIntegrationController extends Controller
         $projectUser = app(ProjectAccessGuard::class)->projectUser('redmine-mantencion', $novaUser);
 
         if (is_array($projectUser)) {
+            $projectUser['_nova_user_id'] = (string) ($novaUser['id'] ?? $projectUser['_nova_user_id'] ?? '');
             $projectUser['id'] = trim((string) ($projectUser['id'] ?? '')) !== ''
                 ? $projectUser['id']
                 : ($novaUser['redmine_id'] ?? $novaUser['username'] ?? $novaUser['id'] ?? '');

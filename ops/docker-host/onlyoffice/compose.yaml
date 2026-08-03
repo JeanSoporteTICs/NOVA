@@ -1,0 +1,48 @@
+services:
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: OnlyOffice
+    restart: unless-stopped
+    env_file: /home/odin/docker/compose/onlyoffice/.env
+    volumes:
+      - onlyoffice_var_lib_onlyoffice:/var/lib/onlyoffice
+      - onlyoffice_var_lib_postgresql:/var/lib/postgresql
+      - onlyoffice_var_lib_rabbitmq:/var/lib/rabbitmq
+      - onlyoffice_var_lib_redis:/var/lib/redis
+      - onlyoffice_var_log_onlyoffice:/var/log/onlyoffice
+      - onlyoffice_var_www_onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_fonts_truetype_custom:/usr/share/fonts/truetype/custom
+      - /home/odin/docker/compose/onlyoffice/config/local.json:/etc/onlyoffice/documentserver/local.json
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - backend
+      - egress
+
+networks:
+  backend:
+    name: nova_backend
+    external: true
+  egress:
+    name: nova_egress
+    external: true
+
+volumes:
+  onlyoffice_var_lib_onlyoffice:
+    external: true
+  onlyoffice_var_lib_postgresql:
+    external: true
+  onlyoffice_var_lib_rabbitmq:
+    external: true
+  onlyoffice_var_lib_redis:
+    external: true
+  onlyoffice_var_log_onlyoffice:
+    external: true
+  onlyoffice_var_www_onlyoffice_data:
+    external: true
+  onlyoffice_fonts_truetype_custom:
+    external: true

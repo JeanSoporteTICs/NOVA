@@ -224,12 +224,13 @@ final class UserIntegrationRepository
                 $row = $rows[$type] ?? null;
                 $externalUser = trim((string) ($row->usuario_externo ?? ''));
                 $secret = trim((string) ($row->valor_secreto ?? ''));
+                $hasSecret = $secret !== '' && SecretValue::inspect($secret)['decryptable'];
                 $result[$type] = [
                     'type' => $type,
                     'external_user' => $externalUser,
                     'has_external_user' => $externalUser !== '',
-                    'has_secret' => $secret !== '',
-                    'stored' => $externalUser !== '' || $secret !== '',
+                    'has_secret' => $hasSecret,
+                    'stored' => $externalUser !== '' || $hasSecret,
                     'updated_at' => (string) ($row->actualizado_at ?? ''),
                     'masked_external_user' => $this->mask($externalUser),
                 ];

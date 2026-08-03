@@ -32,6 +32,31 @@ y respaldos locales usados durante la migración ya no forman parte del runtime.
 - Servidor web con el `DocumentRoot` apuntando exclusivamente a `public/`.
 - Docker Compose para el listener de Telegram y el monitor de servidores.
 
+### Redes Docker del servidor NOVA
+
+La instalación definitiva usa redes separadas y un único punto de entrada:
+
+- `apache-web` es el único contenedor NOVA que publica un puerto en el host
+  (`80/tcp`).
+- `nova_backend` es una red Docker interna (`internal: true`) compartida por
+  Apache, MariaDB, OnlyOffice, phpMyAdmin, Telegram y Monitor.
+- `nova_egress` permite salida sin publicar puertos a OnlyOffice, Telegram y
+  Monitor.
+- MariaDB, phpMyAdmin y OnlyOffice no publican puertos al host.
+- OnlyOffice se consume a través de Apache en `/onlyoffice/`; su URL NOVA es
+  `http://<servidor>/onlyoffice`.
+
+Las copias auditables de los Compose del host viven en `ops/docker-host/`. Las
+ubicaciones operativas actuales son `/opt/docker/apache-web` y
+`/home/odin/docker/compose/*`.
+
+Para comprobar que solo Apache está publicado:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Networks}}'
+docker network inspect nova_backend --format 'internal={{.Internal}}'
+```
+
 ## Instalación local
 
 ```bash

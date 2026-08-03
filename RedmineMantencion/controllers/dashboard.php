@@ -1225,11 +1225,32 @@ function dashboard_core_runtime_credentials(array $input = []): array {
 }
 
 function dashboard_core_credentials_for_current_user(): array {
+    // La ficha NOVA y Cuentas conectadas usan este repositorio como fuente
+    // canónica. Leer por la misma vía evita que el bridge legacy confunda el
+    // ID del perfil Redmine con el ID/UUID central del usuario autenticado.
+    if (function_exists('session') && function_exists('app')) {
+        try {
+            $novaUser = session('nova_user');
+            if (is_array($novaUser) && !empty($novaUser)) {
+                $stored = app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)
+                    ->credentialForSession($novaUser, 'core');
+                if (!empty($stored['stored'])) {
+                    return [
+                        'user' => trim((string)($stored['user'] ?? '')),
+                        'pass' => trim((string)($stored['secret'] ?? '')),
+                    ];
+                }
+            }
+        } catch (\Throwable) {
+            // Conserva compatibilidad con ejecuciones legacy fuera de Laravel.
+        }
+    }
+
     return core_credentials_for_user(dashboard_core_current_credential_user_key());
 }
 
 function dashboard_core_has_saved_credentials(): bool {
-    return core_credentials_has_saved(dashboard_core_current_credential_user_key());
+    return dashboard_core_has_runtime_credentials(dashboard_core_credentials_for_current_user());
 }
 
 function dashboard_core_current_credential_user_key(array $currentUser = []): string {
