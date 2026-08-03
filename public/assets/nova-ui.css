@@ -13259,3 +13259,86 @@ nav.sb-navbar > .container-fluid {
   }
 
 }
+
+/* TIC dashboard: fit the complete active-report grid inside desktop panels.
+   Every column participates in a 100% width budget; long descriptive values
+   may use two lines instead of forcing the table beyond its container. */
+@media (min-width: 1200px) {
+  .rm-work-panel .rm-table-wrap--tic-dashboard {
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  .rm-dashboard-table--tic {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-select,
+  .rm-dashboard-table--tic th:nth-child(1),
+  .rm-dashboard-table--tic td:nth-child(1) { width: 6.5%; min-width: 0; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-redmine,
+  .rm-dashboard-table--tic th:nth-child(2),
+  .rm-dashboard-table--tic td:nth-child(2) { width: 4.5%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-subject,
+  .rm-dashboard-table--tic th:nth-child(3),
+  .rm-dashboard-table--tic td:nth-child(3) { width: 21%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-requester,
+  .rm-dashboard-table--tic th:nth-child(4),
+  .rm-dashboard-table--tic td:nth-child(4) { width: 10%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-date,
+  .rm-dashboard-table--tic th:nth-child(5),
+  .rm-dashboard-table--tic td:nth-child(5) { width: 10%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-type,
+  .rm-dashboard-table--tic th:nth-child(6),
+  .rm-dashboard-table--tic td:nth-child(6) { width: 8%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-unit,
+  .rm-dashboard-table--tic th:nth-child(7),
+  .rm-dashboard-table--tic td:nth-child(7) { width: 9%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-request-unit,
+  .rm-dashboard-table--tic th:nth-child(8),
+  .rm-dashboard-table--tic td:nth-child(8) { width: 12%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-status,
+  .rm-dashboard-table--tic th:nth-child(9),
+  .rm-dashboard-table--tic td:nth-child(9) { width: 5%; }
+
+  .rm-dashboard-table--tic .rm-dashboard-col-actions,
+  .rm-dashboard-table--tic th:nth-child(10),
+  .rm-dashboard-table--tic td:nth-child(10) { width: 14%; }
+
+  .rm-dashboard-table--tic tbody td:nth-child(3),
+  .rm-dashboard-table--tic tbody td:nth-child(4),
+  .rm-dashboard-table--tic tbody td:nth-child(5),
+  .rm-dashboard-table--tic tbody td:nth-child(6),
+  .rm-dashboard-table--tic tbody td:nth-child(7),
+  .rm-dashboard-table--tic tbody td:nth-child(8) {
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .rm-dashboard-table--tic .nova-row-actions {
+    gap: 0.15rem;
+  }
+
+  .rm-dashboard-table--tic .rm-dashboard-select-cell,
+  .rm-dashboard-table--tic td.nova-col-actions {
+    padding-inline: 0.2rem !important;
+  }
+
+  .rm-dashboard-table--tic .btn-action {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
+}

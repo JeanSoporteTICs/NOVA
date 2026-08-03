@@ -112,7 +112,7 @@
             </div>
         </form>
 
-        <div class="table-responsive rm-table-wrap">
+        <div class="table-responsive rm-table-wrap rm-table-wrap--tic-dashboard">
             <table class="table table-striped align-middle w-100 rm-dashboard-table rm-dashboard-table--tic">
                 <colgroup>
                     <col class="rm-dashboard-col-select">
