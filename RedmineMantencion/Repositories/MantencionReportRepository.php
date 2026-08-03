@@ -4,6 +4,7 @@ namespace App\Modulos\RedmineMantencion\Repositories;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 final class MantencionReportRepository
@@ -159,10 +160,10 @@ final class MantencionReportRepository
     }
 
     /** @param array<int,array<string,mixed>> $messages */
-    public function syncMessages(array $messages, array $config = []): void
+    public function syncMessages(array $messages, array $config = []): bool
     {
         if (! $this->tableReady()) {
-            return;
+            return false;
         }
 
         // Resolve each distinct categoria name once for the whole batch instead of
@@ -172,11 +173,14 @@ final class MantencionReportRepository
         // across many messages. See Fase 4 lote 2.
         $categoriaIds = $this->prefetchCategoriaIds($messages);
 
+        $persisted = true;
         foreach ($messages as $message) {
             if (is_array($message)) {
-                $this->upsertMessage($message, $config, $categoriaIds);
+                $persisted = $this->upsertMessage($message, $config, $categoriaIds) && $persisted;
             }
         }
+
+        return $persisted;
     }
 
     /**
@@ -255,11 +259,11 @@ final class MantencionReportRepository
      *        (see syncMessages()/prefetchCategoriaIds()); when omitted, the categoria
      *        is resolved with its own query as before — safe for standalone calls.
      */
-    public function upsertMessage(array $message, array $config = [], ?array $categoriaIds = null): void
+    public function upsertMessage(array $message, array $config = [], ?array $categoriaIds = null): bool
     {
         $moduleId = $this->resolveModuleId();
         if ($moduleId === null || ! $this->tableReady()) {
-            return;
+            return false;
         }
 
         $fuente = trim((string) ($message['fuente'] ?? ''));
@@ -268,7 +272,7 @@ final class MantencionReportRepository
             $fuenteId = trim((string) ($message['id'] ?? ''));
         }
         if ($fuenteId === '') {
-            return;
+            return false;
         }
 
         $values = $this->filterColumns($this->payload($moduleId, $message, $config, $categoriaIds));
@@ -294,12 +298,21 @@ final class MantencionReportRepository
                 // was reconciled through the stable CORE request ID.
                 $values['fuente_id'] = trim((string) ($existing->fuente_id ?? '')) ?: $fuenteId;
                 DB::table('redmine_mantencion_reportes')->where('id', $existing->id)->update($values);
-                return;
+                return true;
             }
 
             $values['creado_at'] = now();
             DB::table('redmine_mantencion_reportes')->insert($values);
-        } catch (\Throwable) {
+            return true;
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo persistir un reporte de Mantencion.', [
+                'fuente' => $fuente,
+                'fuente_id' => $fuenteId,
+                'exception_class' => $exception::class,
+                'error_code' => (string) $exception->getCode(),
+            ]);
+
+            return false;
         }
     }
 

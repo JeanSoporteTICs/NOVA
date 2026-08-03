@@ -18,6 +18,7 @@ function load_hours_extra_all(): array {
 $activeNav = 'horas';
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
+$hoursActionUrl = function_exists('url') ? url('/redmine-mantencion/app/horas-extra') : legacy_app_url('app/horas-extra');
 setlocale(LC_TIME, 'es_CL.UTF-8', 'es_ES.UTF-8', 'es_ES', 'Spanish');
 
 $today = new DateTimeImmutable('now', new DateTimeZone('America/Santiago'));
@@ -605,7 +606,7 @@ $emachSuggestions = mantencion_emach_overtime_suggestions($grupos);
         <h5 class="modal-title">Editar horas por fecha</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <form method="post">
+      <form method="post" action="<?= $h($hoursActionUrl) ?>">
         <input type="hidden" name="action" value="update_extra">
         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
         <div class="modal-body">

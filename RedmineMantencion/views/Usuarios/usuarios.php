@@ -11,6 +11,7 @@ $usuariosActivos = count(array_filter($usuarios, static fn ($u): bool => strtolo
 $usuariosBaneados = count(array_filter($usuarios, static fn ($u): bool => strtolower(trim((string)($u['estado'] ?? 'activo'))) === 'baneado'));
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
+$usersActionUrl = function_exists('url') ? url('/redmine-mantencion/app/usuarios') : legacy_app_url('app/usuarios');
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
 ?>
 <!doctype html>
@@ -59,7 +60,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
         <input id="user-search" type="search" placeholder="Buscar nombre, ID o rol" aria-label="Buscar usuario">
       </div>
       <span class="nova-user-meta ms-auto">Total: <?= count($usuarios) ?></span>
-      <form method="post" class="m-0">
+      <form method="post" action="<?= $h($usersActionUrl) ?>" class="m-0">
         <input type="hidden" name="action" value="preview_remote">
         <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
         <button class="btn-nova btn-nova-info" type="submit" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>>
@@ -172,7 +173,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
 <div class="modal fade detail-drawer-modal" id="importUsersModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable detail-drawer-dialog">
     <div class="modal-content">
-      <form method="post">
+      <form method="post" action="<?= $h($usersActionUrl) ?>">
         <div class="modal-header">
           <h5 class="modal-title">Importar usuarios desde Redmine</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -251,7 +252,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
 <div class="modal fade detail-drawer-modal" id="deleteAccessModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <form method="post">
+      <form method="post" action="<?= $h($usersActionUrl) ?>">
         <div class="modal-header">
           <h5 class="modal-title">Quitar acceso</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -277,7 +278,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
 <div class="modal fade detail-drawer-modal" id="editModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg detail-drawer-dialog">
     <div class="modal-content">
-      <form method="post">
+      <form method="post" action="<?= $h($usersActionUrl) ?>">
         <div class="modal-header">
           <h5 class="modal-title">Editar rol de proyecto</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -323,7 +324,7 @@ $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mo
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <form method="post">
+        <form method="post" action="<?= $h($usersActionUrl) ?>">
           <input type="hidden" name="action" value="create">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="row g-3">

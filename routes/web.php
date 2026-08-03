@@ -151,7 +151,7 @@ Route::get('/redmine-mantencion/health.php', fn () => response()->json([
     'base_path' => data_get(config('modules.redmine-mantencion', []), 'path', base_path('redmine-mantencion')),
 ]))->name('redmine.mantencion.health');
 Route::get('/redmine-mantencion', fn () => redirect()->route('redmine.mantencion.dashboard'));
-Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'index.php'))
+Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Dashboard/dashboard.php'))
     ->name('redmine.mantencion.dashboard');
 Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');
 Route::post('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion.update');
@@ -159,7 +159,7 @@ Route::match(['GET', 'POST'], '/nc_browser_ajax.php', fn () => redirect()->route
     ->name('redmine.mantencion.nc-browser-legacy');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
     $path = match ($section) {
-        'dashboard', 'reportes' => 'index.php',
+        'dashboard', 'reportes' => 'views/Dashboard/dashboard.php',
         'manual', 'pendiente-manual' => 'views/Pendientes/manual.php',
         'horas-extra' => 'views/HorasExtra/horas_extra.php',
         'historico' => 'views/Historico/historico.php',

@@ -320,6 +320,9 @@ function handle_manual_pending(): array {
     $categorias = manual_pending_category_options();
     $form = manual_pending_default_form($cfg, $users);
     $flash = manual_pending_flash_consume();
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && (string)($_GET['created'] ?? '') === '1') {
+        $flash = 'Pendiente manual creado correctamente.';
+    }
     $error = null;
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -372,10 +375,16 @@ function handle_manual_pending(): array {
         } else {
             $messages = load_messages();
             $messages[] = manual_pending_build_record($form, $cfg, $users);
-            save_messages($messages);
-            manual_pending_flash_set('Pendiente manual creado correctamente.');
-            header('Location: ' . legacy_app_url('views/Pendientes/manual.php'));
-            exit;
+            if (!save_messages($messages)) {
+                $error = 'No fue posible guardar el pendiente. Intenta nuevamente o revisa el registro del sistema.';
+            } else {
+                manual_pending_flash_set('Pendiente manual creado correctamente.');
+                $manualPendingUrl = function_exists('url')
+                    ? url('/redmine-mantencion/app/manual')
+                    : legacy_app_url('app/manual');
+                header('Location: ' . $manualPendingUrl . '?created=1');
+                exit;
+            }
         }
     }
 

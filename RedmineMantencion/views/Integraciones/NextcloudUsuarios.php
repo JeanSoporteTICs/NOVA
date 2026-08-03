@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../controllers/nextcloud.php';
 [$flash, $nextcloudCfg, $nextcloudGroups, $lastImport, $preview] = handle_nextcloud();
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
+$nextcloudUsersActionUrl = function_exists('url') ? url('/redmine-mantencion/app/integraciones-nextcloud-usuarios') : legacy_app_url('app/integraciones-nextcloud-usuarios');
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
 $hasSavedNextcloudCredentials = (function_exists('auth_get_user_id') && nextcloud_credentials_has_saved((string)auth_get_user_id()))
     || (trim((string)($nextcloudCfg['admin_user'] ?? '')) !== '' && trim((string)($nextcloudCfg['admin_pass'] ?? '')) !== '');
@@ -40,7 +41,7 @@ foreach ($previewUsers as $item) {
 
     <div class="row g-3">
       <div class="col-12">
-        <form method="post" enctype="multipart/form-data" class="card nextcloud-panel">
+        <form method="post" action="<?= $h($nextcloudUsersActionUrl) ?>" enctype="multipart/form-data" class="card nextcloud-panel">
           <div class="card-body p-4">
             <input type="hidden" name="action" value="import_nextcloud_users">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
@@ -77,7 +78,7 @@ foreach ($previewUsers as $item) {
         <?php if ($previewUsers): ?>
           <div class="card nextcloud-panel mt-3">
             <div class="card-body p-4">
-              <form method="post" id="nextcloud-preview-form">
+              <form method="post" action="<?= $h($nextcloudUsersActionUrl) ?>" id="nextcloud-preview-form">
                 <input type="hidden" name="action" value="confirm_nextcloud_import">
                 <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                 <input type="hidden" name="prepared_users" value="<?= $h(json_encode(['users' => $previewUsers], JSON_UNESCAPED_UNICODE)) ?>">

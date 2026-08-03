@@ -26,11 +26,11 @@ $novaCsrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $novaSessionIdentity = function_exists('session') ? (string) session('nova_user.id', '') : (string) ($_SESSION['user']['id'] ?? '');
 $navItems = [
     ['key' => 'mensajes', 'label' => 'Reportes', 'href' => $mantencionAppUrl, 'icon' => 'bi-inboxes', 'can' => auth_can('mensajes_acceso')],
-    ['key' => 'manual', 'label' => 'Pendiente manual', 'href' => '../Pendientes/manual.php', 'icon' => 'bi-pencil-square', 'can' => auth_can('simulador')],
-    ['key' => 'horas', 'label' => 'Horas extra', 'href' => '../HorasExtra/horas_extra.php', 'icon' => 'bi-clock-history', 'can' => auth_can('horas_extra')],
-    ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => '../Historico/historico.php', 'icon' => 'bi-archive', 'can' => auth_can('historico')],
+    ['key' => 'manual', 'label' => 'Pendiente manual', 'href' => $mantencionAppUrl . '/manual', 'icon' => 'bi-pencil-square', 'can' => auth_can('simulador')],
+    ['key' => 'horas', 'label' => 'Horas extra', 'href' => $mantencionAppUrl . '/horas-extra', 'icon' => 'bi-clock-history', 'can' => auth_can('horas_extra')],
+    ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => $mantencionAppUrl . '/historico', 'icon' => 'bi-archive', 'can' => auth_can('historico')],
     ['key' => 'mis_integraciones', 'label' => 'Cuentas conectadas', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => auth_can('mis_integraciones')],
-    ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => '../Usuarios/usuarios.php', 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
+    ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => $mantencionAppUrl . '/usuarios', 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
     [
         'key' => 'integraciones',
         'label' => 'Integraciones',
@@ -52,9 +52,9 @@ $navItems = [
             ],
         ],
     ],
-    ['key' => 'configuracion', 'label' => 'Configuraci&oacute;n', 'href' => '../Configuracion/configuracion.php', 'icon' => 'bi-sliders', 'can' => auth_can('configuracion') || auth_can('categorias')],
-    ['key' => 'estadisticas', 'label' => 'Estad&iacute;sticas', 'href' => '../Estadisticas/estadisticas.php', 'icon' => 'bi-bar-chart-line', 'can' => auth_can('estadisticas')],
-    ['key' => 'security', 'label' => 'Actividad reciente', 'href' => '../Security/activity.php', 'icon' => 'bi-activity', 'can' => auth_can('actividad')],
+    ['key' => 'configuracion', 'label' => 'Configuraci&oacute;n', 'href' => $mantencionAppUrl . '/configuracion', 'icon' => 'bi-sliders', 'can' => auth_can('configuracion') || auth_can('categorias')],
+    ['key' => 'estadisticas', 'label' => 'Estad&iacute;sticas', 'href' => $mantencionAppUrl . '/estadisticas', 'icon' => 'bi-bar-chart-line', 'can' => auth_can('estadisticas')],
+    ['key' => 'security', 'label' => 'Actividad reciente', 'href' => $mantencionAppUrl . '/actividad', 'icon' => 'bi-activity', 'can' => auth_can('actividad')],
 ];
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark sb-navbar sb-native-navbar">

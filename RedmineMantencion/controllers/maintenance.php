@@ -88,7 +88,21 @@ function maintenance_mode_block_if_enabled(): void {
     if (!$notified) {
         maintenance_set_flash($message);
     }
-    $target = $_SERVER['HTTP_REFERER'] ?? '/redmine-mantencion';
+    $target = function_exists('url')
+        ? url('/redmine-mantencion/app')
+        : legacy_app_url();
+    $referer = trim((string)($_SERVER['HTTP_REFERER'] ?? ''));
+    if ($referer !== '') {
+        $refererPath = parse_url($referer, PHP_URL_PATH);
+        $refererHost = strtolower((string)(parse_url($referer, PHP_URL_HOST) ?? ''));
+        $requestHost = function_exists('request') ? strtolower((string)request()->getHost()) : '';
+        $basePath = function_exists('request') ? rtrim(request()->getBaseUrl(), '/') : '';
+        $allowedPrefix = $basePath . '/redmine-mantencion/';
+        if ($refererHost !== '' && $refererHost === $requestHost
+            && is_string($refererPath) && str_starts_with($refererPath, $allowedPrefix)) {
+            $target = $referer;
+        }
+    }
     header('Location: ' . $target);
     exit;
 }

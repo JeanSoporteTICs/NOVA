@@ -9,6 +9,10 @@ require_once __DIR__ . '/../../controllers/pendiente_manual.php';
 
 $h = fn($v) => htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
+$laravelCsrf = function_exists('csrf_token') ? csrf_token() : '';
+$manualPendingUrl = function_exists('url')
+    ? url('/redmine-mantencion/app/manual')
+    : legacy_app_url('app/manual');
 [$cfg, $users, $categorias, $form, $flash, $error] = handle_manual_pending();
 $maintenanceMode = function_exists('maintenance_mode_enabled') && maintenance_mode_enabled();
 $canAssignOtherUsers = dashboard_can_assign_other_users();
@@ -56,8 +60,9 @@ $categoryOptionsJson = htmlspecialchars(
 
     <div class="card manual-card">
       <div class="card-body manual-grid">
-        <form method="post" class="d-flex flex-column gap-3">
+        <form method="post" action="<?= $h($manualPendingUrl) ?>" class="d-flex flex-column gap-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+          <input type="hidden" name="_token" value="<?= $h($laravelCsrf) ?>">
           <input type="hidden" name="project_id" value="<?= $h($form['project_id'] ?? $cfg['project_id'] ?? 48) ?>">
 
           <div class="field-row single">
@@ -211,6 +216,12 @@ $categoryOptionsJson = htmlspecialchars(
 <?php include __DIR__ . '/../partials/bootstrap-scripts.php'; ?>
 <script>
   (() => {
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get('created') === '1') {
+      currentUrl.searchParams.delete('created');
+      window.history.replaceState({}, document.title, currentUrl.toString());
+    }
+
     window.NovaSearchSelect?.init(document);
     const descriptionInput = document.getElementById('manual-descripcion');
     const descriptionPreview = document.getElementById('manual-description-preview');

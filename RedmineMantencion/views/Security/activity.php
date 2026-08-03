@@ -36,7 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $_SESSION['security_flash'] = $deleted . ' evento(s) propios eliminados de la bitácora.';
     }
-    header('Location: ' . legacy_app_url('views/Security/activity.php'));
+    $activityUrl = function_exists('url') ? url('/redmine-mantencion/app/actividad') : legacy_app_url('app/actividad');
+    header('Location: ' . $activityUrl);
     exit;
 }
 
@@ -87,6 +88,7 @@ $pageUrl = static function (int $targetPage) use ($selectedTag, $selectedChannel
 };
 $activeNav = 'security';
 $csrf = legacy_csrf_token();
+$activityActionUrl = function_exists('url') ? url('/redmine-mantencion/app/actividad') : legacy_app_url('app/actividad');
 ?>
 <!doctype html>
 <html lang="es">
@@ -173,7 +175,7 @@ $csrf = legacy_csrf_token();
             <?php if ($hasFilters): ?><span class="security-activity-filtered">Filtros activos</span><?php endif; ?>
           </div>
           <?php if (auth_can('actividad_eliminar')): ?>
-            <form method="post" class="mb-0" data-app-confirm="¿Eliminar toda la actividad reciente? Esta acción no se puede deshacer.">
+            <form method="post" action="<?= $h($activityActionUrl) ?>" class="mb-0" data-app-confirm="¿Eliminar toda la actividad reciente? Esta acción no se puede deshacer.">
               <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
               <input type="hidden" name="action" value="clear_activity">
               <button type="submit" class="btn btn-outline-danger btn-sm">

@@ -45,6 +45,10 @@ class LegacyProjectController extends Controller
             $path = 'views/Usuarios/usuarios.php';
         }
 
+        if ($project === 'redmine-mantencion' && strtolower($path) === 'views/dashboard.php') {
+            $path = 'views/Dashboard/dashboard.php';
+        }
+
         if ($project === 'emach' && strtolower($path) === 'views/mantenedor/mantenedor.php') {
             return redirect()->route('integrations.emach');
         }

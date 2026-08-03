@@ -617,12 +617,13 @@ function load_messages(): array {
     return [];
 }
 
-function save_messages(array $messages): void {
+function save_messages(array $messages): bool {
     $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
     if ($repo !== null && $repo->tableReady()) {
-        $repo->syncMessages($messages, load_platform_config());
-        return;
+        return $repo->syncMessages($messages, load_platform_config());
     }
+
+    return false;
 }
 
 function dashboard_update_message_hora_extra(array $message): bool {

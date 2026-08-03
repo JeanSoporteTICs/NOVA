@@ -286,7 +286,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
         </aside>
 
         <div class="rm-permissions-editor-panel">
-          <form method="post" id="mantencion-user-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="user">
+          <form method="post" action="<?= $h($configBaseUrl) ?>" id="mantencion-user-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="user">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="save_user_perms">
             <input type="hidden" name="user_select" value="<?= $h($selectedUser) ?>">
@@ -399,7 +399,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
 
         <details class="rm-create-role-disclosure">
           <summary><span><i class="bi bi-plus-circle"></i>Crear un rol</span><i class="bi bi-chevron-down"></i></summary>
-          <form class="rm-create-role-form" method="post">
+          <form class="rm-create-role-form" method="post" action="<?= $h($configBaseUrl) ?>">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="save_roles">
             <input type="hidden" name="role_select" value="<?= $h($selectedRole) ?>">
@@ -417,7 +417,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
             <span><strong>Rol base protegido</strong><small><?= $h(ucfirst($selectedRole)) ?> es necesario para el funcionamiento del módulo.</small></span>
           </div>
         <?php else: ?>
-          <form class="rm-role-delete-form" method="post" data-app-confirm="¿Eliminar el rol <?= $h(ucfirst($selectedRole)) ?>? Se eliminarán sus permisos y la acción no se puede deshacer." data-app-confirm-title="Eliminar rol" data-app-confirm-text="Eliminar rol" data-app-confirm-tone="danger">
+          <form class="rm-role-delete-form" method="post" action="<?= $h($configBaseUrl) ?>" data-app-confirm="¿Eliminar el rol <?= $h(ucfirst($selectedRole)) ?>? Se eliminarán sus permisos y la acción no se puede deshacer." data-app-confirm-title="Eliminar rol" data-app-confirm-text="Eliminar rol" data-app-confirm-tone="danger">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="delete_role">
             <input type="hidden" name="role_select" value="<?= $h($selectedRole) ?>">
@@ -428,7 +428,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
       </aside>
 
       <div class="rm-permissions-editor-panel">
-        <form method="post" id="mantencion-role-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="role">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" id="mantencion-role-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="role">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" value="save_roles">
           <input type="hidden" name="role_select" value="<?= $h($selectedRole) ?>">

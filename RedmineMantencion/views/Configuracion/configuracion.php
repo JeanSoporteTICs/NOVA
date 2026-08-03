@@ -33,7 +33,7 @@ $csrf = legacy_csrf_token();
 $maintenanceMode = maintenance_mode_enabled();
 $maintenanceSettings = maintenance_mode_settings();
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos((string)($_SERVER['REQUEST_URI'] ?? ''), '/redmine-mantencion/views/Configuracion/configuracion.php') !== false) {
-  $configRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
+  $configRedirectUrl = function_exists('url') ? url('/redmine-mantencion/app/configuracion') : legacy_app_url('app/configuracion');
   $query = [];
   if (isset($_GET['panel'])) $query['panel'] = (string)$_GET['panel'];
   if (isset($_GET['synccat'])) $query['synccat'] = (string)$_GET['synccat'];
@@ -533,7 +533,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
   $res = sync_categorias_desde_api('');
   $msg = isset($res['error']) ? $res['error'] : ('Categorías sincronizadas (' . ($res['ok'] ?? 0) . ' registros).');
-  $configRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
+  $configRedirectUrl = function_exists('url') ? url('/redmine-mantencion/app/configuracion') : legacy_app_url('app/configuracion');
   header('Location: ' . $configRedirectUrl . '?panel=categorias&synccat=' . urlencode($msg));
   exit;
 }
@@ -590,7 +590,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       http_response_code(403);
       exit('No tienes permiso para ver esta sección de Configuración.');
     }
-    $configBaseUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php') . '/redmine-mantencion/app/configuracion';
+    $configBaseUrl = function_exists('url')
+      ? url('/redmine-mantencion/app/configuracion')
+      : legacy_app_url('app/configuracion');
     $configPanelUrl = fn($panel) => $configBaseUrl . '?panel=' . rawurlencode((string)$panel);
     include __DIR__ . '/../partials/hero.php'; ?>
 <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
@@ -697,7 +699,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       <div class="rm-panel-body">
         <div class="row g-3">
           <div class="col-lg-5">
-            <form method="post" class="h-100 p-3 border rounded-4 bg-white">
+            <form method="post" action="<?= $h($configBaseUrl) ?>" class="h-100 p-3 border rounded-4 bg-white">
               <input type="hidden" name="action" value="save_nextcloud_config">
               <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
               <h6 class="fw-bold mb-3"><i class="bi bi-sliders text-primary"></i> Parámetros</h6>
@@ -751,7 +753,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <h6 class="fw-bold mb-1"><i class="bi bi-folder2-open text-info"></i> Grupos consultados</h6>
                   <div class="text-muted small">Se almacenan para buscar coincidencias al cargar el Excel.</div>
                 </div>
-                <form method="post" class="m-0">
+                <form method="post" action="<?= $h($configBaseUrl) ?>" class="m-0">
                   <input type="hidden" name="action" value="fetch_nextcloud_groups">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <button class="btn-nova btn-nova-info" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
@@ -759,7 +761,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   </button>
                 </form>
                 <?php if (!empty($nextcloudGroups)): ?>
-                  <form method="post" class="m-0" data-app-confirm="¿Eliminar todos los grupos guardados?">
+                  <form method="post" action="<?= $h($configBaseUrl) ?>" class="m-0" data-app-confirm="¿Eliminar todos los grupos guardados?">
                     <input type="hidden" name="action" value="clear_nextcloud_groups">
                     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                     <button class="btn-nova btn-nova-danger" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
@@ -803,7 +805,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="p-3 border rounded-4 bg-white mb-3">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="p-3 border rounded-4 bg-white mb-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" value="maintenance_settings">
           <div class="row g-3 align-items-end">
@@ -841,7 +843,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="row g-2 mb-3">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-2 mb-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
           <input type="hidden" name="opt_action" value="create">
@@ -873,14 +875,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     <input form="<?= $h($rowFormId) ?>" class="form-check-input" type="checkbox" name="opt_default" <?= !empty($o['default']) ? 'checked' : '' ?>>
                   </td>
                   <td class="d-flex gap-2">
-                    <form method="post" id="<?= $h($rowFormId) ?>" class="m-0">
+                    <form method="post" action="<?= $h($configBaseUrl) ?>" id="<?= $h($rowFormId) ?>" class="m-0">
                       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="update">
                       <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
                       <button class="btn-action btn-action-edit" type="submit" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>
                     </form>
-                    <form method="post" id="<?= $h($deleteFormId) ?>" data-app-confirm="Eliminar?" class="m-0">
+                    <form method="post" action="<?= $h($configBaseUrl) ?>" id="<?= $h($deleteFormId) ?>" data-app-confirm="Eliminar?" class="m-0">
                       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="delete">
@@ -965,7 +967,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar" onclick="(function(){var el=document.getElementById('rolesModal');if(!el)return;el.classList.remove('show');el.style.display='none';el.setAttribute('aria-hidden','true');var bd=document.getElementById('backdrop-roles');if(bd)bd.remove();document.body.classList.remove('modal-open');})();"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="row g-3">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="col-12"><h6 class="fw-bold mb-0">CORE</h6></div>
           <div class="col-12">
@@ -1033,7 +1035,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar" onclick="(function(){var el=document.getElementById('usuariosModal');if(!el)return;el.classList.remove('show');el.style.display='none';el.setAttribute('aria-hidden','true');var bd=document.getElementById('backdrop-usuarios');if(bd)bd.remove();document.body.classList.remove('modal-open');})();"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="row g-3">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="col-12">
             <label class="form-label">Project ID</label>
@@ -1064,7 +1066,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="row g-3">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="col-12">
             <label class="form-label">Horas antes de borrar procesados</label>
@@ -1126,7 +1128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="row g-3 roles-modal-shell">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3 roles-modal-shell">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" id="user-action" value="save_user_perms">
           <div class="col-md-8">
@@ -1361,7 +1363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" class="row g-3 roles-modal-shell">
+        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3 roles-modal-shell">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" id="roles-action" value="save_roles">
           <div class="col-md-6">

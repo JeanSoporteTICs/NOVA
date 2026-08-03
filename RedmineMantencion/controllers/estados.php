@@ -23,6 +23,7 @@ function handle_estados() {
     $estados = $cfg['estados'] ?? [];
     $flash = null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (function_exists('csrf_validate')) csrf_validate();
         if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
         $action = $_POST['action'] ?? '';
         if ($action === 'create') {

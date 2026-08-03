@@ -20,6 +20,7 @@ require_once __DIR__ . '/../../controllers/estadisticas.php';
 $stats = handle_estadisticas();
 $h = fn($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
 $csrf = legacy_csrf_token();
+$statsActionUrl = function_exists('url') ? url('/redmine-mantencion/app/estadisticas') : legacy_app_url('app/estadisticas');
 // valores de filtro (para mostrar rango aplicado)
 $fmtDMY = function($dateStr) {
   $dt = DateTime::createFromFormat('Y-m-d', $dateStr);
@@ -128,7 +129,7 @@ $userNameMap = $users;
     </div>
   </div>
   <div class="card mb-3 p-3">
-    <form id="stats-form" method="post" class="row g-3 align-items-end">
+    <form id="stats-form" method="post" action="<?= $h($statsActionUrl) ?>" class="row g-3 align-items-end">
       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
       <div class="col-12">
         <div class="timeline-box">

@@ -33,9 +33,9 @@ $cfg = load_platform_config();
 $mantencionBaseUrl = function_exists('legacy_app_url')
     ? rtrim(legacy_app_url(), '/')
     : (function_exists('url') ? rtrim(url('/redmine-mantencion'), '/') : '/redmine-mantencion');
-$dashboardActionUrl = function_exists('legacy_app_url')
-    ? legacy_app_url('views/Dashboard/dashboard.php')
-    : $mantencionBaseUrl . '/views/Dashboard/dashboard.php';
+$dashboardActionUrl = function_exists('url')
+    ? url('/redmine-mantencion/app/dashboard')
+    : $mantencionBaseUrl . '/app/dashboard';
 $chileToday = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
 $coreDesde = $_GET['core_desde'] ?? $chileToday;
 $coreHasta = $_GET['core_hasta'] ?? $chileToday;
@@ -624,7 +624,7 @@ $csrf = legacy_csrf_token();
   </div>
 </div>
 
-  <form id="process-form" method="post" class="d-none">
+  <form id="process-form" method="post" action="<?= $h($dashboardActionUrl) ?>" class="d-none">
     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
     <input type="hidden" name="action" id="process-action" value="process_selected">
     <input type="hidden" name="ids" id="process-ids">
@@ -749,7 +749,7 @@ $csrf = legacy_csrf_token();
 
     <div class="modal-content">
 
-      <form method="post" action="../Dashboard/dashboard.php">
+      <form method="post" action="<?= $h($dashboardActionUrl) ?>">
         <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
 
         <div class="modal-header">

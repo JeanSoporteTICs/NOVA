@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../controllers/auth.php';
 auth_require_login('/redmine-mantencion/login.php');
 require_once __DIR__ . '/../../controllers/dashboard.php';
+$historicoActionUrl = function_exists('url') ? url('/redmine-mantencion/app/historico') : legacy_app_url('app/historico');
 require_once __DIR__ . '/../../controllers/storage.php';
 require_once __DIR__ . '/../../controllers/maintenance.php';
 if (!auth_can('historico')) {
@@ -576,7 +577,7 @@ ksort($catsSel);
               <?php endforeach; ?>
             </ul>
           </div>
-          <form method="post" id="historico-bulk-status-form" class="d-none">
+          <form method="post" action="<?= $h($historicoActionUrl) ?>" id="historico-bulk-status-form" class="d-none">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="update_redmine_status">
             <input type="hidden" name="redmine_ids" id="historico-bulk-redmine-ids" value="">
@@ -808,7 +809,7 @@ ksort($catsSel);
                           </div>
                         <?php endif; ?>
                         <?php if ($canDeleteHistory): ?>
-                          <form method="post" class="m-0" data-app-confirm="Eliminar este registro del histórico?">
+                          <form method="post" action="<?= $h($historicoActionUrl) ?>" class="m-0" data-app-confirm="Eliminar este registro del histórico?">
                             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="id" value="<?= $h($row['id'] ?? '') ?>">
