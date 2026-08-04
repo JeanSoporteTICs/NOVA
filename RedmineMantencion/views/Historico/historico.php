@@ -1105,6 +1105,8 @@ ksort($catsSel);
         const ids = [...new Set(statusBadges.map(badge => badge.getAttribute('data-redmine-id')).filter(Boolean))];
         if (!ids.length) return;
 
+        const redmineStatusEndpoint = <?= json_encode($historicoActionUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
         const chunkSize = 5;
         const chunks = [];
         for (let index = 0; index < ids.length; index += chunkSize) {
@@ -1118,10 +1120,16 @@ ksort($catsSel);
 
         for (const chunk of chunks) {
           try {
-            const response = await fetch(`historico.php?ajax=redmine_statuses&ids=${encodeURIComponent(chunk.join(','))}`, {
+            const statusUrl = new URL(redmineStatusEndpoint, window.location.href);
+            statusUrl.searchParams.set('ajax', 'redmine_statuses');
+            statusUrl.searchParams.set('ids', chunk.join(','));
+            const response = await fetch(statusUrl.toString(), {
               headers: { 'Accept': 'application/json' },
               cache: 'no-store',
             });
+            if (!response.ok) {
+              throw new Error(`No se pudo consultar Redmine (HTTP ${response.status}).`);
+            }
             const payload = await response.json();
             const statuses = payload && payload.statuses ? payload.statuses : {};
             chunk.forEach(id => {
