@@ -1564,13 +1564,8 @@
             };
 
             const message = button.dataset.clearConfirm || 'Eliminar los valores de este formulario?';
-            if (window.appUi?.confirmAction) {
-                window.appUi.confirmAction(message, clearForm, { title: 'Confirmar eliminacion' });
-                return;
-            }
-
-            if (!window.confirm(message)) return;
-            clearForm();
+            if (!window.appUi?.confirmAction) return;
+            window.appUi.confirmAction(message, clearForm, { title: 'Confirmar eliminacion' });
         });
     });
 </script>

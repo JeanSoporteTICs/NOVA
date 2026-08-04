@@ -661,15 +661,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 bulkStatusForm.submit();
             };
             const message = `¿Cambiar ${selectedIds.length} ticket(s) seleccionado(s) a “${statusName}”?`;
-            if (window.appUi?.confirmAction) {
-                window.appUi.confirmAction(message, submitBulkStatus, {
-                    title: 'Cambiar estado en Redmine',
-                    acceptText: 'Cambiar estado',
-                    tone: 'info',
-                });
-                return;
-            }
-            if (window.confirm(message)) submitBulkStatus();
+            if (!window.appUi?.confirmAction) return;
+            window.appUi.confirmAction(message, submitBulkStatus, {
+                title: 'Cambiar estado en Redmine',
+                acceptText: 'Cambiar estado',
+                tone: 'info',
+            });
         });
     });
 

@@ -46,7 +46,7 @@
             </div>
             <div class="d-flex justify-content-between align-items-center mb-3">
               
-              <a class="small text-muted" href="#" onclick="alert('Contacta al administrador para restablecer.');return false;">Olvidaste tu Contraseña?</a>
+              <button class="btn btn-link small text-muted p-0" type="button" id="forgot-password-help">Olvidaste tu Contraseña?</button>
             </div>
             <div class="d-grid">
               <button class="btn btn-primary btn-lg" type="submit">
@@ -60,5 +60,15 @@
   </div>
 </div>
 <?php include APP_BASE_PATH . '/views/partials/bootstrap-scripts.php'; ?>
+<script>
+  document.getElementById('forgot-password-help')?.addEventListener('click', () => {
+    window.appModal?.show({
+      title: 'Restablecer contraseña',
+      message: 'Contacta al administrador para restablecer tu contraseña.',
+      tone: 'info',
+      confirmText: 'Entendido',
+    });
+  });
+</script>
 </body>
 </html>

@@ -54,7 +54,7 @@
 
   window.appModal = {
     show(options) {
-      return window.NovaToast.show({ type: options.tone || 'info', message: options.message || options.title || '' });
+      return enqueue({ ...options, confirm: false, tone: options.tone || 'info' });
     },
     confirm(options) {
       return enqueue({ ...options, confirm: true, tone: options.tone || 'danger' });
