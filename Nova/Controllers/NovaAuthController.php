@@ -3,22 +3,17 @@
 namespace App\Modulos\Nova\Controllers;
 
 use App\Http\Controllers\Controller;
-
 use App\Modulos\Nova\Repositories\NovaAuditRepository;
-use App\Modulos\Nova\Services\LegacyUserProvider;
-use App\Modulos\Nova\Services\LegacyLoggerService;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
-use App\Modulos\Nova\Support\LegacyPhpSession;
+use App\Modulos\Nova\Services\LegacyLoggerService;
+use App\Modulos\Nova\Services\LegacyUserProvider;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 
 class NovaAuthController extends Controller
 {
-    public function __construct(private LegacyLoggerService $logger)
-    {
-    }
+    public function __construct(private LegacyLoggerService $logger) {}
 
     public function showLogin(Request $request)
     {
@@ -66,9 +61,6 @@ class NovaAuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        LegacyPhpSession::start($request, 'redmine-mantencion');
-        LegacyPhpSession::destroyIfActive();
-
         return redirect()->route('login');
     }
 
@@ -94,31 +86,31 @@ class NovaAuthController extends Controller
         if ($user === null) {
             $this->logger->log('SESSION_EXTEND_FAIL', sprintf('NOVA contraseña incorrecta para ID %s | IP %s', $identity, $request->ip()));
             $audit->record('sesion_extender_error', 'Contrasena incorrecta.', [
-                'user_id'   => $identity,
+                'user_id' => $identity,
                 'user_name' => is_array($sessionUser) ? ($sessionUser['name'] ?? '') : '',
-                'ip'        => $request->ip(),
+                'ip' => $request->ip(),
             ], $request);
 
             return response()->json(['ok' => false, 'msg' => 'Contrasena incorrecta.'], 422);
         }
 
         $timeout = $settings->sessionTimeout();
-        if (!is_array($sessionUser)) {
+        if (! is_array($sessionUser)) {
             $request->session()->regenerate();
         }
         $request->session()->put('nova_user', $user);
         $request->session()->put('nova_last_activity', time());
         $this->logger->log('SESSION_EXTEND', sprintf('NOVA sesion extendida por %s (ID %s) | timeout %s | IP %s', $user['name'] ?? '', $user['id'] ?? '', $timeout, $request->ip()));
         $audit->record('sesion_extendida', 'Sesion extendida.', [
-            'user_id'   => $user['id'] ?? '',
+            'user_id' => $user['id'] ?? '',
             'user_name' => $user['name'] ?? '',
-            'timeout'   => $timeout,
-            'ip'        => $request->ip(),
+            'timeout' => $timeout,
+            'ip' => $request->ip(),
         ], $request);
 
         return response()->json([
-            'ok'        => true,
-            'timeout'   => $timeout,
+            'ok' => true,
+            'timeout' => $timeout,
             'remaining' => $timeout,
         ]);
     }

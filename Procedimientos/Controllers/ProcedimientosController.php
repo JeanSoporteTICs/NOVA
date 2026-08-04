@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Modulos\Nova\Repositories\NovaAccessRepository;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
 use App\Modulos\Nova\Repositories\UserIntegrationRepository;
-use App\Modulos\Procedimientos\Services\OnlyOfficeJwt;
+use App\Modulos\Procedimientos\Services\NextcloudBrowserService;
 use App\Modulos\Procedimientos\Services\OnlyOfficeHealthService;
+use App\Modulos\Procedimientos\Services\OnlyOfficeJwt;
 use App\Modulos\RedmineMantencion\ExternalClients\NextcloudWebdavClient;
 use App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository;
 use Illuminate\Http\JsonResponse;
@@ -31,37 +32,33 @@ final class ProcedimientosController extends Controller
         ]);
     }
 
-    public function browser(Request $request, NovaAccessRepository $access): never
+    public function browser(Request $request, NovaAccessRepository $access, NextcloudBrowserService $browser): JsonResponse|Response
     {
         $this->authorizeModule($request, $access);
-        if (!defined('NOVA_PROCEDIMIENTOS_INDEPENDENT')) {
-            define('NOVA_PROCEDIMIENTOS_INDEPENDENT', true);
-        }
-        require_once base_path('RedmineMantencion/controllers/nc_browser.php');
-        nc_browser_handle();
-        exit;
+
+        return $browser->response($request);
     }
 
     public function editor(Request $request, NovaAccessRepository $access, NovaSettingsRepository $settings, UserIntegrationRepository $integrations, MantencionConfigRepository $mantencion, OnlyOfficeJwt $jwt): View|RedirectResponse
     {
         $this->authorizeModule($request, $access);
         $path = $this->safePath((string) $request->query('path', ''));
-        if ($path === '/' || !$this->editable($path)) {
+        if ($path === '/' || ! $this->editable($path)) {
             return redirect()->route('procedimientos.index')->with('error', 'El formato seleccionado no admite edicion en linea.');
         }
 
         $office = $settings->onlyOffice();
-        if (!$office['enabled']) {
+        if (! $office['enabled']) {
             return redirect()->route('procedimientos.index')->with('error', 'OnlyOffice esta desactivado temporalmente.');
         }
         $credential = $integrations->credentialForSession((array) $request->session()->get('nova_user', []), 'nextcloud');
         $nextcloudUrl = rtrim(trim((string) ($mantencion->loadAll()['nextcloud_url'] ?? '')), '/');
-        if (!$office['configured'] || !$credential['stored'] || $nextcloudUrl === '') {
+        if (! $office['configured'] || ! $credential['stored'] || $nextcloudUrl === '') {
             return redirect()->route('procedimientos.index')->with('error', 'Configura OnlyOffice global y tus credenciales Nextcloud antes de editar.');
         }
 
         $sessionToken = bin2hex(random_bytes(24));
-        Cache::put('procedimientos.editor.' . $sessionToken, [
+        Cache::put('procedimientos.editor.'.$sessionToken, [
             'user' => (array) $request->session()->get('nova_user', []),
             'path' => $path,
             'nextcloud_url' => $nextcloudUrl,
@@ -72,7 +69,7 @@ final class ProcedimientosController extends Controller
         $config = [
             'document' => [
                 'fileType' => $fileType,
-                'key' => hash('sha256', $path . '|' . $sessionToken),
+                'key' => hash('sha256', $path.'|'.$sessionToken),
                 'title' => $fileName,
                 'url' => route('procedimientos.document', ['token' => $sessionToken]),
                 'permissions' => ['edit' => true, 'download' => true, 'print' => true],
@@ -101,31 +98,31 @@ final class ProcedimientosController extends Controller
         $result = $client->request($this->nextcloudConfig($session, $credential), 'GET', (string) $session['path']);
         abort_unless($result['ok'], 502);
 
-        return response($result['body'], 200, ['Content-Type' => 'application/octet-stream', 'Content-Disposition' => 'inline; filename="' . str_replace('"', '', basename((string) $session['path'])) . '"']);
+        return response($result['body'], 200, ['Content-Type' => 'application/octet-stream', 'Content-Disposition' => 'inline; filename="'.str_replace('"', '', basename((string) $session['path'])).'"']);
     }
 
     public function callback(Request $request, string $token, NovaSettingsRepository $settings, UserIntegrationRepository $integrations, NextcloudWebdavClient $client, OnlyOfficeJwt $jwt): JsonResponse
     {
         $office = $settings->onlyOffice();
         $bearer = $request->bearerToken() ?: (string) $request->input('token', '');
-        if (!$office['enabled'] || !$office['configured'] || $jwt->decode($bearer, $office['secret']) === null) {
+        if (! $office['enabled'] || ! $office['configured'] || $jwt->decode($bearer, $office['secret']) === null) {
             return response()->json(['error' => 1], 401);
         }
         $session = $this->editorSession($token);
         $status = (int) $request->input('status', 0);
-        if (!in_array($status, [2, 6], true)) {
+        if (! in_array($status, [2, 6], true)) {
             return response()->json(['error' => 0]);
         }
         $downloadUrl = trim((string) $request->input('url', ''));
-        if (!$this->trustedOnlyOfficeUrl($downloadUrl, $office['url'])) {
+        if (! $this->trustedOnlyOfficeUrl($downloadUrl, $office['url'])) {
             return response()->json(['error' => 1], 422);
         }
         $download = Http::timeout(60)->get($downloadUrl);
-        if (!$download->successful()) {
+        if (! $download->successful()) {
             return response()->json(['error' => 1], 502);
         }
         $credential = $integrations->credentialForSession((array) $session['user'], 'nextcloud');
-        if (!$credential['stored']) {
+        if (! $credential['stored']) {
             return response()->json(['error' => 1], 404);
         }
         $saved = $client->request($this->nextcloudConfig($session, $credential), 'PUT', (string) $session['path'], $download->body(), ['Content-Type: application/octet-stream']);
@@ -140,7 +137,7 @@ final class ProcedimientosController extends Controller
 
     private function editorSession(string $token): array
     {
-        $session = Cache::get('procedimientos.editor.' . $token);
+        $session = Cache::get('procedimientos.editor.'.$token);
         abort_unless(is_array($session) && isset($session['user'], $session['path'], $session['nextcloud_url']), 404);
 
         return $session;
@@ -153,7 +150,7 @@ final class ProcedimientosController extends Controller
 
     private function safePath(string $path): string
     {
-        return (new NextcloudWebdavClient())->pathSafe($path);
+        return (new NextcloudWebdavClient)->pathSafe($path);
     }
 
     private function editable(string $path): bool

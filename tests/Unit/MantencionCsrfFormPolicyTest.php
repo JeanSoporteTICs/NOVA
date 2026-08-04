@@ -11,7 +11,7 @@ final class MantencionCsrfFormPolicyTest extends TestCase
 {
     public function test_every_explicit_post_form_contains_a_csrf_field(): void
     {
-        $root = dirname(__DIR__, 2) . '/RedmineMantencion';
+        $root = dirname(__DIR__, 2).'/RedmineMantencion';
         $files = new RegexIterator(
             new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root)),
             '/\.(?:php|blade\.php)$/i'
@@ -30,9 +30,9 @@ final class MantencionCsrfFormPolicyTest extends TestCase
             foreach ($matches[0] as $form) {
                 $formsChecked++;
                 self::assertMatchesRegularExpression(
-                    '/\bname\s*=\s*(["\'])(?:csrf_token|_token)\1/i',
+                    '/(?:\bname\s*=\s*(["\'])(?:csrf_token|_token)\1|@csrf\b)/i',
                     $form,
-                    'Formulario POST sin token CSRF en ' . $file->getPathname()
+                    'Formulario POST sin token CSRF en '.$file->getPathname()
                 );
             }
         }

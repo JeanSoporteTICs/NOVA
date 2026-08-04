@@ -10,6 +10,14 @@ use ReflectionClass;
 
 class RedmineDashboardPermissionTest extends TestCase
 {
+    public function test_dashboard_omits_the_redundant_active_requests_heading(): void
+    {
+        $view = (string) file_get_contents(dirname(__DIR__, 2).'/RedmineTic/views/native-sections/dashboard.blade.php');
+
+        $this->assertStringNotContainsString('Solicitudes activas', $view);
+        $this->assertStringNotContainsString('Gestiona la cola actual con estados locales y acciones disponibles.', $view);
+    }
+
     public function test_global_permission_overrides_stale_explicit_denial(): void
     {
         $this->assertTrue($this->can([
@@ -90,7 +98,7 @@ class RedmineDashboardPermissionTest extends TestCase
     }
 
     /**
-     * @param array<string,mixed> $permissions
+     * @param  array<string,mixed>  $permissions
      */
     private function can(array $permissions, string $permission): bool
     {
@@ -102,8 +110,8 @@ class RedmineDashboardPermissionTest extends TestCase
     }
 
     /**
-     * @param array<string,mixed> $permissions
-     * @param array<string,mixed> $currentPermissions
+     * @param  array<string,mixed>  $permissions
+     * @param  array<string,mixed>  $currentPermissions
      * @return array<string,mixed>
      */
     private function restrictedScopes(array $permissions, array $currentPermissions, string $novaRole): array

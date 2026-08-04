@@ -10,8 +10,11 @@ final class MantencionCatalogRepository
     private const MODULE_KEY = 'redmine-mantencion';
 
     private ?int $moduleId = null;
+
     private bool $moduleIdResolved = false;
+
     private ?bool $tableReadyCache = null;
+
     private array $columnAvailableCache = [];
 
     public function tableReady(): bool
@@ -75,6 +78,11 @@ final class MantencionCatalogRepository
     public function deactivateUnidad(string $id): void
     {
         $this->deactivateByDisplayId('unidades', $id);
+    }
+
+    public function deactivateCategoria(string $id): void
+    {
+        $this->deactivateByDisplayId('categorias', $id);
     }
 
     /** @return array<string,string> */
@@ -170,6 +178,7 @@ final class MantencionCatalogRepository
         }
 
         $name = trim((string) $name);
+
         return $name !== '' ? $name : null;
     }
 
@@ -251,6 +260,7 @@ final class MantencionCatalogRepository
                 $id = $this->findExistingRowId($table, $moduleId, $name, $externalId, $hasClaveExterna, $hasOrigen);
                 if ($id !== null) {
                     DB::table($table)->where('id', $id)->update($values);
+
                     continue;
                 }
 
@@ -383,7 +393,7 @@ final class MantencionCatalogRepository
 
     private function columnAvailable(string $table, string $column): bool
     {
-        $key = $table . '.' . $column;
+        $key = $table.'.'.$column;
         if (array_key_exists($key, $this->columnAvailableCache)) {
             return $this->columnAvailableCache[$key];
         }

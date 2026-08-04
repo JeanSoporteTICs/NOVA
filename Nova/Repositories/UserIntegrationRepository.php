@@ -19,7 +19,7 @@ final class UserIntegrationRepository
      */
     public function users(): array
     {
-        if (!$this->tablesAvailable()) {
+        if (! $this->tablesAvailable()) {
             return [];
         }
 
@@ -103,7 +103,7 @@ final class UserIntegrationRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      * @return array{user:string,password:string,stored:bool,updated_at:string}
      */
     public function emachForUser(array $user): array
@@ -129,7 +129,7 @@ final class UserIntegrationRepository
      * row (usuario_id). Never runs for already-encrypted, invalid, or empty
      * values, and never fails the read if the rewrite itself fails.
      *
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      */
     private function maybeRewriteEmachSecret(array $user, string $emachUser, string $rawSecret, string $decryptedPassword): void
     {
@@ -161,7 +161,7 @@ final class UserIntegrationRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      * @return array{chat_id:string,stored:bool,updated_at:string}
      */
     public function telegramForUser(array $user): array
@@ -207,7 +207,7 @@ final class UserIntegrationRepository
     public function integrationsForSession(array $sessionUser, array $types): array
     {
         $userId = $this->databaseUserIdForSession($sessionUser);
-        if ($userId === null || !$this->tablesAvailable()) {
+        if ($userId === null || ! $this->tablesAvailable()) {
             return [];
         }
 
@@ -267,7 +267,7 @@ final class UserIntegrationRepository
     public function credentialForSession(array $sessionUser, string $type): array
     {
         $userId = $this->databaseUserIdForSession($sessionUser);
-        if ($userId === null || !$this->tablesAvailable()) {
+        if ($userId === null || ! $this->tablesAvailable()) {
             return ['user' => '', 'secret' => '', 'stored' => false];
         }
 
@@ -282,14 +282,18 @@ final class UserIntegrationRepository
      */
     public function credentialForUserId(int $userId, string $type = self::REDMINE_TYPE): array
     {
-        if ($userId <= 0 || !$this->tablesAvailable()) {
+        if ($userId <= 0 || ! $this->tablesAvailable()) {
             return ['user' => '', 'secret' => '', 'stored' => false];
         }
 
         try {
             $row = $this->integrationRowForUser($userId, $type);
             $user = trim((string) ($row->usuario_externo ?? ''));
-            $secret = SecretValue::decryptSecret((string) ($row->valor_secreto ?? '')) ?? '';
+            $rawSecret = (string) ($row->valor_secreto ?? '');
+            $secret = SecretValue::decryptSecret($rawSecret) ?? '';
+            if ($secret !== '' && SecretValue::inspect($rawSecret)['needs_rewrite']) {
+                $this->writeIntegration($userId, $this->canonicalType($type), $user, SecretValue::encryptSecret($secret), '');
+            }
             $stored = $this->isRedmineType($type)
                 ? $secret !== ''
                 : ($user !== '' && $secret !== '');
@@ -303,7 +307,7 @@ final class UserIntegrationRepository
     public function redmineTokenForRedmineId(string $redmineId): string
     {
         $redmineId = trim($redmineId);
-        if ($redmineId === '' || !$this->tablesAvailable()) {
+        if ($redmineId === '' || ! $this->tablesAvailable()) {
             return '';
         }
 
@@ -321,7 +325,7 @@ final class UserIntegrationRepository
         $userId = $this->databaseUserIdForSession($sessionUser);
         $type = $this->canonicalType($type);
         $externalUser = trim($externalUser);
-        if ($userId === null || $type === '' || !$this->tablesAvailable()) {
+        if ($userId === null || $type === '' || ! $this->tablesAvailable()) {
             return false;
         }
 
@@ -360,7 +364,7 @@ final class UserIntegrationRepository
     {
         $userId = $this->databaseUserIdForSession($sessionUser);
         $type = $this->canonicalType($type);
-        if ($userId === null || $type === '' || !$this->tablesAvailable()) {
+        if ($userId === null || $type === '' || ! $this->tablesAvailable()) {
             return false;
         }
 
@@ -377,7 +381,7 @@ final class UserIntegrationRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      */
     public function hasEmach(array $user): bool
     {
@@ -385,7 +389,7 @@ final class UserIntegrationRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      */
     public function hasTelegram(array $user): bool
     {
@@ -393,7 +397,7 @@ final class UserIntegrationRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $users
+     * @param  array<int,array<string,mixed>>  $users
      */
     private function write(array $users): bool
     {
@@ -401,7 +405,7 @@ final class UserIntegrationRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      * @return array<int,string>
      */
     private function needles(array $user): array
@@ -442,7 +446,7 @@ final class UserIntegrationRepository
 
     private function databaseUserIdForSession(array $sessionUser): ?int
     {
-        if (!$this->usersTableAvailable()) {
+        if (! $this->usersTableAvailable()) {
             return null;
         }
 
@@ -490,7 +494,7 @@ final class UserIntegrationRepository
 
     private function writeIntegration(int $userId, string $type, string $externalUser, string $secret, string $chatId): bool
     {
-        if ($userId <= 0 || !$this->tablesAvailable()) {
+        if ($userId <= 0 || ! $this->tablesAvailable()) {
             return false;
         }
 
@@ -539,7 +543,7 @@ final class UserIntegrationRepository
     {
         $type = trim($type);
         $query = DB::table('integraciones_usuario')->where('usuario_id', $userId);
-        if (!$this->isRedmineType($type)) {
+        if (! $this->isRedmineType($type)) {
             return $query->where('tipo', $type)->first();
         }
 
@@ -584,12 +588,12 @@ final class UserIntegrationRepository
             return str_repeat('*', $length);
         }
 
-        return mb_substr($value, 0, 2) . str_repeat('*', max(3, $length - 4)) . mb_substr($value, -2);
+        return mb_substr($value, 0, 2).str_repeat('*', max(3, $length - 4)).mb_substr($value, -2);
     }
 
     private function writeTelegramChatId(int $userId, string $chatId): bool
     {
-        if ($userId <= 0 || $chatId === '' || !Schema::hasTable('usuarios_nova') || !Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
+        if ($userId <= 0 || $chatId === '' || ! Schema::hasTable('usuarios_nova') || ! Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
             return false;
         }
 
@@ -616,7 +620,7 @@ final class UserIntegrationRepository
 
     private function clearTelegramChatId(int $userId): bool
     {
-        if ($userId <= 0 || !Schema::hasTable('usuarios_nova') || !Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
+        if ($userId <= 0 || ! Schema::hasTable('usuarios_nova') || ! Schema::hasColumn('usuarios_nova', 'telegram_id_chat')) {
             return false;
         }
 

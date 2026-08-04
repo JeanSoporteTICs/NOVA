@@ -11,7 +11,8 @@ final class NativeBrowserDialogPolicyTest extends TestCase
         $paths = [
             dirname(__DIR__, 2).'/RedmineTic/views/native-sections/history.blade.php',
             dirname(__DIR__, 2).'/RedmineTic/views/native-sections/config.blade.php',
-            dirname(__DIR__, 2).'/RedmineMantencion/app/Views/auth/login.php',
+            dirname(__DIR__, 2).'/Nova/views/nova/auth/login.blade.php',
+            dirname(__DIR__, 2).'/resources/views/procedimientos/browser.blade.php',
         ];
 
         foreach ($paths as $path) {

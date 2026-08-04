@@ -19,16 +19,17 @@ use Illuminate\Support\Facades\Schema;
 final class MantencionHoursExtraRepository
 {
     private const MODULE_KEY = 'redmine-mantencion';
+
     private const ORIGEN = 'mantencion';
 
     private ?int $moduleId = null;
+
     private bool $moduleIdResolved = false;
 
     public function __construct(
         private readonly MantencionReportRepository $reports,
         private readonly HorasExtraRepository $shared,
-    ) {
-    }
+    ) {}
 
     public function tableReady(): bool
     {
@@ -81,7 +82,7 @@ final class MantencionHoursExtraRepository
             // Se itera $rows (ya ordenado por fecha_reporte/id desc) en vez de
             // reporte_ids (sin orden) para conservar el orden de visualizacion previo.
             foreach ($rows as $row) {
-                if (!isset($reporteIdsDelGrupo[$row->id])) {
+                if (! isset($reporteIdsDelGrupo[$row->id])) {
                     continue;
                 }
                 $message = $this->reports->rowToMessage($row);
@@ -221,6 +222,7 @@ final class MantencionHoursExtraRepository
             }
 
             $id = $query->value('id');
+
             return $id !== null ? (int) $id : null;
         } catch (\Throwable) {
             return null;

@@ -12,12 +12,12 @@ final class MantencionReportRepository
     private const MODULE_KEY = 'redmine-mantencion';
 
     private ?int $moduleId = null;
+
     private bool $moduleIdResolved = false;
+
     private ?bool $tableReadyCache = null;
 
-    public function __construct(private readonly MantencionCatalogRepository $catalogs)
-    {
-    }
+    public function __construct(private readonly MantencionCatalogRepository $catalogs) {}
 
     public function tableReady(): bool
     {
@@ -106,7 +106,7 @@ final class MantencionReportRepository
     /**
      * Physically delete report rows by their fuente_id values.
      *
-     * @param array<int,string> $fuenteIds
+     * @param  array<int,string>  $fuenteIds
      */
     public function deleteByFuenteIds(array $fuenteIds): void
     {
@@ -184,8 +184,8 @@ final class MantencionReportRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $messages
-     * @return array<string,int|null>  trimmed categoria name (same casing as payload()) => categoria_id
+     * @param  array<int,array<string,mixed>>  $messages
+     * @return array<string,int|null> trimmed categoria name (same casing as payload()) => categoria_id
      */
     private function prefetchCategoriaIds(array $messages): array
     {
@@ -220,8 +220,171 @@ final class MantencionReportRepository
         return $this->messagesByStatuses(['archivado']);
     }
 
+    /** @return array<string,mixed>|null */
+    public function findMessage(string $publicId, bool $includeArchived = true): ?array
+    {
+        $row = $this->findRow($publicId, $includeArchived);
+
+        return $row !== null ? $this->rowToMessage($row) : null;
+    }
+
     /**
-     * @param array<int,string> $statuses
+     * Update only fields that belong to the editable report payload. The
+     * persistence identity, module and remote ticket are deliberately kept.
+     *
+     * @param  array<string,mixed>  $changes
+     */
+    public function updateMessage(string $publicId, array $changes): bool
+    {
+        $row = $this->findRow($publicId, false);
+        if ($row === null) {
+            return false;
+        }
+
+        $current = $this->rowToMessage($row);
+        $allowed = [
+            'asunto', 'mensaje', 'descripcion', 'proyecto', 'project_id',
+            'tipo', 'tipo_id', 'tracker_id', 'prioridad', 'priority_id',
+            'status_id', 'estado_redmine', 'asignado_a', 'id_redmine_asignado',
+            'asignado_nombre', 'categoria', 'solicitante', 'anexo', 'numero',
+            'unidad', 'unidad_texto', 'fecha', 'fecha_inicio', 'fecha_fin',
+            'hora', 'tiempo_estimado', 'correo', 'core_email', 'hora_extra',
+        ];
+        foreach ($allowed as $key) {
+            if (array_key_exists($key, $changes)) {
+                $current[$key] = $changes[$key];
+            }
+        }
+
+        return $this->upsertMessage($current);
+    }
+
+    /** @param array<int,string> $publicIds */
+    public function deleteMessages(array $publicIds, bool $archivedOnly = false): int
+    {
+        $query = $this->queryByPublicIds($publicIds);
+        if ($query === null) {
+            return 0;
+        }
+        if ($archivedOnly) {
+            $query->where('estado', 'archivado');
+        }
+
+        try {
+            return $query->delete();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /** @param array<int,string> $publicIds */
+    public function archiveMessages(array $publicIds): int
+    {
+        $query = $this->queryByPublicIds($publicIds);
+        if ($query === null) {
+            return 0;
+        }
+
+        try {
+            return $query->whereIn('estado', ['procesado', 'error'])->update([
+                'estado' => 'archivado',
+                'actualizado_at' => now(),
+            ]);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    public function resetErrors(): int
+    {
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null || ! $this->tableReady()) {
+            return 0;
+        }
+
+        try {
+            return DB::table('redmine_mantencion_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('estado', 'error')
+                ->update(['estado' => 'pendiente', 'actualizado_at' => now()]);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /** @param array<int,string> $publicIds */
+    public function resetErrorMessages(array $publicIds): int
+    {
+        $query = $this->queryByPublicIds($publicIds);
+        if ($query === null) {
+            return 0;
+        }
+
+        try {
+            return $query->where('estado', 'error')->update([
+                'estado' => 'pendiente',
+                'numero_ticket_redmine' => null,
+                'actualizado_at' => now(),
+            ]);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    public function setHoursExtra(string $publicId, bool $enabled): bool
+    {
+        $row = $this->findRow($publicId, false);
+        if ($row === null) {
+            return false;
+        }
+
+        try {
+            return DB::table('redmine_mantencion_reportes')->where('id', $row->id)->update([
+                'hora_extra' => $enabled ? 1 : 0,
+                'actualizado_at' => now(),
+            ]) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function markProcessed(string $publicId, string $ticketId): bool
+    {
+        $row = $this->findRow($publicId, false);
+        if ($row === null || ! ctype_digit(trim($ticketId))) {
+            return false;
+        }
+
+        try {
+            return DB::table('redmine_mantencion_reportes')->where('id', $row->id)->update([
+                'estado' => 'procesado',
+                'numero_ticket_redmine' => (int) $ticketId,
+                'actualizado_at' => now(),
+            ]) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function markError(string $publicId): bool
+    {
+        $row = $this->findRow($publicId, false);
+        if ($row === null) {
+            return false;
+        }
+
+        try {
+            return DB::table('redmine_mantencion_reportes')->where('id', $row->id)->update([
+                'estado' => 'error',
+                'actualizado_at' => now(),
+            ]) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param  array<int,string>  $statuses
      * @return array<int,array<string,mixed>>
      */
     private function messagesByStatuses(array $statuses): array
@@ -253,11 +416,58 @@ final class MantencionReportRepository
         }
     }
 
+    private function findRow(string $publicId, bool $includeArchived): ?object
+    {
+        $query = $this->queryByPublicIds([$publicId]);
+        if ($query === null) {
+            return null;
+        }
+        if (! $includeArchived) {
+            $query->where('estado', '<>', 'archivado');
+        }
+
+        try {
+            return $query->first();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /**
-     * @param array<string,mixed> $message
-     * @param array<string,int|null>|null $categoriaIds  optional prefetched name=>id map
-     *        (see syncMessages()/prefetchCategoriaIds()); when omitted, the categoria
-     *        is resolved with its own query as before — safe for standalone calls.
+     * Resolve legacy/public identifiers without ever escaping the Mantencion
+     * module scope. A numeric fuente_id wins over the internal DB id.
+     *
+     * @param  array<int,string>  $publicIds
+     */
+    private function queryByPublicIds(array $publicIds): mixed
+    {
+        $moduleId = $this->resolveModuleId();
+        $publicIds = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $id): string => trim((string) $id),
+            $publicIds,
+        ), static fn (string $id): bool => $id !== '')));
+        if ($moduleId === null || ! $this->tableReady() || $publicIds === []) {
+            return null;
+        }
+
+        return DB::table('redmine_mantencion_reportes')
+            ->where('modulo_id', $moduleId)
+            ->where(static function ($query) use ($publicIds): void {
+                $query->whereIn('fuente_id', $publicIds);
+                $numericIds = array_values(array_filter($publicIds, 'ctype_digit'));
+                if ($numericIds !== []) {
+                    $query->orWhere(static function ($internal) use ($numericIds): void {
+                        $internal->whereNull('fuente_id')->whereIn('id', array_map('intval', $numericIds));
+                    });
+                }
+            });
+    }
+
+    /**
+     * @param  array<string,mixed>  $message
+     * @param  array<string,int|null>|null  $categoriaIds  optional prefetched name=>id map
+     *                                                     (see syncMessages()/prefetchCategoriaIds()); when omitted, the categoria
+     *                                                     is resolved with its own query as before — safe for standalone calls.
      */
     public function upsertMessage(array $message, array $config = [], ?array $categoriaIds = null): bool
     {
@@ -298,11 +508,13 @@ final class MantencionReportRepository
                 // was reconciled through the stable CORE request ID.
                 $values['fuente_id'] = trim((string) ($existing->fuente_id ?? '')) ?: $fuenteId;
                 DB::table('redmine_mantencion_reportes')->where('id', $existing->id)->update($values);
+
                 return true;
             }
 
             $values['creado_at'] = now();
             DB::table('redmine_mantencion_reportes')->insert($values);
+
             return true;
         } catch (\Throwable $exception) {
             Log::error('No se pudo persistir un reporte de Mantencion.', [
@@ -368,6 +580,9 @@ final class MantencionReportRepository
         $hora = $this->formatTimeForLegacy($row->hora_reporte ?? null);
         $redmineId = trim((string) ($row->numero_ticket_redmine ?? ''));
         $categoria = trim((string) ($row->categoria_nombre ?? ''));
+        if ($categoria === '' && isset($row->categoria_id)) {
+            $categoria = trim((string) ($this->catalogs->categoriaNombre((int) $row->categoria_id) ?? ''));
+        }
         $unidad = trim((string) ($row->unidad_texto ?? ''));
         $estadoRedmine = trim((string) ($row->estado_redmine ?? ''));
         $asignadoNombre = trim((string) ($row->asignado_nombre ?? ''));
@@ -415,7 +630,7 @@ final class MantencionReportRepository
             'fecha_inicio' => $fechaInicio,
             'fecha_fin' => $fechaFin,
             'hora' => $hora,
-            'core_fecha_creacion' => trim($fecha . ' ' . $hora),
+            'core_fecha_creacion' => trim($fecha.' '.$hora),
             'tiempo_estimado' => $row->tiempo_estimado !== null ? (string) $row->tiempo_estimado : '',
             'correo' => trim((string) ($row->correo ?? '')),
             'core_email' => trim((string) ($row->correo ?? '')),
@@ -514,6 +729,7 @@ final class MantencionReportRepository
 
         if (($message['fuente'] ?? '') === 'core') {
             $value = trim((string) ($message['core_solicitud_id'] ?? $message['fuente_id'] ?? ''));
+
             return $value !== '' ? $value : null;
         }
 
@@ -561,12 +777,14 @@ final class MantencionReportRepository
     private function decimalOrNull(string $value): ?float
     {
         $value = str_replace(',', '.', trim($value));
+
         return is_numeric($value) ? (float) $value : null;
     }
 
     private function integerOrNull(string $value): ?int
     {
         $value = trim($value);
+
         return ctype_digit($value) ? (int) $value : null;
     }
 

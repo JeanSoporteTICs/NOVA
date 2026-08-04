@@ -2,42 +2,32 @@
 
 namespace Tests\Unit;
 
+use App\Modulos\RedmineMantencion\Repositories\MantencionCatalogRepository;
+use App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository;
+use App\Modulos\RedmineMantencion\Repositories\MantencionReportRepository;
+use App\Modulos\RedmineMantencion\Services\CorePendingReportSyncService;
+use App\Modulos\RedmineMantencion\Services\MantencionCoreImportService;
 use PHPUnit\Framework\TestCase;
 
-class CoreCategoryMappingTest extends TestCase
+final class CoreCategoryMappingTest extends TestCase
 {
-    public static function setUpBeforeClass(): void
+    private function service(): MantencionCoreImportService
     {
-        require_once dirname(__DIR__, 2) . '/RedmineMantencion/controllers/dashboard.php';
-    }
+        $catalogs = new MantencionCatalogRepository;
 
-    public function test_creation_request_keeps_the_matching_catalog_category(): void
-    {
-        $catalog = ['Credencial CORE', 'Creacion De Usuario', 'Modificar Perfil CORE'];
-
-        $this->assertSame(
-            'Creacion De Usuario',
-            dashboard_core_resolve_category('Creación de Usuario', $catalog)
+        return new MantencionCoreImportService(
+            new MantencionConfigRepository,
+            $catalogs,
+            new MantencionReportRepository($catalogs),
+            new CorePendingReportSyncService,
         );
     }
 
-    public function test_creation_request_without_de_uses_the_creation_category(): void
+    public function test_native_core_import_preserves_category_aliases(): void
     {
         $catalog = ['Credencial CORE', 'Creacion De Usuario', 'Modificar Perfil CORE'];
-
-        $this->assertSame(
-            'Creacion De Usuario',
-            dashboard_core_resolve_category('Creacion Usuario', $catalog)
-        );
-    }
-
-    public function test_modify_user_alias_still_uses_the_profile_category(): void
-    {
-        $catalog = ['Credencial CORE', 'Creacion De Usuario', 'Modificar Perfil CORE'];
-
-        $this->assertSame(
-            'Modificar Perfil CORE',
-            dashboard_core_resolve_category('Modificar Usuario', $catalog)
-        );
+        self::assertSame('Creacion De Usuario', $this->service()->resolveCategoryFromCatalog('Creación de Usuario', $catalog));
+        self::assertSame('Creacion De Usuario', $this->service()->resolveCategoryFromCatalog('Creacion Usuario', $catalog));
+        self::assertSame('Modificar Perfil CORE', $this->service()->resolveCategoryFromCatalog('Modificar Usuario', $catalog));
     }
 }

@@ -7,10 +7,14 @@ use Illuminate\Support\Facades\Schema;
 
 final class MantencionConfigRepository
 {
-    private const MODULE_KEY    = 'redmine-mantencion';
-    private const CONFIG_TABLE  = 'configuraciones_modulo';
+    private const MODULE_KEY = 'redmine-mantencion';
+
+    private const CONFIG_TABLE = 'configuraciones_modulo';
+
     private const MODULES_TABLE = 'modulos_nova';
+
     private const OPTIONS_TABLE = 'modulo_opciones';
+
     private const OPTION_KEYS = [
         'trackers' => 'tracker',
         'prioridades' => 'prioridad',
@@ -18,8 +22,11 @@ final class MantencionConfigRepository
     ];
 
     private ?int $moduleId = null;
+
     private bool $moduleIdResolved = false;
+
     private ?bool $tableReadyCache = null;
+
     private ?bool $optionsTableReadyCache = null;
 
     public function tableReady(): bool
@@ -99,7 +106,7 @@ final class MantencionConfigRepository
                 continue;
             }
 
-            $type   = $this->typeOf($value);
+            $type = $this->typeOf($value);
             $stored = $this->encode($value, $type);
 
             try {
@@ -114,7 +121,7 @@ final class MantencionConfigRepository
     }
 
     /**
-     * @param 'tracker'|'prioridad'|'estado' $type
+     * @param  'tracker'|'prioridad'|'estado'  $type
      * @return array<int,array<string,mixed>>
      */
     public function options(string $type): array
@@ -123,8 +130,8 @@ final class MantencionConfigRepository
     }
 
     /**
-     * @param 'tracker'|'prioridad'|'estado' $type
-     * @param array<int,array<string,mixed>> $items
+     * @param  'tracker'|'prioridad'|'estado'  $type
+     * @param  array<int,array<string,mixed>>  $items
      */
     public function saveOptions(string $type, array $items): void
     {
@@ -134,8 +141,8 @@ final class MantencionConfigRepository
     public function defaultOptionId(string $type): string
     {
         foreach ($this->optionsFromDatabase($type) as $option) {
-            if (!empty($option['default'])) {
-                return (string)($option['id'] ?? '');
+            if (! empty($option['default'])) {
+                return (string) ($option['id'] ?? '');
             }
         }
 
@@ -145,7 +152,7 @@ final class MantencionConfigRepository
     public function createOption(string $type, string $externalId, string $name, bool $default = false): bool
     {
         $moduleId = $this->resolveModuleId();
-        if (!$this->optionsTableReady() || $moduleId === null || trim($externalId) === '' || trim($name) === '') {
+        if (! $this->optionsTableReady() || $moduleId === null || trim($externalId) === '' || trim($name) === '') {
             return false;
         }
 
@@ -174,7 +181,7 @@ final class MantencionConfigRepository
                 'actualizado_at' => now(),
             ]);
 
-            return !$default || $this->setDefaultOption($type, $externalId);
+            return ! $default || $this->setDefaultOption($type, $externalId);
         } catch (\Throwable) {
             return false;
         }
@@ -183,7 +190,7 @@ final class MantencionConfigRepository
     public function updateOption(string $type, string $originalId, string $externalId, string $name, bool $default = false): bool
     {
         $moduleId = $this->resolveModuleId();
-        if (!$this->optionsTableReady() || $moduleId === null || trim($originalId) === '' || trim($externalId) === '' || trim($name) === '') {
+        if (! $this->optionsTableReady() || $moduleId === null || trim($originalId) === '' || trim($externalId) === '' || trim($name) === '') {
             return false;
         }
 
@@ -223,7 +230,7 @@ final class MantencionConfigRepository
             if ($default) {
                 return $this->setDefaultOption($type, $externalId);
             }
-            if (!empty($row->predeterminado)) {
+            if (! empty($row->predeterminado)) {
                 $this->saveDefaultOptionId($type, $this->defaultOptionId($type));
             }
 
@@ -236,7 +243,7 @@ final class MantencionConfigRepository
     public function deleteOption(string $type, string $externalId): bool
     {
         $moduleId = $this->resolveModuleId();
-        if (!$this->optionsTableReady() || $moduleId === null || trim($externalId) === '') {
+        if (! $this->optionsTableReady() || $moduleId === null || trim($externalId) === '') {
             return false;
         }
 
@@ -256,7 +263,7 @@ final class MantencionConfigRepository
                 ->where('id_externo', $externalId)
                 ->delete();
 
-            if (!empty($row->predeterminado)) {
+            if (! empty($row->predeterminado)) {
                 $replacement = DB::table(self::OPTIONS_TABLE)
                     ->where('modulo_id', $moduleId)
                     ->where('tipo', $type)
@@ -278,7 +285,7 @@ final class MantencionConfigRepository
     public function setDefaultOption(string $type, string $externalId): bool
     {
         $moduleId = $this->resolveModuleId();
-        if (!$this->optionsTableReady() || $moduleId === null || trim($externalId) === '') {
+        if (! $this->optionsTableReady() || $moduleId === null || trim($externalId) === '') {
             return false;
         }
 
@@ -288,7 +295,7 @@ final class MantencionConfigRepository
                 ->where('tipo', $type)
                 ->where('id_externo', $externalId)
                 ->exists();
-            if (!$exists) {
+            if (! $exists) {
                 return false;
             }
 
@@ -318,7 +325,7 @@ final class MantencionConfigRepository
 
         $this->moduleIdResolved = true;
 
-        if (!$this->tableReady()) {
+        if (! $this->tableReady()) {
             return null;
         }
 
@@ -340,17 +347,26 @@ final class MantencionConfigRepository
         return match ($type) {
             'json' => json_decode($value, true) ?? [],
             'bool' => in_array(strtolower($value), ['1', 'true', 'si', 'sí', 'yes'], true),
-            'int'  => (int) $value,
+            'int' => (int) $value,
             default => $value,
         };
     }
 
     private function typeOf(mixed $value): string
     {
-        if ($value === null)  return 'string';
-        if (is_bool($value))  return 'bool';
-        if (is_int($value))   return 'int';
-        if (is_array($value)) return 'json';
+        if ($value === null) {
+            return 'string';
+        }
+        if (is_bool($value)) {
+            return 'bool';
+        }
+        if (is_int($value)) {
+            return 'int';
+        }
+        if (is_array($value)) {
+            return 'json';
+        }
+
         return 'string';
     }
 
@@ -361,8 +377,8 @@ final class MantencionConfigRepository
         }
 
         return match ($type) {
-            'json'  => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null,
-            'bool'  => $value ? '1' : '0',
+            'json' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null,
+            'bool' => $value ? '1' : '0',
             default => (string) $value,
         };
     }
@@ -403,12 +419,12 @@ final class MantencionConfigRepository
     }
 
     /**
-     * @param 'tracker'|'prioridad'|'estado' $type
+     * @param  'tracker'|'prioridad'|'estado'  $type
      * @return array<int,array<string,mixed>>
      */
     private function optionsFromDatabase(string $type): array
     {
-        if (!$this->optionsTableReady()) {
+        if (! $this->optionsTableReady()) {
             return [];
         }
 
@@ -425,12 +441,12 @@ final class MantencionConfigRepository
                 ->orderBy('orden')
                 ->get(['id_externo', 'nombre', 'predeterminado'])
                 ->map(static function (object $row): array {
-                    $id = (string)($row->id_externo ?? '');
+                    $id = (string) ($row->id_externo ?? '');
 
                     return [
-                        'id' => is_numeric($id) ? (int)$id : $id,
-                        'nombre' => (string)($row->nombre ?? ''),
-                        'default' => (bool)($row->predeterminado ?? false),
+                        'id' => is_numeric($id) ? (int) $id : $id,
+                        'nombre' => (string) ($row->nombre ?? ''),
+                        'default' => (bool) ($row->predeterminado ?? false),
                     ];
                 })
                 ->values()
@@ -441,12 +457,12 @@ final class MantencionConfigRepository
     }
 
     /**
-     * @param 'tracker'|'prioridad'|'estado' $type
-     * @param array<int,array<string,mixed>> $items
+     * @param  'tracker'|'prioridad'|'estado'  $type
+     * @param  array<int,array<string,mixed>>  $items
      */
     private function saveOptionsToDatabase(string $type, array $items): void
     {
-        if (!$this->optionsTableReady()) {
+        if (! $this->optionsTableReady()) {
             return;
         }
 
@@ -458,12 +474,12 @@ final class MantencionConfigRepository
         $savedExternalIds = [];
 
         foreach (array_values($items) as $order => $item) {
-            if (!is_array($item)) {
+            if (! is_array($item)) {
                 continue;
             }
 
-            $externalId = isset($item['id']) ? (string)$item['id'] : null;
-            $name = trim((string)($item['nombre'] ?? $item['name'] ?? ''));
+            $externalId = isset($item['id']) ? (string) $item['id'] : null;
+            $name = trim((string) ($item['nombre'] ?? $item['name'] ?? ''));
             if ($name === '') {
                 continue;
             }
@@ -473,7 +489,7 @@ final class MantencionConfigRepository
                     ['modulo_id' => $moduleId, 'tipo' => $type, 'id_externo' => $externalId],
                     [
                         'nombre' => $name,
-                        'predeterminado' => !empty($item['default']) ? 1 : 0,
+                        'predeterminado' => ! empty($item['default']) ? 1 : 0,
                         'activo' => 1,
                         'orden' => $order + 1,
                         'actualizado_at' => now(),
