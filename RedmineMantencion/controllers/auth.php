@@ -508,6 +508,19 @@ function auth_get_user_id() {
 // CSRF helpers
 function legacy_csrf_token() {
     auth_start_session();
+
+    // Cuando Mantencion se ejecuta a traves del bridge de Laravel, usar el
+    // mismo token para ambas capas. Antes se generaba un token independiente
+    // en NOVALEGACY; si esa sesion se reconstruia entre el GET y el POST, el
+    // formulario conservaba un token que ya no existia y la accion terminaba
+    // en 419 aunque la sesion NOVA siguiera vigente.
+    $laravelToken = function_exists('csrf_token') ? trim((string)csrf_token()) : '';
+    if ($laravelToken !== '') {
+        $_SESSION['csrf_token'] = $laravelToken;
+
+        return $laravelToken;
+    }
+
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }

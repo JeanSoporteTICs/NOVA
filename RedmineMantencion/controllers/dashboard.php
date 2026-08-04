@@ -771,6 +771,14 @@ function dashboard_core_is_in_review(array $message): bool {
     return (dashboard_core_status_indicator($message)['key'] ?? '') === 'review';
 }
 
+function dashboard_redmine_send_block_reason(array $message): ?string {
+    if (dashboard_core_is_in_review($message)) {
+        return 'La solicitud permanece En Revisión en CORE.';
+    }
+
+    return null;
+}
+
 function dashboard_normalize_phone(string $value): string {
     $digits = preg_replace('/\D+/', '', $value);
     if ($digits === '') {
@@ -3061,7 +3069,8 @@ function send_selected_messages(array &$messages, array $ids, array $cfg, string
         if (!in_array(($message['id'] ?? ''), $ids, true)) {
             continue;
         }
-        if (dashboard_core_is_in_review($message)) {
+        $blockReason = dashboard_redmine_send_block_reason($message);
+        if ($blockReason !== null) {
             $message['estado'] = 'pendiente';
             $blocked++;
             $blockedIds[] = (string)($message['id'] ?? 'sin-id');

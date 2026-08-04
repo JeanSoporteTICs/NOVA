@@ -220,6 +220,7 @@ class LegacyProjectController extends Controller
 
     private function rewriteLegacyOutput(string $content): string
     {
+        $content = $this->injectLaravelCsrfIntoPostForms($content);
         $prefix = $this->publicBasePrefix();
         if ($prefix === '') {
             return $content;
@@ -234,6 +235,39 @@ class LegacyProjectController extends Controller
         }
 
         return $content;
+    }
+
+    /**
+     * Add the NOVA session token to legacy POST forms as a second line of
+     * defence. Mantencion validates its legacy csrf_token itself, while this
+     * hidden field keeps forms valid when the separate NOVALEGACY session is
+     * rebuilt between rendering and submission.
+     */
+    private function injectLaravelCsrfIntoPostForms(string $content): string
+    {
+        $token = trim((string) csrf_token());
+        if ($token === '' || stripos($content, '<form') === false) {
+            return $content;
+        }
+
+        $rewritten = preg_replace_callback(
+            '/<form\b(?=[^>]*\bmethod\s*=\s*(["\']?)post\1)[^>]*>.*?<\/form>/is',
+            static function (array $match) use ($token): string {
+                $form = $match[0];
+                if (preg_match('/\bname\s*=\s*(["\'])_token\1/i', $form) === 1) {
+                    return $form;
+                }
+
+                $field = '<input type="hidden" name="_token" value="'
+                    . htmlspecialchars($token, ENT_QUOTES, 'UTF-8')
+                    . '">';
+
+                return (string) preg_replace('/(<form\b[^>]*>)/i', '$1' . $field, $form, 1);
+            },
+            $content
+        );
+
+        return is_string($rewritten) ? $rewritten : $content;
     }
 
     private function rewriteLegacyUrl(string $url): string
