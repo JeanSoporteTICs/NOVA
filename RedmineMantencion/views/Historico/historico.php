@@ -577,7 +577,10 @@ ksort($catsSel);
               <?php endforeach; ?>
             </ul>
           </div>
-          <form method="post" action="<?= $h($historicoActionUrl) ?>" id="historico-bulk-status-form" class="d-none">
+          <form method="post" action="<?= $h($historicoActionUrl) ?>" id="historico-bulk-status-form" class="d-none"
+                data-app-confirm-title="Cambiar estado en Redmine"
+                data-app-confirm-tone="info"
+                data-app-confirm-text="Cambiar estado">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="update_redmine_status">
             <input type="hidden" name="redmine_ids" id="historico-bulk-redmine-ids" value="">
@@ -1035,10 +1038,11 @@ ksort($catsSel);
           const statusId = choice.getAttribute('data-status-id') || '';
           const statusLabel = choice.getAttribute('data-status-label') || '';
           if (!ids.length || !statusId || !bulkStatusForm || !bulkRedmineIds || !bulkStatusId) return;
-          if (!window.confirm(`¿Cambiar ${ids.length} ticket(s) seleccionado(s) a “${statusLabel}”?`)) return;
           bulkRedmineIds.value = ids.join(',');
           bulkStatusId.value = statusId;
-          bulkStatusForm.submit();
+          bulkStatusForm.dataset.appConfirm = `¿Cambiar ${ids.length} ticket(s) seleccionado(s) a “${statusLabel}”?`;
+          delete bulkStatusForm.dataset.appConfirmAccepted;
+          bulkStatusForm.requestSubmit();
         });
       });
 
