@@ -43,7 +43,7 @@
             </nav>
         </aside>
         <main class="rm-config-content">
-            <section class="rm-config-summary" id="config-summary">
+            <section class="rm-config-summary rm-config-panel" id="config-summary">
                 <div class="rm-config-summary-kpis">
                     <article class="rm-summary-kpi"><span class="is-blue"><i class="bi bi-kanban"></i></span><div><small>Proyecto</small><strong>{{ $config['project_name'] ?? 'Sin definir' }}</strong></div></article>
                     <article class="rm-summary-kpi"><span class="is-cyan"><i class="bi bi-diagram-3"></i></span><div><small>Trackers</small><strong>{{ count($config['trackers'] ?? []) }}</strong></div></article>
@@ -52,7 +52,7 @@
                 </div>
             </section>
 
-    <div class="row g-3" id="config-connection">
+    <div class="row g-3 rm-config-panel d-none" id="config-connection">
         @if ($canSettings)
             <div class="col-xl-7">
                 <section class="nova-system-card">
@@ -95,8 +95,8 @@
     <div class="row g-3 mt-0">
         @foreach ($optionGroups as $type => $group)
             @if ($allowed($group['permission']))
-                <div class="col-xl-4">
-                    <section class="nova-system-card h-100" id="config-{{ $group['key'] }}">
+                <div class="col-12 rm-config-panel d-none" id="config-{{ $group['key'] }}">
+                    <section class="nova-system-card h-100">
                         <h2 class="h5 mb-3">{{ $group['label'] }}</h2>
                         <div class="vstack gap-2 mb-3">
                             @forelse ($config[$group['key']] ?? [] as $option)
@@ -135,7 +135,7 @@
         @endforeach
     </div>
 
-    <div class="row g-3 mt-0" id="config-catalogs">
+    <div class="row g-3 mt-0 rm-config-panel d-none" id="config-catalogs">
         @foreach ([
             ['type' => 'categoria', 'label' => 'Categorías', 'items' => $categories, 'permission' => 'cfg_categorias'],
             ['type' => 'unidad', 'label' => 'Unidades', 'items' => $units, 'permission' => 'cfg_unidades'],
@@ -178,7 +178,7 @@
     </div>
 
     @if ($canRoles)
-        <section class="nova-system-card mt-3" id="config-roles">
+        <section class="nova-system-card mt-3 rm-config-panel d-none" id="config-roles">
             <h2 class="h5 mb-3">Permisos por rol</h2>
             <ul class="nav nav-tabs mb-3" role="tablist">
                 @foreach ($roles as $role)<li class="nav-item"><button class="nav-link @if($loop->first) active @endif" data-bs-toggle="tab" data-bs-target="#role-{{ $loop->index }}" type="button">{{ ucfirst($role) }}</button></li>@endforeach
@@ -213,7 +213,7 @@
     @endif
 
     @if ($allowed('cfg_conexion'))
-        <section class="nova-system-card mt-3" id="config-nextcloud">
+        <section class="nova-system-card mt-3 rm-config-panel d-none" id="config-nextcloud">
             <h2 class="h5 mb-3">Credencial administrativa Nextcloud</h2>
             <form method="POST" action="{{ route('redmine.mantencion.config.action') }}" class="row g-3 align-items-end">
                 @csrf
@@ -229,5 +229,30 @@
 @endsection
 
 @push('scripts')
-<script>(()=>{document.querySelectorAll('.rm-config-nav-link').forEach(link=>link.addEventListener('click',()=>document.querySelectorAll('.rm-config-nav-link').forEach(item=>item.classList.toggle('active',item===link))));})();</script>
+<script>(()=>{
+    const links = Array.from(document.querySelectorAll('.rm-config-nav-link'));
+    const panels = Array.from(document.querySelectorAll('.rm-config-panel'));
+    const showPanel = id => {
+        panels.forEach(panel => panel.classList.toggle('d-none', panel.id !== id));
+        links.forEach(link => {
+            const active = link.getAttribute('href') === '#' + id;
+            link.classList.toggle('active', active);
+            active ? link.setAttribute('aria-current', 'page') : link.removeAttribute('aria-current');
+        });
+    };
+    const idFromHash = () => (window.location.hash || '').replace('#', '');
+    links.forEach(link => link.addEventListener('click', event => {
+        const id = (link.getAttribute('href') || '').replace('#', '');
+        if (!document.getElementById(id)) return;
+        event.preventDefault();
+        history.replaceState(null, '', '#' + id);
+        showPanel(id);
+    }));
+    window.addEventListener('hashchange', () => {
+        const id = idFromHash();
+        if (document.getElementById(id)) showPanel(id);
+    });
+    const initial = idFromHash();
+    showPanel(document.getElementById(initial) ? initial : 'config-summary');
+})();</script>
 @endpush
