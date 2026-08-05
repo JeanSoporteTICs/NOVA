@@ -67,9 +67,10 @@ class SecretValueTest extends TestCase
 
     public function test_legacy_enc_v1_value_is_decoded_via_existing_helper(): void
     {
+        require_once base_path('RedmineMantencion/controllers/core_credentials.php');
         putenv('CORE_CREDENTIAL_KEY=test-secret-value-key');
 
-        $legacyEncrypted = $this->legacyEncrypt('legacy-core-password', 'test-secret-value-key');
+        $legacyEncrypted = core_credentials_encrypt('legacy-core-password');
         $this->assertStringStartsWith('enc:v1:', $legacyEncrypted);
 
         $this->assertSame('legacy-core-password', SecretValue::decryptSecret($legacyEncrypted));
@@ -80,17 +81,6 @@ class SecretValueTest extends TestCase
         $this->assertTrue($inspection['needs_rewrite']);
 
         putenv('CORE_CREDENTIAL_KEY');
-    }
-
-    private function legacyEncrypt(string $plain, string $keySource): string
-    {
-        $iv = random_bytes(16);
-        $key = hash('sha256', $keySource, true);
-        $cipher = openssl_encrypt($plain, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        self::assertIsString($cipher);
-        $mac = hash_hmac('sha256', $iv.$cipher, $key, true);
-
-        return 'enc:v1:'.base64_encode($iv).':'.base64_encode($cipher).':'.base64_encode($mac);
     }
 
     public function test_inspect_never_exposes_the_secret_value(): void

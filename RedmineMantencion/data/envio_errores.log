@@ -1,0 +1,73 @@
+{
+    "ts": "2026-06-02T17:24:47-04:00",
+    "http_code": 201,
+    "error": "",
+    "body": "{\"issue\":{\"id\":124667,\"project\":{\"id\":48,\"name\":\"Backlog Mantención TI\"},\"tracker\":{\"id\":3,\"name\":\"Soporte\"},\"status\":{\"id\":1,\"name\":\"Nueva\",\"is_closed\":false},\"priority\":{\"id\":2,\"name\":\"Normal\"},\"author\":{\"id\":42,\"name\":\"Jean  Cortés Lorca\"},\"assigned_to\":{\"id\":42,\"name\":\"Jean  Cortés Lorca\"},\"category\":{\"id\":467,\"name\":\"Archivo\"},\"subject\":\"esto e\",\"description\":\"es una\",\"start_date\":\"2026-06-02\",\"due_date\":\"2026-06-02\",\"done_ratio\":0,\"is_private\":false,\"estimated_hours\":1.0,\"total_estimated_hours\":1.0,\"spent_hours\":0.0,\"total_spent_hours\":0.0,\"custom_fields\":[{\"id\":3,\"name\":\"Solicitante\",\"value\":\"hola\"},{\"id\":4,\"name\":\"Anexo\",\"value\":\"\"},{\"id\":5,\"name\":\"Unidad\",\"value\":\"prueba\"},{\"id\":7,\"name\":\"Apoyo\",\"multiple\":true,\"value\":[]},{\"id\":8,\"name\":\"Correo\",\"value\":\"\"},{\"id\":12,\"name\":\"Hora Extra\",\"value\":\"1\"}],\"created_on\":\"2026-06-02T21:24:45Z\",\"updated_on\":\"2026-06-02T21:24:45Z\",\"closed_on\":null}}",
+    "payload": {
+        "issue": {
+            "project_id": 48,
+            "subject": "esto e",
+            "description": "es una",
+            "tracker_id": 3,
+            "priority_id": 2,
+            "status_id": 1,
+            "is_private": false,
+            "start_date": "2026-06-02",
+            "due_date": "2026-06-02",
+            "estimated_hours": 1,
+            "assigned_to_id": "42",
+            "category_id": 467,
+            "custom_fields": [
+                {
+                    "id": "3",
+                    "value": "hola"
+                },
+                {
+                    "id": "5",
+                    "value": "prueba"
+                },
+                {
+                    "id": "12",
+                    "value": "1"
+                }
+            ]
+        }
+    },
+    "message_id": "manual-6a1f4503b6f177.28249420"
+}
+{
+    "ts": "2026-06-03T12:22:15-04:00",
+    "http_code": 201,
+    "error": "",
+    "body": "{\"issue\":{\"id\":124751,\"project\":{\"id\":48,\"name\":\"Backlog Mantención TI\"},\"tracker\":{\"id\":3,\"name\":\"Soporte\"},\"status\":{\"id\":1,\"name\":\"Nueva\",\"is_closed\":false},\"priority\":{\"id\":2,\"name\":\"Normal\"},\"author\":{\"id\":42,\"name\":\"Jean  Cortés Lorca\"},\"assigned_to\":{\"id\":42,\"name\":\"Jean  Cortés Lorca\"},\"category\":{\"id\":121,\"name\":\"Credenciales\"},\"subject\":\"prueba 03-06-2026\",\"description\":\"\",\"start_date\":\"2026-06-03\",\"due_date\":\"2026-06-03\",\"done_ratio\":0,\"is_private\":false,\"estimated_hours\":null,\"total_estimated_hours\":null,\"spent_hours\":0.0,\"total_spent_hours\":0.0,\"custom_fields\":[{\"id\":3,\"name\":\"Solicitante\",\"value\":\"jean\"},{\"id\":4,\"name\":\"Anexo\",\"value\":\"\"},{\"id\":5,\"name\":\"Unidad\",\"value\":\"hbv\"},{\"id\":7,\"name\":\"Apoyo\",\"multiple\":true,\"value\":[]},{\"id\":8,\"name\":\"Correo\",\"value\":\"\"},{\"id\":12,\"name\":\"Hora Extra\",\"value\":\"0\"}],\"created_on\":\"2026-06-03T16:22:14Z\",\"updated_on\":\"2026-06-03T16:22:14Z\",\"closed_on\":null}}",
+    "payload": {
+        "issue": {
+            "project_id": 48,
+            "subject": "prueba 03-06-2026",
+            "description": "",
+            "tracker_id": 3,
+            "priority_id": 2,
+            "status_id": 1,
+            "is_private": false,
+            "start_date": "2026-06-03",
+            "due_date": "2026-06-03",
+            "assigned_to_id": "42",
+            "category_id": 121,
+            "custom_fields": [
+                {
+                    "id": "3",
+                    "value": "jean"
+                },
+                {
+                    "id": "5",
+                    "value": "hbv"
+                },
+                {
+                    "id": "12",
+                    "value": "0"
+                }
+            ]
+        }
+    },
+    "message_id": "manual-6a2054ad3a86e9.85252410"
+}

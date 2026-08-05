@@ -42,12 +42,17 @@
             </div>
         </section>
         @if (session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
-        @include('procedimientos.browser', [
-            'nextcloudConfigured' => $nextcloudConfigured,
-            'browserUrl' => route('procedimientos.browser'),
-            'integrationsUrl' => route('integrations.nova'),
-            'editorUrl' => route('procedimientos.editor'),
-        ])
+        @php
+            require_once base_path('RedmineMantencion/controllers/nc_browser.php');
+            $csrf = csrf_token();
+            $canEditProcedures = true;
+            $ncHasCredentialsOverride = !empty($nextcloudConfigured);
+            $ncAjaxUrlOverride = route('procedimientos.browser');
+            $ncIntegracionesUrlOverride = route('integrations.nova');
+            $ncEditorUrlOverride = route('procedimientos.editor');
+            $mantencionBaseUrl = rtrim(url('/redmine-mantencion'), '/');
+            include base_path('RedmineMantencion/views/Procedimientos/_nc_browser.php');
+        @endphp
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

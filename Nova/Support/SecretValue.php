@@ -8,8 +8,10 @@ use Illuminate\Support\Facades\Log;
  * Central helper for reading/writing encrypted secrets stored across NOVA
  * (integraciones_usuario.valor_secreto and equivalents).
  *
- * Wraps Laravel's encrypt()/decrypt() and recognizes historical plaintext and
- * `enc:v1:` AES+HMAC values so migrations never need to load procedural code.
+ * Wraps Laravel's encrypt()/decrypt() and recognizes the legacy formats already
+ * present in the codebase (plaintext, and the custom `enc:v1:` AES+HMAC codec
+ * from RedmineMantencion/controllers/core_credentials.php) without duplicating
+ * their logic. Not wired to any caller yet — see docs/ETAPA_A for the rollout.
  */
 final class SecretValue
 {
@@ -82,37 +84,27 @@ final class SecretValue
     }
 
     /**
+     * enc:v1 is decoded exclusively through the existing legacy codec
+     * (RedmineMantencion/controllers/core_credentials.php::core_credentials_decrypt())
+     * when it happens to be loaded in the current request — this class never
+     * reimplements that AES/HMAC logic.
+     *
      * @return array{status:string,plaintext:?string}
      */
     private static function analyzeLegacyEncV1(string $value): array
     {
-        if (! function_exists('openssl_decrypt')) {
-            return ['status' => 'invalid', 'plaintext' => null];
+        if (!function_exists('core_credentials_decrypt')) {
+            return ['status' => 'legacy_enc_v1', 'plaintext' => null];
         }
-        $parts = explode(':', trim($value), 5);
-        if (count($parts) !== 5) {
-            return ['status' => 'invalid', 'plaintext' => null];
-        }
-        $iv = base64_decode($parts[2], true);
-        $cipher = base64_decode($parts[3], true);
-        $mac = base64_decode($parts[4], true);
-        $keySource = trim((string) (getenv('CORE_CREDENTIAL_KEY') ?: getenv('APP_KEY') ?: config('app.key', '')));
-        if ($iv === false || $cipher === false || $mac === false || $keySource === '') {
-            return ['status' => 'invalid', 'plaintext' => null];
-        }
-        $key = hash('sha256', $keySource, true);
-        $expected = hash_hmac('sha256', $iv.$cipher, $key, true);
-        if (! hash_equals($expected, $mac)) {
+
+        $plain = core_credentials_decrypt($value);
+        if ($plain === '') {
             Log::warning('SecretValue: no se pudo descifrar un valor legacy enc:v1 (posible corrupcion o clave distinta).');
 
             return ['status' => 'invalid', 'plaintext' => null];
         }
-        $plain = openssl_decrypt($cipher, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        if ($plain === false || trim($plain) === '') {
-            return ['status' => 'invalid', 'plaintext' => null];
-        }
 
-        return ['status' => 'legacy_enc_v1', 'plaintext' => trim($plain)];
+        return ['status' => 'legacy_enc_v1', 'plaintext' => $plain];
     }
 
     private static function looksLikeLaravelEncryptedShape(string $value): bool

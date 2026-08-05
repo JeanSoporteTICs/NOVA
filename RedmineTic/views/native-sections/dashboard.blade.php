@@ -77,6 +77,13 @@
 
 <section class="card nova-card rm-work-panel mb-4">
     <div class="card-body p-4">
+        <div class="rm-section-head">
+            <div>
+                <h2>Solicitudes activas</h2>
+                <p>Gestiona la cola actual con estados locales y acciones disponibles.</p>
+            </div>
+        </div>
+
         <form class="dashboard-toolbar px-3 pt-3 mb-4" method="post" action="{{ $redmineRoute('redmine.native.dashboard.action') }}" data-dashboard-bulk-form>
             @csrf
             <input type="hidden" name="dashboard_action" value="delete_selected">

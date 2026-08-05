@@ -41,6 +41,14 @@ class LegacyProjectController extends Controller
             $path = $config['entry'];
         }
 
+        if ($project === 'redmine-mantencion' && strtolower($path) === 'usuarios/usuarios.php') {
+            $path = 'views/Usuarios/usuarios.php';
+        }
+
+        if ($project === 'redmine-mantencion' && strtolower($path) === 'views/dashboard.php') {
+            $path = 'views/Dashboard/dashboard.php';
+        }
+
         if ($project === 'emach' && strtolower($path) === 'views/mantenedor/mantenedor.php') {
             return redirect()->route('integrations.emach');
         }
@@ -65,7 +73,7 @@ class LegacyProjectController extends Controller
         }
 
         if (strtolower(pathinfo($fullPath, PATHINFO_EXTENSION)) === 'php') {
-            $isPublicEndpoint = false;
+            $isPublicEndpoint = $this->isPublicLegacyEndpoint($request, $project, $path);
             $access = app(ProjectAccessGuard::class);
             if (!$isPublicEndpoint && !$this->userCanAccessProject($project, $config, $access)) {
                 return redirect()->route('home')->with('access_error', $access->deniedMessage((string) ($config['name'] ?? $project)));
@@ -84,6 +92,67 @@ class LegacyProjectController extends Controller
         }
 
         return $response;
+    }
+
+    public function toggleMantencionHoursExtra(Request $request, ProjectAccessGuard $access)
+    {
+        $config = $this->projectConfig('redmine-mantencion');
+        $this->abortIfDisabled($config);
+        if (!$this->userCanAccessProject('redmine-mantencion', $config, $access)) {
+            return response()->json(['ok' => false, 'message' => 'No tienes acceso a Redmine Mantención.'], 403);
+        }
+
+        $submittedToken = (string) $request->input('_token', $request->header('X-CSRF-TOKEN', ''));
+        if ($submittedToken === '' || !hash_equals((string) $request->session()->token(), $submittedToken)) {
+            return response()->json(['ok' => false, 'message' => 'La validación de seguridad venció. Recarga la página.'], 419);
+        }
+
+        $this->prepareLegacyRuntime('redmine-mantencion', $config);
+        require_once $config['path'] . '/controllers/dashboard.php';
+
+        if (!auth_can('horas_extra_editar')) {
+            return response()->json(['ok' => false, 'message' => 'No tienes permiso para editar Horas extra.'], 403);
+        }
+
+        $id = trim((string) $request->input('id', ''));
+        $messages = load_messages();
+        if ($id === '' || !dashboard_can_access_message($messages, $id)) {
+            return response()->json(['ok' => false, 'message' => 'No se encontró la solicitud o no tienes acceso.'], 404);
+        }
+
+        $updatedMessage = null;
+        $enabled = false;
+        foreach ($messages as $message) {
+            if ((string) ($message['id'] ?? '') !== $id) {
+                continue;
+            }
+            $enabled = normalize_hour_extra_value($message['hora_extra'] ?? '') !== '1';
+            $message['hora_extra'] = $enabled ? '1' : '0';
+            $message['tiempo_estimado'] = $enabled ? '1' : '';
+            $updatedMessage = $message;
+            break;
+        }
+
+        if (!is_array($updatedMessage) || !dashboard_update_message_hora_extra($updatedMessage)) {
+            return response()->json(['ok' => false, 'message' => 'No se pudo actualizar la hora extra.'], 422);
+        }
+
+        if ($enabled) {
+            append_hours_extra_record($updatedMessage);
+        } else {
+            remove_hours_extra_record_by_id($id);
+        }
+        dashboard_log_action('HORA_EXTRA', ($enabled ? 'Activo' : 'Desactivo') . ' hora extra en reporte ID ' . $id);
+
+        return response()->json([
+            'ok' => true,
+            'message' => $enabled ? 'Hora extra activada.' : 'Hora extra desactivada.',
+            'row' => [
+                'id' => $id,
+                'hora_extra' => $enabled ? '1' : '0',
+                'tiempo_estimado' => $updatedMessage['tiempo_estimado'],
+            ],
+        ]);
     }
 
     public function asset(Request $request, string $project, string $path)
@@ -170,7 +239,9 @@ class LegacyProjectController extends Controller
 
     /**
      * Add the NOVA session token to legacy POST forms as a second line of
-     * defence for modules that still execute through the legacy bridge.
+     * defence. Mantencion validates its legacy csrf_token itself, while this
+     * hidden field keeps forms valid when the separate NOVALEGACY session is
+     * rebuilt between rendering and submission.
      */
     private function injectLaravelCsrfIntoPostForms(string $content): string
     {
@@ -271,8 +342,13 @@ class LegacyProjectController extends Controller
         // so without an early close, concurrent AJAX requests from the same user in
         // the same module queue up waiting for each other's lock instead of running
         // in parallel. Precedent: emach already did this; redmine-mantencion's own
-        // Any legacy code path that still needs to write session data may reopen it.
-        if (in_array($project, ['emach', 'telegram'], true)) {
+        // toggle_hora_extra AJAX action was serializing on exactly this lock (confirmed
+        // via DevTools timing showing requests finishing ~6-7s apart in sequence).
+        // Any legacy code path that still needs to WRITE new session data later
+        // (e.g. a non-AJAX flash/toast message before a redirect) already reopens the
+        // session itself via auth_start_session() before writing — see dashboard_set_flash()
+        // / dashboard_set_toast() in RedmineMantencion/controllers/dashboard.php.
+        if (in_array($project, ['emach', 'redmine-mantencion', 'telegram'], true)) {
             session_write_close();
         }
     }
@@ -290,6 +366,15 @@ class LegacyProjectController extends Controller
         }
 
         return $access->canAccess($project, $user);
+    }
+
+    private function isPublicLegacyEndpoint(Request $request, string $project, string $path): bool
+    {
+        if ($project !== 'redmine-mantencion') {
+            return false;
+        }
+
+        return false;
     }
 
     private function projectConfig(string $project): array

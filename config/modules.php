@@ -18,8 +18,14 @@ return [
         'type' => 'native',
         'path' => $modulePath('NOVA_REDMINE_TIC_PATH', 'redmine_tic'),
         'entry' => 'laravel:redmine.native.dashboard',
-        'allowed_static_roots' => [],
-        'allowed_php_roots' => [],
+        'allowed_static_roots' => [
+            'assets',
+        ],
+        'allowed_php_roots' => [
+            '',
+            'views',
+            'controllers',
+        ],
     ],
     'redmine-mantencion' => [
         'name' => 'Redmine Mantencion',
@@ -31,7 +37,11 @@ return [
         'allowed_static_roots' => [
             'assets',
         ],
-        'allowed_php_roots' => [],
+        'allowed_php_roots' => [
+            '',
+            'views',
+            'controllers',
+        ],
     ],
     'emach' => [
         'name' => 'EMACH',

@@ -238,7 +238,7 @@ campos no vacíos separados por comas.
 app/                    Núcleo Laravel, contratos, middleware y comandos
 Nova/                   Módulo central NOVA
 RedmineTic/             Módulo Redmine TIC nativo
-RedmineMantencion/      Módulo Redmine Mantención nativo
+RedmineMantencion/      Módulo Redmine Mantención y bridge legacy
 Emach/                  Módulo EMACH
 Procedimientos/         Módulo documental
 telegram/               Listener y librería del bot
@@ -253,31 +253,6 @@ ops/ y scripts/         Construcción, verificación y operación
 Los módulos se registran en `config/modules.php`. El núcleo no debe depender
 directamente de implementaciones de Redmine TIC: las integraciones entre capas
 se resuelven mediante contratos en `app/Contracts` y enlaces del contenedor.
-
-### Redmine Mantención nativo
-
-Todas las rutas operativas bajo `/redmine-mantencion` usan controladores
-Laravel, sesión NOVA, CSRF, permisos relacionales y vistas Blade. Esto incluye
-Dashboard, pendientes manuales, importación CORE, envío y estados Redmine,
-Histórico, Horas extra, Usuarios, Configuración, Estadísticas, Actividad y
-aprovisionamiento/historial Nextcloud. Sus assets se sirven mediante un
-controlador nativo propio.
-
-Mantención ya no pasa por `LegacyProjectController`, no abre `NOVALEGACY` y se
-retiraron físicamente sus controladores, bootstrap, login y vistas PHP
-procedurales. Las rutas históricas solo redirigen a su equivalente nativo. El
-cambio reutiliza las tablas y repositorios existentes: no crea almacenamiento
-paralelo ni reintroduce archivos JSON.
-
-La pantalla de cuentas conectadas también usa el layout/permisos nativos de
-Mantención. Procedimientos consume Nextcloud mediante
-`NextcloudBrowserService`, `NextcloudWebdavClient` y `NextcloudOcsClient`; ya no
-incluye el antiguo dispatcher `nc_browser.php`. Tanto Redmine como CORE y
-Nextcloud obtienen las credenciales personales desde `integraciones_usuario`.
-
-En el envío mixto a Redmine, los reportes cuyo estado CORE sigue **En Revisión**
-permanecen pendientes. El resultado que informa ese bloqueo se presenta después
-de completar la barra de progreso y cerrar el overlay de integración.
 
 ### Datos e identidad
 

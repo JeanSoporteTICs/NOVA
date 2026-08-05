@@ -9,24 +9,24 @@ namespace App\Modulos\RedmineMantencion\Services;
 final class CorePendingReportSyncService
 {
     /**
-     * @param  array<int,array<string,mixed>>  $messages
+     * @param array<int,array<string,mixed>> $messages
      * @return array{source:array<string,int>,core:array<string,int>}
      */
     public function indexes(array $messages): array
     {
         $indexes = ['source' => [], 'core' => []];
         foreach ($messages as $index => $message) {
-            if (! is_array($message)) {
+            if (!is_array($message)) {
                 continue;
             }
 
             $sourceId = $this->sourceId($message);
-            if ($sourceId !== '' && ! isset($indexes['source'][$sourceId])) {
+            if ($sourceId !== '' && !isset($indexes['source'][$sourceId])) {
                 $indexes['source'][$sourceId] = $index;
             }
 
             $coreId = $this->coreId($message);
-            if ($coreId !== '' && ! isset($indexes['core'][$coreId])) {
+            if ($coreId !== '' && !isset($indexes['core'][$coreId])) {
                 $indexes['core'][$coreId] = $index;
             }
         }
@@ -35,7 +35,7 @@ final class CorePendingReportSyncService
     }
 
     /**
-     * @param  array{source:array<string,int>,core:array<string,int>}  $indexes
+     * @param array{source:array<string,int>,core:array<string,int>} $indexes
      */
     public function matchIndex(array $indexes, array $incoming): ?int
     {
@@ -130,7 +130,7 @@ final class CorePendingReportSyncService
     }
 
     /**
-     * @param  array<int,string>  $keys
+     * @param array<int,string> $keys
      */
     private function first(array $message, array $keys): string
     {

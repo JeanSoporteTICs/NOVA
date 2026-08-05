@@ -28,7 +28,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->loadViewsFrom(base_path('RedmineTic/views'), 'redmine_tic');
-        $this->loadViewsFrom(base_path('RedmineMantencion/views'), 'redmine_mantencion');
         View::addLocation(base_path('Nova/views'));
     }
 }

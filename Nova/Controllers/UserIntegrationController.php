@@ -3,20 +3,21 @@
 namespace App\Modulos\Nova\Controllers;
 
 use App\Http\Controllers\Controller;
+
 use App\Modulos\Emach\Services\EmachClientService;
 use App\Modulos\Emach\Services\EmachOvertimeService;
+use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\Nova\Repositories\NovaAccessRepository;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
-use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
+use App\Modulos\Nova\Support\LegacyPhpSession;
 use App\Modulos\Procedimientos\Services\OnlyOfficeHealthService;
-use App\Modulos\RedmineMantencion\Services\MantencionAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Arr;
 use Illuminate\View\View;
 
 class UserIntegrationController extends Controller
@@ -134,6 +135,9 @@ class UserIntegrationController extends Controller
     public function show(Request $request, UserIntegrationRepository $integrations, NovaSettingsRepository $settings, OnlyOfficeHealthService $onlyOfficeHealth, string $module): View
     {
         $config = $this->moduleConfig($module);
+        if ($module === 'redmine-mantencion') {
+            $this->syncMantencionLegacySession($request);
+        }
         $projectUser = $this->authorizeModule($request, $module);
 
         $sessionUser = $this->sessionUser($request);
@@ -143,11 +147,8 @@ class UserIntegrationController extends Controller
         $sessionRemaining = max(0, $sessionTimeout - (time() - $lastActivity));
 
         $template = $module === 'redmine-mantencion'
-            ? 'redmine_mantencion::native.integrations'
+            ? 'nova.integrations.user-config-mantencion'
             : 'nova.integrations.user-config';
-        $mantencionContext = $module === 'redmine-mantencion'
-            ? app(MantencionAccessService::class)->context($request)
-            : null;
 
         $states = $integrations->integrationsForSession($sessionUser, array_values(array_filter($types, static fn (string $type): bool => $type !== 'telegram')));
         if (in_array('telegram', $types, true)) {
@@ -174,19 +175,20 @@ class UserIntegrationController extends Controller
             'sessionRemaining' => $sessionRemaining,
             'integrationPermissions' => is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [],
             'onlyOfficeHealth' => $module === 'nova' ? $onlyOfficeHealth->check() : [],
-            'context' => $mantencionContext,
-            'permissions' => is_array($mantencionContext['permissions'] ?? null) ? $mantencionContext['permissions'] : [],
         ]);
     }
 
     public function update(Request $request, UserIntegrationRepository $integrations, string $module): RedirectResponse
     {
         $config = $this->moduleConfig($module);
+        if ($module === 'redmine-mantencion') {
+            $this->syncMantencionLegacySession($request);
+        }
         $this->authorizeModule($request, $module);
 
         $type = (string) $request->input('type', '');
         $definition = $config['types'][$type] ?? null;
-        if (! is_array($definition)) {
+        if (!is_array($definition)) {
             return $this->integrationRedirect($module)->with('integration_error', 'Integracion no permitida para este modulo.');
         }
 
@@ -221,14 +223,14 @@ class UserIntegrationController extends Controller
             : $integrations->integrationForSession($sessionUser, $type);
         $externalUser = trim((string) $request->input('external_user', ''));
         $secret = (string) $request->input('secret', '');
-        if (! empty($definition['external_required']) && $externalUser === '' && empty($current['has_external_user'])) {
-            return $this->integrationRedirect($module)->withInput()->with('integration_error', 'Completa '.$definition['external_label'].'.');
+        if (!empty($definition['external_required']) && $externalUser === '' && empty($current['has_external_user'])) {
+            return $this->integrationRedirect($module)->withInput()->with('integration_error', 'Completa ' . $definition['external_label'] . '.');
         }
-        if (! empty($definition['secret_required']) && $secret === '' && empty($current['has_secret'])) {
-            return $this->integrationRedirect($module)->withInput()->with('integration_error', 'Completa '.$definition['secret_label'].'.');
+        if (!empty($definition['secret_required']) && $secret === '' && empty($current['has_secret'])) {
+            return $this->integrationRedirect($module)->withInput()->with('integration_error', 'Completa ' . $definition['secret_label'] . '.');
         }
 
-        if ($type === 'telegram' && $secret === '' && ! empty($current['has_secret'])) {
+        if ($type === 'telegram' && $secret === '' && !empty($current['has_secret'])) {
             return $this->integrationRedirect($module)->with('integration_status', 'Chat ID conservado sin cambios.');
         }
 
@@ -263,7 +265,7 @@ class UserIntegrationController extends Controller
         }
 
         $date = $this->parseDate((string) $request->input('fecha', ''));
-        if (! $date) {
+        if (!$date) {
             return response()->json(['ok' => false, 'message' => 'Fecha invalida.'], 422);
         }
 
@@ -280,7 +282,7 @@ class UserIntegrationController extends Controller
         $schedule = $overtime->scheduleForUser($userId);
         $weekday = (int) $date->format('N');
         $configured = $schedule[$weekday] ?? null;
-        $scheduledExit = $configured && ! empty($configured['activo'])
+        $scheduledExit = $configured && !empty($configured['activo'])
             ? $overtime->minutesFromClock((string) ($configured['salida'] ?? ''))
             : null;
         $tieneJornadaActiva = $scheduledExit !== null;
@@ -288,7 +290,7 @@ class UserIntegrationController extends Controller
         try {
             $rows = $this->fetchEmachRows($emach, (int) $date->format('Y'), (int) $date->format('n'), (string) $credentials['user'], (string) $credentials['password']);
         } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'message' => 'No pude consultar EMACH: '.$e->getMessage()], 502);
+            return response()->json(['ok' => false, 'message' => 'No pude consultar EMACH: ' . $e->getMessage()], 502);
         }
 
         $request->session()->put('emach.last_query', [
@@ -317,7 +319,7 @@ class UserIntegrationController extends Controller
                 'hora_inicio' => $overtime->clockFromMinutes($scheduledExit),
                 'hora_fin' => $overtime->clockFromMinutes($actualExit),
                 'total' => $overtime->formatMinutes($extraMinutes),
-                'message' => 'Calculado consultando EMACH para '.$date->format('d-m-Y').'.',
+                'message' => 'Calculado consultando EMACH para ' . $date->format('d-m-Y') . '.',
             ]);
         }
 
@@ -364,12 +366,11 @@ class UserIntegrationController extends Controller
         abort_unless(is_array($projectUser), 403);
 
         if ($module === 'redmine-mantencion') {
-            $context = app(MantencionAccessService::class)->context($request);
-            abort_unless(is_array($context) && app(MantencionAccessService::class)->can($context, 'mis_integraciones'), 403);
-            $projectUser['permisos'] = $context['permissions'];
+            require_once base_path('RedmineMantencion/controllers/auth.php');
+            abort_unless(auth_can('mis_integraciones'), 403);
         } elseif ($module === 'redmine_tic') {
             $permissions = is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [];
-            abort_unless(! empty($permissions['all']) || ! empty($permissions['mis_integraciones']), 403);
+            abort_unless(!empty($permissions['all']) || !empty($permissions['mis_integraciones']), 403);
         }
 
         return $projectUser;
@@ -383,7 +384,7 @@ class UserIntegrationController extends Controller
         }
 
         foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'] as $format) {
-            $date = \DateTimeImmutable::createFromFormat('!'.$format, $value, new \DateTimeZone('America/Santiago'));
+            $date = \DateTimeImmutable::createFromFormat('!' . $format, $value, new \DateTimeZone('America/Santiago'));
             if ($date instanceof \DateTimeImmutable) {
                 return $date;
             }
@@ -395,7 +396,7 @@ class UserIntegrationController extends Controller
     private function centralUserIdForSession(array $sessionUser): ?int
     {
         try {
-            if (! Schema::hasTable('usuarios_nova')) {
+            if (!Schema::hasTable('usuarios_nova')) {
                 return null;
             }
 
@@ -445,7 +446,7 @@ class UserIntegrationController extends Controller
     }
 
     /**
-     * @param  array<string,mixed>  $config
+     * @param array<string,mixed> $config
      */
     private function homeUrl(array $config): string
     {
@@ -468,5 +469,42 @@ class UserIntegrationController extends Controller
         };
 
         return redirect()->route($route);
+    }
+
+    private function syncMantencionLegacySession(Request $request): void
+    {
+        $novaUser = $this->sessionUser($request);
+        if ($novaUser === []) {
+            return;
+        }
+
+        LegacyPhpSession::start($request, 'redmine-mantencion');
+
+        $projectUser = app(ProjectAccessGuard::class)->projectUser('redmine-mantencion', $novaUser);
+
+        if (is_array($projectUser)) {
+            $projectUser['_nova_user_id'] = (string) ($novaUser['id'] ?? $projectUser['_nova_user_id'] ?? '');
+            $projectUser['id'] = trim((string) ($projectUser['id'] ?? '')) !== ''
+                ? $projectUser['id']
+                : ($novaUser['redmine_id'] ?? $novaUser['username'] ?? $novaUser['id'] ?? '');
+            $projectUser['nombre'] = trim((string) ($projectUser['nombre'] ?? '')) !== ''
+                ? $projectUser['nombre']
+                : ($novaUser['name'] ?? '');
+            $projectUser['apellido'] = trim((string) ($projectUser['apellido'] ?? '')) !== ''
+                ? $projectUser['apellido']
+                : ($novaUser['apellido'] ?? '');
+            $projectUser['rol'] = trim((string) ($projectUser['rol'] ?? '')) !== ''
+                ? $projectUser['rol']
+                : ($novaUser['role'] ?? 'usuario');
+        }
+
+        $_SESSION['user'] = is_array($projectUser) ? $projectUser : ($novaUser['legacy'] ?? [
+            'id' => $novaUser['id'] ?? '',
+            'nombre' => $novaUser['name'] ?? '',
+            'apellido' => $novaUser['apellido'] ?? '',
+            'rut' => $novaUser['rut'] ?? '',
+            'rol' => $novaUser['role'] ?? 'usuario',
+        ]);
+        $_SESSION['last_activity'] = time();
     }
 }

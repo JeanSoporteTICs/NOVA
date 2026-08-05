@@ -11142,23 +11142,6 @@ nav.sb-navbar > .container-fluid {
   color: #fff;
 }
 
-.he-action-remove {
-  border-color: #efc3c3;
-  background: #fff7f7;
-  color: #a43a3a;
-  box-shadow: 0 4px 10px rgba(135, 45, 45, 0.08);
-}
-
-.he-action-remove .he-action-icon {
-  background: #fee2e2;
-  color: #b42318;
-}
-
-.he-action-button.he-action-icon-only {
-  width: 40px;
-  padding: 4px;
-}
-
 .he-action-button:hover {
   transform: translateY(-1px);
 }
@@ -11175,13 +11158,6 @@ nav.sb-navbar > .container-fluid {
   background: linear-gradient(135deg, #1f72b2 0%, #125b91 100%);
   color: #fff;
   box-shadow: 0 9px 19px rgba(30, 112, 174, 0.3);
-}
-
-.he-action-remove:hover {
-  border-color: #dc8f8f;
-  background: #fff0f0;
-  color: #8f2424;
-  box-shadow: 0 7px 15px rgba(135, 45, 45, 0.14);
 }
 
 .he-action-button:focus-visible {
@@ -11296,194 +11272,6 @@ nav.sb-navbar > .container-fluid {
   height: 1em;
   margin: 0;
   line-height: 1;
-}
-
-/* Mantencion dashboard: compact, aligned action rail. */
-.nova-mantencion-page .dashboard-table th.nova-col-actions,
-.nova-mantencion-page .dashboard-table td.nova-col-actions {
-  width: 136px !important;
-  min-width: 136px !important;
-  max-width: 136px !important;
-  padding-inline: 10px !important;
-  text-align: center !important;
-  vertical-align: middle !important;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-row-actions {
-  display: inline-flex !important;
-  width: auto !important;
-  min-height: 36px;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  margin: 0 auto !important;
-  vertical-align: middle;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action {
-  display: inline-flex !important;
-  width: 34px !important;
-  height: 34px !important;
-  min-width: 34px !important;
-  min-height: 34px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  align-items: center !important;
-  justify-content: center !important;
-  border: 1px solid transparent !important;
-  border-radius: 10px !important;
-  box-shadow: 0 5px 12px rgba(15, 23, 42, .13) !important;
-  line-height: 1 !important;
-  transform: none;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action > i {
-  display: block;
-  width: auto;
-  height: auto;
-  margin: 0 !important;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action--edit {
-  color: #fff !important;
-  background: linear-gradient(135deg, #0891b2, #0e7490) !important;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action--hours.btn-hora-extra--off {
-  color: #52627a !important;
-  border-color: #cbd5e1 !important;
-  background: #fff !important;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, .08) !important;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action--hours.btn-hora-extra--on {
-  color: #fff !important;
-  background: linear-gradient(135deg, #10b981, #059669) !important;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action--delete {
-  color: #fff !important;
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px) !important;
-  box-shadow: 0 8px 16px rgba(15, 23, 42, .18) !important;
-}
-
-.nova-mantencion-page .dashboard-table .dashboard-action:active {
-  transform: translateY(0) !important;
-}
-
-.nova-mantencion-page .dashboard-table .report-hours:focus-visible + .dashboard-action--hours,
-.nova-mantencion-page .dashboard-table .dashboard-action:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, .28) !important;
-  outline-offset: 2px;
-}
-
-/* Toolbar and edit drawer share the same compact command language. */
-.nova-mantencion-page .dashboard-toolbar__button-group .dashboard-command,
-.nova-mantencion-page .dashboard-edit-drawer .dashboard-command {
-  display: inline-flex !important;
-  min-height: 42px !important;
-  height: 42px !important;
-  padding: 0 14px !important;
-  gap: 8px !important;
-  border: 1px solid transparent !important;
-  border-radius: 10px !important;
-  font-size: .76rem !important;
-  font-weight: 800 !important;
-  letter-spacing: .04em !important;
-  line-height: 1 !important;
-  box-shadow: 0 5px 12px rgba(15, 23, 42, .13) !important;
-  transform: none;
-}
-
-.nova-mantencion-page .dashboard-toolbar__button-group .dashboard-command.d-none {
-  display: none !important;
-}
-
-.nova-mantencion-page .dashboard-toolbar__button-group .dashboard-command > i:first-child,
-.nova-mantencion-page .dashboard-edit-drawer .dashboard-command > i:first-child {
-  display: inline-flex !important;
-  width: auto !important;
-  height: auto !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0 !important;
-  background: transparent !important;
-  font-size: .95rem !important;
-}
-
-.nova-mantencion-page .dashboard-command.btn-nova-primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-}
-
-.nova-mantencion-page .dashboard-command.btn-nova-success {
-  background: linear-gradient(135deg, #10b981, #059669) !important;
-}
-
-.nova-mantencion-page .dashboard-command.btn-nova-warning {
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-}
-
-.nova-mantencion-page .dashboard-command.btn-nova-secondary {
-  background: linear-gradient(135deg, #64748b, #475569) !important;
-}
-
-.nova-mantencion-page .dashboard-command.btn-nova-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-}
-
-.nova-mantencion-page .dashboard-toolbar__button-group .dashboard-command:hover,
-.nova-mantencion-page .dashboard-edit-drawer .dashboard-command:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px) !important;
-  box-shadow: 0 8px 16px rgba(15, 23, 42, .18) !important;
-}
-
-.nova-mantencion-page .dashboard-toolbar__button-group .dashboard-command:active,
-.nova-mantencion-page .dashboard-edit-drawer .dashboard-command:active {
-  transform: translateY(0) !important;
-}
-
-.nova-mantencion-page .dashboard-edit-drawer .modal-header {
-  align-items: flex-start;
-  background: linear-gradient(135deg, rgba(37, 99, 235, .1), rgba(14, 116, 144, .08)), #fff !important;
-}
-
-.nova-mantencion-page .dashboard-edit-drawer .modal-body {
-  background: #f6f9fd !important;
-}
-
-.nova-mantencion-page .dashboard-edit-drawer .modal-body > .row {
-  margin: 0;
-  padding: 16px;
-  border: 1px solid rgba(203, 213, 225, .78);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, .06);
-}
-
-.nova-mantencion-page .dashboard-edit-drawer .modal-footer {
-  display: flex !important;
-  justify-content: flex-end !important;
-  gap: 10px !important;
-  background: rgba(255, 255, 255, .96) !important;
-  box-shadow: 0 -12px 24px rgba(15, 23, 42, .06);
-}
-
-@media (max-width: 575.98px) {
-  .nova-mantencion-page .dashboard-toolbar__button-group .dashboard-command,
-  .nova-mantencion-page .dashboard-edit-drawer .dashboard-command {
-    width: 100% !important;
-    justify-content: center !important;
-  }
 }
 
 /* Server Monitor — operational control room */
@@ -13553,22 +13341,4 @@ nav.sb-navbar > .container-fluid {
     min-width: 28px;
     height: 28px;
   }
-}
-
-/* =============================================================================
-   Redmine Mantención native view additions
-   Preserves the original Mantención shell and adds native-only components.
-   ============================================================================= */
-body.nova-mantencion-page {
-  padding-top: 0 !important;
-}
-
-body.nova-mantencion-page .nova-content > .container-fluid {
-  width: 100%;
-  max-width: 1680px;
-  margin-inline: auto;
-}
-
-body.nova-mantencion-page .nova-system-card:not(.p-0) {
-  padding: clamp(1rem, 2vw, 1.35rem);
 }

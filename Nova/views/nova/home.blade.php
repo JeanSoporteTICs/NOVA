@@ -242,7 +242,7 @@
     <script src="{{ asset('assets/nova-ui.js') }}"></script>
     <script>
         // Delegated open/close wiring for this page's 3 modals, mirroring the
-        // Keep the session dialog behavior aligned with the shared NOVA UI.
+        // pattern already used in RedmineMantencion/views/partials/navbar.php.
         // window.appUi.openModal/closeModal (nova-ui.js) delegate to the real
         // bootstrap.Modal component for elements with class="modal" (all 3
         // here), so this page now gets a backdrop/focus-trap/native Escape
