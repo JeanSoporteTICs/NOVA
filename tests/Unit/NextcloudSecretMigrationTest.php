@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Modulos\Nova\Support\SecretValue;
+use App\Modulos\RedmineMantencion\Services\MantencionUsuariosCentralService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -219,7 +220,7 @@ class NextcloudSecretMigrationTest extends TestCase
         $user = $this->makeNovaUser();
         $encrypted = encrypt('already-safe-nextcloud');
 
-        usuarios_central_save_integration_encrypted($user['db_id'], 'nextcloud', $encrypted, 'ncuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'nextcloud', $encrypted, 'ncuser');
 
         $this->assertSame($encrypted, $this->storedSecret($user['db_id'], 'nextcloud'));
     }
@@ -228,7 +229,7 @@ class NextcloudSecretMigrationTest extends TestCase
     {
         $user = $this->makeNovaUser();
 
-        usuarios_central_save_integration_encrypted($user['db_id'], 'nextcloud', 'plain-legacy-value', 'ncuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'nextcloud', 'plain-legacy-value', 'ncuser');
 
         $stored = $this->storedSecret($user['db_id'], 'nextcloud');
         $this->assertNotSame('plain-legacy-value', $stored);
@@ -247,7 +248,7 @@ class NextcloudSecretMigrationTest extends TestCase
             'actualizado_at' => now(),
         ]);
 
-        usuarios_central_save_integration_encrypted($user['db_id'], 'nextcloud', $this->fakeCorruptedLaravelPayload(), 'ncuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'nextcloud', $this->fakeCorruptedLaravelPayload(), 'ncuser');
 
         // Invalid input never overwrites a previously-good value.
         $this->assertSame('pre-existing', SecretValue::decryptSecret($this->storedSecret($user['db_id'], 'nextcloud')));

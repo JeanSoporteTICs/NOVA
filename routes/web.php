@@ -2,6 +2,16 @@
 
 use App\Modulos\Nova\Controllers\HoursExtraController;
 use App\Modulos\Nova\Controllers\LegacyProjectController;
+use App\Modulos\RedmineMantencion\Controllers\DashboardController as MantencionDashboardController;
+use App\Modulos\RedmineMantencion\Controllers\HistoricoController as MantencionHistoricoController;
+use App\Modulos\RedmineMantencion\Controllers\HorasExtraController as MantencionHorasExtraController;
+use App\Modulos\RedmineMantencion\Controllers\PendientesController as MantencionPendientesController;
+use App\Modulos\RedmineMantencion\Controllers\UsuariosController as MantencionUsuariosController;
+use App\Modulos\RedmineMantencion\Controllers\EstadisticasController as MantencionEstadisticasController;
+use App\Modulos\RedmineMantencion\Controllers\ConfiguracionController as MantencionConfiguracionController;
+use App\Modulos\RedmineMantencion\Controllers\ActivityController as MantencionActivityController;
+use App\Modulos\RedmineMantencion\Controllers\NextcloudUsuariosController as MantencionNextcloudUsuariosController;
+use App\Modulos\RedmineMantencion\Controllers\NextcloudHistorialController as MantencionNextcloudHistorialController;
 use App\Modulos\Nova\Controllers\ModuleAdminController;
 use App\Modulos\Nova\Controllers\NovaAdministrationController;
 use App\Modulos\Nova\Controllers\NovaAuthController;
@@ -151,38 +161,55 @@ Route::get('/redmine-mantencion/health.php', fn () => response()->json([
     'base_path' => data_get(config('modules.redmine-mantencion', []), 'path', base_path('redmine-mantencion')),
 ]))->name('redmine.mantencion.health');
 Route::get('/redmine-mantencion', fn () => redirect()->route('redmine.mantencion.dashboard'));
-Route::post('/redmine-mantencion/app/dashboard/hora-extra', [LegacyProjectController::class, 'toggleMantencionHoursExtra'])
+Route::post('/redmine-mantencion/app/dashboard/hora-extra', [MantencionDashboardController::class, 'toggleHoursExtra'])
     ->name('redmine.mantencion.dashboard.hours-extra');
-Route::match(['GET', 'POST'], '/redmine-mantencion/app', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Dashboard/dashboard.php'))
+Route::match(['GET', 'POST'], '/redmine-mantencion/app', [MantencionDashboardController::class, 'index'])
     ->name('redmine.mantencion.dashboard');
 Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');
 Route::post('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion.update');
 Route::match(['GET', 'POST'], '/nc_browser_ajax.php', fn () => redirect()->route('procedimientos.index'))
     ->name('redmine.mantencion.nc-browser-legacy');
-Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, LegacyProjectController $controller, string $section) {
-    $path = match ($section) {
-        'dashboard', 'reportes' => 'views/Dashboard/dashboard.php',
-        'manual', 'pendiente-manual' => 'views/Pendientes/manual.php',
-        'horas-extra' => 'views/HorasExtra/horas_extra.php',
-        'historico' => 'views/Historico/historico.php',
-        'procedimientos' => null,
-        'usuarios' => 'views/Usuarios/usuarios.php',
-        'integraciones-nextcloud-usuarios' => 'views/Integraciones/NextcloudUsuarios.php',
-        'integraciones-nextcloud-historial' => 'views/Integraciones/NextcloudHistorial.php',
-        'configuracion' => 'views/Configuracion/configuracion.php',
-        'estadisticas' => 'views/Estadisticas/estadisticas.php',
-        'actividad' => 'views/Security/activity.php',
+Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, MantencionDashboardController $dashboard, MantencionHistoricoController $historico, MantencionHorasExtraController $horasExtra, MantencionPendientesController $pendientes, MantencionUsuariosController $usuarios, MantencionEstadisticasController $estadisticas, MantencionConfiguracionController $configuracion, MantencionActivityController $actividad, MantencionNextcloudUsuariosController $nextcloudUsuarios, MantencionNextcloudHistorialController $nextcloudHistorial, string $section) {
+    return match ($section) {
+        'dashboard', 'reportes' => $dashboard->index(),
+        'historico' => $historico->index(),
+        'horas-extra' => $horasExtra->index(),
+        'manual', 'pendiente-manual' => $pendientes->index(),
+        'usuarios' => $usuarios->index(),
+        'estadisticas' => $estadisticas->index(),
+        'configuracion' => $configuracion->index(),
+        'actividad' => $actividad->index(),
+        'integraciones-nextcloud-usuarios' => $nextcloudUsuarios->index(),
+        'integraciones-nextcloud-historial' => $nextcloudHistorial->index(),
+        'procedimientos' => redirect()->route('procedimientos.index'),
         default => abort(404),
     };
-
-    if ($section === 'procedimientos') {
-        return redirect()->route('procedimientos.index');
-    }
-    return $controller->passthrough($request, 'redmine-mantencion', $path);
 })->name('redmine.mantencion.section');
-Route::match(['GET', 'POST'], '/redmine-mantencion/{path}', fn (Request $request, LegacyProjectController $controller, ?string $path = null) => $controller->passthrough($request, 'redmine-mantencion', $path))
-    ->where('path', '^(?!app(?:/|$)).*')
-    ->name('redmine.mantencion.path');
+// Reemplaza el antiguo catch-all `/redmine-mantencion/{path}` (aceptaba
+// cualquier ruta bajo views/, controllers/ o la raíz del módulo y la
+// resolvía contra el filesystem). Estas son las únicas rutas fuera de
+// /app/... que siguen teniendo un consumidor real:
+//   - login.php / logout.php: passthrough() ya las intercepta y redirige a
+//     las rutas centrales de NOVA (`login`/`logout`); auth.php redirige aquí
+//     explícitamente en fallos de CSRF (ver csrf_validate()).
+//   - views/Procedimientos/nc_browser_ajax.php: endpoint AJAX del explorador
+//     de archivos Nextcloud, usado por RedmineMantencion/views/Procedimientos/
+//     _nc_browser.php — incluido tanto por la vista legacy de Procedimientos
+//     como por el módulo nativo App\Modulos\Procedimientos (resources/views/
+//     procedimientos/index.blade.php hace un include() directo de ese parcial).
+//   - views/Integraciones/Nextcloud.php: shim de redirección enlazado desde
+//     el mismo parcial (_nc_browser.php) hacia configuración > Nextcloud.
+// Cualquier otro archivo bajo RedmineMantencion/ (entrypoints huérfanos como
+// index.php/session_touch.php, vistas sin ruta como Categorias/categorias.php)
+// deja de ser alcanzable por URL — no tenían ningún enlace real apuntándoles.
+Route::match(['GET', 'POST'], '/redmine-mantencion/login.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'login.php'))
+    ->name('redmine.mantencion.login-legacy');
+Route::match(['GET', 'POST'], '/redmine-mantencion/logout.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'logout.php'))
+    ->name('redmine.mantencion.logout-legacy');
+Route::match(['GET', 'POST'], '/redmine-mantencion/views/Procedimientos/nc_browser_ajax.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Procedimientos/nc_browser_ajax.php'))
+    ->name('redmine.mantencion.nc-browser-ajax');
+Route::match(['GET', 'POST'], '/redmine-mantencion/views/Integraciones/Nextcloud.php', fn (Request $request, LegacyProjectController $controller) => $controller->passthrough($request, 'redmine-mantencion', 'views/Integraciones/Nextcloud.php'))
+    ->name('redmine.mantencion.nextcloud-config-shim');
 Route::get('/redmine', fn () => redirect()->route('redmine.dashboard'));
 Route::get('/redmine/nativo', fn () => redirect()->route('redmine.native.dashboard'));
 Route::get('/redmine/nativo/{section}', fn (string $section) => redirect()->route('redmine.native.section', ['section' => $section]));

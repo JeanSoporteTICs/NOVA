@@ -9,7 +9,7 @@ final class MantencionHistoricoRouteTest extends TestCase
     public function test_redmine_status_ajax_uses_the_laravel_history_route(): void
     {
         $view = file_get_contents(
-            dirname(__DIR__, 2).'/RedmineMantencion/views/Historico/historico.php'
+            dirname(__DIR__, 2).'/resources/views/redmine-mantencion/historico.blade.php'
         );
 
         self::assertIsString($view);
@@ -21,7 +21,7 @@ final class MantencionHistoricoRouteTest extends TestCase
     public function test_bulk_status_change_uses_the_application_modal(): void
     {
         $view = file_get_contents(
-            dirname(__DIR__, 2).'/RedmineMantencion/views/Historico/historico.php'
+            dirname(__DIR__, 2).'/resources/views/redmine-mantencion/historico.blade.php'
         );
 
         self::assertIsString($view);

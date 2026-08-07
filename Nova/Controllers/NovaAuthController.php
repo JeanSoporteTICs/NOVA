@@ -8,7 +8,6 @@ use App\Modulos\Nova\Repositories\NovaAuditRepository;
 use App\Modulos\Nova\Services\LegacyUserProvider;
 use App\Modulos\Nova\Services\LegacyLoggerService;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
-use App\Modulos\Nova\Support\LegacyPhpSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -66,8 +65,9 @@ class NovaAuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        LegacyPhpSession::start($request, 'redmine-mantencion');
-        LegacyPhpSession::destroyIfActive();
+        // Redmine Mantención ya no crea una sesión NOVALEGACY propia (ver
+        // LegacyProjectController::syncNovaUserToLegacySession()), así que ya
+        // no hay nada que limpiar aquí para ese módulo.
 
         return redirect()->route('login');
     }

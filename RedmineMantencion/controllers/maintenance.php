@@ -496,15 +496,11 @@ function maintenance_clear_output_buffers(): void {
 }
 
 function maintenance_set_flash(string $message): void {
-    auth_start_session();
-    $_SESSION['maintenance_flash'] = $message;
+    session()->put('mantencion_maintenance_flash', $message);
 }
 
 function maintenance_consume_flash(): ?string {
-    auth_start_session();
-    $message = $_SESSION['maintenance_flash'] ?? null;
-    unset($_SESSION['maintenance_flash']);
-    return $message;
+    return session()->pull('mantencion_maintenance_flash');
 }
 
 function maintenance_redirect_back(): void {

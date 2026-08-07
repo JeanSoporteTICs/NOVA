@@ -21,18 +21,53 @@ function legacy_app_url(string $path = ''): string {
 }
 
 function auth_start_session() {
-    if (session_status() === PHP_SESSION_NONE) {
-        $params = session_get_cookie_params();
-        session_set_cookie_params([
-            'lifetime' => 0,
-            'path' => $params['path'] ?? '/',
-            'domain' => $params['domain'] ?? '',
-            'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
-        session_start();
+    // No-op: Redmine Mantención no abre sesión PHP nativa. Toda la sesión la
+    // maneja Laravel (middleware `web`/StartSession, ya activo antes de que
+    // este archivo se ejecute vía LegacyProjectController::dispatchPhp()).
+    // Se conserva la función (sin cuerpo) porque RedmineMantencion/app/ (el
+    // mini-MVC huérfano, ver [[07-redmine-mantencion]]) todavía la invoca y
+    // no forma parte de esta migración: sus entrypoints (login.php, logout.php,
+    // session_touch.php) no son alcanzables desde ninguna URL activa.
+}
+
+/**
+ * Usuario actual de Mantención, resuelto directamente desde la sesión Laravel
+ * (reemplaza la antigua lectura de $_SESSION['user'], que LegacyProjectController
+ * poblaba en la sesión NOVALEGACY antes de despachar este módulo).
+ */
+function mantencion_current_user(): ?array {
+    static $cache = false;
+    if ($cache !== false) {
+        return $cache;
     }
+
+    $novaUser = function_exists('session') ? session('nova_user') : null;
+    if (!is_array($novaUser)) {
+        $standalone = function_exists('session') ? session('mantencion_standalone_user') : null;
+        return $cache = is_array($standalone) ? $standalone : null;
+    }
+
+    $projectUser = null;
+    if (function_exists('app') && class_exists(\App\Modulos\Nova\Services\ProjectAccessGuard::class)) {
+        try {
+            $projectUser = app(\App\Modulos\Nova\Services\ProjectAccessGuard::class)
+                ->projectUser('redmine-mantencion', $novaUser);
+        } catch (\Throwable) {
+            $projectUser = null;
+        }
+    }
+
+    if (is_array($projectUser)) {
+        $projectUser['_nova_user_id'] = (string)($novaUser['id'] ?? $projectUser['_nova_user_id'] ?? '');
+        return $cache = $projectUser;
+    }
+
+    return $cache = is_array($novaUser['legacy'] ?? null) ? $novaUser['legacy'] : [
+        'id' => $novaUser['id'] ?? '',
+        'nombre' => $novaUser['name'] ?? '',
+        'rut' => $novaUser['rut'] ?? '',
+        'rol' => $novaUser['role'] ?? 'usuario',
+    ];
 }
 
 function auth_config_timeout() {
@@ -51,8 +86,9 @@ function auth_config_timeout() {
 }
 
 function auth_touch_activity() {
-    auth_start_session();
-    $_SESSION['last_activity'] = time();
+    if (function_exists('session')) {
+        session()->put('mantencion_last_activity', time());
+    }
 }
 
 function auth_norm_key($v) {
@@ -255,7 +291,11 @@ function auth_central_redmine_api_token($redmineId, string $type = 'redmine'): s
 }
 
 function auth_login($username, $password) {
-    auth_start_session();
+    // Ruta de login independiente (usuario/clave propios de Mantención), solo
+    // alcanzable hoy desde RedmineMantencion/app/Controllers/AuthController.php
+    // (mini-MVC huérfano, sin ninguna URL activa que lo enrute — ver
+    // [[07-redmine-mantencion]]). Se conserva funcional por si algún día se
+    // reconecta, ahora sobre la sesión Laravel en vez de $_SESSION nativo.
     $user = auth_find_user($username);
     if ($user && strtolower(trim((string)($user['estado'] ?? 'activo'))) === 'baneado') {
         log_security_event('LOGIN_BLOCKED', sprintf('Usuario baneado "%s"', $username));
@@ -276,16 +316,21 @@ function auth_login($username, $password) {
         }
     }
     if ($ok) {
-        session_regenerate_id(true);
-        $_SESSION['user'] = [
+        if (function_exists('request')) {
+            request()->session()->regenerate();
+        }
+        $legacyUser = [
             'id' => $user['id'] ?? '',
             'nombre' => trim((string)($user['nombre'] ?? '')),
             'apellido' => trim((string)($user['apellido'] ?? '')),
             'rut' => $user['rut'] ?? '',
             'rol' => $user['rol'] ?? 'usuario',
         ];
+        if (function_exists('session')) {
+            session()->put('mantencion_standalone_user', $legacyUser);
+        }
         auth_touch_activity();
-        log_security_event('LOGIN_SUCCESS', sprintf('User %s (%s)', $_SESSION['user']['nombre'], $username));
+        log_security_event('LOGIN_SUCCESS', sprintf('User %s (%s)', $legacyUser['nombre'], $username));
         return true;
     }
     log_security_event('LOGIN_FAILURE', sprintf('Intento con "%s"', $username));
@@ -293,36 +338,37 @@ function auth_login($username, $password) {
 }
 
 function auth_logout() {
-    auth_start_session();
-    $name = trim((string)($_SESSION['user']['nombre'] ?? ''));
-    $id = trim((string)($_SESSION['user']['id'] ?? ''));
+    $user = mantencion_current_user();
+    $name = trim((string)($user['nombre'] ?? ''));
+    $id = trim((string)($user['id'] ?? ''));
     if ($name !== '' || $id !== '') {
         log_security_event('LOGOUT', sprintf('Sesion cerrada por %s (ID %s)', $name !== '' ? $name : 'usuario', $id));
     }
-    // limpiar variables y cookie de sesión
-    $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    // Solo se limpian las claves propias de Mantención dentro de la sesión
+    // Laravel compartida: destruir toda la sesión cerraría la sesión NOVA
+    // completa (y la de otros módulos), lo que nunca fue el comportamiento
+    // real — la antigua sesión NOVALEGACY que sí se destruía por completo
+    // era una sesión PHP nativa separada, exclusiva de este módulo.
+    if (function_exists('session')) {
+        session()->forget(['mantencion_standalone_user', 'mantencion_last_activity']);
     }
-    session_destroy();
 }
 
 function auth_require_login($redirect = '/redmine-mantencion/login.php') {
-    auth_start_session();
     $novaUser = function_exists('session') ? session('nova_user') : null;
     $managedByNova = is_array($novaUser);
     $timeout = auth_config_timeout();
-    $last = $_SESSION['last_activity'] ?? 0;
+    $last = (int) (function_exists('session') ? session('mantencion_last_activity', 0) : 0);
     if (!$managedByNova && $last && (time() - $last) > $timeout) {
         log_security_event('SESSION_TIMEOUT', 'Sesion expirada por inactividad');
         auth_logout();
     }
-    if (empty($_SESSION['user'])) {
+    $user = mantencion_current_user();
+    if (empty($user)) {
         header('Location: ' . ($managedByNova || function_exists('route') ? route('login') : $redirect));
         exit;
     }
-    $sessionUserId = (string)($_SESSION['user']['id'] ?? '');
+    $sessionUserId = (string)($user['id'] ?? '');
     if ($sessionUserId !== '') {
         $sessionUser = auth_find_user_by_id($sessionUserId);
         if ($sessionUser && strtolower(trim((string)($sessionUser['estado'] ?? 'activo'))) === 'baneado') {
@@ -338,16 +384,16 @@ function auth_require_login($redirect = '/redmine-mantencion/login.php') {
 }
 
 function auth_get_user_role() {
-    auth_start_session();
-    $sessionUserId = (string)($_SESSION['user']['id'] ?? '');
+    $user = mantencion_current_user();
+    $sessionUserId = (string)($user['id'] ?? '');
     if ($sessionUserId !== '') {
-        $user = auth_find_user_by_id($sessionUserId);
-        if (is_array($user) && trim((string)($user['rol'] ?? '')) !== '') {
-            return (string)$user['rol'];
+        $found = auth_find_user_by_id($sessionUserId);
+        if (is_array($found) && trim((string)($found['rol'] ?? '')) !== '') {
+            return (string)$found['rol'];
         }
     }
 
-    return $_SESSION['user']['rol'] ?? 'usuario';
+    return $user['rol'] ?? 'usuario';
 }
 
 // ----------------- Roles y permisos -----------------
@@ -501,55 +547,33 @@ function auth_can($permiso) {
 }
 
 function auth_get_user_id() {
-    auth_start_session();
-    return $_SESSION['user']['id'] ?? '';
+    $user = mantencion_current_user();
+    return $user['id'] ?? '';
 }
 
 // CSRF helpers
 function legacy_csrf_token() {
-    auth_start_session();
-
-    // Cuando Mantencion se ejecuta a traves del bridge de Laravel, usar el
-    // mismo token para ambas capas. Antes se generaba un token independiente
-    // en NOVALEGACY; si esa sesion se reconstruia entre el GET y el POST, el
-    // formulario conservaba un token que ya no existia y la accion terminaba
-    // en 419 aunque la sesion NOVA siguiera vigente.
-    $laravelToken = function_exists('csrf_token') ? trim((string)csrf_token()) : '';
-    if ($laravelToken !== '') {
-        $_SESSION['csrf_token'] = $laravelToken;
-
-        return $laravelToken;
-    }
-
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
+    // Mantención ya no mantiene un token CSRF propio en una sesión aparte:
+    // usa directamente el token de la sesión Laravel, la única sesión real
+    // ahora para este módulo.
+    return function_exists('csrf_token') ? trim((string)csrf_token()) : '';
 }
 
 function csrf_validate() {
-    auth_start_session();
-    // Acepta token por POST o cabecera X-CSRF-Token (p.ej. AJAX)
-    $token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-    $token = trim($token);
-    $sess  = $_SESSION['csrf_token'] ?? '';
-    $legacyValid = $token !== '' && $sess !== '' && hash_equals($sess, $token);
-
-    // Las rutas legacy se despachan dentro de Laravel y mantienen dos sesiones:
-    // la sesión NOVA y NOVALEGACY. Aceptar también el token Laravel evita falsos
-    // negativos cuando el bridge reconstruye la sesión legacy entre GET y POST.
-    $laravelSubmitted = trim((string)(
-        $_POST['_token']
+    // Acepta el token por cualquiera de los nombres de campo/cabecera que el
+    // JS y los formularios legacy ya usaban, validándolo contra el único
+    // token real (el de la sesión Laravel).
+    $submitted = trim((string)(
+        $_POST['csrf_token']
+        ?? $_POST['_token']
         ?? $_SERVER['HTTP_X_CSRF_TOKEN']
         ?? $_SERVER['HTTP_X_XSRF_TOKEN']
         ?? ''
     ));
-    $laravelExpected = function_exists('csrf_token') ? trim((string)csrf_token()) : '';
-    $laravelValid = $laravelSubmitted !== ''
-        && $laravelExpected !== ''
-        && hash_equals($laravelExpected, $laravelSubmitted);
+    $expected = function_exists('csrf_token') ? trim((string)csrf_token()) : '';
+    $valid = $submitted !== '' && $expected !== '' && hash_equals($expected, $submitted);
 
-    if (!$legacyValid && !$laravelValid) {
+    if (!$valid) {
         $expectsJson = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
             || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
             || (string)($_POST['ajax'] ?? '') === '1';

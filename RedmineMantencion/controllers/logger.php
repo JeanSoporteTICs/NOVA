@@ -1,7 +1,7 @@
 <?php
 function log_security_event(string $tag, string $details): void {
     try {
-        $sessionUser = is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
+        $sessionUser = function_exists('mantencion_current_user') ? (mantencion_current_user() ?? []) : [];
         $context = array_filter([
             'user_id' => trim((string)($sessionUser['id'] ?? '')),
             'user_name' => trim((string)(($sessionUser['nombre'] ?? '') . ' ' . ($sessionUser['apellido'] ?? ''))),

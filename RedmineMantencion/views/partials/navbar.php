@@ -7,9 +7,7 @@ $activeNav = $activeNav ?? '';
 $sessionTimeout = function_exists('app')
     ? app(\App\Modulos\Nova\Repositories\NovaSettingsRepository::class)->sessionTimeout()
     : auth_config_timeout();
-$lastActivity = function_exists('session')
-    ? (int) session('nova_last_activity', time())
-    : (int) ($_SESSION['last_activity'] ?? time());
+$lastActivity = (int) session('nova_last_activity', time());
 $remaining = max(0, $sessionTimeout - (time() - $lastActivity));
 $role = auth_get_user_role();
 $maintenanceSettings = maintenance_mode_settings();
@@ -23,7 +21,7 @@ $novaLogoutUrl = function_exists('route') ? route('logout') : $mantencionBaseUrl
 $novaSessionExtendUrl = function_exists('route') ? route('session.extend') : $mantencionBaseUrl . '/session_extend.php';
 $novaLoginUrl = function_exists('route') ? route('login') : $novaHomeUrl . '/login';
 $novaCsrfToken = function_exists('csrf_token') ? csrf_token() : '';
-$novaSessionIdentity = function_exists('session') ? (string) session('nova_user.id', '') : (string) ($_SESSION['user']['id'] ?? '');
+$novaSessionIdentity = (string) session('nova_user.id', '');
 $navItems = [
     ['key' => 'mensajes', 'label' => 'Reportes', 'href' => $mantencionAppUrl, 'icon' => 'bi-inboxes', 'can' => auth_can('mensajes_acceso')],
     ['key' => 'manual', 'label' => 'Pendiente manual', 'href' => $mantencionAppUrl . '/manual', 'icon' => 'bi-pencil-square', 'can' => auth_can('simulador')],
@@ -78,11 +76,12 @@ $navItems = [
           </span>
         <?php endif; ?>
         <?php
-          $navNombre   = trim((string)($_SESSION['user']['nombre'] ?? ''));
-          $navApellido = trim((string)($_SESSION['user']['apellido'] ?? ''));
+          $navCurrentUser = mantencion_current_user() ?? [];
+          $navNombre   = trim((string)($navCurrentUser['nombre'] ?? ''));
+          $navApellido = trim((string)($navCurrentUser['apellido'] ?? ''));
           $navDisplay  = trim($navNombre . ($navApellido !== '' ? ' ' . $navApellido : ''));
           if ($navDisplay === '') {
-              $navDisplay = trim((string)($_SESSION['user']['id'] ?? '')) !== '' ? 'usuario' : '';
+              $navDisplay = trim((string)($navCurrentUser['id'] ?? '')) !== '' ? 'usuario' : '';
           }
         ?>
         <?php if ($navDisplay !== ''): ?>

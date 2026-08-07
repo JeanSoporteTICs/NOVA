@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Modulos\Nova\Support\SecretValue;
+use App\Modulos\RedmineMantencion\Services\MantencionUsuariosCentralService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -12,7 +13,7 @@ use Tests\TestCase;
  * Covers the ETAPA A / Lote A5 migration of CORE credential handling onto
  * SecretValue — the generalization of A4's Nextcloud auto-rewrite to
  * type=core, plus dedicated coverage of core_credentials_for_user() and the
- * CORE caller of usuarios_central_save_integration_encrypted(). Runs
+ * CORE caller of MantencionUsuariosCentralService::usuarios_central_save_integration_encrypted(). Runs
  * against the real usuarios_nova / integraciones_usuario tables inside a
  * rolled-back transaction.
  */
@@ -222,7 +223,7 @@ class CoreSecretMigrationTest extends TestCase
         $user = $this->makeNovaUser();
         $encrypted = encrypt('already-safe-core');
 
-        usuarios_central_save_integration_encrypted($user['db_id'], 'core', $encrypted, 'coreuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'core', $encrypted, 'coreuser');
 
         $this->assertSame($encrypted, $this->storedSecret($user['db_id'], 'core'));
     }
@@ -231,7 +232,7 @@ class CoreSecretMigrationTest extends TestCase
     {
         $user = $this->makeNovaUser();
 
-        usuarios_central_save_integration_encrypted($user['db_id'], 'core', 'plain-legacy-core-value', 'coreuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'core', 'plain-legacy-core-value', 'coreuser');
 
         $stored = $this->storedSecret($user['db_id'], 'core');
         $this->assertNotSame('plain-legacy-core-value', $stored);
@@ -244,7 +245,7 @@ class CoreSecretMigrationTest extends TestCase
         $legacy = core_credentials_encrypt('enc-v1-via-usuarios-bridge');
 
         $user = $this->makeNovaUser();
-        usuarios_central_save_integration_encrypted($user['db_id'], 'core', $legacy, 'coreuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'core', $legacy, 'coreuser');
 
         $stored = $this->storedSecret($user['db_id'], 'core');
         $this->assertSame('laravel_encrypted', SecretValue::inspect($stored)['status']);
@@ -265,7 +266,7 @@ class CoreSecretMigrationTest extends TestCase
             'actualizado_at' => now(),
         ]);
 
-        usuarios_central_save_integration_encrypted($user['db_id'], 'core', $this->fakeCorruptedLaravelPayload(), 'coreuser');
+        app(MantencionUsuariosCentralService::class)->usuarios_central_save_integration_encrypted($user['db_id'], 'core', $this->fakeCorruptedLaravelPayload(), 'coreuser');
 
         $this->assertSame('pre-existing-core', SecretValue::decryptSecret($this->storedSecret($user['db_id'], 'core')));
     }

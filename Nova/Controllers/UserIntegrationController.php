@@ -10,7 +10,6 @@ use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\Nova\Repositories\NovaAccessRepository;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
-use App\Modulos\Nova\Support\LegacyPhpSession;
 use App\Modulos\Procedimientos\Services\OnlyOfficeHealthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -135,9 +134,6 @@ class UserIntegrationController extends Controller
     public function show(Request $request, UserIntegrationRepository $integrations, NovaSettingsRepository $settings, OnlyOfficeHealthService $onlyOfficeHealth, string $module): View
     {
         $config = $this->moduleConfig($module);
-        if ($module === 'redmine-mantencion') {
-            $this->syncMantencionLegacySession($request);
-        }
         $projectUser = $this->authorizeModule($request, $module);
 
         $sessionUser = $this->sessionUser($request);
@@ -181,9 +177,6 @@ class UserIntegrationController extends Controller
     public function update(Request $request, UserIntegrationRepository $integrations, string $module): RedirectResponse
     {
         $config = $this->moduleConfig($module);
-        if ($module === 'redmine-mantencion') {
-            $this->syncMantencionLegacySession($request);
-        }
         $this->authorizeModule($request, $module);
 
         $type = (string) $request->input('type', '');
@@ -471,40 +464,4 @@ class UserIntegrationController extends Controller
         return redirect()->route($route);
     }
 
-    private function syncMantencionLegacySession(Request $request): void
-    {
-        $novaUser = $this->sessionUser($request);
-        if ($novaUser === []) {
-            return;
-        }
-
-        LegacyPhpSession::start($request, 'redmine-mantencion');
-
-        $projectUser = app(ProjectAccessGuard::class)->projectUser('redmine-mantencion', $novaUser);
-
-        if (is_array($projectUser)) {
-            $projectUser['_nova_user_id'] = (string) ($novaUser['id'] ?? $projectUser['_nova_user_id'] ?? '');
-            $projectUser['id'] = trim((string) ($projectUser['id'] ?? '')) !== ''
-                ? $projectUser['id']
-                : ($novaUser['redmine_id'] ?? $novaUser['username'] ?? $novaUser['id'] ?? '');
-            $projectUser['nombre'] = trim((string) ($projectUser['nombre'] ?? '')) !== ''
-                ? $projectUser['nombre']
-                : ($novaUser['name'] ?? '');
-            $projectUser['apellido'] = trim((string) ($projectUser['apellido'] ?? '')) !== ''
-                ? $projectUser['apellido']
-                : ($novaUser['apellido'] ?? '');
-            $projectUser['rol'] = trim((string) ($projectUser['rol'] ?? '')) !== ''
-                ? $projectUser['rol']
-                : ($novaUser['role'] ?? 'usuario');
-        }
-
-        $_SESSION['user'] = is_array($projectUser) ? $projectUser : ($novaUser['legacy'] ?? [
-            'id' => $novaUser['id'] ?? '',
-            'nombre' => $novaUser['name'] ?? '',
-            'apellido' => $novaUser['apellido'] ?? '',
-            'rut' => $novaUser['rut'] ?? '',
-            'rol' => $novaUser['role'] ?? 'usuario',
-        ]);
-        $_SESSION['last_activity'] = time();
-    }
 }
