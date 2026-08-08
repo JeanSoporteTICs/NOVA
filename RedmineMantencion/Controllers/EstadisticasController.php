@@ -21,6 +21,7 @@ class EstadisticasController extends Controller
     public function index(): View
     {
         require_once base_path('RedmineMantencion/controllers/auth.php');
+        require_once base_path('RedmineMantencion/controllers/dashboard.php');
 
         if (!auth_can('estadisticas')) {
             return redirect(legacy_app_url());
