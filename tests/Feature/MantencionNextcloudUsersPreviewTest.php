@@ -130,11 +130,15 @@ final class MantencionNextcloudUsersPreviewTest extends TestCase
         self::assertSame('solicitante@example.test', $valid['requester']['solicitante_correo'] ?? null);
         self::assertSame('', $valid['requester']['solicitante'] ?? null);
 
+        $optional = $service->nextcloud_requester_from_input([]);
+        self::assertArrayNotHasKey('error', $optional);
+        self::assertSame('', $optional['requester']['solicitante_nombre'] ?? null);
+        self::assertSame('', $optional['requester']['solicitante_correo'] ?? null);
+
         $invalid = $service->nextcloud_requester_from_input([
-            'solicitante_nombre' => 'Persona Solicitante',
             'solicitante_correo' => 'correo-invalido',
         ]);
-        self::assertSame('Debes ingresar un correo válido para el solicitante.', $invalid['error'] ?? null);
+        self::assertSame('El correo del solicitante no es válido.', $invalid['error'] ?? null);
 
         $invalidRut = $service->nextcloud_requester_from_input([
             'solicitante_nombre' => 'Persona Solicitante',
@@ -153,6 +157,10 @@ final class MantencionNextcloudUsersPreviewTest extends TestCase
         self::assertIsString($view);
         self::assertStringContainsString('id="nextcloud-import-form"', $view);
         self::assertStringContainsString('maxlength="12"', $view);
+        self::assertStringContainsString('Nombre del solicitante <span class="text-muted fw-normal">(opcional)</span>', $view);
+        self::assertStringContainsString('Correo <span class="text-muted fw-normal">(opcional)</span>', $view);
+        self::assertStringContainsString("const valid = !hasValue || isValidRequesterEmail(requesterEmail.value)", $view);
+        self::assertDoesNotMatchRegularExpression('/name="solicitante_(?:nombre|correo)"[^>]*\srequired(?:\s|>)/', $view);
         self::assertStringContainsString('Los puntos y el guion se añaden automáticamente.', $view);
         self::assertStringContainsString('function formatRequesterRut(value)', $view);
         self::assertStringContainsString('function isValidRequesterRut(value)', $view);

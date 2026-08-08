@@ -55,8 +55,8 @@
               </div>
               <div class="row g-3">
                 <div class="col-md-6 col-xl-4">
-                  <label class="form-label" for="nextcloud-requester-name">Nombre del solicitante</label>
-                  <input class="form-control" id="nextcloud-requester-name" name="solicitante_nombre" value="<?= $h($requesterForm['solicitante_nombre'] ?? '') ?>" maxlength="200" placeholder="Nombre completo" required>
+                  <label class="form-label" for="nextcloud-requester-name">Nombre del solicitante <span class="text-muted fw-normal">(opcional)</span></label>
+                  <input class="form-control" id="nextcloud-requester-name" name="solicitante_nombre" value="<?= $h($requesterForm['solicitante_nombre'] ?? '') ?>" maxlength="200" placeholder="Nombre completo">
                 </div>
                 <div class="col-md-6 col-xl-4">
                   <label class="form-label" for="nextcloud-requester-rut">RUT <span class="text-muted fw-normal">(opcional)</span></label>
@@ -65,9 +65,9 @@
                   <div class="invalid-feedback" id="nextcloud-requester-rut-feedback">Ingresa un RUT válido, incluido su dígito verificador.</div>
                 </div>
                 <div class="col-md-6 col-xl-4">
-                  <label class="form-label" for="nextcloud-requester-email">Correo</label>
-                  <input class="form-control" id="nextcloud-requester-email" name="solicitante_correo" type="email" value="<?= $h($requesterForm['solicitante_correo'] ?? '') ?>" maxlength="190" placeholder="solicitante@dominio.cl" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="nextcloud-requester-email-feedback" required>
-                  <div class="invalid-feedback" id="nextcloud-requester-email-feedback">Ingresa un correo válido, por ejemplo nombre@dominio.cl.</div>
+                  <label class="form-label" for="nextcloud-requester-email">Correo <span class="text-muted fw-normal">(opcional)</span></label>
+                  <input class="form-control" id="nextcloud-requester-email" name="solicitante_correo" type="email" value="<?= $h($requesterForm['solicitante_correo'] ?? '') ?>" maxlength="190" placeholder="solicitante@dominio.cl" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="nextcloud-requester-email-feedback">
+                  <div class="invalid-feedback" id="nextcloud-requester-email-feedback">Si ingresas un correo, debe tener un formato válido, por ejemplo nombre@dominio.cl.</div>
                 </div>
               </div>
             </section>
@@ -477,10 +477,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateRequesterEmailState(showFeedback = false) {
     if (!requesterEmail) return true;
-    const valid = isValidRequesterEmail(requesterEmail.value);
-    requesterEmail.setCustomValidity(valid ? '' : 'Ingresa un correo válido, por ejemplo nombre@dominio.cl.');
+    const hasValue = requesterEmail.value.trim() !== '';
+    const valid = !hasValue || isValidRequesterEmail(requesterEmail.value);
+    requesterEmail.setCustomValidity(valid ? '' : 'Si ingresas un correo, debe tener un formato válido.');
     requesterEmail.classList.toggle('is-invalid', showFeedback && !valid);
-    requesterEmail.classList.toggle('is-valid', showFeedback && valid);
+    requesterEmail.classList.toggle('is-valid', showFeedback && hasValue && valid);
     return valid;
   }
 

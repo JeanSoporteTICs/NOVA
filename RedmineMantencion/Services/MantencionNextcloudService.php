@@ -843,11 +843,9 @@ class MantencionNextcloudService
             'solicitante_rut' => $limit($input['solicitante_rut'] ?? '', 20),
             'solicitante_correo' => strtolower($limit($input['solicitante_correo'] ?? '', 190)),
         ];
-        if ($requester['solicitante_nombre'] === '') {
-            return ['error' => 'Debes ingresar el nombre del solicitante.'];
-        }
-        if (filter_var($requester['solicitante_correo'], FILTER_VALIDATE_EMAIL) === false) {
-            return ['error' => 'Debes ingresar un correo válido para el solicitante.'];
+        if ($requester['solicitante_correo'] !== ''
+            && filter_var($requester['solicitante_correo'], FILTER_VALIDATE_EMAIL) === false) {
+            return ['error' => 'El correo del solicitante no es válido.'];
         }
         if ($requester['solicitante_rut'] !== '') {
             if (! $this->novaUsers->isValidRut($requester['solicitante_rut'])) {
