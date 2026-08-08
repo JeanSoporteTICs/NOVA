@@ -106,11 +106,7 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
 
     <div class="nc-busy-overlay" id="nc-busy-overlay" role="status" aria-live="polite" aria-hidden="true">
       <div class="nc-busy-card blue-on-white">
-        <div class="group" aria-hidden="true">
-          <div class="centerCircle"></div>
-          <div class="leftCircle"></div>
-          <div class="rightCircle"></div>
-        </div>
+        <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
         <div class="nc-busy-text" id="nc-busy-text">Consultando Nextcloud...</div>
       </div>
     </div>

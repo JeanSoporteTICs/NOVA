@@ -301,6 +301,372 @@ window.appUi.openModal = NovaAppUi.openModal;
 window.appUi.closeModal = NovaAppUi.closeModal;
 NovaAppUi.registerLoadingListeners();
 
+/**
+ * NovaSidebarCompact — compact mode shared by every primary NOVA sidebar.
+ *
+ * The control is injected automatically so native and legacy modules keep
+ * identical markup and behavior. State is stored separately for each module.
+ */
+const NovaSidebarCompact = (() => {
+    const STORAGE_PREFIX = 'nova-sidebar-compact:';
+    const NAVBAR_SELECTOR = '.nova-topbar, .rm-navbar, .sb-navbar, .telegram-topbar, .telegram-navbar, .emach-navbar';
+    const MODULE_PATHS = [
+        'redmine-mantencion',
+        'redmine_tic',
+        'monitoreo-servidores',
+        'administracion',
+        'telegram',
+        'emach',
+    ];
+    let viewportSyncFrame = 0;
+
+    function syncViewportOffset(sidebar) {
+        if (!window.matchMedia('(min-width: 992px)').matches) {
+            sidebar.style.removeProperty('--nova-sidebar-viewport-offset');
+            return;
+        }
+
+        const navbar = document.querySelector(NAVBAR_SELECTOR);
+        const navbarBottom = navbar ? Math.ceil(navbar.getBoundingClientRect().bottom) : 0;
+        const layoutTop = Math.ceil(sidebar.closest('.nova-layout')?.getBoundingClientRect().top || 0);
+        const visibleTop = Math.max(navbarBottom, layoutTop);
+        const offset = Math.max(0, Math.min(window.innerHeight - 120, visibleTop));
+        sidebar.style.setProperty('--nova-sidebar-viewport-offset', `${offset}px`);
+    }
+
+    function syncViewportOffsets() {
+        viewportSyncFrame = 0;
+        document.querySelectorAll('.nova-sidebar').forEach(syncViewportOffset);
+    }
+
+    function requestViewportSync() {
+        if (viewportSyncFrame) return;
+        viewportSyncFrame = window.requestAnimationFrame(syncViewportOffsets);
+    }
+
+    function moduleKey(sidebar) {
+        const explicitKey = String(sidebar.dataset.novaSidebarKey || '').trim();
+        if (explicitKey) return explicitKey;
+
+        const path = decodeURIComponent(window.location.pathname || '').toLowerCase();
+        const matchedModule = MODULE_PATHS.find(module => path.includes(`/${module}`));
+        if (matchedModule) return matchedModule;
+
+        return sidebar.id || 'nova';
+    }
+
+    function storageKey(sidebar) {
+        return `${STORAGE_PREFIX}${moduleKey(sidebar)}`;
+    }
+
+    function readCompact(sidebar) {
+        try {
+            return window.localStorage.getItem(storageKey(sidebar)) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function writeCompact(sidebar, compact) {
+        try {
+            window.localStorage.setItem(storageKey(sidebar), compact ? '1' : '0');
+        } catch (error) {
+            // Storage may be disabled; compact mode still works for this page.
+        }
+    }
+
+    function linkLabel(link) {
+        const label = Array.from(link.children).find(child => child.tagName === 'SPAN');
+        return String(label?.textContent || '').trim();
+    }
+
+    function ensureLinkTitles(sidebar) {
+        sidebar.querySelectorAll('.nova-sidebar-link').forEach(link => {
+            const label = linkLabel(link);
+            if (label && !link.hasAttribute('title')) link.setAttribute('title', label);
+        });
+    }
+
+    function ensureControl(sidebar) {
+        let footer = Array.from(sidebar.children).find(child => child.classList?.contains('nova-sidebar-footer'));
+        if (!footer) {
+            footer = document.createElement('div');
+            footer.className = 'nova-sidebar-footer';
+            sidebar.appendChild(footer);
+        }
+
+        let button = footer.querySelector('.nova-sidebar-collapse-toggle');
+        if (!button) {
+            button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'nova-sidebar-collapse-toggle';
+            button.setAttribute('aria-controls', sidebar.id || 'novaSidebar');
+            button.innerHTML = '<i class="bi bi-chevron-double-left" aria-hidden="true"></i><span>Contraer men\u00fa</span>';
+            footer.appendChild(button);
+        }
+
+        return button;
+    }
+
+    function collapseTarget(sidebar, toggle) {
+        const targetId = String(toggle?.getAttribute('aria-controls') || '').trim()
+            || String(toggle?.getAttribute('href') || '').replace(/^#/, '');
+        if (!targetId) return null;
+
+        return Array.from(sidebar.querySelectorAll('.collapse')).find(collapse => collapse.id === targetId) || null;
+    }
+
+    function setCollapseState(sidebar, collapse, expanded) {
+        if (!collapse) return;
+        collapse.classList.remove('collapsing');
+        collapse.classList.toggle('show', expanded);
+        collapse.style.removeProperty('height');
+
+        sidebar.querySelectorAll('.nova-sidebar-link[data-bs-toggle="collapse"]').forEach(toggle => {
+            if (collapseTarget(sidebar, toggle) === collapse) {
+                toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            }
+        });
+    }
+
+    function syncNestedGroups(sidebar, compact) {
+        const activeLeaf = sidebar.querySelector('.nova-sidebar-link.active:not([data-bs-toggle="collapse"])');
+        sidebar.querySelectorAll('.collapse').forEach(collapse => {
+            const containsActive = activeLeaf instanceof Element && collapse.contains(activeLeaf);
+            setCollapseState(sidebar, collapse, !compact && containsActive);
+        });
+    }
+
+    function setCompact(sidebar, button, compact) {
+        sidebar.classList.toggle('is-compact', compact);
+        button.setAttribute('aria-pressed', compact ? 'true' : 'false');
+        button.setAttribute('aria-label', compact ? 'Expandir men\u00fa' : 'Contraer men\u00fa');
+        button.setAttribute('title', compact ? 'Expandir men\u00fa' : 'Contraer men\u00fa');
+
+        const icon = button.querySelector('i');
+        const label = button.querySelector('span');
+        if (icon) icon.className = compact ? 'bi bi-chevron-double-right' : 'bi bi-chevron-double-left';
+        if (label) label.textContent = compact ? 'Expandir men\u00fa' : 'Contraer men\u00fa';
+        syncNestedGroups(sidebar, compact);
+    }
+
+    function init(root = document) {
+        root.querySelectorAll('.nova-sidebar:not([data-nova-sidebar-compact-ready])').forEach(sidebar => {
+            if (sidebar.dataset.novaSidebarCompact === 'false') return;
+
+            sidebar.setAttribute('data-nova-sidebar-compact-ready', 'true');
+            syncViewportOffset(sidebar);
+            ensureLinkTitles(sidebar);
+            const button = ensureControl(sidebar);
+            setCompact(sidebar, button, readCompact(sidebar));
+
+            button.addEventListener('click', () => {
+                const compact = !sidebar.classList.contains('is-compact');
+                delete sidebar.dataset.novaSidebarTemporaryExpanded;
+                setCompact(sidebar, button, compact);
+                writeCompact(sidebar, compact);
+            });
+
+            sidebar.addEventListener('click', event => {
+                const link = event.target instanceof Element ? event.target.closest('.nova-sidebar-link') : null;
+                if (!link || !sidebar.contains(link)) return;
+
+                const isCollapseToggle = link.matches('[data-bs-toggle="collapse"]');
+                if (isCollapseToggle && sidebar.classList.contains('is-compact')) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    sidebar.dataset.novaSidebarTemporaryExpanded = 'true';
+                    setCompact(sidebar, button, false);
+                    const target = collapseTarget(sidebar, link);
+                    window.requestAnimationFrame(() => setCollapseState(sidebar, target, true));
+                    return;
+                }
+
+                if (!isCollapseToggle && sidebar.dataset.novaSidebarTemporaryExpanded === 'true') {
+                    delete sidebar.dataset.novaSidebarTemporaryExpanded;
+                    setCompact(sidebar, button, true);
+                    writeCompact(sidebar, true);
+                }
+            });
+        });
+
+        // The synchronous head preload prevents a wide-sidebar flash. At this
+        // point every sidebar has its definitive is-compact state.
+        document.documentElement.classList.remove('nova-sidebar-precompact');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => init());
+    } else {
+        init();
+    }
+    document.addEventListener('partial:loaded', () => init());
+    window.addEventListener('resize', requestViewportSync);
+    window.addEventListener('scroll', requestViewportSync, { passive: true });
+    window.visualViewport?.addEventListener('resize', requestViewportSync);
+
+    return { init };
+})();
+
+window.NovaSidebarCompact = NovaSidebarCompact;
+
+/**
+ * NovaUserMenu — consolidates the current-user label and POST logout form in
+ * one accessible menu across NOVA and its native/legacy subprojects.
+ */
+const NovaUserMenu = (() => {
+    const CONTAINER_SELECTOR = [
+        '.nova-session',
+        '.rm-top-actions',
+        '.sb-nav-actions',
+        '.telegram-nav-actions',
+        '.emach-nav-actions',
+        '.telegram-topbar > :last-child',
+    ].join(',');
+    let menuSequence = 0;
+
+    function userLabel(container) {
+        return Array.from(container.querySelectorAll('span')).find(element => (
+            element.querySelector('.bi-person-circle')
+            && !element.closest('.nova-user-menu')
+        ));
+    }
+
+    function logoutForm(container) {
+        return Array.from(container.querySelectorAll('form')).find(form => {
+            const action = String(form.getAttribute('action') || '').toLowerCase();
+            return action.includes('/logout') || form.querySelector('.bi-box-arrow-right');
+        });
+    }
+
+    function close(menu, restoreFocus = false) {
+        if (!menu?.classList.contains('is-open')) return;
+        menu.classList.remove('is-open');
+        const trigger = menu.querySelector('.nova-user-menu-trigger');
+        const panel = menu.querySelector('.nova-user-menu-panel');
+        trigger?.setAttribute('aria-expanded', 'false');
+        if (panel) panel.hidden = true;
+        if (restoreFocus) trigger?.focus();
+    }
+
+    function closeAll(except = null) {
+        document.querySelectorAll('.nova-user-menu.is-open').forEach(menu => {
+            if (menu !== except) close(menu);
+        });
+    }
+
+    function build(container, labelElement, form) {
+        const name = String(labelElement.textContent || '').replace(/\s+/g, ' ').trim() || 'Usuario';
+        const initial = Array.from(name)[0]?.toLocaleUpperCase('es') || 'U';
+        const panelId = `nova-user-menu-panel-${++menuSequence}`;
+
+        const menu = document.createElement('div');
+        menu.className = 'nova-user-menu';
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'nova-user-menu-trigger';
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.setAttribute('aria-haspopup', 'menu');
+        trigger.setAttribute('aria-controls', panelId);
+        trigger.setAttribute('title', `Men\u00fa de ${name}`);
+
+        const avatar = document.createElement('span');
+        avatar.className = 'nova-user-menu-avatar';
+        avatar.setAttribute('aria-hidden', 'true');
+        avatar.textContent = initial;
+
+        const nameElement = document.createElement('span');
+        nameElement.className = 'nova-user-menu-name';
+        nameElement.textContent = name;
+
+        const chevron = document.createElement('i');
+        chevron.className = 'bi bi-chevron-down nova-user-menu-chevron';
+        chevron.setAttribute('aria-hidden', 'true');
+        trigger.append(avatar, nameElement, chevron);
+
+        const panel = document.createElement('div');
+        panel.className = 'nova-user-menu-panel';
+        panel.id = panelId;
+        panel.setAttribute('role', 'menu');
+        panel.hidden = true;
+
+        const passwordButton = document.createElement('button');
+        passwordButton.type = 'button';
+        passwordButton.className = 'nova-user-menu-action';
+        passwordButton.disabled = true;
+        passwordButton.setAttribute('role', 'menuitem');
+        passwordButton.setAttribute('aria-disabled', 'true');
+        passwordButton.innerHTML = '<i class="bi bi-key" aria-hidden="true"></i><span>Cambiar contrase\u00f1a</span><small>Pr\u00f3ximamente</small>';
+
+        const divider = document.createElement('div');
+        divider.className = 'nova-user-menu-divider';
+        divider.setAttribute('role', 'separator');
+
+        const submit = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (submit instanceof HTMLButtonElement) {
+            submit.className = 'nova-user-menu-action is-danger';
+            submit.setAttribute('role', 'menuitem');
+            submit.innerHTML = '<i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Cerrar sesi\u00f3n</span>';
+        }
+        form.className = 'nova-user-menu-logout';
+        form.style.removeProperty('display');
+
+        const formParent = form.parentNode;
+        panel.append(passwordButton, divider);
+        menu.append(trigger, panel);
+        formParent?.insertBefore(menu, form);
+        panel.appendChild(form);
+        labelElement.remove();
+
+        trigger.addEventListener('click', event => {
+            event.stopPropagation();
+            const open = !menu.classList.contains('is-open');
+            closeAll(menu);
+            menu.classList.toggle('is-open', open);
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+            panel.hidden = !open;
+        });
+
+        menu.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            close(menu, true);
+        });
+    }
+
+    function init(root = document) {
+        root.querySelectorAll(CONTAINER_SELECTOR).forEach(container => {
+            if (container.dataset.novaUserMenuReady === 'true') return;
+            const labelElement = userLabel(container);
+            const form = logoutForm(container);
+            if (!labelElement || !form) return;
+
+            container.dataset.novaUserMenuReady = 'true';
+            build(container, labelElement, form);
+        });
+    }
+
+    document.addEventListener('click', event => {
+        if (!event.target.closest('.nova-user-menu')) closeAll();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeAll();
+    });
+    window.addEventListener('resize', () => closeAll());
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => init());
+    } else {
+        init();
+    }
+    document.addEventListener('partial:loaded', () => init());
+
+    return { init };
+})();
+
+window.NovaUserMenu = NovaUserMenu;
+
 // Compat: expose appModal.show as NovaToast wrapper if appModal not already defined
 if (!window.appModal) {
     window.appModal = {
@@ -883,38 +1249,50 @@ window.NovaCsrfForms = NovaCsrfForms;
 
 // Shared "back to top" button — wires up any .nova-scroll-top button on the
 // page (moves it to <body>, toggles visibility past 220px of scroll, smooth-
-// scrolls on click). Consolidates what used to be 3 near-identical copies in
-// Historico/historico.php, Usuarios/usuarios.php and RedmineTic/native.blade.php.
+// scrolls on click) and removes stale buttons after partial navigation.
 // RM Dashboard's .dashboard-scroll-top is intentionally NOT covered here — it
 // has its own IntersectionObserver-based visibility logic tied to a specific
 // scroll target, not just a raw scroll-position threshold.
 const NovaScrollTop = (() => {
-    function init() {
-        document.querySelectorAll('.nova-scroll-top').forEach((btn) => {
-            if (btn.parentElement !== document.body) {
-                document.body.appendChild(btn);
-            }
-            const update = () => {
-                // setProperty(..., 'important') because .nova-scroll-top's own
-                // display:none in nova-ui.css is !important (needed to beat the
-                // global .btn{display:inline-flex!important} rule) — a plain
-                // non-important inline assignment here would never win against it.
-                btn.style.setProperty('display', (window.scrollY || document.documentElement.scrollTop || 0) > 220 ? 'flex' : 'none', 'important');
-            };
-            btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-            window.addEventListener('scroll', update, { passive: true });
-            window.addEventListener('resize', update);
-            update();
+    function update() {
+        const visible = (window.scrollY || document.documentElement.scrollTop || 0) > 220;
+        document.querySelectorAll('body > .nova-scroll-top').forEach((btn) => {
+            btn.style.setProperty('display', visible ? 'flex' : 'none', 'important');
         });
     }
 
+    function init(root = document) {
+        root.querySelectorAll('.nova-scroll-top').forEach((btn) => {
+            if (btn.parentElement !== document.body) {
+                document.body.appendChild(btn);
+            }
+            if (btn.dataset.novaScrollTopReady !== 'true') {
+                btn.dataset.novaScrollTopReady = 'true';
+                btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+            }
+        });
+        update();
+    }
+
+    function refreshAfterPartialNavigation() {
+        const hasMantencionDashboard = Boolean(document.querySelector('#page-content .dashboard-shell'));
+        document.querySelectorAll('body > .nova-scroll-top').forEach(btn => btn.remove());
+        if (!hasMantencionDashboard) {
+            document.querySelectorAll('body > .dashboard-scroll-top').forEach(btn => btn.remove());
+        }
+        init(document);
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', () => init());
     } else {
         init();
     }
+    document.addEventListener('partial:loaded', refreshAfterPartialNavigation);
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
 
-    return { init };
+    return { init, update };
 })();
 
 window.NovaScrollTop = NovaScrollTop;

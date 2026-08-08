@@ -23,36 +23,36 @@ $novaLoginUrl = function_exists('route') ? route('login') : $novaHomeUrl . '/log
 $novaCsrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $novaSessionIdentity = (string) session('nova_user.id', '');
 $navItems = [
-    ['key' => 'mensajes', 'label' => 'Reportes', 'href' => $mantencionAppUrl, 'icon' => 'bi-inboxes', 'can' => auth_can('mensajes_acceso')],
-    ['key' => 'manual', 'label' => 'Pendiente manual', 'href' => $mantencionAppUrl . '/manual', 'icon' => 'bi-pencil-square', 'can' => auth_can('simulador')],
-    ['key' => 'horas', 'label' => 'Horas extra', 'href' => $mantencionAppUrl . '/horas-extra', 'icon' => 'bi-clock-history', 'can' => auth_can('horas_extra')],
-    ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => $mantencionAppUrl . '/historico', 'icon' => 'bi-archive', 'can' => auth_can('historico')],
-    ['key' => 'mis_integraciones', 'label' => 'Cuentas conectadas', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => 'bi-person-lock', 'can' => auth_can('mis_integraciones')],
-    ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => $mantencionAppUrl . '/usuarios', 'icon' => 'bi-people', 'can' => auth_can('usuarios')],
+    ['key' => 'mensajes', 'label' => 'Reportes', 'href' => $mantencionAppUrl, 'icon' => config('navigation-icons.reportes'), 'can' => auth_can('mensajes_acceso')],
+    ['key' => 'manual', 'label' => 'Pendiente manual', 'href' => $mantencionAppUrl . '/manual', 'icon' => config('navigation-icons.reporte_manual'), 'can' => auth_can('simulador')],
+    ['key' => 'horas', 'label' => 'Horas extra', 'href' => $mantencionAppUrl . '/horas-extra', 'icon' => config('navigation-icons.horas_extra'), 'can' => auth_can('horas_extra')],
+    ['key' => 'historico', 'label' => 'Hist&oacute;rico', 'href' => $mantencionAppUrl . '/historico', 'icon' => config('navigation-icons.historico'), 'can' => auth_can('historico')],
+    ['key' => 'mis_integraciones', 'label' => 'Cuentas conectadas', 'href' => $mantencionAppUrl . '/mis-integraciones', 'icon' => config('navigation-icons.cuentas_conectadas'), 'can' => auth_can('mis_integraciones')],
+    ['key' => 'usuarios', 'label' => 'Usuarios', 'href' => $mantencionAppUrl . '/usuarios', 'icon' => config('navigation-icons.usuarios'), 'can' => auth_can('usuarios')],
     [
         'key' => 'integraciones',
         'label' => 'Integraciones',
         'href' => '#',
-        'icon' => 'bi-diagram-3',
+        'icon' => config('navigation-icons.integraciones'),
         'can' => auth_can('integraciones_nextcloud'),
         'children' => [
             [
                 'key' => 'integraciones_nextcloud',
                 'label' => 'Nextcloud',
                 'href' => '#',
-                'icon' => 'bi-cloud',
+                'icon' => config('navigation-icons.nextcloud'),
                 'can' => auth_can('integraciones_nextcloud'),
                 'children' => [
-                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Nextcloud', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-usuarios', 'icon' => 'bi-cloud-plus', 'can' => auth_can('integraciones_nextcloud')],
-                    ['key' => 'integraciones_nextcloud_grupos', 'label' => 'Grupos', 'href' => $mantencionAppUrl . '/configuracion?panel=nextcloud', 'icon' => 'bi-people', 'can' => auth_can('integraciones_nextcloud')],
-                    ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial', 'href' => '/redmine-mantencion/app/integraciones-nextcloud-historial', 'icon' => 'bi-clock-history', 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Nextcloud', 'href' => $mantencionAppUrl . '/integraciones-nextcloud-usuarios', 'icon' => config('navigation-icons.nextcloud'), 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_grupos', 'label' => 'Grupos', 'href' => $mantencionAppUrl . '/configuracion?panel=nextcloud', 'icon' => config('navigation-icons.grupos'), 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial', 'href' => $mantencionAppUrl . '/integraciones-nextcloud-historial', 'icon' => config('navigation-icons.historial'), 'can' => auth_can('integraciones_nextcloud')],
                 ],
             ],
         ],
     ],
-    ['key' => 'configuracion', 'label' => 'Configuraci&oacute;n', 'href' => $mantencionAppUrl . '/configuracion', 'icon' => 'bi-sliders', 'can' => auth_can('configuracion') || auth_can('categorias')],
-    ['key' => 'estadisticas', 'label' => 'Estad&iacute;sticas', 'href' => $mantencionAppUrl . '/estadisticas', 'icon' => 'bi-bar-chart-line', 'can' => auth_can('estadisticas')],
-    ['key' => 'security', 'label' => 'Actividad reciente', 'href' => $mantencionAppUrl . '/actividad', 'icon' => 'bi-activity', 'can' => auth_can('actividad')],
+    ['key' => 'configuracion', 'label' => 'Configuraci&oacute;n', 'href' => $mantencionAppUrl . '/configuracion', 'icon' => config('navigation-icons.configuracion'), 'can' => auth_can('configuracion') || auth_can('categorias')],
+    ['key' => 'estadisticas', 'label' => 'Estad&iacute;sticas', 'href' => $mantencionAppUrl . '/estadisticas', 'icon' => config('navigation-icons.estadisticas'), 'can' => auth_can('estadisticas')],
+    ['key' => 'security', 'label' => 'Actividad reciente', 'href' => $mantencionAppUrl . '/actividad', 'icon' => config('navigation-icons.actividad'), 'can' => auth_can('actividad')],
 ];
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark sb-navbar sb-native-navbar">
@@ -176,13 +176,20 @@ $navItems = [
         <?php endif; ?>
       <?php endforeach; ?>
     </nav>
+    <div class="nova-sidebar-footer">
+      <button class="nova-sidebar-collapse-toggle" type="button" aria-controls="novaSidebar" aria-pressed="false" aria-label="Contraer men&uacute;" title="Contraer men&uacute;">
+        <i class="bi bi-chevron-double-left" aria-hidden="true"></i><span>Contraer men&uacute;</span>
+      </button>
+    </div>
   </aside>
   <main class="nova-content" id="nova-main-content">
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
 <div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
   <div class="nova-integration-card">
     <span class="nova-integration-icon"><i class="bi bi-cloud-arrow-down"></i></span>
-    <img class="nova-integration-gif" id="nova-integration-gif" src="" alt="" hidden>
+    <div class="nova-integration-nextcloud" id="nova-integration-nextcloud" hidden>
+      <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
+    </div>
     <strong id="nova-integration-title">Consultando integraci&oacute;n</strong>
     <span id="nova-integration-detail">La operaci&oacute;n puede tardar unos segundos.</span>
     <div class="nova-integration-bar" aria-hidden="true"><i></i></div>
@@ -247,18 +254,15 @@ $navItems = [
     const detail = document.getElementById('nova-integration-detail');
     const icon = integrationOverlay.querySelector('.nova-integration-icon i');
     const iconContainer = integrationOverlay.querySelector('.nova-integration-icon');
-    const gif = document.getElementById('nova-integration-gif');
+    const nextcloudLoader = document.getElementById('nova-integration-nextcloud');
     if (state) {
+      const isNextcloud = options.provider === 'nextcloud';
       if (title) title.textContent = options.title || 'Consultando integración';
       if (detail) detail.textContent = options.detail || 'La operación puede tardar unos segundos.';
       if (icon) icon.className = 'bi ' + (options.icon || 'bi-cloud-arrow-down');
-      if (gif) {
-        gif.hidden = !options.image;
-        gif.src = options.image || '';
-        gif.alt = options.image ? (options.imageAlt || '') : '';
-      }
-      if (iconContainer) iconContainer.hidden = Boolean(options.image);
-      integrationOverlay.classList.toggle('has-media', Boolean(options.image));
+      if (nextcloudLoader) nextcloudLoader.hidden = !isNextcloud;
+      if (iconContainer) iconContainer.hidden = isNextcloud;
+      integrationOverlay.classList.toggle('is-nextcloud', isNextcloud);
       integrationOverlay.classList.add('is-active');
       integrationOverlay.setAttribute('aria-hidden', 'false');
       document.body.classList.add('nova-integration-loading');
@@ -272,14 +276,12 @@ $navItems = [
     const actionInput = form.querySelector('input[name="action"]');
     const action = ((actionInput && actionInput.value) || '') + ' ' + ((submitter && submitter.value) || '') + ' ' + ((submitter && submitter.textContent) || '');
     const lower = action.toLowerCase();
-    if (!/(sync|sincron|import|fetch|consult|confirm|core|api)/i.test(lower)) return null;
     if (lower.indexOf('nextcloud') !== -1) return {
       title: lower.indexOf('group') !== -1 ? 'Consultando grupos de Nextcloud' : 'Procesando Nextcloud',
       detail: lower.indexOf('group') !== -1 ? 'Obteniendo los grupos disponibles. Esto puede tardar algunos segundos.' : 'Conectando con Nextcloud y preparando la respuesta.',
-      icon: 'bi-cloud-arrow-up',
-      image: <?= json_encode(legacy_app_url('assets/img/Nextcloud.gif'), JSON_UNESCAPED_SLASHES) ?>,
-      imageAlt: 'Consultando Nextcloud'
+      provider: 'nextcloud'
     };
+    if (!/(sync|sincron|import|fetch|consult|confirm|core|api)/i.test(lower)) return null;
     if (lower.indexOf('core') !== -1) return { title: 'Consultando CORE', detail: 'Buscando y normalizando datos recibidos desde CORE.', icon: 'bi-database-down' };
     if (lower.indexOf('redmine') !== -1 || lower.indexOf('sync') !== -1 || lower.indexOf('sincron') !== -1) return { title: 'Sincronizando Redmine', detail: 'Actualizando catálogos y datos desde Redmine.', icon: 'bi-arrow-repeat' };
     if (lower.indexOf('import') !== -1) return { title: 'Importando datos', detail: 'Procesando archivo o datos externos.', icon: 'bi-file-earmark-arrow-up' };
@@ -336,20 +338,110 @@ window.addEventListener('load', () => {
       'horas_extra.php',
       'pendientes/manual.php',
     ];
+    const sidebar = document.getElementById('novaSidebar');
     const navLinks = document.querySelectorAll('.nova-sidebar-body a.nova-sidebar-link:not([data-bs-toggle])');
+    const groupToggles = document.querySelectorAll('.nova-sidebar-body a.nova-sidebar-link[data-bs-toggle="collapse"]');
+    const navigationKey = value => {
+      try {
+        const parsed = new URL(value, window.location.href);
+        return `${parsed.pathname.replace(/\/+$/, '')}${parsed.search}`;
+      } catch (error) {
+        return String(value || '');
+      }
+    };
     const setActive = (urlStr) => {
+      const targetKey = navigationKey(urlStr);
+      let activeLink = null;
       navLinks.forEach(a => {
-        if (a.href === urlStr) a.classList.add('active'); else a.classList.remove('active');
+        const active = navigationKey(a.href) === targetKey;
+        a.classList.toggle('active', active);
+        if (active) {
+          a.setAttribute('aria-current', 'page');
+          activeLink = a;
+        } else {
+          a.removeAttribute('aria-current');
+        }
+      });
+
+      const compact = sidebar?.classList.contains('is-compact') ?? false;
+      groupToggles.forEach(toggle => {
+        const targetId = String(toggle.getAttribute('aria-controls') || '').trim()
+          || String(toggle.getAttribute('href') || '').replace(/^#/, '');
+        const controlled = targetId ? document.getElementById(targetId) : null;
+        const containsActive = controlled instanceof Element && activeLink instanceof Element && controlled.contains(activeLink);
+        toggle.classList.toggle('active', containsActive);
+        toggle.setAttribute('aria-expanded', !compact && containsActive ? 'true' : 'false');
+      });
+      sidebar?.querySelectorAll('.collapse').forEach(collapse => {
+        const shouldExpand = !compact && activeLink instanceof Element && collapse.contains(activeLink);
+        collapse.classList.remove('collapsing');
+        collapse.classList.toggle('show', shouldExpand);
+        collapse.style.removeProperty('height');
+      });
+    };
+    const pageStyleHref = (link, baseUrl) => {
+      try {
+        return new URL(link.getAttribute('href') || '', baseUrl).href;
+      } catch (error) {
+        return '';
+      }
+    };
+    const isModulePageStyle = (link, baseUrl) => {
+      const href = pageStyleHref(link, baseUrl);
+      if (!href) return false;
+      try {
+        const pathname = new URL(href).pathname.toLowerCase();
+        return pathname.includes('/redmine-mantencion/assets/css/') && !pathname.endsWith('/theme.css');
+      } catch (error) {
+        return false;
+      }
+    };
+    const syncPageStyles = async (doc, targetUrl) => {
+      const desiredLinks = Array.from(doc.querySelectorAll('link[rel~="stylesheet"]'))
+        .filter(link => isModulePageStyle(link, targetUrl));
+      const desiredHrefs = new Set(desiredLinks.map(link => pageStyleHref(link, targetUrl)).filter(Boolean));
+      const currentLinks = Array.from(document.querySelectorAll('link[rel~="stylesheet"]'))
+        .filter(link => isModulePageStyle(link, window.location.href));
+      const currentHrefs = new Set(currentLinks.map(link => pageStyleHref(link, window.location.href)).filter(Boolean));
+      const pendingStyles = [];
+
+      desiredLinks.forEach(source => {
+        const href = pageStyleHref(source, targetUrl);
+        if (!href || currentHrefs.has(href)) return;
+
+        const link = document.createElement('link');
+        Array.from(source.attributes).forEach(attribute => link.setAttribute(attribute.name, attribute.value));
+        link.href = href;
+        link.dataset.partialNavStyle = 'true';
+        pendingStyles.push(new Promise(resolve => {
+          const finish = () => resolve();
+          link.addEventListener('load', finish, { once: true });
+          link.addEventListener('error', finish, { once: true });
+          window.setTimeout(finish, 2500);
+        }));
+        document.head.appendChild(link);
+      });
+
+      await Promise.all(pendingStyles);
+      currentLinks.forEach(link => {
+        const href = pageStyleHref(link, window.location.href);
+        if (!desiredHrefs.has(href)) link.remove();
       });
     };
     const executeScripts = (doc) => {
       const pageEl = doc.getElementById('page-content');
       if (pageEl) {
-        pageEl.querySelectorAll('script').forEach(old => {
+        const pageScripts = new Set([
+          ...pageEl.querySelectorAll('script'),
+          ...doc.querySelectorAll('script[data-partial-nav-script]'),
+        ]);
+        pageScripts.forEach(old => {
           const s = document.createElement('script');
           if (old.src) s.src = old.src;
           else s.textContent = old.textContent;
           document.body.appendChild(s);
+          if (old.src) s.addEventListener('load', () => s.remove(), { once: true });
+          else s.remove();
         });
       }
       // Re-disparar eventos para vistas cargadas din&aacute;micamente.
@@ -376,7 +468,9 @@ window.addEventListener('load', () => {
           window.location.href = url;
           return;
         }
-        if (newContent.querySelectorAll('script').length > 0) {
+        const blockingPageScripts = Array.from(newContent.querySelectorAll('script'))
+          .filter(script => !script.hasAttribute('data-partial-nav-script'));
+        if (blockingPageScripts.length > 0) {
           window.location.href = url;
           return;
         }
@@ -386,6 +480,7 @@ window.addEventListener('load', () => {
           window.location.href = url;
           return;
         }
+        await syncPageStyles(doc, url);
         pageContent.innerHTML = contentHtml;
         window.NovaSearchSelect?.init(pageContent);
         // limpiar nodos de texto vacíos/BOM

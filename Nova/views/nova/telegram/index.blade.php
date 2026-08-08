@@ -6,6 +6,8 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Telegram | NOVA</title>
     @include('nova.partials.favicon')
+    @php $novaSidebarPreloadVersion = @filemtime(public_path('assets/nova-sidebar-preload.js')) ?: '1'; @endphp
+    <script src="{{ asset('assets/nova-sidebar-preload.js') }}?v={{ $novaSidebarPreloadVersion }}" data-nova-sidebar-key="telegram"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     @php
@@ -329,6 +331,6 @@
 @endif
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{ asset('assets/nova-ui.js') }}"></script>
+<script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
 </body>
 </html>

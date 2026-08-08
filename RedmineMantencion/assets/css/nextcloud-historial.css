@@ -3,4 +3,309 @@
     .nextcloud-row-created > * { background-color: #dcfce7 !important; }
     .nextcloud-row-existing > * { background-color: #fef3c7 !important; }
     .nextcloud-row-failed > * { background-color: #fee2e2 !important; }
+    .nextcloud-history-shell { overflow: hidden; }
+    .nextcloud-history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.15rem;
+      border-bottom: 1px solid #d7e3f0;
+      background: linear-gradient(135deg, #f7fbff, #eef6ff);
+    }
+    .nextcloud-history-head h2 {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      margin: 0;
+      color: #173f70;
+      font-size: 1rem;
+      font-weight: 850;
+    }
+    .nextcloud-history-head h2 i { color: #0082c9; }
+    .nextcloud-history-head p { margin: .18rem 0 0; color: #64748b; font-size: .76rem; font-weight: 650; }
+    .nextcloud-history-total {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2rem;
+      padding: .35rem .7rem;
+      border: 1px solid #bfd4ea;
+      border-radius: 999px;
+      background: #fff;
+      color: #315c89;
+      font-size: .74rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .nextcloud-history-wrap { overflow-x: visible; }
+    .nextcloud-history-table { width: 100%; min-width: 0; table-layout: fixed; }
+    .nextcloud-history-table thead th,
+    .nextcloud-history-detail-table thead th {
+      padding: .7rem .75rem;
+      border-bottom: 1px solid #c9d8ea;
+      background: #eaf3fd;
+      color: #23446b;
+      font-size: .68rem;
+      font-weight: 850;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .nextcloud-history-table thead th:nth-child(1) { width: 16%; }
+    .nextcloud-history-table thead th:nth-child(2) { width: 25%; }
+    .nextcloud-history-table thead th:nth-child(3) { width: 23%; }
+    .nextcloud-history-table thead th:nth-child(4) { width: 27%; }
+    .nextcloud-history-table thead th:nth-child(5) { width: 9%; }
+    .nextcloud-history-table tbody td {
+      padding: .72rem .75rem;
+      border-color: #e0e9f3;
+      background: #fff;
+      color: #2b3e55;
+      font-size: .78rem;
+      vertical-align: middle;
+    }
+    .nextcloud-history-table tbody tr:hover td { background: #f7fbff; }
+    .nextcloud-history-date {
+      color: #425b78 !important;
+      font-variant-numeric: tabular-nums;
+      font-weight: 750;
+      white-space: normal;
+    }
+    .nextcloud-history-date > span { display: flex; flex-wrap: wrap; align-items: baseline; }
+    .nextcloud-history-date i { margin-right: .42rem; color: #5d83aa; }
+    .nextcloud-history-id {
+      display: inline-block;
+      max-width: 112px;
+      overflow: hidden;
+      color: #174f87;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .72rem;
+      font-weight: 850;
+      text-overflow: ellipsis;
+      margin: .3rem 0 0 1.35rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .nextcloud-history-requester,
+    .nextcloud-history-contact { display: grid; min-width: 0; gap: .2rem; }
+    .nextcloud-history-requester { gap: .38rem; }
+    .nextcloud-history-requester strong { overflow: hidden; color: #203a58; font-size: .78rem; font-weight: 820; text-overflow: ellipsis; white-space: nowrap; }
+    .nextcloud-history-contact span {
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+      min-width: 0;
+      overflow: hidden;
+      color: #536b85;
+      font-size: .69rem;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .nextcloud-history-contact i { flex: 0 0 auto; color: #4f83b5; }
+    .nextcloud-history-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.65rem;
+      padding: .22rem .55rem;
+      border-radius: 999px;
+      font-size: .66rem;
+      font-weight: 850;
+    }
+    .nextcloud-history-status.is-success { background: #dcfce7; color: #166534; }
+    .nextcloud-history-status.is-warning { background: #fef3c7; color: #92400e; }
+    .nextcloud-history-status.is-danger { background: #fee2e2; color: #991b1b; }
+    .nextcloud-history-metrics { display: flex; flex-wrap: wrap; gap: .35rem .6rem; margin-top: .38rem; }
+    .nextcloud-history-metrics span {
+      display: inline-flex;
+      align-items: center;
+      gap: .25rem;
+      color: #64748b;
+      font-size: .66rem;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .nextcloud-history-metrics .is-created i { color: #16a34a; }
+    .nextcloud-history-metrics .is-existing i { color: #d97706; }
+    .nextcloud-history-metrics .is-failed i { color: #dc2626; }
+    .nextcloud-history-groups { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .nextcloud-history-groups span {
+      display: inline-flex;
+      max-width: 150px;
+      padding: .22rem .48rem;
+      overflow: hidden;
+      border: 1px solid #c7dbef;
+      border-radius: 999px;
+      background: #eef7ff;
+      color: #245c91;
+      font-size: .67rem;
+      font-weight: 750;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .nextcloud-history-groups span.is-empty { border-color: #d9e1ea; background: #f4f6f8; color: #738196; }
+    .nextcloud-history-context { display: grid; min-width: 0; gap: .45rem; }
+    .nextcloud-history-detail {
+      display: -webkit-box;
+      overflow: hidden;
+      color: #53677e;
+      font-size: .74rem;
+      font-weight: 650;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .nextcloud-history-open.btn-nova {
+      display: inline-grid;
+      width: 2.35rem;
+      min-width: 2.35rem;
+      height: 2.35rem;
+      min-height: 2.35rem;
+      padding: 0 !important;
+      place-items: center;
+      border: 1px solid #bcd5f5 !important;
+      border-radius: .72rem !important;
+      background: #eef6ff !important;
+      color: #2563eb !important;
+      box-shadow: 0 5px 12px rgba(37, 99, 235, .12);
+    }
+    .nextcloud-history-open.btn-nova > i:first-child {
+      display: inline-block;
+      width: auto;
+      min-width: 0;
+      height: auto;
+      margin: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 1rem;
+    }
+    .nextcloud-history-open.btn-nova:hover {
+      border-color: #2563eb !important;
+      background: #2563eb !important;
+      color: #fff !important;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, .24);
+      transform: translateY(-1px);
+    }
+    .nextcloud-history-open.btn-nova:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .22);
+      outline-offset: 2px;
+    }
+    .nextcloud-history-modal .modal-content {
+      overflow: hidden;
+      border: 0;
+      border-radius: 1rem;
+      box-shadow: 0 28px 80px rgba(15, 32, 51, .28);
+    }
+    .nextcloud-history-modal .modal-header {
+      align-items: flex-start;
+      padding: 1rem 1.2rem;
+      border-bottom-color: #d7e3f0;
+      background: linear-gradient(135deg, #f5faff, #e9f4ff);
+    }
+    .nextcloud-history-modal-kicker {
+      margin: 0 0 .15rem;
+      color: #0082c9;
+      font-size: .65rem;
+      font-weight: 850;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .nextcloud-history-modal .modal-title { color: #173f70; font-size: 1.05rem; font-weight: 850; }
+    .nextcloud-history-modal .modal-header div > span { color: #64748b; font-size: .74rem; font-weight: 650; }
+    .nextcloud-history-modal .modal-body { padding: 1rem; background: #f8fbff; }
+    .nextcloud-history-requester-card {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .65rem;
+      margin-bottom: .8rem;
+      padding: .75rem;
+      border: 1px solid #cfe0f0;
+      border-radius: .8rem;
+      background: #fff;
+    }
+    .nextcloud-history-requester-card > div { display: grid; min-width: 0; gap: .12rem; }
+    .nextcloud-history-requester-card span { color: #718198; font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+    .nextcloud-history-requester-card strong { overflow: hidden; color: #23446b; font-size: .75rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .nextcloud-history-detail-wrap { overflow-x: visible; border: 1px solid #d5e1ee; border-radius: .8rem; background: #fff; }
+    .nextcloud-history-detail-table { width: 100%; min-width: 0; table-layout: fixed; }
+    .nextcloud-history-detail-table thead th:nth-child(1) { width: 10%; }
+    .nextcloud-history-detail-table thead th:nth-child(2) { width: 13%; }
+    .nextcloud-history-detail-table thead th:nth-child(3) { width: 17%; }
+    .nextcloud-history-detail-table thead th:nth-child(4) { width: 21%; }
+    .nextcloud-history-detail-table thead th:nth-child(5) { width: 18%; }
+    .nextcloud-history-detail-table thead th:nth-child(6) { width: 21%; }
+    .nextcloud-history-detail-table tbody td { padding: .62rem .7rem; overflow-wrap: anywhere; border-color: #e2e8f0; font-size: .75rem; }
+    .nextcloud-history-modal .modal-footer { border-top-color: #d7e3f0; background: #fff; }
+    @media (max-width: 991.98px) {
+      .nextcloud-history-head { align-items: flex-start; flex-direction: column; }
+      .nextcloud-history-wrap { padding: .75rem; background: #edf4fb; }
+      .nextcloud-history-table,
+      .nextcloud-history-table tbody { display: block; width: 100%; }
+      .nextcloud-history-table thead { display: none; }
+      .nextcloud-history-table tbody { display: grid; gap: .75rem; }
+      .nextcloud-history-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: hidden;
+        border: 1px solid #cfdeed;
+        border-radius: .85rem;
+        background: #fff;
+        box-shadow: 0 8px 22px rgba(30, 64, 100, .06);
+      }
+      .nextcloud-history-table tbody tr[hidden] { display: none !important; }
+      .nextcloud-history-table tbody td {
+        display: block;
+        min-width: 0;
+        padding: .72rem;
+        border: 0;
+        border-bottom: 1px solid #e4ebf3;
+      }
+      .nextcloud-history-table tbody td::before,
+      .nextcloud-history-detail-table tbody td::before {
+        display: block;
+        margin-bottom: .32rem;
+        color: #718198;
+        content: attr(data-label);
+        font-size: .61rem;
+        font-weight: 850;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+      }
+      .nextcloud-history-table tbody td:nth-child(3),
+      .nextcloud-history-table tbody td:nth-child(4),
+      .nextcloud-history-table tbody td:last-child { grid-column: 1 / -1; }
+      .nextcloud-history-table tbody td:last-child { display: flex; align-items: center; justify-content: space-between; }
+      .nextcloud-history-open { align-self: center; }
+    }
+    @media (max-width: 767.98px) {
+      .nextcloud-history-modal .modal-dialog { margin: .5rem; }
+      .nextcloud-history-modal .modal-content { max-height: calc(100dvh - 1rem); border-radius: .8rem; }
+      .nextcloud-history-requester-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .nextcloud-history-detail-wrap { border: 0; background: transparent; }
+      .nextcloud-history-detail-table,
+      .nextcloud-history-detail-table tbody { display: block; width: 100%; }
+      .nextcloud-history-detail-table thead { display: none; }
+      .nextcloud-history-detail-table tbody { display: grid; gap: .65rem; }
+      .nextcloud-history-detail-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: hidden;
+        border: 1px solid #d5e1ee;
+        border-radius: .75rem;
+        background: #fff;
+      }
+      .nextcloud-history-detail-table tbody td { display: block; min-width: 0; border: 0; border-bottom: 1px solid #e5ebf2; }
+      .nextcloud-history-detail-table tbody td:nth-child(6) { grid-column: 1 / -1; }
+    }
+    @media (max-width: 575.98px) {
+      .nextcloud-history-table tbody tr,
+      .nextcloud-history-detail-table tbody tr,
+      .nextcloud-history-requester-card { grid-template-columns: 1fr; }
+      .nextcloud-history-table tbody td:nth-child(3),
+      .nextcloud-history-table tbody td:nth-child(4),
+      .nextcloud-history-table tbody td:last-child,
+      .nextcloud-history-detail-table tbody td:nth-child(6) { grid-column: auto; }
+      .nextcloud-history-table tbody td:last-child { align-items: stretch; flex-direction: column; gap: .35rem; }
+      .nextcloud-history-open { align-self: flex-end; }
+    }
   

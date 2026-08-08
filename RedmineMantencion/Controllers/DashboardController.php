@@ -11,6 +11,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -30,7 +31,7 @@ class DashboardController extends Controller
      * ahora movida aquí. El HTML se conserva prácticamente intacto en
      * resources/views/redmine-mantencion/dashboard.blade.php.
      */
-    public function index(): View
+    public function index(): View|RedirectResponse
     {
         require_once base_path('RedmineMantencion/controllers/dashboard.php');
 
@@ -47,7 +48,11 @@ class DashboardController extends Controller
         $openCoreCredentialsModal = (bool) session()->pull('mantencion_dashboard_open_core_credentials_modal', false);
         $coreRuntimeUserSession = trim((string) session()->pull('mantencion_dashboard_core_runtime_user', ''));
 
-        [$messages, $flash, $securityLog] = $this->dashboardService->handle_request();
+        $dashboardResult = $this->dashboardService->handle_request();
+        if ($dashboardResult instanceof RedirectResponse) {
+            return $dashboardResult;
+        }
+        [$messages, $flash, $securityLog] = $dashboardResult;
         if ($flashSession) {
             $flash = $flashSession;
         }
@@ -63,10 +68,10 @@ class DashboardController extends Controller
             ? rtrim(legacy_app_url(), '/')
             : (function_exists('url') ? rtrim(url('/redmine-mantencion'), '/') : '/redmine-mantencion');
         $dashboardActionUrl = function_exists('route')
-            ? route('redmine.mantencion.section', ['section' => 'dashboard'], false)
+            ? route('redmine.mantencion.section', ['section' => 'dashboard'])
             : $mantencionBaseUrl . '/app/dashboard';
         $dashboardHoursExtraActionUrl = function_exists('route')
-            ? route('redmine.mantencion.dashboard.hours-extra', [], false)
+            ? route('redmine.mantencion.dashboard.hours-extra')
             : $dashboardActionUrl;
         $chileToday = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
         $coreDesde = $_GET['core_desde'] ?? $chileToday;

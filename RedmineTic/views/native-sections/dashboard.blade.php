@@ -27,7 +27,44 @@
 
         return $value ?: '-';
     };
+    $categoryOptions = collect($categories ?? [])->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))->filter()->unique()->values();
     $unitOptions = collect($units ?? [])->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))->filter()->unique()->values();
+    $activeAssigneeUsers = collect($users ?? [])->filter(
+        fn ($user) => strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo'))) === 'activo'
+    )->values();
+    $sessionUser = session('redmine_project_user', session('nova_user', []));
+    $sessionUser = is_array($sessionUser) ? $sessionUser : [];
+    $sessionUserIds = collect([
+        $sessionUser['redmine_id'] ?? null,
+        $sessionUser['id'] ?? null,
+        $sessionUser['uuid'] ?? null,
+        $sessionUser['_nova_user_id'] ?? null,
+    ])->map(fn ($value) => trim((string) $value))->filter()->values()->all();
+    $currentAssignee = $activeAssigneeUsers->first(function ($user) use ($sessionUserIds) {
+        $userIds = array_filter([
+            trim((string) ($user['id'] ?? '')),
+            trim((string) ($user['redmine_id'] ?? '')),
+            trim((string) ($user['_nova_user_id'] ?? '')),
+            trim((string) ($user['rut'] ?? '')),
+            trim((string) ($user['rut_sin_dv'] ?? '')),
+        ]);
+
+        return count(array_intersect($userIds, $sessionUserIds)) > 0;
+    }) ?? [];
+    $currentAssigneeId = trim((string) ($currentAssignee['redmine_id'] ?? $currentAssignee['id'] ?? ''));
+    $currentAssigneeId = ctype_digit($currentAssigneeId) ? $currentAssigneeId : '';
+    $assigneeOptions = $activeAssigneeUsers->map(function ($user) {
+        $userId = trim((string) ($user['redmine_id'] ?? $user['id'] ?? ''));
+        if (!ctype_digit($userId)) {
+            return null;
+        }
+        $displayName = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')));
+        if ($displayName === '') {
+            $displayName = trim((string) ($user['usuario'] ?? $user['username'] ?? $userId));
+        }
+
+        return ['value' => $userId, 'label' => $displayName];
+    })->filter()->unique('value')->values();
 @endphp
 
 <section class="rm-module-head">
@@ -103,7 +140,13 @@
                         <button class="btn-nova btn-nova-warning btn-icon" name="dashboard_action" value="archive_selected" type="submit"><i class="bi bi-archive"></i>Archivar</button>
                     @endif
                     @if ($canDeleteReports)
-                        <button class="btn-nova btn-nova-danger btn-icon" name="dashboard_action" value="delete_selected" type="submit"><i class="bi bi-trash3"></i>Eliminar seleccionados</button>
+                        <button class="btn-nova btn-nova-danger btn-icon" name="dashboard_action" value="delete_selected" type="submit"
+                            data-dashboard-delete-selected
+                            data-app-confirm="¿Eliminar las solicitudes seleccionadas? Esta accion no se puede deshacer."
+                            data-app-confirm-title="Eliminar solicitudes"
+                            data-app-confirm-text="Si, eliminar"
+                            disabled
+                            @if($processedActionsLocked) data-processed-action @endif><i class="bi bi-trash3"></i>Eliminar seleccionados</button>
                     @endif
                     @if ($showRetryAction && $canEditReports)
                         <button class="btn-nova btn-nova-secondary btn-icon" name="dashboard_action" value="reset_errors" type="submit" title="Cambiar errores seleccionados a pendiente"><i class="bi bi-arrow-counterclockwise"></i>Reintentar errores</button>
@@ -120,7 +163,7 @@
                     <col class="rm-dashboard-col-subject">
                     <col class="rm-dashboard-col-requester">
                     <col class="rm-dashboard-col-date">
-                    <col class="rm-dashboard-col-type">
+                    <col class="rm-dashboard-col-category">
                     <col class="rm-dashboard-col-unit">
                     <col class="rm-dashboard-col-request-unit">
                     <col class="rm-dashboard-col-status">
@@ -137,7 +180,7 @@
                         <th>Asunto</th>
                         <th>Solicitante</th>
                         <th>Fecha creación</th>
-                        <th>Tipo solicitud</th>
+                        <th>Categorías</th>
                         <th>Unidad</th>
                         <th>Unidad solicitante</th>
                         <th>Estado local</th>
@@ -184,7 +227,7 @@
                         </td>
                         <td>{{ $report['solicitante'] ?? '-' }}</td>
                         <td>{{ $fmtDate($report['fecha_inicio'] ?? $report['fecha'] ?? '') }} {{ $report['hora'] ?? '' }}</td>
-                        <td>{{ $report['tipo'] ?? '-' }}</td>
+                        <td>{{ $report['categoria'] ?? '-' }}</td>
                         <td>{{ $report['unidad'] ?? '-' }}</td>
                         <td>{{ $report['unidad_solicitante'] ?? '-' }}</td>
                         <td class="text-center">
@@ -253,7 +296,11 @@
                                     @csrf
                                     <input type="hidden" name="dashboard_action" value="delete">
                                     <input type="hidden" name="id" value="{{ $report['id'] ?? '' }}">
-                                    <button class="btn-action btn-action-delete action-tooltip" type="submit" title="Eliminar" aria-label="Eliminar" @if($processedActionsLocked) disabled data-processed-action @endif><i class="bi bi-trash3"></i></button>
+                                    <button class="btn-action btn-action-delete action-tooltip" type="submit" title="Eliminar" aria-label="Eliminar"
+                                        data-app-confirm="¿Eliminar la solicitud {{ $report['id'] ?? '' }}? Esta accion no se puede deshacer."
+                                        data-app-confirm-title="Eliminar solicitud"
+                                        data-app-confirm-text="Si, eliminar"
+                                        @if($processedActionsLocked) disabled data-processed-action @endif><i class="bi bi-trash3"></i></button>
                                 </form>
                                 @endif
                             </div>
@@ -320,6 +367,8 @@
                 <div class="detail-drawer-view is-active" id="drawer-detail-view">
                     <div class="row g-3">
                         <input type="hidden" name="id">
+                        <div class="col-12"><label class="form-label">Asunto</label><input class="form-control" name="asunto"></div>
+
                         <div class="col-12 col-md-3"><label class="form-label">Tipo</label><input class="form-control" name="tipo"></div>
                         <div class="col-12 col-md-3">
                             <label class="form-label">Estado</label>
@@ -329,25 +378,42 @@
                                 <option value="error">error</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-6"><label class="form-label">Asunto</label><input class="form-control" name="asunto"></div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Unidad Solicitante</label>
+                            <select class="form-select tic-dashboard-select2" name="unidad_solicitante" data-tic-dashboard-select2 data-placeholder="Seleccionar unidad solicitante">
+                                <option value=""></option>
+                                @foreach ($unitOptions as $unitOption)
+                                    <option value="{{ $unitOption }}">{{ $unitOption }}</option>
+                                @endforeach
+                            </select>
+                        </div>
 
                         <div class="col-12 col-md-3"><label class="form-label">Prioridad</label><input class="form-control" name="prioridad"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Categorias</label><input class="form-control" name="categoria" list="rm-categories"></div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Categorias</label>
+                            <select class="form-select tic-dashboard-select2" name="categoria" data-tic-dashboard-select2 data-placeholder="Seleccionar categoria">
+                                <option value=""></option>
+                                @foreach ($categoryOptions as $categoryOption)
+                                    <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="col-12 col-md-3">
                             <label class="form-label">Asignado a</label>
-                            <select class="form-select" name="asignado_a"><option value="">Sin asignar</option>@foreach ($users as $user)<option value="{{ $user['id'] ?? '' }}">{{ trim(($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')) }}</option>@endforeach</select>
+                            <select class="form-select tic-dashboard-select2" name="asignado_a" data-tic-dashboard-select2 data-placeholder="Seleccionar usuario activo">
+                                <option value="">Sin asignar</option>
+                                @foreach ($assigneeOptions as $userOption)
+                                    <option value="{{ $userOption['value'] }}">{{ $userOption['label'] }}</option>
+                                @endforeach
+                            </select>
                             <div class="form-text fw-semibold" data-current-assignee></div>
                         </div>
                         <div class="col-12 col-md-3"><label class="form-label">Solicitante</label><input class="form-control" name="solicitante"></div>
 
-                        <div class="col-12 col-md-3"><label class="form-label">Unidad</label><input class="form-control" name="unidad"></div>
-                        <div class="col-12 col-md-3">
-                            <label class="form-label">Unidad Solicitante</label>
-                            <div class="nova-search-select" data-search-select data-options='@json($unitOptions)'>
-                                <input class="form-control" name="unidad_solicitante" autocomplete="off" data-search-select-input>
-                                <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
-                            </div>
-                        </div>
+                        <div class="col-12 col-md-6"><label class="form-label">Unidad</label><input class="form-control" name="unidad"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
+
                         <div class="col-12 col-md-3">
                             <label class="form-label">Hora extra</label>
                             <select class="form-select" name="hora_extra" @disabled(!$canEditHoursExtra)>
@@ -358,9 +424,6 @@
                                 <div class="form-text"><i class="bi bi-lock"></i> Requiere el permiso Editar de Horas extra.</div>
                             @endif
                         </div>
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
-
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" @disabled(!$canEditHoursExtra)></div>
                         <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
@@ -373,7 +436,7 @@
                             <div id="tic-dashboard-description-edit-panel" role="tabpanel" aria-labelledby="tic-dashboard-description-edit-tab">
                                 <label class="form-label">Mensaje</label>
                                 <textarea class="form-control nova-description-editor" name="mensaje" rows="6"></textarea>
-                                <div class="form-text">Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div>
+                                <!-- <div class="form-text">Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div> -->
                             </div>
                             <div class="nova-description-preview" id="tic-dashboard-description-preview" role="tabpanel" aria-labelledby="tic-dashboard-description-preview-tab" hidden></div>
                         </div>
@@ -391,6 +454,45 @@
 
 <script>
     let ticDashboardDescriptionTabs = null;
+    const currentDashboardAssigneeId = @json($currentAssigneeId);
+    const setDashboardSelectValue = (select, value, label = '', preserveMissing = false) => {
+        if (!select) return;
+        Array.from(select.options).forEach((option) => {
+            if (option.dataset.transientOption === '1') option.remove();
+        });
+        const normalizedValue = String(value || '').trim();
+        const hasOption = Array.from(select.options).some((option) => option.value === normalizedValue);
+        if (normalizedValue !== '' && !hasOption && preserveMissing) {
+            const transientOption = new Option(label || normalizedValue, normalizedValue, false, false);
+            transientOption.dataset.transientOption = '1';
+            select.add(transientOption);
+        }
+        select.value = normalizedValue !== '' && Array.from(select.options).some((option) => option.value === normalizedValue)
+            ? normalizedValue
+            : '';
+        if (window.jQuery?.fn?.select2) {
+            window.jQuery(select).trigger('change.select2');
+        }
+    };
+    const initTicDashboardSelect2 = () => {
+        if (!window.jQuery?.fn?.select2) return;
+        const modal = window.jQuery('#editar-solicitud');
+        window.jQuery('#editar-solicitud [data-tic-dashboard-select2]').each(function () {
+            const select = window.jQuery(this);
+            if (select.hasClass('select2-hidden-accessible')) return;
+            select.select2({
+                width: '100%',
+                dropdownParent: modal,
+                allowClear: false,
+                dropdownCssClass: 'tic-select2-dropdown',
+                placeholder: this.dataset.placeholder || 'Seleccionar',
+                language: {
+                    noResults: () => 'No se encontraron resultados',
+                    searching: () => 'Buscando...'
+                }
+            });
+        });
+    };
     const initTicDashboardDescription = () => {
         ticDashboardDescriptionTabs = window.NovaDescriptionTables?.bind({
             input: document.querySelector('#editar-solicitud [name="mensaje"]'),
@@ -401,15 +503,20 @@
         }) || null;
     };
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTicDashboardDescription, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+            initTicDashboardDescription();
+            initTicDashboardSelect2();
+        }, { once: true });
     } else {
         initTicDashboardDescription();
+        initTicDashboardSelect2();
     }
 
     const dashboardSelectedInput = document.querySelector('[data-dashboard-selected-ids]');
     const dashboardSelectedCount = document.querySelector('[data-dashboard-selected-count]');
     const dashboardSelectAll = document.querySelector('[data-dashboard-select-all]');
     const dashboardRowChecks = Array.from(document.querySelectorAll('[data-dashboard-row-check]'));
+    const dashboardDeleteSelected = document.querySelector('[data-dashboard-delete-selected]');
     const syncDashboardSelection = () => {
         const selectableChecks = dashboardRowChecks.filter((input) => !input.disabled);
         const selectedIds = dashboardRowChecks
@@ -425,6 +532,13 @@
         if (dashboardSelectAll) {
             dashboardSelectAll.checked = selectableChecks.length > 0 && selectedIds.length === selectableChecks.length;
             dashboardSelectAll.indeterminate = selectedIds.length > 0 && selectedIds.length < selectableChecks.length;
+        }
+        if (dashboardDeleteSelected) {
+            const locked = dashboardDeleteSelected.hasAttribute('data-processed-action') && !processedActionsEnabled;
+            dashboardDeleteSelected.disabled = selectedIds.length === 0 || locked;
+            dashboardDeleteSelected.dataset.appConfirm = selectedIds.length === 1
+                ? '¿Eliminar la solicitud seleccionada? Esta accion no se puede deshacer.'
+                : `¿Eliminar las ${selectedIds.length} solicitudes seleccionadas? Esta accion no se puede deshacer.`;
         }
     };
 
@@ -580,14 +694,33 @@
             form.elements.estado.value = button.dataset.reportEstado || 'pendiente';
             form.elements.asunto.value = button.dataset.reportAsunto || '';
             form.elements.prioridad.value = button.dataset.reportPrioridad || '';
-            form.elements.categoria.value = button.dataset.reportCategoria || '';
+            setDashboardSelectValue(
+                form.elements.categoria,
+                button.dataset.reportCategoria || '',
+                button.dataset.reportCategoria || '',
+                true
+            );
             form.elements.solicitante.value = button.dataset.reportSolicitante || '';
             form.elements.unidad.value = button.dataset.reportUnidad || '';
-            form.elements.unidad_solicitante.value = button.dataset.reportUnidadSolicitante || '';
-            form.elements.asignado_a.value = button.dataset.reportAsignado || '';
+            setDashboardSelectValue(
+                form.elements.unidad_solicitante,
+                button.dataset.reportUnidadSolicitante || '',
+                button.dataset.reportUnidadSolicitante || '',
+                true
+            );
+            const reportAssigneeId = String(button.dataset.reportAsignado || '').trim();
+            const assigneeId = reportAssigneeId || currentDashboardAssigneeId;
+            setDashboardSelectValue(
+                form.elements.asignado_a,
+                assigneeId,
+                button.dataset.reportAsignadoNombre || assigneeId,
+                reportAssigneeId !== ''
+            );
             const currentAssignee = form.querySelector('[data-current-assignee]');
             if (currentAssignee) {
-                currentAssignee.textContent = button.dataset.reportAsignadoNombre ? `Actual: ${button.dataset.reportAsignadoNombre}` : '';
+                currentAssignee.textContent = reportAssigneeId !== '' && button.dataset.reportAsignadoNombre
+                    ? `Actual: ${button.dataset.reportAsignadoNombre}`
+                    : (assigneeId !== '' ? 'Asignado por defecto al usuario conectado.' : 'No se pudo identificar un usuario activo para la asignacion predeterminada.');
             }
             form.elements.hora_extra.value = (button.dataset.reportHoraExtra || 'NO').toUpperCase() === 'SI' ? 'SI' : 'NO';
             form.elements.fecha_inicio.value = toDateInput(button.dataset.reportFechaInicio);
@@ -643,5 +776,3 @@
         });
     });
 </script>
-
-<datalist id="rm-categories">@foreach ($categories as $category)<option value="{{ $category['nombre'] ?? '' }}"></option>@endforeach</datalist>

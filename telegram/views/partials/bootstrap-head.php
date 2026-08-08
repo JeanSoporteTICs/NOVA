@@ -20,6 +20,9 @@ $themeVersion = @filemtime($themePath) ?: time();
   <link rel="icon" type="image/svg+xml" href="<?= $h($novaFaviconUrl) ?>?v=<?= (int) $novaFaviconVersion ?>">
   <link rel="shortcut icon" type="image/svg+xml" href="<?= $h($novaFaviconUrl) ?>?v=<?= (int) $novaFaviconVersion ?>">
   <link rel="apple-touch-icon" href="<?= $h($novaTouchIconUrl) ?>?v=<?= (int) $novaFaviconVersion ?>">
+  <?php $novaSidebarPreloadPath = function_exists('base_path') ? base_path('public/assets/nova-sidebar-preload.js') : __DIR__ . '/../../../public/assets/nova-sidebar-preload.js'; ?>
+  <?php $novaSidebarPreloadVersion = @filemtime($novaSidebarPreloadPath) ?: time(); ?>
+  <script src="<?= $h(function_exists('asset') ? asset('assets/nova-sidebar-preload.js') : '/NOVA/public/assets/nova-sidebar-preload.js') ?>?v=<?= (int) $novaSidebarPreloadVersion ?>" data-nova-sidebar-key="telegram"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="<?= $h($moduleBaseUrl) ?>/assets/theme.css?v=<?= (int) $themeVersion ?>" rel="stylesheet">

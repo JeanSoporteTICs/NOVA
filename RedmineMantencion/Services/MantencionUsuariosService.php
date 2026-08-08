@@ -28,57 +28,8 @@ class MantencionUsuariosService
             if (function_exists('maintenance_mode_block_if_enabled')) {
                 maintenance_mode_block_if_enabled();
             }
-            $id_input = $this->storage->sanitize_input($_POST['id_manual'] ?? '');
-
             if ($action === 'create') {
-                if ($id_input !== '' && $this->storage->has_duplicate_id($rows, $id_input)) {
-                    return [$rows, 'Error: el ID ya existe', $importPreview];
-                }
-                $assignedRole = $this->storage->sanitize_input($_POST['rol'] ?? 'usuario');
-                $rolePerms = [];
-                if (function_exists('auth_load_roles')) {
-                    $roles = auth_load_roles();
-                    $cfg = $roles[$assignedRole] ?? [];
-                    if (is_array($cfg)) {
-                        $rolePerms = $cfg;
-                    }
-                }
-                $requiredName = $this->storage->sanitize_input($_POST['nombre'] ?? '');
-                $requiredLast = $this->storage->sanitize_input($_POST['apellido'] ?? '');
-                if ($requiredName === '') {
-                    return [$rows, 'Error: el nombre es obligatorio', $importPreview];
-                }
-                [$newNombre, $newApellido] = $requiredLast !== ''
-                    ? [$requiredName, $requiredLast]
-                    : usuarios_split_name($requiredName);
-                if ($newApellido === '') {
-                    return [$rows, 'Error: el apellido es obligatorio', $importPreview];
-                }
-                $newRow = [
-                    'id' => $id_input !== '' ? $id_input : uniqid('', true),
-                    'rut_sin_dv' => '',
-                    'nombre' => $newNombre !== '' ? $newNombre : $requiredName,
-                    'apellido' => $newApellido,
-                    'rut' => '',
-                    'numero_celular' => '',
-                    'estamento' => '',
-                    'rol' => $assignedRole,
-                    'estado' => in_array(($_POST['estado'] ?? 'activo'), ['activo', 'baneado'], true) ? $_POST['estado'] : 'activo',
-                    'api' => '',
-                    'core_user' => '',
-                    'core_pass_enc' => '',
-                    'nextcloud_user' => '',
-                    'nextcloud_pass_enc' => '',
-                    'permisos' => $rolePerms,
-                ];
-                $rows[] = $newRow;
-                // Punctual create: $this->central->usuarios_central_upsert() already persists this one
-                // record. $this->storage->save_usuarios($DATA_FILE, $rows) would loop and re-upsert
-                // every user in $rows for no additional effect (same antipattern fixed
-                // in dashboard.php's 'update' case) — removed.
-                $this->central->usuarios_central_upsert($newRow);
-                usuarios_set_flash('Usuario creado');
-                $this->storage->usuarios_redirect_back();
+                return [$rows, 'La creacion de usuarios se realiza unicamente desde NOVA.', $importPreview];
             } elseif ($action === 'update') {
                 $id = $_POST['id'] ?? '';
                 $index = $this->storage->find_user_index($rows, $id);
@@ -86,9 +37,8 @@ class MantencionUsuariosService
                 $current = &$rows[$index];
                 $current['rol'] = $this->storage->sanitize_input($_POST['rol'] ?? ($current['rol'] ?? 'usuario'));
                 $current['_preserve_existing_status'] = true;
-                // Punctual update: $this->central->usuarios_central_upsert() already persists this one
-                // record; $this->storage->save_usuarios($DATA_FILE, $rows) was a redundant full re-upsert
-                // of every user (see note in the 'create' branch above) — removed.
+                // Punctual update: usuarios_central_upsert() already persists this record;
+                // a full save would redundantly re-upsert every project user.
                 $this->central->usuarios_central_upsert($current);
                 unset($current['_preserve_existing_status']);
                 usuarios_set_flash('Rol de proyecto actualizado');

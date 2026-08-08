@@ -6,9 +6,11 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Administracion - NOVA</title>
     @include('nova.partials.favicon')
+    @php $novaSidebarPreloadVersion = @filemtime(public_path('assets/nova-sidebar-preload.js')) ?: '1'; @endphp
+    <script src="{{ asset('assets/nova-sidebar-preload.js') }}?v={{ $novaSidebarPreloadVersion }}" data-nova-sidebar-key="administracion"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
+    <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
     @php $novaAdminCssVersion = @filemtime(public_path('assets/nova-admin.css')) ?: '1'; @endphp
     <link href="{{ asset('assets/nova-admin.css') }}?v={{ $novaAdminCssVersion }}" rel="stylesheet">
 </head>
@@ -30,7 +32,7 @@
                 <div class="collapse navbar-collapse" id="novaUsersTopbar">
                     <div class="rm-top-actions mt-3 mt-lg-0">
                         @include('nova.partials.session-control')
-                        <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                        <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
                         <form method="POST" action="{{ route('logout') }}" style="display:inline">
                             @csrf
@@ -43,15 +45,15 @@
 
         @php
             $adminSections = [
-                'centro' => ['label' => 'Centro', 'icon' => 'bi-speedometer2', 'description' => 'Resumen rapido de usuarios, salud, accesos y Telegram.'],
-                'configuracion' => ['label' => 'Configuracion', 'icon' => 'bi-sliders', 'description' => 'Ajustes globales de sesion, salud y notificaciones administrativas.'],
-                'onlyoffice' => ['label' => 'OnlyOffice', 'icon' => 'bi-file-earmark-word', 'description' => 'Configura el editor en linea utilizado por Procedimientos.'],
-                'salud' => ['label' => 'Salud', 'icon' => 'bi-activity', 'description' => 'Chequeos de servicios y dependencias criticas.'],
-                'auditoria' => ['label' => 'Auditoria', 'icon' => 'bi-journal-text', 'description' => 'Eventos recientes y acciones registradas en administracion.'],
-                'telegram' => ['label' => 'Telegram', 'icon' => 'bi-telegram', 'description' => 'Configura el bot global y revisa el estado del servicio.'],
-                'telegram-mensajes' => ['label' => 'Mensajes Telegram', 'icon' => 'bi-chat-square-text', 'description' => 'Edita las respuestas programadas que envia el bot.'],
-                'usuarios' => ['label' => 'Usuarios', 'icon' => 'bi-people', 'description' => 'Crea usuarios, revisa integraciones personales y administra estados.'],
-                'accesos' => ['label' => 'Accesos', 'icon' => 'bi-shield-lock', 'description' => 'Define a que vistas NOVA puede entrar cada usuario.'],
+                'centro' => ['label' => 'Centro', 'icon' => config('navigation-icons.centro'), 'description' => 'Resumen rapido de usuarios, salud, accesos y Telegram.'],
+                'configuracion' => ['label' => 'Configuracion', 'icon' => config('navigation-icons.configuracion'), 'description' => 'Ajustes globales de sesion, salud y notificaciones administrativas.'],
+                'onlyoffice' => ['label' => 'OnlyOffice', 'icon' => config('navigation-icons.onlyoffice'), 'description' => 'Configura el editor en linea utilizado por Procedimientos.'],
+                'salud' => ['label' => 'Salud', 'icon' => config('navigation-icons.salud'), 'description' => 'Chequeos de servicios y dependencias criticas.'],
+                'auditoria' => ['label' => 'Auditoria', 'icon' => config('navigation-icons.auditoria'), 'description' => 'Eventos recientes y acciones registradas en administracion.'],
+                'telegram' => ['label' => 'Telegram', 'icon' => config('navigation-icons.telegram'), 'description' => 'Configura el bot global y revisa el estado del servicio.'],
+                'telegram-mensajes' => ['label' => 'Mensajes Telegram', 'icon' => config('navigation-icons.mensajes_telegram'), 'description' => 'Edita las respuestas programadas que envia el bot.'],
+                'usuarios' => ['label' => 'Usuarios', 'icon' => config('navigation-icons.usuarios'), 'description' => 'Crea usuarios, revisa integraciones personales y administra estados.'],
+                'accesos' => ['label' => 'Accesos', 'icon' => config('navigation-icons.accesos'), 'description' => 'Define a que vistas NOVA puede entrar cada usuario.'],
             ];
             $activeAdminSection = $adminSections[$section] ?? $adminSections['centro'];
         @endphp
@@ -71,6 +73,7 @@
                         </a>
                     @endforeach
                 </nav>
+                @include('nova.partials.sidebar-compact-control', ['sidebarId' => 'novaSidebar'])
             </aside>
 
             <main class="nova-content rm-main">
@@ -1066,7 +1069,7 @@
         </form>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
     <script>
         const form = document.querySelector('.form-panel');
         const formTitle = document.querySelector('[data-user-form-title]');

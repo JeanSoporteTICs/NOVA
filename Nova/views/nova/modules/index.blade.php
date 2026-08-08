@@ -23,7 +23,7 @@
                 </a>
                 <div class="rm-top-actions">
                     @include('nova.partials.session-control')
-                    <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                    <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                     <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
                     <form method="POST" action="{{ route('logout') }}" style="display:inline">
                         @csrf
@@ -122,7 +122,7 @@
         </form>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
     <script>
         (() => {
             const list = document.querySelector('[data-module-list]');

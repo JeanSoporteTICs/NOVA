@@ -621,6 +621,8 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
           <div class="row g-3">
 
+            <div class="col-12"><label class="form-label">Asunto</label><textarea name="asunto" id="md-asunto" class="form-control" rows="2"></textarea></div>
+
             <div class="col-md-4">
               <label class="form-label">Tipo</label>
               <input id="md-tipo" class="form-control" list="tipo-list" disabled>
@@ -640,31 +642,51 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               <input type="hidden" name="prioridad" id="md-prioridad-hidden">
             </div>
 
-            <div class="col-12"><label class="form-label">Asunto</label><textarea name="asunto" id="md-asunto" class="form-control" rows="2"></textarea></div>
-
-            <div class="col-md-6"><label class="form-label">Categorías</label><input name="categoria" id="md-categoria" class="form-control" list="cat-list"></div>
+            <div class="col-md-6">
+              <label class="form-label" for="md-categoria">Categorías</label>
+              <select name="categoria" id="md-categoria" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Seleccionar categoría">
+                <option value=""></option>
+                <?php foreach ($catOptions as $categoryOption): ?>
+                  <option value="<?= $h($categoryOption) ?>"><?= $h($categoryOption) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
 
             <div class="col-md-6">
-              <label class="form-label">Asignado a</label>
-              <input id="md-asignado-display" class="form-control" list="user-list" placeholder="Buscar por nombre" autocomplete="off">
-              <input type="hidden" name="asignado_a" id="md-asignado-hidden">
+              <label class="form-label" for="md-asignado">Asignado a</label>
+              <select name="asignado_a" id="md-asignado" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Seleccionar usuario activo">
+                <option value="">Sin asignar</option>
+                <?php foreach ($userOptions as $userOption): ?>
+                  <option value="<?= $h($userOption['id']) ?>"><?= $h($userOption['nombre']) ?></option>
+                <?php endforeach; ?>
+              </select>
               <div class="form-text" id="md-asignado-help"></div>
             </div>
 
             <div class="col-md-6"><label class="form-label">Solicitante</label><input name="solicitante" id="md-solicitante" class="form-control"></div>
 
+            <div class="col-md-6"><label class="form-label">Número</label><input name="numero" id="md-numero" class="form-control"></div>
+
+            <div class="col-md-6"><label class="form-label">Correo</label><input name="core_email" id="md-core_email" class="form-control" type="email"></div>
+
             <div class="col-md-6"><label class="form-label">Establecimiento</label><input name="establecimiento" id="md-establecimiento" class="form-control"></div>
  
             <div class="col-md-6"><label class="form-label">Departamento</label><input name="departamento" id="md-departamento" class="form-control"></div>
 
-            <?php if ($estadoRedmineId): ?>
-            <div class="col-md-3">
+            <div class="col-md-6">
               <label class="form-label">Estado Redmine</label>
-              <input class="form-control" value="<?= $h($estadoRedmineNombre ?: ('ID ' . $estadoRedmineId)) ?>" disabled>
+              <input class="form-control" value="<?= $h($estadoRedmineNombre ?: ($estadoRedmineId ? ('ID ' . $estadoRedmineId) : 'No definido')) ?>" disabled>
             </div>
-            <?php endif; ?>
 
-            <div class="col-md-3">
+            <div class="col-md-3"><label class="form-label">Fecha Inicio</label><input type="date" name="fecha_inicio" id="md-fecha_inicio" class="form-control"></div>
+
+            <div class="col-md-3"><label class="form-label">Fecha Fin</label><input type="date" name="fecha_fin" id="md-fecha_fin" class="form-control"></div>
+
+            <div class="col-md-3"><label class="form-label">Fecha</label><input type="date" name="fecha" id="md-fecha" class="form-control"></div>
+
+            <div class="col-md-3"><label class="form-label">Hora</label><input name="hora" id="md-hora" class="form-control"></div>
+
+            <div class="col-md-6">
               <label class="form-label">Hora extra</label>
               <select name="hora_extra" id="md-hora_extra" class="form-select" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>>
                 <option value="0" selected>No</option>
@@ -675,19 +697,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               <?php endif; ?>
             </div>
 
-            <div class="col-md-3"><label class="form-label">Fecha Inicio</label><input type="date" name="fecha_inicio" id="md-fecha_inicio" class="form-control"></div>
-
-            <div class="col-md-3"><label class="form-label">Fecha Fin</label><input type="date" name="fecha_fin" id="md-fecha_fin" class="form-control"></div>
-
-            <div class="col-md-3"><label class="form-label">Tiempo Estimado</label><input name="tiempo_estimado" id="md-tiempo_estimado" class="form-control" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>></div>
-
-            <div class="col-md-3"><label class="form-label">Fecha</label><input type="date" name="fecha" id="md-fecha" class="form-control"></div>
-
-            <div class="col-md-2"><label class="form-label">Hora</label><input name="hora" id="md-hora" class="form-control"></div>
-
-            <div class="col-md-3"><label class="form-label">Número</label><input name="numero" id="md-numero" class="form-control"></div>
-
-            <div class="col-md-5"><label class="form-label">Correo</label><input name="core_email" id="md-core_email" class="form-control" type="email"></div>
+            <div class="col-md-6"><label class="form-label">Tiempo Estimado</label><input name="tiempo_estimado" id="md-tiempo_estimado" class="form-control" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>></div>
 
             <div class="col-12 d-none" id="md-descripcion-wrap">
               <label class="form-label d-block">Descripción</label>
@@ -868,11 +878,46 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
   });
 
   const detalleModal = document.getElementById('detalleModal');
+  const setMantencionSelectValue = (select, value, label = '') => {
+    if (!select) return;
+    Array.from(select.options).forEach(option => {
+      if (option.dataset.transientOption === '1') option.remove();
+    });
+    const normalizedValue = String(value || '').trim();
+    const hasOption = Array.from(select.options).some(option => option.value === normalizedValue);
+    if (normalizedValue !== '' && !hasOption) {
+      const transientOption = new Option(label || normalizedValue, normalizedValue, false, false);
+      transientOption.dataset.transientOption = '1';
+      select.add(transientOption);
+    }
+    select.value = normalizedValue;
+    if (window.jQuery?.fn?.select2) window.jQuery(select).trigger('change.select2');
+  };
+  const initMantencionDashboardSelect2 = () => {
+    if (!window.jQuery?.fn?.select2 || !detalleModal) return;
+    const modal = window.jQuery(detalleModal);
+    modal.find('[data-mantencion-select2]').each(function () {
+      const select = window.jQuery(this);
+      if (select.hasClass('select2-hidden-accessible')) return;
+      select.select2({
+        width: '100%',
+        dropdownParent: modal,
+        allowClear: false,
+        dropdownCssClass: 'tic-select2-dropdown',
+        placeholder: this.dataset.placeholder || 'Seleccionar',
+        language: {
+          noResults: () => 'No se encontraron resultados',
+          searching: () => 'Buscando...'
+        }
+      });
+    });
+  };
   if (detalleModal && !dashboardCanEditReports) {
     detalleModal.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(control => {
       control.disabled = true;
     });
   }
+  initMantencionDashboardSelect2();
   let currentPreviewRows = [];
   let currentPreviewColumns = [];
   const openPreviewModalBtn = document.getElementById('open-preview-modal-btn');
@@ -1023,32 +1068,17 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
   set('md-prioridad', 'data-prioridad');
   set('md-prioridad-hidden', 'data-prioridad');
 
-  set('md-categoria', 'data-categoria');
+  setMantencionSelectValue(
+    document.getElementById('md-categoria'),
+    btn.getAttribute('data-categoria') || '',
+    btn.getAttribute('data-categoria') || ''
+  );
 
-  const asignadoDisplay = document.getElementById('md-asignado-display');
-  const asignadoHidden = document.getElementById('md-asignado-hidden');
-  const userList = document.getElementById('user-list');
-  const findUserIdByName = value => {
-    if (!userList || !value) return '';
-    const option = Array.from(userList.options).find(opt => opt.value === value);
-    return option ? (option.getAttribute('data-id') || '') : '';
-  };
-  const syncAsignadoHidden = value => {
-    if (!asignadoHidden) return;
-    const foundId = findUserIdByName(value);
-    asignadoHidden.value = foundId || (btn.getAttribute('data-asignado_a') || '');
-  };
-  if (asignadoDisplay) {
-    asignadoDisplay.value = btn.getAttribute('data-asignado_nombre') || '';
-    syncAsignadoHidden(asignadoDisplay.value);
-    if (!asignadoDisplay.dataset.listenerAttached) {
-      asignadoDisplay.dataset.listenerAttached = '1';
-      asignadoDisplay.addEventListener('input', () => syncAsignadoHidden(asignadoDisplay.value));
-    }
-  }
-  if (asignadoHidden && !asignadoDisplay) {
-    asignadoHidden.value = btn.getAttribute('data-asignado_a') || '';
-  }
+  setMantencionSelectValue(
+    document.getElementById('md-asignado'),
+    btn.getAttribute('data-asignado_a') || '',
+    btn.getAttribute('data-asignado_nombre') || ''
+  );
 
   set('md-solicitante', 'data-solicitante');
 
@@ -1578,8 +1608,11 @@ async function submitDashboardAction(form) {
       Object.entries(fieldAttributes).forEach(([field, attribute]) => {
         if (data.has(field)) detailButton?.setAttribute(attribute, String(data.get(field) ?? ''));
       });
-      const assignedDisplay = form.querySelector('#md-asignado-display');
-      if (assignedDisplay) detailButton?.setAttribute('data-asignado_nombre', assignedDisplay.value);
+      const assignedSelect = form.querySelector('#md-asignado');
+      if (assignedSelect) {
+        const assignedLabel = assignedSelect.selectedOptions[0]?.textContent?.trim() || '';
+        detailButton?.setAttribute('data-asignado_nombre', assignedLabel === 'Sin asignar' ? '' : assignedLabel);
+      }
       reportRow?.setAttribute('data-horaextra', String(data.get('hora_extra') || '0'));
       bootstrap.Modal.getInstance(document.getElementById('detalleModal'))?.hide();
       sessionStorage.setItem(dashboardScrollKey, String(window.scrollY || 0));

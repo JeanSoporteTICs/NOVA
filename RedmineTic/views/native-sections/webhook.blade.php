@@ -46,18 +46,18 @@
     $timeNow = now('America/Santiago')->format('H:i');
 @endphp
 
-<section class="rm-module-head">
+<!-- <section class="rm-module-head">
     <span class="rm-module-head-icon is-orange"><i class="bi bi-pencil-square"></i></span>
     <div>
         <small>Ingreso manual</small>
         <h2>Reporte manual</h2>
         <p>Crea un pendiente con datos completos para revisar y enviar a Redmine.</p>
     </div>
-    <!-- <div class="rm-module-meter">
+    <div class="rm-module-meter">
          <strong>{{ $activeUsers->count() }}</strong>
         <span>asignables</span> 
-    </div> -->
-</section>
+    </div>
+</section> -->
 
 <section class="row g-3 align-items-start rm-manual-view">
     <div class="col-12">
@@ -68,15 +68,15 @@
                     <h2>Crear reporte manual</h2>
                     <p>El reporte queda en pendientes para revisar, editar o enviar a Redmine.</p>
                 </div>
-                <span class="nova-badge is-warning"><i class="bi bi-inbox"></i>Pendiente</span>
+                <!-- <span class="nova-badge is-warning"><i class="bi bi-inbox"></i>Pendiente</span> -->
             </div>
 
             <div class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-6 rm-manual-horizontal-field">
                     <label class="form-label" for="manual-tipo">Tipo</label>
                     <input class="form-control" id="manual-tipo" name="tipo" value="Soporte" maxlength="80">
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6 rm-manual-horizontal-field">
                     <label class="form-label" for="manual-prioridad">Prioridad</label>
                     <select class="form-select" id="manual-prioridad" name="prioridad">
                         <option value="NORMAL">NORMAL</option>
@@ -86,33 +86,38 @@
                     </select>
                 </div>
 
-                <div class="col-12">
+                <div class="col-12 rm-manual-horizontal-field">
                     <label class="form-label" for="manual-asunto">Problema</label>
                     <input class="form-control" id="manual-asunto" name="asunto" maxlength="220" required placeholder="Ej: Impresora no imprime">
                 </div>
 
-                <div class="col-12">
-                    <div class="nova-description-tabs" role="tablist" aria-label="Vista de descripción">
-                        <button type="button" class="nova-description-tab is-active" id="tic-manual-description-edit-tab" role="tab" aria-selected="true"><i class="bi bi-pencil"></i>Modificar</button>
-                        <button type="button" class="nova-description-tab" id="tic-manual-description-preview-tab" role="tab" aria-selected="false"><i class="bi bi-table"></i>Previsualizar</button>
+                <div class="col-12 rm-manual-description-field">
+                    <label class="form-label" for="manual-descripcion">Descripcion</label>
+                    <div class="rm-manual-description-control">
+                        <div class="nova-description-tabs" role="tablist" aria-label="Vista de descripción">
+                            <button type="button" class="nova-description-tab is-active" id="tic-manual-description-edit-tab" role="tab" aria-selected="true"><i class="bi bi-pencil"></i>Modificar</button>
+                            <button type="button" class="nova-description-tab" id="tic-manual-description-preview-tab" role="tab" aria-selected="false"><i class="bi bi-table"></i>Previsualizar</button>
+                        </div>
+                        <div id="tic-manual-description-edit-panel" role="tabpanel" aria-labelledby="tic-manual-description-edit-tab">
+                            <textarea class="form-control nova-description-editor" id="manual-descripcion" name="descripcion" rows="5" maxlength="4000" placeholder="Detalle breve del problema, contacto, equipo afectado u observaciones"></textarea>
+                            <!-- <div class="form-text">Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div> -->
+                        </div>
+                        <div class="nova-description-preview" id="tic-manual-description-preview" role="tabpanel" aria-labelledby="tic-manual-description-preview-tab" hidden></div>
                     </div>
-                    <div id="tic-manual-description-edit-panel" role="tabpanel" aria-labelledby="tic-manual-description-edit-tab">
-                        <label class="form-label" for="manual-descripcion">Descripcion</label>
-                        <textarea class="form-control nova-description-editor" id="manual-descripcion" name="descripcion" rows="5" maxlength="4000" placeholder="Detalle breve del problema, contacto, equipo afectado u observaciones"></textarea>
-                        <div class="form-text">Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div>
-                    </div>
-                    <div class="nova-description-preview" id="tic-manual-description-preview" role="tabpanel" aria-labelledby="tic-manual-description-preview-tab" hidden></div>
                 </div>
 
                 <div class="col-lg-7">
                     <div class="rm-manual-field-stack">
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-asignado">Asignar a</label>
                             <div class="rm-assignee-row">
-                                <div class="nova-search-select" data-search-select data-options='@json($assigneeOptions)' data-value-input="#manual-asignado">
-                                    <input class="form-control" id="manual-asignado-search" value="{{ $currentAssigneeName }}" autocomplete="off" placeholder="Buscar usuario activo" data-search-select-input>
-                                    <input type="hidden" id="manual-asignado" name="asignado_a" value="{{ $currentAssigneeId }}">
-                                    <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
+                                <div class="rm-assignee-select">
+                                    <select class="form-select tic-webhook-select2" id="manual-asignado" name="asignado_a" data-tic-webhook-select2 data-placeholder="Seleccionar usuario activo">
+                                        <option value="">Sin asignar</option>
+                                        @foreach ($assigneeOptions as $userOption)
+                                            <option value="{{ $userOption['value'] }}" @selected((string) $userOption['value'] === $currentAssigneeId)>{{ $userOption['label'] }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
                                 <button type="button"
                                     class="btn btn-outline-secondary rm-assign-me-btn"
@@ -125,30 +130,47 @@
                             </div>
                         </div>
 
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-categoria">Categoria</label>
-                            <div class="nova-search-select" data-search-select data-options='@json($categoryOptions)'>
-                                <input class="form-control" id="manual-categoria" name="categoria" maxlength="180" autocomplete="off" placeholder="Buscar categoria" data-search-select-input>
-                                <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
-                            </div>
+                            <select class="form-select tic-webhook-select2" id="manual-categoria" name="categoria" data-tic-webhook-select2 data-placeholder="Seleccionar categoria">
+                                <option value=""></option>
+                                @foreach ($categoryOptions as $categoryOption)
+                                    <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
+                                @endforeach
+                            </select>
                         </div>
 
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-solicitante">Solicitante</label>
                             <input class="form-control" id="manual-solicitante" name="solicitante" maxlength="160" placeholder="Nombre de quien solicita">
                         </div>
 
                         <div class="rm-manual-inline-grid">
-                            <div>
+                            <div class="rm-manual-horizontal-field">
                                 <label class="form-label" for="manual-unidad">Ubicacion</label>
                                 <input class="form-control" id="manual-unidad" name="unidad" maxlength="180" placeholder="Ej: SOME HBV">
                             </div>
-                            <div>
+                            <div class="rm-manual-horizontal-field">
                                 <label class="form-label" for="manual-unidad-solicitante">Unidad solicitante</label>
-                                <div class="nova-search-select" data-search-select data-options='@json($unitOptions)'>
-                                    <input class="form-control" id="manual-unidad-solicitante" name="unidad_solicitante" maxlength="180" autocomplete="off" placeholder="Buscar unidad solicitante" data-search-select-input>
-                                    <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
-                                </div>
+                                <select class="form-select tic-webhook-select2" id="manual-unidad-solicitante" name="unidad_solicitante" data-tic-webhook-select2 data-placeholder="Seleccionar unidad solicitante">
+                                    <option value=""></option>
+                                    @foreach ($unitOptions as $unitOption)
+                                        <option value="{{ $unitOption }}">{{ $unitOption }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="manual-extra-row">
+                            <div class="rm-manual-horizontal-field">
+                                <label class="form-label" for="manual-hora-extra">Hora extra</label>
+                                <select class="form-select" id="manual-hora-extra" name="hora_extra">
+                                    <option value="NO">No</option>
+                                    <option value="SI">Sí</option>
+                                </select>
+                            </div>
+                            <div class="rm-manual-horizontal-field">
+                                <label class="form-label" for="manual-tiempo-estimado">Tiempo estimado</label>
+                                <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1:30">
                             </div>
                         </div>
                     </div>
@@ -156,30 +178,21 @@
 
                 <div class="col-lg-5">
                     <div class="rm-manual-date-stack">
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-fecha-inicio">Fecha inicio</label>
                             <input class="form-control" id="manual-fecha-inicio" type="date" name="fecha_inicio" value="{{ $today }}">
                         </div>
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-fecha-fin">Fecha fin</label>
                             <input class="form-control" id="manual-fecha-fin" type="date" name="fecha_fin" value="{{ $today }}">
                         </div>
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-fecha">Fecha reporte</label>
                             <input class="form-control" id="manual-fecha" type="date" name="fecha" value="{{ $today }}">
                         </div>
-                        <div>
+                        <div class="rm-manual-horizontal-field">
                             <label class="form-label" for="manual-hora">Hora</label>
                             <input class="form-control" id="manual-hora" type="time" name="hora" value="{{ $timeNow }}">
-                        </div>
-                        <div class="manual-extra-row">
-                            <label class="form-check form-switch manual-switch" for="manual-hora-extra">
-                                <input class="form-check-input" type="checkbox" id="manual-hora-extra" name="hora_extra" value="SI" data-manual-extra-toggle>
-                                <span>Hora extra</span>
-                            </label>
-                            <div class="manual-extra-time" data-manual-extra-time hidden>
-                                <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" aria-label="Tiempo estimado">
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -198,6 +211,23 @@
 <link href="{{ asset('assets/redmine-tic-webhook.css') }}?v={{ $redmineTicWebhookCssVersion }}" rel="stylesheet">
 
 <script>
+    const initTicWebhookSelect2 = () => {
+        if (!window.jQuery?.fn?.select2) return;
+        window.jQuery('[data-tic-webhook-select2]').each(function () {
+            const select = window.jQuery(this);
+            if (select.hasClass('select2-hidden-accessible')) return;
+            select.select2({
+                width: '100%',
+                allowClear: false,
+                dropdownCssClass: 'tic-select2-dropdown',
+                placeholder: this.dataset.placeholder || 'Seleccionar',
+                language: {
+                    noResults: () => 'No se encontraron resultados',
+                    searching: () => 'Buscando...'
+                }
+            });
+        });
+    };
     const initTicManualDescription = () => {
         window.NovaDescriptionTables?.bind({
             input: document.getElementById('manual-descripcion'),
@@ -208,57 +238,35 @@
         });
     };
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTicManualDescription, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+            initTicManualDescription();
+            initTicWebhookSelect2();
+        }, { once: true });
     } else {
         initTicManualDescription();
+        initTicWebhookSelect2();
     }
 
     (() => {
-        const toggle = document.querySelector('[data-manual-extra-toggle]');
-        const timeField = document.querySelector('[data-manual-extra-time]');
-        const sync = () => {
-            if (!timeField || !toggle) return;
-            timeField.hidden = !toggle.checked;
-        };
-        toggle?.addEventListener('change', sync);
-        sync();
-    })();
-
-    (() => {
         const button = document.querySelector('[data-assign-me-tic]');
-        const searchInput = document.getElementById('manual-asignado-search');
-        const hiddenInput = document.getElementById('manual-asignado');
-        const wrapper = searchInput?.closest('[data-search-select]');
-        if (!button || !searchInput || !hiddenInput || !wrapper) return;
-
-        let options = [];
-        try {
-            options = JSON.parse(wrapper.dataset.options || '[]');
-        } catch (error) {
-            options = [];
-        }
-
-        const normalize = value => String(value || '')
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase()
-            .trim();
+        const assigneeSelect = document.getElementById('manual-asignado');
+        if (!button || !assigneeSelect) return;
 
         button.addEventListener('click', () => {
             const assigneeId = button.dataset.assignMeId || '';
-            const assigneeName = button.dataset.assignMeName || '';
-            const match = options.find(option => String(option.value || '') === assigneeId)
-                || options.find(option => normalize(option.label) === normalize(assigneeName));
+            const match = Array.from(assigneeSelect.options).find((option) => option.value === assigneeId);
 
             if (!match) {
                 window.NovaToast?.warning?.('No se encontró tu usuario activo en TIC.');
                 return;
             }
 
-            searchInput.value = match.label || assigneeName;
-            hiddenInput.value = match.value || assigneeId;
-            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-            hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            assigneeSelect.value = assigneeId;
+            if (window.jQuery?.fn?.select2) {
+                window.jQuery(assigneeSelect).trigger('change');
+            } else {
+                assigneeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
         });
     })();
 </script>

@@ -13,9 +13,11 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ $moduleConfig['title'] }} | Mis integraciones</title>
         @include('nova.partials.favicon')
+        @php $novaSidebarPreloadVersion = @filemtime(public_path('assets/nova-sidebar-preload.js')) ?: '1'; @endphp
+        <script src="{{ asset('assets/nova-sidebar-preload.js') }}?v={{ $novaSidebarPreloadVersion }}" data-nova-sidebar-key="{{ $moduleKey }}"></script>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-        <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
+        <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
     @endif
 </head>
 <body class="{{ $moduleKey === 'emach' ? 'emach-page' : 'nova-page' }} integration-page integration-page-{{ $moduleConfig['theme'] ?? $moduleKey }}">
@@ -59,14 +61,14 @@
         'actividad' => 'Actividad',
     ];
     $ticSectionIcons = [
-        'dashboard' => 'bi-inboxes',
-        'webhook' => 'bi-send-plus',
-        'horas-extra' => 'bi-clock-history',
-        'historico' => 'bi-archive',
-        'usuarios' => 'bi-people',
-        'configuracion' => 'bi-sliders',
-        'estadisticas' => 'bi-graph-up',
-        'actividad' => 'bi-activity',
+        'dashboard' => config('navigation-icons.reportes'),
+        'webhook' => config('navigation-icons.reporte_manual'),
+        'horas-extra' => config('navigation-icons.horas_extra'),
+        'historico' => config('navigation-icons.historico'),
+        'usuarios' => config('navigation-icons.usuarios'),
+        'configuracion' => config('navigation-icons.configuracion'),
+        'estadisticas' => config('navigation-icons.estadisticas'),
+        'actividad' => config('navigation-icons.actividad'),
     ];
     $ticSectionPermissions = [
         'dashboard' => 'mensajes_acceso', 'webhook' => 'simulador', 'horas-extra' => 'horas_extra',
@@ -97,7 +99,7 @@
             <div class="collapse navbar-collapse" id="integrationTopbar">
                 <div class="rm-top-actions integration-top-actions mt-3 mt-lg-0">
                     @include('nova.partials.session-control')
-                    <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                    <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                     <a class="btn btn-outline-light" href="{{ $homeUrl }}"><i class="bi bi-arrow-left"></i>Modulo</a>
                     <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
                     <form method="POST" action="{{ route('logout') }}" style="display:inline">
@@ -123,10 +125,11 @@
                         </a>
                     @endforeach
                     <a class="nova-sidebar-link active" href="{{ route('integrations.redmine_tic') }}" aria-current="page">
-                        <i class="bi bi-person-lock nova-sidebar-icon"></i>
+                        <i class="bi {{ config('navigation-icons.cuentas_conectadas') }} nova-sidebar-icon"></i>
                         <span>Mis integraciones</span>
                     </a>
                 </nav>
+                @include('nova.partials.sidebar-compact-control', ['sidebarId' => 'novaSidebar'])
             </aside>
     @endif
 @endif
@@ -244,7 +247,7 @@
                             </div>
                         </dl>
 
-                        <form id="{{ $formId }}" method="post" action="{{ $postUrl }}" class="integration-form js-integration-form">
+                        <form id="{{ $formId }}" method="post" action="{{ $postUrl }}" class="integration-form js-integration-form" data-integration-type="{{ $type }}">
                             @csrf
                             <input type="hidden" name="action" value="save">
                             <input type="hidden" name="type" value="{{ $type }}">
@@ -352,6 +355,17 @@
 </div>
 @endif
 
+<div class="nova-integration-overlay" id="nova-nextcloud-account-loading" role="status" aria-live="polite" aria-hidden="true">
+    <div class="nova-integration-card">
+        <div class="nova-integration-nextcloud">
+            <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
+        </div>
+        <strong>Guardando cuenta Nextcloud</strong>
+        <span>Validando y sincronizando tus credenciales.</span>
+        <div class="nova-integration-bar" aria-hidden="true"><i></i></div>
+    </div>
+</div>
+
 <div class="modal fade integration-confirm-modal" id="integrationDeleteConfirm" tabindex="-1"
      aria-labelledby="integrationDeleteConfirmTitle" aria-describedby="integrationDeleteConfirmDescription" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -389,7 +403,7 @@
 
 @if ($moduleKey !== 'emach')
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
 @endif
 <script>
 (function () {
@@ -439,6 +453,7 @@
     });
 
     const deleteModalElement = document.getElementById('integrationDeleteConfirm');
+    const nextcloudAccountLoading = document.getElementById('nova-nextcloud-account-loading');
     const deleteIntegrationName = deleteModalElement?.querySelector('[data-integration-confirm-name]');
     const deleteConfirmButton = deleteModalElement?.querySelector('[data-integration-confirm-delete]');
     let pendingDeleteForm = null;
@@ -474,6 +489,12 @@
             return;
         }
 
+        if (form.matches('.js-integration-form[data-integration-type="nextcloud"]') && nextcloudAccountLoading) {
+            nextcloudAccountLoading.classList.add('is-active', 'is-nextcloud');
+            nextcloudAccountLoading.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('nova-integration-loading');
+        }
+
         form.querySelectorAll('button[type="submit"]').forEach(function (button) {
             button.disabled = true;
             button.classList.add('is-submitting');
@@ -482,6 +503,12 @@
             event.submitter.disabled = true;
             event.submitter.classList.add('is-submitting');
         }
+    });
+
+    window.addEventListener('pageshow', function () {
+        nextcloudAccountLoading?.classList.remove('is-active');
+        nextcloudAccountLoading?.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('nova-integration-loading');
     });
 
     deleteConfirmButton?.addEventListener('click', function () {

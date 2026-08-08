@@ -264,6 +264,12 @@ class RedmineDashboardController extends Controller
                 ->with('redmine_status_type', $result['ok'] ? 'success' : 'danger');
         }
 
+        if ($action === 'save' && $request->boolean('_creating')) {
+            return back()
+                ->with('redmine_status', 'La creacion de usuarios se realiza unicamente desde NOVA.')
+                ->with('redmine_status_type', 'warning');
+        }
+
         if ($action === 'delete') {
             $deleted = $redmine->deleteUser((string) $request->input('id'));
             $message = $deleted > 0 ? 'Acceso al proyecto quitado.' : 'No se encontro el usuario.';
@@ -272,9 +278,11 @@ class RedmineDashboardController extends Controller
             $message = $result['ok']
                 ? 'Estado cambiado a ' . $result['nuevo_estado'] . '.'
                 : 'No se encontro el usuario.';
-        } else {
+        } elseif ($action === 'save') {
             $result = $redmine->saveUser($request->all());
-            $message = $result['ok'] ? 'Usuario guardado.' : $result['error'];
+            $message = $result['ok'] ? 'Rol de proyecto actualizado.' : $result['error'];
+        } else {
+            $message = 'Accion de usuario no permitida.';
         }
 
         return back()->with('redmine_status', $message);

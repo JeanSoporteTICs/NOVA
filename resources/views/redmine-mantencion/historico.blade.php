@@ -23,6 +23,8 @@
   <?php endif; ?>
 
   <form id="filter-form" class="card card-body shadow-sm mb-3 historico-filter-card" method="get" aria-live="polite">
+    <input type="hidden" name="per_page" value="<?= $h($perPage) ?>">
+    <input type="hidden" name="page" value="1">
     <div class="row g-3 align-items-end">
       <?php
         $filterFields = [
@@ -83,7 +85,7 @@
         <a
           class="btn-nova btn-nova-secondary w-100"
           id="btn-clear"
-          href="historico.php"
+          href="<?= $h($mantencionAppUrl . '/historico') ?>"
           aria-label="Limpiar filtros"
           aria-pressed="false">
           <i class="bi bi-x-circle"></i> Limpiar
@@ -347,6 +349,7 @@
                                 <li>
                                   <form
                                     method="post"
+                                    action="<?= $h($historicoActionUrl) ?>"
                                     class="m-0"
                                     data-app-confirm="¿Cambiar el ticket #<?= $h($redmineId) ?> a <?= $h($statusLabel) ?>?"
                                     data-app-confirm-title="Cambiar estado en Redmine"

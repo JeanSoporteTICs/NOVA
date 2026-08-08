@@ -10,7 +10,7 @@
     <div>
         <small>Acceso del proyecto</small>
         <h2>Usuarios TIC</h2>
-        <p>Administra usuarios del modulo, estado operativo, rol y datos de integracion.</p>
+        <p>Administra el acceso y rol del modulo. La creacion de usuarios se realiza desde NOVA.</p>
     </div>
     <div class="rm-module-meter">
         <strong>{{ count($users) }}</strong>
@@ -48,7 +48,6 @@
             <input type="hidden" name="action" value="preview_redmine">
             <button class="btn-nova btn-nova-info" type="submit" @disabled($usersMaintenanceLocked) title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Importar usuarios desde Redmine' }}"><i class="bi bi-cloud-download"></i>Importar Redmine</button>
         </form>
-        <button class="btn-nova btn-nova-success" type="button" id="new-user-button" @disabled($usersMaintenanceLocked) title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Nuevo usuario' }}"><i class="bi bi-plus-circle"></i>Nuevo</button>
     </div>
     <div class="table-responsive">
         <table id="tic-user-table" class="nova-user-table">
@@ -104,16 +103,12 @@
                             <button class="btn-action btn-action-edit" type="button"
                                 data-user-edit
                                 data-id="{{ $user['id'] ?? '' }}"
-                                data-rut="{{ $user['rut'] ?? '' }}"
                                 data-nombre="{{ $user['nombre'] ?? '' }}"
                                 data-apellido="{{ $user['apellido'] ?? '' }}"
-                                data-telegram-chat-id="{{ $telegramChatId }}"
                                 data-rol="{{ $user['rol'] ?? 'usuario' }}"
-                                data-estado="{{ $state }}"
-                                data-api="{{ $user['api'] ?? '' }}"
                                 @disabled($usersMaintenanceLocked)
-                                title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Editar usuario' }}"
-                                aria-label="Editar usuario">
+                                title="{{ $usersMaintenanceLocked ? 'Modulo en mantencion' : 'Editar rol de proyecto' }}"
+                                aria-label="Editar rol de proyecto">
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <button class="btn-action btn-action-delete"
@@ -245,38 +240,23 @@
         <form class="modal-content" method="post" action="{{ $redmineRoute('redmine.native.users.action') }}" id="user-form">
             @csrf
             <input type="hidden" name="action" value="save">
-            <input type="hidden" name="_creating" value="1">
+            <input type="hidden" name="_creating" value="0">
+            <input type="hidden" id="user-id" name="id">
             <div class="modal-header">
                 <div>
                     <p class="detail-drawer-kicker">Usuario TICS</p>
                     <h2 class="modal-title" id="user-form-title">
                         <span class="detail-drawer-icon"><i class="bi bi-person-gear"></i></span>
-                        <span data-user-form-title-text>Nuevo usuario</span>
+                        <span>Editar rol de proyecto</span>
                     </h2>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <div class="row g-3">
-                    <div class="col-12 col-md-4" data-create-field data-edit-field>
-                        <label class="form-label" for="user-id">ID / RUT sin DV</label>
-                        <input class="form-control" id="user-id" name="id" placeholder="Nuevo si queda vacio">
-                    </div>
-                    <div class="col-12 col-md-4" data-create-field>
-                        <label class="form-label" for="user-rut">RUT</label>
-                        <input class="form-control" id="user-rut" name="rut">
-                    </div>
-                    <div class="col-12 col-md-4" data-create-field>
-                        <label class="form-label" for="user-telegram-chat-id">Chat ID Telegram</label>
-                        <input class="form-control" id="user-telegram-chat-id" name="telegram_chat_id" placeholder="7449883192">
-                    </div>
-                    <div class="col-12 col-md-6" data-create-field data-edit-field>
-                        <label class="form-label" for="user-nombre">Nombre</label>
-                        <input class="form-control" id="user-nombre" name="nombre" required>
-                    </div>
-                    <div class="col-12 col-md-6" data-create-field data-edit-field>
-                        <label class="form-label" for="user-apellido">Apellido</label>
-                        <input class="form-control" id="user-apellido" name="apellido">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="tic-user-display">Usuario</label>
+                        <input class="form-control" id="tic-user-display" readonly>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="user-rol">Rol</label>
@@ -286,18 +266,7 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-12 col-md-6" data-create-field>
-                        <label class="form-label" for="user-estado">Estado</label>
-                        <select class="form-select" id="user-estado" name="estado_usuario">
-                            <option value="activo">activo</option>
-                            <option value="baneado">baneado</option>
-                        </select>
-                    </div>
-                    <div class="col-12" data-create-field>
-                        <label class="form-label" for="user-api">API</label>
-                        <input class="form-control" id="user-api" name="api">
-                    </div>
-                    <div class="col-12" data-edit-role-note hidden>
+                    <div class="col-12">
                         <div class="nova-alert-card is-info mb-0">
                             <i class="bi bi-person-lock"></i>
                             <span>En edicion solo se modifica el rol dentro del proyecto. La identidad, estado e integraciones personales se mantienen sin cambios.</span>
@@ -307,7 +276,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i>Cancelar</button>
-                <button class="btn-nova btn-nova-primary" type="submit" @disabled($usersMaintenanceLocked)><i class="bi bi-save"></i>Guardar usuario</button>
+                <button class="btn-nova btn-nova-primary" type="submit" @disabled($usersMaintenanceLocked)><i class="bi bi-save"></i>Guardar rol</button>
             </div>
         </form>
     </div>
@@ -316,9 +285,7 @@
 <script>
     (() => {
         const form = document.getElementById('user-form');
-        const title = document.querySelector('[data-user-form-title-text]');
         const modal = document.getElementById('usuario-modal');
-        const newButton = document.getElementById('new-user-button');
         const hasImportPreview = @json(is_array($importPreview));
         const usersMaintenanceLocked = @json($usersMaintenanceLocked);
         if (!form) return;
@@ -343,43 +310,6 @@
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         };
-
-        const resetForm = () => {
-            form.reset();
-            setEditMode(false);
-            setValue('id', '');
-            setValue('_creating', '1');
-            if (title) title.textContent = 'Nuevo usuario';
-        };
-
-        const setEditMode = (isEdit) => {
-            ['id', 'rut', 'telegram_chat_id', 'nombre', 'apellido', 'estado_usuario', 'api'].forEach((name) => {
-                const field = form.elements[name];
-                if (!field) return;
-                if (field.tagName === 'SELECT') {
-                    field.disabled = isEdit;
-                } else {
-                    field.readOnly = isEdit;
-                }
-            });
-            form.querySelectorAll('[data-create-field]').forEach((field) => {
-                field.hidden = isEdit;
-            });
-            form.querySelectorAll('[data-edit-field]').forEach((field) => {
-                field.hidden = false;
-            });
-            if (form.elements.nombre) {
-                form.elements.nombre.required = !isEdit;
-            }
-            const note = form.querySelector('[data-edit-role-note]');
-            if (note) note.hidden = !isEdit;
-        };
-
-        newButton?.addEventListener('click', () => {
-            if (usersMaintenanceLocked) return;
-            resetForm();
-            openModal();
-        });
 
         // Modal confirmar eliminación
         const deleteModal = document.getElementById('delete-user-modal');
@@ -407,16 +337,12 @@
             button.addEventListener('click', () => {
                 if (usersMaintenanceLocked) return;
                 setValue('id', button.dataset.id);
-                setValue('rut', button.dataset.rut);
-                setValue('nombre', button.dataset.nombre);
-                setValue('apellido', button.dataset.apellido);
-                setValue('telegram_chat_id', button.dataset.telegramChatId);
                 setValue('rol', button.dataset.rol || 'usuario');
-                setValue('estado_usuario', button.dataset.estado || 'activo');
-                setValue('api', button.dataset.api);
                 setValue('_creating', '0');
-                setEditMode(true);
-                if (title) title.textContent = 'Editar usuario';
+                const userDisplay = document.getElementById('tic-user-display');
+                if (userDisplay) {
+                    userDisplay.value = `${button.dataset.nombre || ''} ${button.dataset.apellido || ''}`.trim();
+                }
                 openModal();
             });
         });

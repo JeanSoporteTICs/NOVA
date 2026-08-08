@@ -397,6 +397,9 @@ if (copyBtn) {
   });
 }
 </script>
+<button id="horas-extra-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" class="btn btn-primary nova-scroll-top">
+  <i class="bi bi-arrow-up"></i>
+</button>
 </div> <!-- #page-content -->
 </body>
 </html>

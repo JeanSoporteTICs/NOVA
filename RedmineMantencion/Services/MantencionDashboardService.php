@@ -76,10 +76,8 @@ class MantencionDashboardService
         return $dt instanceof \DateTimeImmutable ? $dt->format('d-m-Y') : trim((string)$value);
     }
 
-    public function dashboard_redirect_back(): void {
-        $location = $_SERVER['REQUEST_URI'] ?? '/redmine-mantencion';
-        header('Location: ' . $location);
-        exit;
+    public function dashboard_redirect_back(): \Illuminate\Http\RedirectResponse {
+        return redirect(request()->fullUrl());
     }
 
     public function dashboard_required_permission_for_action(string $action): ?string {
@@ -120,7 +118,7 @@ class MantencionDashboardService
         return array_values(array_filter(array_map('trim', $ids), static fn(string $id): bool => $id !== '' && isset($allowed[$id])));
     }
 
-    public function handle_request(): array {
+    public function handle_request(): array|\Illuminate\Http\RedirectResponse {
         $messages = load_messages();
         $userId = auth_get_user_id();
         $userToken = load_user_api_token($userId);
@@ -570,7 +568,7 @@ class MantencionDashboardService
                 dashboard_json_response($ajaxPayload, !empty($ajaxPayload['ok']) ? 200 : 400);
             }
             dashboard_set_flash($flashMsg ?? '');
-            $this->dashboard_redirect_back();
+            return $this->dashboard_redirect_back();
         }
         $rawLog = security_load_events();
         $securityLog = array_filter($rawLog, fn($entry) => (($entry['tag'] ?? '') !== 'CSRF_ALERT'));

@@ -9,8 +9,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ url('/redmine-mantencion/assets/theme.css') }}" rel="stylesheet">
-    <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
-    <script defer src="{{ asset('assets/nova-ui.js') }}"></script>
+    <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <script defer src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
 </head>
 <body class="nova-page bg-light">
     <nav class="navbar rm-navbar">
@@ -21,7 +21,7 @@
             </a>
             <div class="rm-top-actions">
                 @include('nova.partials.session-control')
-                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
                 <form method="POST" action="{{ route('logout') }}">@csrf<button class="btn btn-outline-light" type="submit"><i class="bi bi-box-arrow-right"></i>Salir</button></form>
             </div>

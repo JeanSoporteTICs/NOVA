@@ -16,8 +16,12 @@ $novaFaviconVersion = @filemtime($novaFaviconPath) ?: time();
   <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($novaFaviconUrl, ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaFaviconVersion ?>">
   <link rel="shortcut icon" type="image/svg+xml" href="<?= htmlspecialchars($novaFaviconUrl, ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaFaviconVersion ?>">
   <link rel="apple-touch-icon" href="<?= htmlspecialchars($novaTouchIconUrl, ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaFaviconVersion ?>">
+  <?php $novaSidebarPreloadPath = function_exists('base_path') ? base_path('public/assets/nova-sidebar-preload.js') : __DIR__ . '/../../../public/assets/nova-sidebar-preload.js'; ?>
+  <?php $novaSidebarPreloadVersion = @filemtime($novaSidebarPreloadPath) ?: time(); ?>
+  <script src="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-sidebar-preload.js') : '/NOVA/public/assets/nova-sidebar-preload.js', ENT_QUOTES, 'UTF-8') ?>?v=<?= (int)$novaSidebarPreloadVersion ?>" data-nova-sidebar-key="redmine-mantencion"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
 <?php if ($includeTheme): ?>
   <?php $themeVersion = @filemtime(__DIR__ . '/../../assets/theme.css') ?: time(); ?>
   <link href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/theme.css?v=<?= (int)$themeVersion ?>" rel="stylesheet">

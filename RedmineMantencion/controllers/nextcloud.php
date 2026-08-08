@@ -37,7 +37,7 @@ function nextcloud_config_load(): array {
     return [];
 }
 
-function nextcloud_request(array $cfg, string $method, string $path, array $payload = [], int $timeoutSeconds = 10): array {
+function nextcloud_request(array $cfg, string $method, string $path, array $payload = [], int $timeoutSeconds = 30): array {
     $base = rtrim((string)$cfg['url'], '/');
     $url = $base . '/ocs/v1.php/cloud' . $path . (str_contains($path, '?') ? '&' : '?') . 'format=json';
     $pairs = [];
@@ -72,7 +72,14 @@ function nextcloud_request(array $cfg, string $method, string $path, array $payl
         $message = $errno === CURLE_OPERATION_TIMEDOUT
             ? 'Nextcloud demoró más de ' . $timeoutSeconds . ' segundos en responder. Intenta nuevamente.'
             : 'No fue posible conectar con Nextcloud. Verifica la URL y vuelve a intentarlo.';
-        return ['ok' => false, 'statuscode' => 0, 'message' => $message];
+        return [
+            'ok' => false,
+            'http' => 0,
+            'statuscode' => 0,
+            'message' => $message,
+            'timeout' => $errno === CURLE_OPERATION_TIMEDOUT,
+            'curl_errno' => $errno,
+        ];
     }
     $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);

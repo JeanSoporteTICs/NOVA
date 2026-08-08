@@ -16,7 +16,7 @@
     </button>
     <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
         @include('nova.partials.session-control')
-        <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+        <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i> NOVA</a>
         <form method="POST" action="{{ route('logout') }}" class="d-inline m-0">
             @csrf
@@ -33,12 +33,13 @@
         </div>
         <nav class="nova-sidebar-body" aria-label="Navegación Telegram">
             <a class="nova-sidebar-link {{ $telegramActiveNav === 'inicio' ? 'active' : '' }}" href="{{ route('telegram.index') }}" @if($telegramActiveNav === 'inicio') aria-current="page" @endif>
-                <i class="bi bi-person-gear nova-sidebar-icon"></i><span>Mi Telegram</span>
+                <i class="bi {{ config('navigation-icons.telegram') }} nova-sidebar-icon"></i><span>Mi Telegram</span>
             </a>
             @if($telegramIsAdmin)
                 <a class="nova-sidebar-link {{ $telegramActiveNav === 'actividad' ? 'active' : '' }}" href="{{ route('telegram.log') }}" @if($telegramActiveNav === 'actividad') aria-current="page" @endif>
-                    <i class="bi bi-activity nova-sidebar-icon"></i><span>Actividad</span>
+                    <i class="bi {{ config('navigation-icons.actividad') }} nova-sidebar-icon"></i><span>Actividad</span>
                 </a>
             @endif
         </nav>
+        @include('nova.partials.sidebar-compact-control', ['sidebarId' => 'telegramSidebar'])
     </aside>

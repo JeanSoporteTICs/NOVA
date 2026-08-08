@@ -22,15 +22,21 @@ if (function_exists('request')) {
     $currentUser = array_merge($currentUser, $novaSessionUser);
   }
 }
+$navFirstName = trim((string) ($currentUser['name'] ?? $currentUser['nombre'] ?? ''));
+$navLastName = trim((string) ($currentUser['apellido'] ?? ''));
+$navDisplayName = trim($navFirstName . ($navLastName !== '' ? ' ' . $navLastName : ''));
+if ($navDisplayName === '') {
+  $navDisplayName = trim((string) ($currentUser['username'] ?? $currentUser['usuario'] ?? '')) ?: 'Usuario';
+}
 $navItems = [
-  ['key' => 'inicio', 'label' => 'Consulta', 'href' => $emachBaseUrl, 'icon' => 'bi-table'],
-  ['key' => 'horario', 'label' => 'Horario', 'href' => $emachBaseUrl . '/horario.php', 'icon' => 'bi-calendar-week'],
-  ['key' => 'configuracion', 'label' => 'Configuracion', 'href' => $emachBaseUrl . '/configuracion', 'icon' => 'bi-person-lock'],
+  ['key' => 'inicio', 'label' => 'Consulta', 'href' => $emachBaseUrl, 'icon' => config('navigation-icons.consulta')],
+  ['key' => 'horario', 'label' => 'Horario', 'href' => $emachBaseUrl . '/horario.php', 'icon' => config('navigation-icons.horario')],
+  ['key' => 'configuracion', 'label' => 'Configuracion', 'href' => $emachBaseUrl . '/configuracion', 'icon' => config('navigation-icons.configuracion')],
 ];
 $currentRole = (string) ($currentUser['role'] ?? $currentUser['rol'] ?? 'usuario');
 $sessionIdentity = (string) ($currentUser['id'] ?? $currentUser['username'] ?? '');
 if (in_array($currentRole, config('nova.module_admin_roles', []), true)) {
-  $navItems[] = ['key' => 'actividad', 'label' => 'Actividad', 'href' => $emachBaseUrl . '/log', 'icon' => 'bi-activity'];
+  $navItems[] = ['key' => 'actividad', 'label' => 'Actividad', 'href' => $emachBaseUrl . '/log', 'icon' => config('navigation-icons.actividad')];
 }
 
 ?>
@@ -47,7 +53,7 @@ if (in_array($currentRole, config('nova.module_admin_roles', []), true)) {
       <span class="emach-session-badge badge bg-light text-dark d-inline-flex align-items-center gap-1" id="session-timer" data-remaining="<?= $h($remaining) ?>" data-timeout="<?= $h($sessionTimeout) ?>">
         <i class="bi bi-clock"></i><span id="session-timer-text">--:--</span>
       </span>
-      <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($currentUser['nombre'] ?? $currentUser['name'] ?? 'Usuario') ?></span>
+      <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($navDisplayName) ?></span>
       <a class="btn btn-outline-light" href="<?= $h($homeUrl) ?>"><i class="bi bi-house-door"></i>NOVA</a>
       <form method="POST" action="<?= $h($logoutUrl) ?>" class="d-inline m-0">
         <input type="hidden" name="_token" value="<?= $h($csrfToken) ?>">
@@ -71,6 +77,11 @@ if (in_array($currentRole, config('nova.module_admin_roles', []), true)) {
         </a>
       <?php endforeach; ?>
     </nav>
+    <div class="nova-sidebar-footer">
+      <button class="nova-sidebar-collapse-toggle" type="button" aria-controls="novaSidebar" aria-pressed="false" aria-label="Contraer men&uacute;" title="Contraer men&uacute;">
+        <i class="bi bi-chevron-double-left" aria-hidden="true"></i><span>Contraer men&uacute;</span>
+      </button>
+    </div>
   </aside>
 
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>

@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <?php $pageTitle = 'Crear usuarios por lotes'; $includeTheme = true; include base_path('RedmineMantencion/views/partials/bootstrap-head.php'); ?>
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
   <?php $nextcloudUsuariosCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/nextcloud-usuarios.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/nextcloud-usuarios.css?v=<?= (int)$nextcloudUsuariosCssVersion ?>">
 </head>
@@ -18,9 +19,16 @@
       include base_path('RedmineMantencion/views/partials/hero.php');
     ?>
 
+    <?php if (trim((string)$flash) !== ''): ?>
+      <div class="nova-alert-card is-warning mb-3" role="alert">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span><?= $h($flash) ?></span>
+      </div>
+    <?php endif; ?>
+
     <div class="row g-3">
       <div class="col-12">
-        <form method="post" action="<?= $h($nextcloudUsersActionUrl) ?>" enctype="multipart/form-data" class="card nextcloud-panel">
+        <form method="post" action="<?= $h($nextcloudUsersActionUrl) ?>" enctype="multipart/form-data" class="card nextcloud-panel" id="nextcloud-import-form" autocomplete="off">
           <div class="card-body p-4">
             <input type="hidden" name="action" value="import_nextcloud_users">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
@@ -37,15 +45,42 @@
               <span class="badge text-bg-light border">API OCS</span>
             </div>
 
+            <section class="nextcloud-requester-fields mb-3" aria-labelledby="nextcloud-requester-title">
+              <div class="nextcloud-requester-head">
+                <span><i class="bi bi-person-vcard" aria-hidden="true"></i></span>
+                <div>
+                  <h6 id="nextcloud-requester-title">Datos del solicitante</h6>
+                  <p>Estos datos identificarán la importación en el historial.</p>
+                </div>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-6 col-xl-4">
+                  <label class="form-label" for="nextcloud-requester-name">Nombre del solicitante</label>
+                  <input class="form-control" id="nextcloud-requester-name" name="solicitante_nombre" value="<?= $h($requesterForm['solicitante_nombre'] ?? '') ?>" maxlength="200" placeholder="Nombre completo" required>
+                </div>
+                <div class="col-md-6 col-xl-4">
+                  <label class="form-label" for="nextcloud-requester-rut">RUT <span class="text-muted fw-normal">(opcional)</span></label>
+                  <input class="form-control" id="nextcloud-requester-rut" name="solicitante_rut" value="<?= $h($requesterForm['solicitante_rut'] ?? '') ?>" maxlength="12" placeholder="12.345.678-5" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="nextcloud-requester-rut-help nextcloud-requester-rut-feedback">
+                  <!-- <div class="form-text" id="nextcloud-requester-rut-help">Los puntos y el guion se añaden automáticamente.</div> -->
+                  <div class="invalid-feedback" id="nextcloud-requester-rut-feedback">Ingresa un RUT válido, incluido su dígito verificador.</div>
+                </div>
+                <div class="col-md-6 col-xl-4">
+                  <label class="form-label" for="nextcloud-requester-email">Correo</label>
+                  <input class="form-control" id="nextcloud-requester-email" name="solicitante_correo" type="email" value="<?= $h($requesterForm['solicitante_correo'] ?? '') ?>" maxlength="190" placeholder="solicitante@dominio.cl" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="nextcloud-requester-email-feedback" required>
+                  <div class="invalid-feedback" id="nextcloud-requester-email-feedback">Ingresa un correo válido, por ejemplo nombre@dominio.cl.</div>
+                </div>
+              </div>
+            </section>
+
             <div class="mb-3">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                 <label class="form-label mb-0">Archivo CSV o XLSX</label>
-                <a class="btn-nova btn-nova-success" href="/redmine-mantencion/assets/templates/plantilla-usuarios-nextcloud-v2.xlsx" download>
+                <a class="btn-nova btn-nova-success" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/templates/plantilla-usuarios-nextcloud-v2.xlsx" download>
                   <i class="bi bi-file-earmark-excel"></i> Descargar plantilla
                 </a>
               </div>
               <input type="file" name="nextcloud_file" class="form-control" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-              <div class="form-text">CSV funciona de inmediato. XLSX requiere la extensión ZIP habilitada en PHP.</div>
+              <!-- <div class="form-text">CSV funciona de inmediato. XLSX requiere la extensión ZIP habilitada en PHP.</div> -->
             </div>
 
             <button class="btn-nova btn-nova-primary" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
@@ -54,13 +89,20 @@
           </div>
         </form>
 
+        <?php
+          $selectableNextcloudGroups = array_values(array_unique(array_filter(
+              array_map(static fn($group): string => trim((string)$group), is_array($nextcloudGroups) ? $nextcloudGroups : []),
+              static fn(string $group): bool => $group !== ''
+          )));
+          natcasesort($selectableNextcloudGroups);
+          $selectableNextcloudGroups = array_values($selectableNextcloudGroups);
+        ?>
         <?php if ($previewUsers): ?>
           <div class="card nextcloud-panel mt-3">
             <div class="card-body p-4">
               <form method="post" action="<?= $h($nextcloudUsersActionUrl) ?>" id="nextcloud-preview-form">
                 <input type="hidden" name="action" value="confirm_nextcloud_import">
                 <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-                <input type="hidden" name="prepared_users" value="<?= $h(json_encode(['users' => $previewUsers], JSON_UNESCAPED_UNICODE)) ?>">
                 <input type="hidden" name="nextcloud_runtime_user" id="nextcloud-runtime-user-hidden" value="">
                 <input type="hidden" name="nextcloud_runtime_pass" id="nextcloud-runtime-pass-hidden" value="">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
@@ -73,21 +115,54 @@
                       <div class="text-muted small">Marca filas para cambiar su grupo o elimina las que no quieras crear. Los correos inválidos deben corregirse en el archivo y volver a cargarse.</div>
                     </div>
                   </div>
-                  <button type="<?= $hasSavedNextcloudCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-success" id="nextcloud-confirm-btn" data-maintenance="<?= $maintenanceMode ? '1' : '0' ?>" <?= $hasSavedNextcloudCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#nextcloudCredentialsModal"' ?> <?= ($maintenanceMode || $hasInvalidPreview) ? 'disabled' : '' ?> <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
-                    <i class="bi bi-cloud-arrow-up"></i> Confirmar creación
-                  </button>
+                  <div class="nextcloud-preview-actions">
+                    <span class="nextcloud-preview-count"><i class="bi bi-people"></i><?= count($previewUsers) ?> usuario<?= count($previewUsers) === 1 ? '' : 's' ?></span>
+                    <button type="<?= $hasSavedNextcloudCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-success" id="nextcloud-confirm-btn" data-maintenance="<?= $maintenanceMode ? '1' : '0' ?>" <?= $hasSavedNextcloudCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#nextcloudCredentialsModal"' ?> disabled <?= $maintenanceMode ? 'title="Plataforma en mantención"' : '' ?>>
+                      <i class="bi bi-cloud-arrow-up"></i> Confirmar creación
+                    </button>
+                  </div>
                 </div>
 
-                <div class="nextcloud-group-tools mb-3">
-                  <div class="row g-2 align-items-start">
-                    <div class="col-lg-6">
-                      <label class="form-label">Buscar grupo existente</label>
-                      <input type="search" class="form-control" id="nextcloud-group-search" placeholder="Buscar grupo en tiempo real" autocomplete="off" list="nextcloud-group-list">
-                      <datalist id="nextcloud-group-list"></datalist>
+                <?php if ($previewRequester): ?>
+                  <section class="nextcloud-requester-summary mb-3" aria-label="Solicitante de la importación">
+                    <div class="nextcloud-requester-summary-icon"><i class="bi bi-person-check" aria-hidden="true"></i></div>
+                    <div>
+                      <span>Solicitante</span>
+                      <strong><?= $h(($previewRequester['solicitante_nombre'] ?? '') !== '' ? $previewRequester['solicitante_nombre'] : ($previewRequester['solicitante'] ?? '')) ?></strong>
                     </div>
-                    <div class="col-lg-2">
-                      <label class="form-label">Cuota</label>
+                    <div>
+                      <span>RUT</span>
+                      <strong><?= $h(($previewRequester['solicitante_rut'] ?? '') !== '' ? $previewRequester['solicitante_rut'] : 'No informado') ?></strong>
+                    </div>
+                    <div>
+                      <span>Correo</span>
+                      <strong><?= $h($previewRequester['solicitante_correo'] ?? '') ?></strong>
+                    </div>
+                  </section>
+                <?php endif; ?>
+
+                <div class="nextcloud-group-tools mb-3">
+                  <div class="nextcloud-bulk-head">
+                    <div>
+                      <strong><i class="bi bi-people-fill" aria-hidden="true"></i> Cambios masivos</strong>
+                      <span>Se aplican únicamente a los usuarios marcados.</span>
+                    </div>
+                    <span class="nextcloud-bulk-selected" id="nextcloud-bulk-selected">0 seleccionados</span>
+                  </div>
+                  <div class="row g-2 align-items-start">
+                    <div class="col-lg-5">
+                      <label class="form-label" for="nextcloud-bulk-group">Grupo para seleccionados</label>
+                      <select class="form-select nextcloud-group-select" id="nextcloud-bulk-group">
+                        <option value="__keep__" selected>No cambiar grupo</option>
+                        <?php foreach ($selectableNextcloudGroups as $group): ?>
+                          <option value="<?= $h($group) ?>"><?= $h($group) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-lg-3">
+                      <label class="form-label" for="nextcloud-bulk-quota">Cuota para seleccionados</label>
                       <select class="form-select" id="nextcloud-bulk-quota">
+                        <option value="__keep__" selected>No cambiar cuota</option>
                         <option value="">Predeterminada</option>
                         <option value="none">Ilimitado</option>
                         <option value="1 GB">1 GB</option>
@@ -95,27 +170,27 @@
                         <option value="10 GB">10 GB</option>
                       </select>
                     </div>
-                    <div class="col-lg-2 d-grid pt-lg-4">
+                    <div class="col-lg-4 d-grid pt-lg-4">
                       <button type="button" class="btn-nova btn-nova-primary" id="nextcloud-apply-changes" disabled>
-                        <i class="bi bi-check2-square"></i> Aplicar cambios
+                        <i class="bi bi-check2-square"></i> Aplicar a seleccionados
                       </button>
                     </div>
                   </div>
-                  <div class="form-text mt-2">Solo se pueden aplicar grupos existentes consultados desde Nextcloud.</div>
+                  <!-- <div class="form-text mt-2"><strong>Opcional:</strong> puedes aplicar solo grupo, solo cuota o ambos. Los valores en “No cambiar” se conservan.</div> -->
                 </div>
 
-                <div class="table-responsive border rounded-4 overflow-hidden">
+                <div class="table-responsive nextcloud-table-wrap" role="region" aria-label="Usuarios preparados para crear en Nextcloud" tabindex="0">
                   <table class="table table-sm mb-0 align-middle nextcloud-preview-table">
-                    <thead class="table-light">
+                    <thead>
                       <tr>
-                        <th style="width:44px;"><input type="checkbox" class="form-check-input" id="nextcloud-check-all" aria-label="Seleccionar todos"></th>
-                        <th>Nombre de usuario</th>
-                        <th>Nombre a desplegar</th>
-                        <th>Correo</th>
-                        <th>Grupo</th>
-                        <th>Cuota</th>
-                        <th>Contraseña</th>
-                        <th style="width:58px;">Acción</th>
+                        <th scope="col" class="nextcloud-col-select"><input type="checkbox" class="form-check-input" id="nextcloud-check-all" aria-label="Seleccionar todos"></th>
+                        <th scope="col" class="nextcloud-col-user">Usuario</th>
+                        <th scope="col" class="nextcloud-col-name">Nombre a desplegar</th>
+                        <th scope="col" class="nextcloud-col-email">Correo</th>
+                        <th scope="col" class="nextcloud-col-group">Grupo</th>
+                        <th scope="col" class="nextcloud-col-quota">Cuota</th>
+                        <th scope="col" class="nextcloud-col-password">Contraseña</th>
+                        <th scope="col" class="nextcloud-col-action">Acción</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -123,49 +198,36 @@
                         <?php
                           $selectedGroup = (string)($item['groups'][0] ?? '');
                           $emailValid = !empty($item['email_valid']);
-                          $groupSuggestions = is_array($item['group_suggestions'] ?? null) ? $item['group_suggestions'] : [];
                         ?>
                         <tr data-nextcloud-row>
-                          <td><input type="checkbox" class="form-check-input nextcloud-row-check" aria-label="Seleccionar fila"></td>
-                          <td class="fw-bold">
-                            <?= $h($item['userid'] ?? '') ?>
-                            <?php if (!empty($item['userid_normalized']) && (string)($item['raw_userid'] ?? '') !== ''): ?>
-                              <span class="badge text-bg-info ms-1">Normalizado desde <?= $h($item['raw_userid'] ?? '') ?></span>
-                            <?php endif; ?>
+                          <td class="nextcloud-col-select"><input type="checkbox" class="form-check-input nextcloud-row-check" name="selected_users[]" value="<?= (int)$idx ?>" aria-label="Seleccionar usuario <?= $h($item['userid'] ?? '') ?>"></td>
+                          <td class="nextcloud-col-user">
+                            <span class="nextcloud-user-id"><i class="bi bi-person-badge" aria-hidden="true"></i><?= $h($item['userid'] ?? '') ?></span>
                             <?php if (!empty($item['duplicate_in_file'])): ?>
-                              <span class="badge text-bg-danger ms-1">Duplicado</span>
+                              <span class="badge text-bg-danger nextcloud-inline-status">Duplicado</span>
                             <?php endif; ?>
                             <input type="hidden" name="users[<?= (int)$idx ?>][userid]" value="<?= $h($item['userid'] ?? '') ?>">
                             <input type="hidden" name="users[<?= (int)$idx ?>][displayName]" value="<?= $h($item['displayName'] ?? '') ?>">
                             <input type="hidden" name="users[<?= (int)$idx ?>][email]" value="<?= $h($item['email'] ?? '') ?>">
                             <input type="hidden" name="users[<?= (int)$idx ?>][language]" value="<?= $h($item['language'] ?? 'es') ?>">
                             <input type="hidden" name="users[<?= (int)$idx ?>][password]" value="<?= $h($item['password'] ?? '') ?>">
-                            <input type="hidden" name="users[<?= (int)$idx ?>][group]" value="<?= $h($selectedGroup) ?>" class="nextcloud-row-group-input">
                           </td>
-                          <td><?= $h($item['displayName'] ?? '') ?></td>
-                          <td>
-                            <?= $h($item['email'] ?? '') ?>
+                          <td class="nextcloud-col-name"><span class="nextcloud-primary-text"><?= $h($item['displayName'] ?? '') ?></span></td>
+                          <td class="nextcloud-col-email">
+                            <span class="nextcloud-email-value"><?= $h($item['email'] ?? '') ?></span>
                             <?php if (!$emailValid): ?>
-                              <span class="badge text-bg-danger ms-1">Correo inválido</span>
+                              <span class="badge text-bg-danger nextcloud-inline-status">Correo inválido</span>
                             <?php endif; ?>
                           </td>
-                          <td>
-                            <?php if ($selectedGroup !== ''): ?>
-                              <span class="badge text-bg-success nextcloud-group-badge" data-group-label><?= $h($selectedGroup) ?></span>
-                            <?php else: ?>
-                              <span class="badge text-bg-warning nextcloud-group-badge" data-group-label>Sin coincidencia</span>
-                              <?php if ($groupSuggestions): ?>
-                                <div class="d-flex flex-wrap gap-1 mt-2">
-                                  <?php foreach ($groupSuggestions as $suggestion): ?>
-                                    <button type="button" class="btn btn-sm btn-outline-primary nextcloud-suggestion-btn" data-suggested-group="<?= $h($suggestion) ?>">
-                                      <?= $h($suggestion) ?>
-                                    </button>
-                                  <?php endforeach; ?>
-                                </div>
-                              <?php endif; ?>
-                            <?php endif; ?>
+                          <td class="nextcloud-col-group">
+                            <select name="users[<?= (int)$idx ?>][group]" class="form-select form-select-sm nextcloud-group-select nextcloud-row-group-select" data-placeholder="Seleccionar grupo" aria-label="Grupo de <?= $h($item['userid'] ?? '') ?>">
+                              <option value=""></option>
+                              <?php foreach ($selectableNextcloudGroups as $group): ?>
+                                <option value="<?= $h($group) ?>" <?= $selectedGroup === $group ? 'selected' : '' ?>><?= $h($group) ?></option>
+                              <?php endforeach; ?>
+                            </select>
                           </td>
-                          <td>
+                          <td class="nextcloud-col-quota">
                             <?php $itemQuota = (string)($item['quota'] ?? ''); ?>
                             <select name="users[<?= (int)$idx ?>][quota]" class="form-select form-select-sm nextcloud-row-quota">
                               <option value="" <?= $itemQuota === '' ? 'selected' : '' ?>>Predeterminada</option>
@@ -175,9 +237,9 @@
                               <option value="10 GB" <?= $itemQuota === '10 GB' ? 'selected' : '' ?>>10 GB</option>
                             </select>
                           </td>
-                          <td class="fw-bold text-primary"><?= $h($item['password'] ?? '') ?></td>
-                          <td>
-                            <button type="button" class="btn btn-sm btn-outline-danger nextcloud-remove-row" aria-label="Eliminar fila">
+                          <td class="nextcloud-col-password"><code class="nextcloud-password-value"><?= $h($item['password'] ?? '') ?></code></td>
+                          <td class="nextcloud-col-action">
+                            <button type="button" class="btn btn-outline-danger nextcloud-remove-row" aria-label="Eliminar usuario <?= $h($item['userid'] ?? '') ?>" title="Quitar usuario">
                               <i class="bi bi-trash"></i>
                             </button>
                           </td>
@@ -286,7 +348,7 @@
 <div class="nextcloud-loading-overlay" id="nextcloud-loading-overlay" role="status" aria-live="polite" aria-hidden="true">
   <div class="nextcloud-loading-card">
     <div class="nextcloud-loading-media">
-      <img src="/redmine-mantencion/assets/img/Nextcloud.gif" alt="">
+      <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
     </div>
     <div class="nextcloud-loading-body">
       <h3 class="nextcloud-loading-title">Creando usuarios en Nextcloud</h3>
@@ -341,12 +403,17 @@
 </div>
 
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const search = document.getElementById('nextcloud-group-search');
-  const groupList = document.getElementById('nextcloud-group-list');
+  const importForm = document.getElementById('nextcloud-import-form');
+  const requesterRut = document.getElementById('nextcloud-requester-rut');
+  const requesterEmail = document.getElementById('nextcloud-requester-email');
+  const bulkGroup = document.getElementById('nextcloud-bulk-group');
   const bulkQuota = document.getElementById('nextcloud-bulk-quota');
   const applyChanges = document.getElementById('nextcloud-apply-changes');
+  const bulkSelected = document.getElementById('nextcloud-bulk-selected');
   const checkAll = document.getElementById('nextcloud-check-all');
   const confirmBtn = document.getElementById('nextcloud-confirm-btn');
   const previewForm = document.getElementById('nextcloud-preview-form');
@@ -362,70 +429,104 @@ document.addEventListener('DOMContentLoaded', () => {
   const nextcloudLoadingText = document.getElementById('nextcloud-loading-text');
   const nextcloudLoadingStep = document.getElementById('nextcloud-loading-step');
   const getRows = () => Array.from(document.querySelectorAll('[data-nextcloud-row]'));
-  const groups = <?= json_encode(array_values($nextcloudGroups), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
-  let selectedGroup = '';
-  let selectedGroupText = '';
-  let quotaChanged = false;
+  const keepBulkValue = '__keep__';
   let nextcloudProgressTimer = null;
   let nextcloudSubmitAccepted = false;
-  const groupStopwords = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'a', 'al', 'en', 'por', 'para']);
 
-  function normalizeGroupText(value) {
-    return String(value || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
+  function formatRequesterRut(value) {
+    const clean = String(value || '').replace(/[^0-9kK]/g, '').toUpperCase().slice(0, 9);
+    if (clean.length <= 1) return clean;
+
+    const number = clean.slice(0, -1);
+    const verifier = clean.slice(-1);
+    const dottedNumber = number.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${dottedNumber}-${verifier}`;
   }
 
-  function groupTokens(value) {
-    return normalizeGroupText(value)
-      .split(/[^a-z0-9]+/)
-      .filter(token => token && !groupStopwords.has(token))
-      .filter((token, index, items) => items.indexOf(token) === index);
-  }
+  function isValidRequesterRut(value) {
+    const clean = String(value || '').replace(/[^0-9kK]/g, '').toLowerCase();
+    if (!/^\d{7,8}[0-9k]$/.test(clean)) return false;
 
-  function groupKey(value) {
-    return normalizeGroupText(value).replace(/[^a-z0-9]+/g, '');
-  }
-
-  function groupScore(term, group) {
-    const needle = groupKey(term);
-    const hay = groupKey(group);
-    if (!needle || !hay) return 0;
-    if (needle === hay) return 100;
-    const needleTokens = groupTokens(term);
-    const groupTokensValue = groupTokens(group);
-    const needleTokenKey = needleTokens.join('');
-    const groupTokenKey = groupTokensValue.join('');
-    if (needleTokenKey && needleTokenKey === groupTokenKey) return 98;
-    if (needleTokenKey && groupTokenKey.includes(needleTokenKey)) return 90;
-    if (groupTokenKey && needleTokenKey.includes(groupTokenKey)) return 86;
-    const overlap = needleTokens.filter(token => groupTokensValue.includes(token));
-    if (needleTokens.length && groupTokensValue.length) {
-      const needleCoverage = overlap.length / needleTokens.length;
-      const groupCoverage = overlap.length / groupTokensValue.length;
-      const partialMatches = needleTokens.filter(token => {
-        return token.length >= 2 && groupTokensValue.some(groupToken => groupToken.startsWith(token) || groupToken.includes(token));
-      });
-      const partialCoverage = new Set(partialMatches).size / needleTokens.length;
-      if (needleCoverage === 1 && groupCoverage === 1) return 96;
-      if (needleCoverage === 1) return 82;
-      if (partialCoverage === 1) return 80;
-      if (partialCoverage >= 0.5 && partialMatches.length >= 2) return 72;
-      if (groupCoverage === 1 && overlap.length >= 2) return 78;
-      if (overlap.length >= 2) return 68;
+    const number = clean.slice(0, -1);
+    const verifier = clean.slice(-1);
+    let factor = 2;
+    let sum = 0;
+    for (let index = number.length - 1; index >= 0; index -= 1) {
+      sum += Number(number[index]) * factor;
+      factor = factor === 7 ? 2 : factor + 1;
     }
-    if (hay.includes(needle)) return 74;
-    if (needle.includes(hay)) return 70;
-    return 0;
+
+    const remainder = 11 - (sum % 11);
+    const expected = remainder === 11 ? '0' : remainder === 10 ? 'k' : String(remainder);
+    return expected === verifier;
   }
 
-  function bestGroupMatch(term) {
-    const matches = groups
-      .map(group => ({ group, score: groupScore(term, group) }))
-      .filter(item => item.score >= 68)
-      .sort((a, b) => b.score - a.score || a.group.length - b.group.length || a.group.localeCompare(b.group, 'es'));
-    return matches.length ? matches[0].group : '';
+  function updateRequesterRutState(showFeedback = false) {
+    if (!requesterRut) return true;
+    const hasValue = requesterRut.value.trim() !== '';
+    const valid = !hasValue || isValidRequesterRut(requesterRut.value);
+    requesterRut.setCustomValidity(valid ? '' : 'Ingresa un RUT válido, incluido su dígito verificador.');
+    requesterRut.classList.toggle('is-invalid', showFeedback && !valid);
+    requesterRut.classList.toggle('is-valid', showFeedback && hasValue && valid);
+    return valid;
+  }
+
+  function isValidRequesterEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(value || '').trim());
+  }
+
+  function updateRequesterEmailState(showFeedback = false) {
+    if (!requesterEmail) return true;
+    const valid = isValidRequesterEmail(requesterEmail.value);
+    requesterEmail.setCustomValidity(valid ? '' : 'Ingresa un correo válido, por ejemplo nombre@dominio.cl.');
+    requesterEmail.classList.toggle('is-invalid', showFeedback && !valid);
+    requesterEmail.classList.toggle('is-valid', showFeedback && valid);
+    return valid;
+  }
+
+  if (requesterRut) {
+    requesterRut.value = formatRequesterRut(requesterRut.value);
+    requesterRut.addEventListener('input', () => {
+      const cursorAtEnd = requesterRut.selectionStart === requesterRut.value.length;
+      requesterRut.value = formatRequesterRut(requesterRut.value);
+      updateRequesterRutState(false);
+      if (cursorAtEnd) requesterRut.setSelectionRange(requesterRut.value.length, requesterRut.value.length);
+    });
+    requesterRut.addEventListener('blur', () => {
+      requesterRut.value = formatRequesterRut(requesterRut.value);
+      updateRequesterRutState(true);
+    });
+    requesterRut.addEventListener('invalid', () => updateRequesterRutState(true));
+    updateRequesterRutState(false);
+  }
+
+  if (requesterEmail) {
+    requesterEmail.value = requesterEmail.value.trim().toLowerCase();
+    requesterEmail.addEventListener('input', () => {
+      requesterEmail.value = requesterEmail.value.toLowerCase();
+      updateRequesterEmailState(false);
+    });
+    requesterEmail.addEventListener('blur', () => {
+      requesterEmail.value = requesterEmail.value.trim().toLowerCase();
+      updateRequesterEmailState(true);
+    });
+    requesterEmail.addEventListener('invalid', () => updateRequesterEmailState(true));
+    updateRequesterEmailState(false);
+  }
+
+  if (importForm) {
+    importForm.addEventListener('submit', event => {
+      if (requesterRut) requesterRut.value = formatRequesterRut(requesterRut.value);
+      if (requesterEmail) requesterEmail.value = requesterEmail.value.trim().toLowerCase();
+      const rutValid = updateRequesterRutState(true);
+      const emailValid = updateRequesterEmailState(true);
+      if (rutValid && emailValid) return;
+
+      event.preventDefault();
+      const firstInvalid = !rutValid ? requesterRut : requesterEmail;
+      firstInvalid?.focus();
+      firstInvalid?.reportValidity();
+    });
   }
 
   function showNextcloudLoading() {
@@ -470,128 +571,118 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateConfirmState() {
     if (!confirmBtn) return;
-    const rows = getRows();
-    const missingGroup = rows.length === 0 || rows.some(row => {
-      const input = row.querySelector('.nextcloud-row-group-input');
-      return !input || input.value.trim() === '';
-    });
-    const invalidEmail = rows.some(row => row.querySelector('.badge.text-bg-danger'));
-    const duplicateRows = rows.some(row => Array.from(row.querySelectorAll('.badge')).some(badge => badge.textContent.trim() === 'Duplicado'));
-    confirmBtn.disabled = confirmBtn.dataset.maintenance === '1' || missingGroup || invalidEmail || duplicateRows;
+    const selectedRows = getRows().filter(row => row.querySelector('.nextcloud-row-check')?.checked);
+    const invalidEmail = selectedRows.some(row => Array.from(row.querySelectorAll('.badge')).some(badge => badge.textContent.trim() === 'Correo inválido'));
+    const duplicateRows = selectedRows.some(row => Array.from(row.querySelectorAll('.badge')).some(badge => badge.textContent.trim() === 'Duplicado'));
+    confirmBtn.disabled = confirmBtn.dataset.maintenance === '1' || selectedRows.length === 0 || invalidEmail || duplicateRows;
   }
 
   function hasSelectedRows() {
     return document.querySelectorAll('.nextcloud-row-check:checked').length > 0;
   }
 
-  function updateApplyState() {
-    if (!applyChanges) return;
-    applyChanges.disabled = (!selectedGroup && !quotaChanged) || !hasSelectedRows();
+  function selectedBulkGroup() {
+    if (!bulkGroup || bulkGroup.value === keepBulkValue) return '';
+    return bulkGroup.value.trim();
   }
 
-  if (search) {
-    search.addEventListener('input', () => {
-      const term = search.value.trim();
-      const normalized = normalizeGroupText(term);
-      selectedGroup = bestGroupMatch(term);
-      selectedGroupText = selectedGroup;
-      updateApplyState();
-      if (!groupList) return;
-      groupList.innerHTML = '';
-      if (normalized.length < 1) return;
-      groups
-        .map(group => ({ group, score: groupScore(term, group) }))
-        .filter(item => item.score > 0 || normalizeGroupText(item.group).includes(normalized))
-        .sort((a, b) => b.score - a.score || a.group.length - b.group.length || a.group.localeCompare(b.group, 'es'))
-        .slice(0, 30)
-        .forEach(({ group }) => {
-          const option = document.createElement('option');
-          option.value = group;
-          groupList.appendChild(option);
-        });
+  function hasBulkQuotaChange() {
+    return Boolean(bulkQuota && bulkQuota.value !== keepBulkValue);
+  }
+
+  function updateApplyState() {
+    if (!applyChanges) return;
+    const hasBulkChange = selectedBulkGroup() !== '' || hasBulkQuotaChange();
+    applyChanges.disabled = !hasBulkChange || !hasSelectedRows();
+  }
+
+  function updateSelectionState() {
+    const checks = Array.from(document.querySelectorAll('.nextcloud-row-check'));
+    const selectedCount = checks.filter(check => check.checked).length;
+    checks.forEach(check => {
+      check.closest('[data-nextcloud-row]')?.classList.toggle('is-selected', check.checked);
     });
-    search.addEventListener('change', () => {
-      const match = bestGroupMatch(search.value.trim());
-      if (match) {
-        selectedGroup = match;
-        selectedGroupText = match;
-        search.value = match;
-      }
-      updateApplyState();
+    if (checkAll) {
+      checkAll.checked = checks.length > 0 && selectedCount === checks.length;
+      checkAll.indeterminate = selectedCount > 0 && selectedCount < checks.length;
+    }
+    if (bulkSelected) bulkSelected.textContent = `${selectedCount} seleccionado${selectedCount === 1 ? '' : 's'}`;
+    updateApplyState();
+    updateConfirmState();
+  }
+
+  const select2Available = Boolean(window.jQuery?.fn?.select2);
+  if (select2Available) {
+    window.jQuery('.nextcloud-group-select').each(function () {
+      const select = window.jQuery(this);
+      select.select2({
+        width: '100%',
+        allowClear: false,
+        placeholder: this.dataset.placeholder || 'Seleccionar grupo',
+        language: {
+          noResults: () => 'No se encontraron grupos',
+          searching: () => 'Buscando grupos...'
+        }
+      });
     });
   }
+
+  if (bulkGroup) {
+    bulkGroup.addEventListener('change', updateApplyState);
+    if (select2Available) window.jQuery(bulkGroup).on('change.novaBulk', updateApplyState);
+  }
+
+  document.querySelectorAll('.nextcloud-row-group-select').forEach(select => {
+    select.addEventListener('change', updateConfirmState);
+  });
 
   if (checkAll) {
     checkAll.addEventListener('change', () => {
       document.querySelectorAll('.nextcloud-row-check').forEach(check => {
         check.checked = checkAll.checked;
       });
-      updateApplyState();
+      updateSelectionState();
     });
   }
 
   document.querySelectorAll('.nextcloud-row-check').forEach(check => {
-    check.addEventListener('change', updateApplyState);
+    check.addEventListener('change', updateSelectionState);
   });
 
   document.querySelectorAll('.nextcloud-remove-row').forEach(button => {
     button.addEventListener('click', () => {
       const row = button.closest('[data-nextcloud-row]');
       if (row) row.remove();
-      if (checkAll) {
-        const checks = Array.from(document.querySelectorAll('.nextcloud-row-check'));
-        checkAll.checked = checks.length > 0 && checks.every(check => check.checked);
-      }
-      updateApplyState();
-      updateConfirmState();
-    });
-  });
-
-  document.querySelectorAll('.nextcloud-suggestion-btn').forEach(button => {
-    button.addEventListener('click', () => {
-      const row = button.closest('[data-nextcloud-row]');
-      const group = button.dataset.suggestedGroup || '';
-      const groupInput = row ? row.querySelector('.nextcloud-row-group-input') : null;
-      const label = row ? row.querySelector('[data-group-label]') : null;
-      if (!group || !groupInput || !label) return;
-      groupInput.value = group;
-      label.textContent = group;
-      label.classList.remove('text-bg-warning');
-      label.classList.add('text-bg-success');
-      row.querySelectorAll('.nextcloud-suggestion-btn').forEach(item => item.remove());
-      updateApplyState();
-      updateConfirmState();
+      updateSelectionState();
     });
   });
 
   if (bulkQuota) {
-    bulkQuota.addEventListener('change', () => {
-      quotaChanged = true;
-      updateApplyState();
-    });
+    bulkQuota.addEventListener('change', updateApplyState);
   }
 
   if (applyChanges) {
     applyChanges.addEventListener('click', () => {
-      if (!selectedGroup && !quotaChanged) return;
-      document.querySelectorAll('.nextcloud-row-check:checked').forEach(check => {
+      const groupToApply = selectedBulkGroup();
+      const applyQuota = hasBulkQuotaChange();
+      if (!groupToApply && !applyQuota) return;
+      const selectedChecks = Array.from(document.querySelectorAll('.nextcloud-row-check:checked'));
+      selectedChecks.forEach(check => {
         const row = check.closest('[data-nextcloud-row]');
-        const groupInput = row ? row.querySelector('.nextcloud-row-group-input') : null;
-        const label = row ? row.querySelector('[data-group-label]') : null;
+        const groupSelect = row ? row.querySelector('.nextcloud-row-group-select') : null;
         const quota = row ? row.querySelector('.nextcloud-row-quota') : null;
-        if (selectedGroup && groupInput && label) {
-          groupInput.value = selectedGroup;
-          label.textContent = selectedGroupText;
-          label.classList.remove('text-bg-warning');
-          label.classList.add('text-bg-success');
+        if (groupToApply && groupSelect) {
+          groupSelect.value = groupToApply;
+          if (select2Available) window.jQuery(groupSelect).trigger('change.select2');
         }
-        if (quotaChanged && bulkQuota && quota) {
+        if (applyQuota && bulkQuota && quota) {
           quota.value = bulkQuota.value;
         }
       });
-      quotaChanged = false;
       updateApplyState();
       updateConfirmState();
+      const changes = [groupToApply ? `grupo ${groupToApply}` : '', applyQuota ? 'cuota' : ''].filter(Boolean).join(' y ');
+      window.NovaToast?.success(`Se aplicó ${changes} a ${selectedChecks.length} usuario${selectedChecks.length === 1 ? '' : 's'}.`, 'Cambios aplicados');
     });
   }
 
@@ -621,6 +712,16 @@ document.addEventListener('DOMContentLoaded', () => {
     previewForm.addEventListener('submit', event => {
       if (nextcloudRuntimeUserHidden) nextcloudRuntimeUserHidden.value = nextcloudRuntimeUserInput?.value || '';
       if (nextcloudRuntimePassHidden) nextcloudRuntimePassHidden.value = nextcloudRuntimePassInput?.value || '';
+      if (!hasSelectedRows()) {
+        event.preventDefault();
+        window.appModal?.show({
+          title: 'Selecciona usuarios',
+          message: 'Marca al menos un usuario antes de confirmar la creación.',
+          tone: 'warning'
+        });
+        updateSelectionState();
+        return;
+      }
       if (nextcloudSubmitAccepted) {
         showNextcloudLoading();
         return;
@@ -652,8 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  updateConfirmState();
-  updateApplyState();
+  updateSelectionState();
 
 });
 </script>

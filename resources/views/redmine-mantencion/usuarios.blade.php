@@ -13,7 +13,7 @@
   <?php
     $heroIcon = 'bi-people';
     $heroTitle = 'Usuarios';
-    $heroSubtitle = 'Gestion de usuarios e integraciones personales';
+    $heroSubtitle = 'Gestion de acceso y roles del proyecto. Los usuarios se crean desde NOVA';
     $heroExtras = '';
     include base_path('RedmineMantencion/views/partials/hero.php');
   ?>
@@ -43,7 +43,7 @@
         <i class="bi bi-search"></i>
         <input id="user-search" type="search" placeholder="Buscar nombre, ID o rol" aria-label="Buscar usuario">
       </div>
-      <span class="nova-user-meta ms-auto">Total: <?= count($usuarios) ?></span>
+      <span class="nova-user-meta ms-auto" id="user-filter-count">Mostrando: <?= (int)$usuariosActivos ?></span>
       <form method="post" action="<?= $h($usersActionUrl) ?>" class="m-0">
         <input type="hidden" name="action" value="preview_remote">
         <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
@@ -51,9 +51,6 @@
           <i class="bi bi-cloud-download"></i> Importar Redmine
         </button>
       </form>
-      <button class="btn-nova btn-nova-primary" data-bs-toggle="modal" data-bs-target="#createUserModal" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>>
-        <i class="bi bi-person-plus"></i> Nuevo usuario
-      </button>
     </div>
     <div class="table-responsive">
       <table id="user-table" class="nova-user-table">
@@ -91,7 +88,7 @@
           };
           $estadoBadge = $uEstado === 'baneado' ? 'is-baneado' : 'is-activo';
         ?>
-          <tr data-user-status="<?= $h($uEstado === 'baneado' ? 'baneado' : 'activo') ?>">
+          <tr data-user-status="<?= $h($uEstado === 'baneado' ? 'baneado' : 'activo') ?>" <?= $uEstado === 'baneado' ? 'hidden' : '' ?>>
             <td data-col="id nombre">
               <div class="nova-user-cell">
                 <div class="nova-user-avatar"><?= $h($uInitials) ?></div>
@@ -148,6 +145,9 @@
             </td>
           </tr>
         <?php endforeach; ?>
+        <?php if ($usuarios): ?>
+          <tr id="user-filter-empty" <?= $usuariosActivos > 0 ? 'hidden' : '' ?>><td colspan="6" class="nova-table-empty">No hay usuarios para el filtro seleccionado.</td></tr>
+        <?php endif; ?>
         </tbody>
       </table>
     </div>
@@ -300,72 +300,30 @@
   </div>
 </div>
 
-<div class="modal fade detail-drawer-modal" id="createUserModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable detail-drawer-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Crear usuario</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form method="post" action="<?= $h($usersActionUrl) ?>">
-          <input type="hidden" name="action" value="create">
-          <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-          <div class="row g-3">
-            <div class="col-md-4"><label class="form-label">ID (manual)</label><input name="id_manual" id="new-id" class="form-control" placeholder="ID" aria-label="ID"></div>
-            <div class="col-md-4"><label class="form-label">Nombre</label><input name="nombre" class="form-control" placeholder="Nombre" required></div>
-            <div class="col-md-4"><label class="form-label">Apellido</label><input name="apellido" class="form-control" placeholder="Apellido" required></div>
-            <div class="col-md-4">
-              <label class="form-label">Rol</label>
-              <select name="rol" class="form-select">
-                <option value="usuario" selected>Usuario</option>
-                <option value="administrador">Administrador</option>
-                <option value="gestor">Gestor</option>
-                <option value="root">Root</option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Estado</label>
-              <select name="estado" class="form-select">
-                <option value="activo" selected>Activo</option>
-                <option value="baneado">Baneado</option>
-              </select>
-            </div>
-            <div class="col-12">
-              <div class="nova-alert-card is-info mb-0">
-                <i class="bi bi-person-lock"></i>
-                Las credenciales de Redmine, CORE y Nextcloud son personales. Cada usuario debe ingresarlas desde el modulo correspondiente.
-              </div>
-            </div>
-          </div>
-          <div class="text-end mt-3">
-            <button class="btn-nova btn-nova-primary btn-icon" <?= $maintenanceMode ? 'disabled title="Plataforma en mantencion"' : '' ?>><i class="bi bi-check-lg"></i> Guardar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
-<button id="users-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" class="btn btn-primary nova-scroll-top">
-    <i class="bi bi-arrow-up"></i>
-</button>
-<script>
+<script data-partial-nav-script>
+(() => {
 const userFilterInput = document.getElementById('user-search');
 const userStatusFilters = document.getElementById('user-status-filters');
+const userFilterCount = document.getElementById('user-filter-count');
+const userFilterEmpty = document.getElementById('user-filter-empty');
 const hasImportPreview = <?= is_array($importPreview) ? 'true' : 'false' ?>;
 let activeUserStatus = userStatusFilters?.querySelector('[data-filter].is-active')?.getAttribute('data-filter') || 'activo';
 
 function applyUserFilters() {
   const term = (userFilterInput?.value || '').toLowerCase().trim();
+  let visibleUsers = 0;
   document.querySelectorAll('#user-table tbody tr[data-user-status]').forEach(tr => {
     const statusMatches = (tr.getAttribute('data-user-status') || 'activo') === activeUserStatus;
     const textMatches = term === '' || Array.from(tr.querySelectorAll('[data-col]')).some(td =>
       (td.textContent || '').toLowerCase().includes(term)
     );
-    tr.style.display = statusMatches && textMatches ? '' : 'none';
+    const visible = statusMatches && textMatches;
+    tr.hidden = !visible;
+    if (visible) visibleUsers += 1;
   });
+  if (userFilterCount) userFilterCount.textContent = `Mostrando: ${visibleUsers}`;
+  if (userFilterEmpty) userFilterEmpty.hidden = visibleUsers !== 0;
 }
 
 if (userFilterInput) {
@@ -462,34 +420,10 @@ function setupImportModal() {
   }
 }
 
-const existingIds = <?= json_encode(array_values(array_map(fn($u) => $u['id'] ?? '', $usuarios)), JSON_UNESCAPED_UNICODE) ?>.filter(Boolean);
-
-function markDuplicate(input, isDup, msg = 'Ya existe') {
-  if (!input) return;
-  input.classList.toggle('is-invalid', isDup);
-  let fb = input.parentElement.querySelector('.invalid-feedback');
-  if (!fb) {
-    fb = document.createElement('div');
-    fb.className = 'invalid-feedback';
-    input.parentElement.appendChild(fb);
-  }
-  fb.textContent = isDup ? msg : '';
-}
-
-function checkDuplicatesCreate() {
-  const idInput = document.getElementById('new-id');
-  const idVal = (idInput?.value || '').trim();
-  markDuplicate(idInput, idVal !== '' && existingIds.includes(idVal), 'El ID ya existe');
-}
-
-const newIdInput = document.getElementById('new-id');
-if (newIdInput) {
-  newIdInput.addEventListener('input', checkDuplicatesCreate);
-}
-
 setupEditModal();
 setupDeleteModal();
 setupImportModal();
+})();
 </script>
 </div>
 </body>

@@ -8,7 +8,7 @@
     @include('nova.partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
+    <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
 </head>
 <body class="nova-page">
     <main class="nova-home nova-shell">
@@ -22,9 +22,9 @@
                 </div>
             </div>
 
-            <nav class="nova-session" aria-label="Sesión de {{ session('nova_user.name') }}">
+            <nav class="nova-session" aria-label="Sesión de @include('nova.partials.current-user-name')">
                 @include('nova.partials.session-control')
-                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 @if (isset($projects['integraciones']))
                     <a class="btn btn-outline-light" href="{{ route('integrations.nova') }}" title="Mis integraciones">
                         <i class="bi bi-person-lock"></i><span class="nova-navbar-label">Integraciones</span>
@@ -239,7 +239,7 @@
         @endif
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
     <script>
         // Delegated open/close wiring for this page's 3 modals, mirroring the
         // pattern already used in RedmineMantencion/views/partials/navbar.php.

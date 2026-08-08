@@ -32,7 +32,6 @@ class HistoricoController extends Controller
         $h = fn ($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
         $maintenanceMode = maintenance_mode_enabled();
         $csrf = legacy_csrf_token();
-        $historicoActionUrl = function_exists('url') ? url('/redmine-mantencion/app/historico') : legacy_app_url('app/historico');
         $mantencionBaseUrl = function_exists('legacy_app_url')
             ? rtrim(legacy_app_url(), '/')
             : (function_exists('url') ? rtrim(url('/redmine-mantencion'), '/') : '/redmine-mantencion');
@@ -317,20 +316,34 @@ class HistoricoController extends Controller
         if (!$scopeBloqueado && $f_usuario !== '') {
             $historicoFilterChips[] = ['icon' => 'bi-person', 'label' => 'Asignado ' . $f_usuario, 'remove' => 'usuario'];
         }
-        $historicoChipUrl = static function (string $key) use ($perPage): string {
+        $historicoBaseUrl = route('redmine.mantencion.section', ['section' => 'historico']);
+        $historicoStateQuery = array_filter([
+            'desde' => $f_desde,
+            'hasta' => $f_hasta,
+            'fuente' => $f_fuente,
+            'descripcion' => $f_descripcion,
+            'buscar' => $f_busqueda,
+            'categoria' => $f_categoria,
+            'usuario' => $scopeBloqueado ? '' : $f_usuario,
+            'mensajes_scope' => $f_scope,
+            'per_page' => $perPage,
+            'page' => $currentPage,
+        ], static fn ($value): bool => $value !== '');
+        $historicoActionUrl = $historicoBaseUrl . '?' . http_build_query($historicoStateQuery);
+        $historicoChipUrl = static function (string $key) use ($perPage, $historicoBaseUrl): string {
             $query = $_GET;
             unset($query[$key]);
             $query['page'] = 1;
             $query['per_page'] = $perPage;
 
-            return 'historico.php' . ($query ? '?' . http_build_query($query) : '');
+            return $historicoBaseUrl . ($query ? '?' . http_build_query($query) : '');
         };
-        $historicoPageUrl = static function (int $page) use ($perPage): string {
+        $historicoPageUrl = static function (int $page) use ($perPage, $historicoBaseUrl): string {
             $query = $_GET;
             $query['page'] = max(1, $page);
             $query['per_page'] = $perPage;
 
-            return 'historico.php?' . http_build_query($query);
+            return $historicoBaseUrl . '?' . http_build_query($query);
         };
 
         $usuariosSel = [];

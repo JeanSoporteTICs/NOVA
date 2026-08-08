@@ -563,11 +563,16 @@ function csrf_validate() {
     // Acepta el token por cualquiera de los nombres de campo/cabecera que el
     // JS y los formularios legacy ya usaban, validándolo contra el único
     // token real (el de la sesión Laravel).
+    $request = function_exists('request') ? request() : null;
     $submitted = trim((string)(
         $_POST['csrf_token']
         ?? $_POST['_token']
         ?? $_SERVER['HTTP_X_CSRF_TOKEN']
         ?? $_SERVER['HTTP_X_XSRF_TOKEN']
+        ?? ($request?->input('csrf_token'))
+        ?? ($request?->input('_token'))
+        ?? ($request?->header('X-CSRF-TOKEN'))
+        ?? ($request?->header('X-XSRF-TOKEN'))
         ?? ''
     ));
     $expected = function_exists('csrf_token') ? trim((string)csrf_token()) : '';

@@ -2,54 +2,76 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use App\Modulos\Nova\Services\NovaUserService;
 use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
+use Illuminate\Http\RedirectResponse;
 use Throwable;
 use ZipArchive;
 
 class MantencionNextcloudService
 {
-    public function handle_nextcloud(): array {
+    public function __construct(private readonly NovaUserService $novaUsers)
+    {
+    }
+
+    public function handle_nextcloud(): array|RedirectResponse {
         $flash = $this->nextcloud_consume_flash();
         $lastImport = $this->nextcloud_consume_last_import();
         $preview = $this->nextcloud_consume_preview();
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $request = request();
+        if ($request->isMethod('post')) {
             if (function_exists('csrf_validate')) csrf_validate();
             if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
-            $action = $_POST['action'] ?? '';
+            $action = (string)$request->input('action', '');
             if ($action === 'save_nextcloud_config') {
-                $this->nextcloud_save_config($_POST);
+                $this->nextcloud_save_config($request->all());
                 $this->nextcloud_set_flash('Configuración de Nextcloud guardada');
-                $this->nextcloud_redirect_back();
+                return $this->nextcloud_redirect_back('nextcloud');
             }
             if ($action === 'fetch_nextcloud_groups') {
                 $res = $this->nextcloud_fetch_groups('');
                 if (isset($res['error'])) return [$res['error'], $this->nextcloud_config(), $this->nextcloud_cached_groups()];
                 $this->nextcloud_save_cached_groups($res['groups'] ?? []);
                 $this->nextcloud_set_flash('Grupos consultados: ' . count($res['groups'] ?? []));
-                $this->nextcloud_redirect_back();
+                return $this->nextcloud_redirect_back('nextcloud');
             }
             if ($action === 'clear_nextcloud_groups') {
                 $this->nextcloud_save_cached_groups([]);
                 $this->nextcloud_set_flash('Grupos guardados eliminados.');
-                $this->nextcloud_redirect_back();
+                return $this->nextcloud_redirect_back('nextcloud');
             }
             if ($action === 'import_nextcloud_users') {
-                $res = $this->nextcloud_prepare_users($_FILES['nextcloud_file'] ?? [], $_POST);
+                $requesterResult = $this->nextcloud_requester_from_input($request->all());
+                if (isset($requesterResult['error'])) {
+                    return [$requesterResult['error'], $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
+                }
+                $uploadedFile = $request->file('nextcloud_file');
+                $file = $uploadedFile !== null ? [
+                    'error' => $uploadedFile->getError(),
+                    'name' => $uploadedFile->getClientOriginalName(),
+                    'tmp_name' => $uploadedFile->getPathname(),
+                ] : [];
+                $res = $this->nextcloud_prepare_users($file, $request->all());
                 if (isset($res['error'])) return [$res['error'], $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
+                $res['requester'] = $requesterResult['requester'];
                 $this->nextcloud_set_preview($res);
-                $this->nextcloud_redirect_back();
+                return $this->nextcloud_redirect_back();
             }
             if ($action === 'confirm_nextcloud_import') {
-                $payload = json_decode((string)($_POST['prepared_users'] ?? ''), true);
-                $users = $this->nextcloud_users_from_post((array)($_POST['users'] ?? []));
-                if (!$users) {
-                    $users = is_array($payload['users'] ?? null) ? $payload['users'] : [];
+                $selectedRows = $this->nextcloud_selected_rows(
+                    (array)$request->input('users', []),
+                    (array)$request->input('selected_users', [])
+                );
+                $users = $this->nextcloud_users_from_post($selectedRows);
+                if (!$users) return ['Selecciona al menos un usuario para crear.', $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
+                $requesterResult = $this->nextcloud_requester_from_input((array)($preview['requester'] ?? []));
+                if (isset($requesterResult['error'])) {
+                    return [$requesterResult['error'], $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
                 }
-                if (!$users) return ['No hay usuarios preparados para importar.', $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
-                $runtimeUser = trim((string)($_POST['nextcloud_runtime_user'] ?? ''));
-                $runtimePass = trim((string)($_POST['nextcloud_runtime_pass'] ?? ''));
+                $runtimeUser = trim((string)$request->input('nextcloud_runtime_user', ''));
+                $runtimePass = trim((string)$request->input('nextcloud_runtime_pass', ''));
                 if ($runtimeUser === '' || $runtimePass === '') {
                     $savedCredentials = nextcloud_credentials_for_user(function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '');
                     if ($runtimeUser === '') {
@@ -62,7 +84,7 @@ class MantencionNextcloudService
                 $res = $this->nextcloud_import_prepared_users($users, [
                     'user' => $runtimeUser,
                     'pass' => $runtimePass,
-                ]);
+                ], $requesterResult['requester']);
                 if (isset($res['error'])) return [$res['error'], $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
                 $msg = 'Importación Nextcloud completada. Creados: ' . (int)($res['created'] ?? 0) . ' | existentes: ' . (int)($res['exists'] ?? 0);
                 $failed = $res['failed'] ?? [];
@@ -71,7 +93,8 @@ class MantencionNextcloudService
                 }
                 $this->nextcloud_set_last_import($res);
                 $this->nextcloud_set_flash($msg);
-                $this->nextcloud_redirect_back();
+                $this->nextcloud_clear_preview();
+                return $this->nextcloud_redirect_back();
             }
         }
         return [$flash, $this->nextcloud_config(), $this->nextcloud_cached_groups(), $lastImport, $preview];
@@ -166,8 +189,14 @@ class MantencionNextcloudService
     }
 
     public function nextcloud_consume_preview(): array {
-        $preview = session()->pull('mantencion_nextcloud_preview', []);
+        // La previsualización debe sobrevivir al GET para poder revalidar la
+        // selección en el POST de confirmación y volver a mostrarse si falla.
+        $preview = session()->get('mantencion_nextcloud_preview', []);
         return is_array($preview) ? $preview : [];
+    }
+
+    public function nextcloud_clear_preview(): void {
+        session()->forget('mantencion_nextcloud_preview');
     }
 
     public function nextcloud_created_history_load(): array {
@@ -188,6 +217,10 @@ class MantencionNextcloudService
                 $entry = [
                     'id' => (string)$batch->legacy_id,
                     'created_at' => (new DateTimeImmutable((string)$batch->created_at_cl))->format(DateTimeInterface::ATOM),
+                    'solicitante' => (string)($batch->solicitante ?? ''),
+                    'solicitante_nombre' => (string)($batch->solicitante_nombre ?? ''),
+                    'solicitante_rut' => (string)($batch->solicitante_rut ?? ''),
+                    'solicitante_correo' => (string)($batch->solicitante_correo ?? ''),
                     'users' => [],
                     'created_users' => [],
                     'existing_users' => [],
@@ -219,7 +252,7 @@ class MantencionNextcloudService
         }
     }
 
-    public function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = [], array $failedUsers = [], array $resultUsers = []): ?array {
+    public function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = [], array $failedUsers = [], array $resultUsers = [], array $requester = []): ?array {
         if (!$createdUsers && !$existingUsers && !$failedUsers && !$resultUsers) return null;
         $batch = [
             'id' => bin2hex(random_bytes(6)),
@@ -229,16 +262,24 @@ class MantencionNextcloudService
             'existing_users' => array_values($existingUsers),
             'failed_users' => array_values($failedUsers),
             'result_users' => array_values($resultUsers),
+            'solicitante' => (string)($requester['solicitante'] ?? ''),
+            'solicitante_nombre' => (string)($requester['solicitante_nombre'] ?? ''),
+            'solicitante_rut' => (string)($requester['solicitante_rut'] ?? ''),
+            'solicitante_correo' => (string)($requester['solicitante_correo'] ?? ''),
         ];
         if (!$this->nextcloud_history_table_ready()) {
             return null;
         }
         try {
-            \Illuminate\Support\Facades\DB::transaction(static function () use ($batch): void {
-                $moduleId = $this->nextcloud_history_module_id();
+            $moduleId = $this->nextcloud_history_module_id();
+            \Illuminate\Support\Facades\DB::transaction(static function () use ($batch, $moduleId): void {
                 $batchId = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')->insertGetId([
                     'modulo_id' => $moduleId,
                     'legacy_id' => $batch['id'],
+                    'solicitante' => $batch['solicitante'],
+                    'solicitante_nombre' => $batch['solicitante_nombre'],
+                    'solicitante_rut' => $batch['solicitante_rut'],
+                    'solicitante_correo' => $batch['solicitante_correo'],
                     'created_at_cl' => date('Y-m-d H:i:s', strtotime((string)$batch['created_at'])),
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -422,7 +463,7 @@ class MantencionNextcloudService
         return $this->nextcloud_import_prepared_users($prepared['users'] ?? []);
     }
 
-    public function nextcloud_import_prepared_users(array $users, array $runtimeCredentials = []): array {
+    public function nextcloud_import_prepared_users(array $users, array $runtimeCredentials = [], array $requester = []): array {
         $cfg = $this->nextcloud_config();
         $runtimeUser = trim((string)($runtimeCredentials['user'] ?? ''));
         $runtimePass = trim((string)($runtimeCredentials['pass'] ?? ''));
@@ -503,26 +544,30 @@ class MantencionNextcloudService
                 'groups' => $user['groups'],
                 'quota' => $user['quota'],
                 'language' => $user['language'],
-            ]);
-            if ($res['ok']) {
+            ], 30);
+            $verification = !empty($res['timeout'])
+                ? $this->nextcloud_user_exists($cfg, (string)$user['userid'], 30)
+                : [];
+            $outcome = $this->nextcloud_classify_creation_response($res, $verification);
+            if ($outcome['status'] === 'created') {
                 $created++;
-                $createdUser = $this->nextcloud_user_result_snapshot($user, 'created', 'Creado correctamente.');
+                $createdUser = $this->nextcloud_user_result_snapshot($user, 'created', $outcome['message']);
                 $createdUsers[] = $createdUser;
                 $resultUsers[] = $createdUser;
-            } elseif ((int)($res['statuscode'] ?? 0) === 102) {
+            } elseif ($outcome['status'] === 'existing') {
                 $exists++;
-                $existingUser = $this->nextcloud_user_result_snapshot($user, 'existing', 'No se creó porque ya existe en Nextcloud.');
+                $existingUser = $this->nextcloud_user_result_snapshot($user, 'existing', $outcome['message']);
                 $existingUsers[] = $existingUser;
                 $resultUsers[] = $existingUser;
             } else {
-                $message = (($res['message'] ?? '') ?: 'HTTP ' . ($res['http'] ?? 0));
+                $message = $outcome['message'];
                 $failed[] = $user['userid'] . ': ' . $message;
                 $failedUser = $this->nextcloud_user_result_snapshot($user, 'failed', $message);
                 $failedUsers[] = $failedUser;
                 $resultUsers[] = $failedUser;
             }
         }
-        $batch = $this->nextcloud_created_history_save_batch($createdUsers, $existingUsers, $failedUsers, $resultUsers);
+        $batch = $this->nextcloud_created_history_save_batch($createdUsers, $existingUsers, $failedUsers, $resultUsers, $requester);
         nextcloud_log_action(
             'NEXTCLOUD_USERS_IMPORT',
             'Creacion/importacion de usuarios Nextcloud | total ' . count($users)
@@ -644,7 +689,7 @@ class MantencionNextcloudService
             }
             $line = $this->nextcloud_to_utf8($line);
             if ($header === null) {
-                $header = array_map('nextcloud_header_key', $line);
+                $header = array_map([$this, 'nextcloud_header_key'], $line);
                 continue;
             }
             if (!$header || count(array_filter($line, fn($v) => trim((string)$v) !== '')) === 0) {
@@ -700,7 +745,7 @@ class MantencionNextcloudService
             }
         }
         if (!$matrix) return ['rows' => []];
-        $header = array_map('nextcloud_header_key', array_values($matrix[0]));
+        $header = array_map([$this, 'nextcloud_header_key'], array_values($matrix[0]));
         $rows = [];
         foreach (array_slice($matrix, 1) as $line) {
             $assoc = [];
@@ -743,9 +788,12 @@ class MantencionNextcloudService
         return ['ok' => true, 'users' => $preparedUsers, 'total' => count($preparedUsers)];
     }
 
-    public function nextcloud_redirect_back(): void {
-        header('Location: ' . ($_SERVER['REQUEST_URI'] ?? '/redmine-mantencion/views/Integraciones/Nextcloud.php'));
-        exit;
+    public function nextcloud_redirect_back(string $panel = ''): RedirectResponse {
+        $target = $panel !== ''
+            ? request()->fullUrlWithQuery(['panel' => $panel])
+            : request()->fullUrl();
+
+        return redirect()->to($target, 303);
     }
 
     public function nextcloud_sanitize(string $value): string {
@@ -778,6 +826,39 @@ class MantencionNextcloudService
         session()->put('mantencion_nextcloud_last_import', $result);
     }
 
+    public function nextcloud_requester_from_input(array $input): array {
+        $limit = static function ($value, int $length): string {
+            $clean = trim((string)$value);
+            $clean = (string)preg_replace('/[\x00-\x1F\x7F]/u', '', $clean);
+            return function_exists('mb_substr') ? mb_substr($clean, 0, $length) : substr($clean, 0, $length);
+        };
+        $requesterName = $limit($input['solicitante_nombre'] ?? '', 200);
+        if ($requesterName === '') {
+            $requesterName = $limit($input['solicitante'] ?? '', 200);
+        }
+        $requester = [
+            // Se conserva la clave legacy para leer vistas previas e historiales antiguos.
+            'solicitante' => '',
+            'solicitante_nombre' => $requesterName,
+            'solicitante_rut' => $limit($input['solicitante_rut'] ?? '', 20),
+            'solicitante_correo' => strtolower($limit($input['solicitante_correo'] ?? '', 190)),
+        ];
+        if ($requester['solicitante_nombre'] === '') {
+            return ['error' => 'Debes ingresar el nombre del solicitante.'];
+        }
+        if (filter_var($requester['solicitante_correo'], FILTER_VALIDATE_EMAIL) === false) {
+            return ['error' => 'Debes ingresar un correo válido para el solicitante.'];
+        }
+        if ($requester['solicitante_rut'] !== '') {
+            if (! $this->novaUsers->isValidRut($requester['solicitante_rut'])) {
+                return ['error' => 'El RUT del solicitante no es válido.'];
+            }
+            $requester['solicitante_rut'] = $this->novaUsers->canonicalRut($requester['solicitante_rut']);
+        }
+
+        return ['requester' => $requester];
+    }
+
     public function nextcloud_set_preview(array $preview): void {
         session()->put('mantencion_nextcloud_preview', $preview);
     }
@@ -796,12 +877,12 @@ class MantencionNextcloudService
         }, $row);
     }
 
-    public function nextcloud_user_exists(array $cfg, string $userid): array {
+    public function nextcloud_user_exists(array $cfg, string $userid, int $timeoutSeconds = 30): array {
         $userid = trim($userid);
         if ($userid === '') {
             return ['exists' => false];
         }
-        $res = nextcloud_request($cfg, 'GET', '/users/' . rawurlencode($userid));
+        $res = nextcloud_request($cfg, 'GET', '/users/' . rawurlencode($userid), [], $timeoutSeconds);
         if (!empty($res['ok'])) {
             return ['exists' => true];
         }
@@ -811,7 +892,43 @@ class MantencionNextcloudService
         if ($http === 404 || $statusCode === 404 || str_contains($message, 'not exist') || str_contains($message, 'not found')) {
             return ['exists' => false];
         }
-        return ['exists' => null, 'error' => (($res['message'] ?? '') ?: 'HTTP ' . $http)];
+        return [
+            'exists' => null,
+            'error' => (($res['message'] ?? '') ?: 'HTTP ' . $http),
+            'timeout' => !empty($res['timeout']),
+        ];
+    }
+
+    public function nextcloud_classify_creation_response(array $response, array $verification = []): array {
+        if (!empty($response['ok'])) {
+            return ['status' => 'created', 'message' => 'Creado correctamente.'];
+        }
+        if ((int)($response['statuscode'] ?? 0) === 102) {
+            return ['status' => 'existing', 'message' => 'No se creó porque ya existe en Nextcloud.'];
+        }
+        if (!empty($response['timeout'])) {
+            if (($verification['exists'] ?? null) === true) {
+                return [
+                    'status' => 'created',
+                    'message' => 'Creado correctamente. Nextcloud demoró en responder, pero la cuenta fue verificada.',
+                ];
+            }
+            if (($verification['exists'] ?? null) === false) {
+                return [
+                    'status' => 'failed',
+                    'message' => 'Nextcloud no confirmó la creación y el usuario no aparece registrado. Puedes intentar nuevamente.',
+                ];
+            }
+            return [
+                'status' => 'failed',
+                'message' => 'Nextcloud no confirmó la creación y no fue posible verificar si la cuenta quedó registrada. Revisa el usuario antes de reintentar.',
+            ];
+        }
+
+        return [
+            'status' => 'failed',
+            'message' => (string)(($response['message'] ?? '') ?: 'HTTP ' . ($response['http'] ?? 0)),
+        ];
     }
 
     public function nextcloud_user_result_snapshot(array $user, string $status, string $message = ''): array {
@@ -844,6 +961,21 @@ class MantencionNextcloudService
             ];
         }
         return array_values(array_filter($users, fn($user) => $user['userid'] !== '' && $user['password'] !== ''));
+    }
+
+    public function nextcloud_selected_rows(array $rows, array $selectedIndexes): array {
+        $selected = [];
+        $seen = [];
+        foreach ($selectedIndexes as $index) {
+            $key = is_int($index) ? $index : trim((string)$index);
+            $lookupKey = (string)$key;
+            if ($key === '' || isset($seen[$lookupKey]) || !array_key_exists($key, $rows) || !is_array($rows[$key])) {
+                continue;
+            }
+            $seen[$lookupKey] = true;
+            $selected[] = $rows[$key];
+        }
+        return $selected;
     }
 
     public function nextcloud_xlsx_col_index(string $cellRef): int {

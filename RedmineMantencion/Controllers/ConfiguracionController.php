@@ -50,7 +50,11 @@ class ConfiguracionController extends Controller
             return $configResult;
         }
         [$cfg, $flash, $opts] = $configResult;
-        [$nextcloudFlash, $nextcloudCfg, $nextcloudGroups] = $this->nextcloud->handle_nextcloud();
+        $nextcloudResult = $this->nextcloud->handle_nextcloud();
+        if ($nextcloudResult instanceof RedirectResponse) {
+            return $nextcloudResult;
+        }
+        [$nextcloudFlash, $nextcloudCfg, $nextcloudGroups] = $nextcloudResult;
         $h = fn ($v) => htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8');
         $role = auth_get_user_role();
         $novaSessionUser = function_exists('session') ? session('nova_user') : null;

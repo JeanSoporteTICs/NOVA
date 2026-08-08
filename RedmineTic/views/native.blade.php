@@ -7,14 +7,14 @@
         return route($name, $parameters);
     };
     $sectionIcons = [
-        'dashboard' => 'bi-inboxes',
-        'webhook' => 'bi-pencil-square',
-        'horas-extra' => 'bi-clock',
-        'historico' => 'bi-archive',
-        'usuarios' => 'bi-people',
-        'configuracion' => 'bi-sliders',
-        'estadisticas' => 'bi-bar-chart-line',
-        'actividad' => 'bi-activity',
+        'dashboard' => config('navigation-icons.reportes'),
+        'webhook' => config('navigation-icons.reporte_manual'),
+        'horas-extra' => config('navigation-icons.horas_extra'),
+        'historico' => config('navigation-icons.historico'),
+        'usuarios' => config('navigation-icons.usuarios'),
+        'configuracion' => config('navigation-icons.configuracion'),
+        'estadisticas' => config('navigation-icons.estadisticas'),
+        'actividad' => config('navigation-icons.actividad'),
     ];
 @endphp
 <!doctype html>
@@ -25,8 +25,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Redmine - {{ $sectionLabel }}</title>
     @include('nova.partials.favicon')
+    @php $novaSidebarPreloadVersion = @filemtime(public_path('assets/nova-sidebar-preload.js')) ?: '1'; @endphp
+    <script src="{{ asset('assets/nova-sidebar-preload.js') }}?v={{ $novaSidebarPreloadVersion }}" data-nova-sidebar-key="redmine_tic"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    @if (in_array($section, ['dashboard', 'webhook'], true))
+        <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    @endif
 @php $nativeCssVersion = @filemtime(public_path('assets/redmine-tic-native.css')) ?: '1'; @endphp
     <link href="{{ asset('assets/redmine-tic-native.css') }}?v={{ $nativeCssVersion }}" rel="stylesheet">
 @php $novaUiCssVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1'; @endphp
@@ -49,7 +54,7 @@
                 <div class="collapse navbar-collapse" id="rmTopbar">
                     <div class="rm-top-actions mt-3 mt-lg-0">
                         @include('nova.partials.session-control')
-                        <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                        <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
                         <form method="POST" action="{{ route('logout') }}" style="display:inline" data-maintenance-allowed="1">@csrf<button class="btn btn-outline-light" type="submit"><i class="bi bi-box-arrow-right"></i>Salir</button></form>
                     </div>
@@ -74,11 +79,12 @@
                     @endforeach
                     @if (!empty(data_get(session('redmine_project_user'), 'legacy.permisos.all')) || !empty(data_get(session('redmine_project_user'), 'legacy.permisos.mis_integraciones')))
                         <a class="nova-sidebar-link" href="{{ route('integrations.redmine_tic') }}">
-                            <i class="bi bi-person-lock nova-sidebar-icon"></i>
+                            <i class="bi {{ config('navigation-icons.cuentas_conectadas') }} nova-sidebar-icon"></i>
                             <span>Mis integraciones</span>
                         </a>
                     @endif
                 </nav>
+                @include('nova.partials.sidebar-compact-control', ['sidebarId' => 'novaSidebar'])
             </aside>
 
             <main class="nova-content rm-main">
@@ -174,14 +180,18 @@
         </div>
     </div>
 
-    @if (in_array($section, ['dashboard', 'historico', 'usuarios'], true))
+    @if (in_array($section, ['dashboard', 'historico', 'horas-extra'], true))
         <button id="redmine-tic-scroll-top" type="button" title="Volver arriba" aria-label="Volver arriba" class="btn btn-primary nova-scroll-top">
             <i class="bi bi-arrow-up"></i>
         </button>
     @endif
 
+    @if (in_array($section, ['dashboard', 'webhook'], true))
+        <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    @endif
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
     <script>
         window.appUi = window.appUi || {};
 
@@ -285,7 +295,10 @@
 
         document.addEventListener('submit', (event) => {
             const form = event.target;
-            const blockMessage = form?.getAttribute('data-app-block-message') || '';
+            const submitter = event.submitter || document.activeElement?.closest?.('button, input[type="submit"]') || null;
+            const blockMessage = submitter?.getAttribute('data-app-block-message')
+                || form?.getAttribute('data-app-block-message')
+                || '';
             if (blockMessage) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
@@ -294,19 +307,21 @@
                 return;
             }
 
-            const message = form?.getAttribute('data-app-confirm') || '';
+            const message = submitter?.getAttribute('data-app-confirm')
+                || form?.getAttribute('data-app-confirm')
+                || '';
             if (!message || form?.dataset.confirmAccepted === '1') return;
 
             event.preventDefault();
             event.stopImmediatePropagation();
 
             pendingConfirmForm = form;
-            pendingConfirmSubmitter = event.submitter || document.activeElement?.closest?.('button, input[type="submit"]') || null;
+            pendingConfirmSubmitter = submitter;
             showConfirmModal(message, {
-                title: form.dataset.appConfirmTitle || 'Confirmar accion',
+                title: submitter?.dataset.appConfirmTitle || form.dataset.appConfirmTitle || 'Confirmar accion',
                 accept: true,
-                acceptText: form.dataset.appConfirmText || 'Aceptar',
-                tone: form.dataset.appConfirmTone || 'danger',
+                acceptText: submitter?.dataset.appConfirmText || form.dataset.appConfirmText || 'Aceptar',
+                tone: submitter?.dataset.appConfirmTone || form.dataset.appConfirmTone || 'danger',
             });
             if (confirmModal && window.bootstrap?.Modal) return;
 

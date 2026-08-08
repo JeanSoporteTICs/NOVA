@@ -107,7 +107,8 @@
             <div>
               <div class="d-flex align-items-center gap-2">
                 <?php if ($canAssignOtherUsers): ?>
-                  <select name="asignado_a" id="asignado_a" class="form-select">
+                  <select name="asignado_a" id="asignado_a" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Seleccionar usuario activo">
+                    <option value=""></option>
                     <?php foreach ($users as $user): ?>
                       <option value="<?= $h($user['id']) ?>" <?= (string)($form['asignado_a'] ?? '') === (string)$user['id'] ? 'selected' : '' ?>>
                         <?= $h($user['nombre']) ?>
@@ -132,10 +133,16 @@
           <div class="field-row">
             <div class="field-label">Categoría</div>
             <div>
-              <div class="nova-search-select" data-search-select data-options='<?= $categoryOptionsJson ?>'>
-                <input name="categoria" id="manual-categoria" class="form-control" autocomplete="off" placeholder="Buscar categoría" value="<?= $h($form['categoria'] ?? '') ?>" data-search-select-input>
-                <div class="nova-search-select__menu" role="listbox" data-search-select-menu hidden></div>
-              </div>
+              <?php $currentManualCategory = trim((string)($form['categoria'] ?? '')); ?>
+              <select name="categoria" id="manual-categoria" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Seleccionar categoría">
+                <option value=""></option>
+                <?php if ($currentManualCategory !== '' && !in_array($currentManualCategory, $categoryOptions, true)): ?>
+                  <option value="<?= $h($currentManualCategory) ?>" selected><?= $h($currentManualCategory) ?></option>
+                <?php endif; ?>
+                <?php foreach ($categoryOptions as $categoryOption): ?>
+                  <option value="<?= $h($categoryOption) ?>" <?= $currentManualCategory === $categoryOption ? 'selected' : '' ?>><?= $h($categoryOption) ?></option>
+                <?php endforeach; ?>
+              </select>
             </div>
             <div></div>
             <div></div>
@@ -175,15 +182,33 @@
   </div>
 </div>
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
-<script>
+<script data-partial-nav-script>
   (() => {
+    const initMantencionManualSelect2 = () => {
+      if (!window.jQuery?.fn?.select2) return;
+      window.jQuery('[data-mantencion-select2]').each(function () {
+        const select = window.jQuery(this);
+        if (select.hasClass('select2-hidden-accessible')) return;
+        select.select2({
+          width: '100%',
+          allowClear: false,
+          dropdownCssClass: 'tic-select2-dropdown',
+          placeholder: this.dataset.placeholder || 'Seleccionar',
+          language: {
+            noResults: () => 'No se encontraron resultados',
+            searching: () => 'Buscando...'
+          }
+        });
+      });
+    };
+    initMantencionManualSelect2();
+
     const currentUrl = new URL(window.location.href);
     if (currentUrl.searchParams.get('created') === '1') {
       currentUrl.searchParams.delete('created');
       window.history.replaceState({}, document.title, currentUrl.toString());
     }
 
-    window.NovaSearchSelect?.init(document);
     const startDateInput = document.getElementById('manual-fecha-inicio');
     const endDateInput = document.getElementById('manual-fecha-fin');
     const syncManualDates = () => {

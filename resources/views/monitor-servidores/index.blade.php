@@ -6,6 +6,8 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Monitor de Servidores | NOVA</title>
     @include('nova.partials.favicon')
+    @php $novaSidebarPreloadVersion = @filemtime(public_path('assets/nova-sidebar-preload.js')) ?: '1'; @endphp
+    <script src="{{ asset('assets/nova-sidebar-preload.js') }}?v={{ $novaSidebarPreloadVersion }}" data-nova-sidebar-key="monitoreo-servidores"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     @php $monitorCssVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1'; @endphp
@@ -27,7 +29,7 @@
             </div>
             <nav class="nova-session" aria-label="Sesión">
                 @include('nova.partials.session-control')
-                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> {{ session('nova_user.name') }}</span>
+                <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 <a class="btn btn-outline-light" href="{{ route('home') }}" title="NOVA">
                     <i class="bi bi-house-door"></i><span class="nova-navbar-label">NOVA</span>
                 </a>
@@ -58,19 +60,20 @@
                 <nav class="nova-sidebar-body" aria-label="Secciones del monitor">
                     <a class="nova-sidebar-link {{ $section === 'dashboard' || ($section === 'detail' && ! $canManage) ? 'active' : '' }}" href="{{ route('monitor.dashboard') }}"
                        @if ($section === 'dashboard' || ($section === 'detail' && ! $canManage)) aria-current="page" @endif>
-                        <i class="bi bi-speedometer2 nova-sidebar-icon"></i><span>Resumen</span>
+                        <i class="bi {{ config('navigation-icons.resumen') }} nova-sidebar-icon"></i><span>Resumen</span>
                     </a>
                     @if ($canManage)
                         <a class="nova-sidebar-link {{ in_array($section, ['servers', 'detail'], true) ? 'active' : '' }}" href="{{ route('monitor.servers') }}"
                            @if (in_array($section, ['servers', 'detail'], true)) aria-current="page" @endif>
-                            <i class="bi bi-server nova-sidebar-icon"></i><span>Servidores</span>
+                            <i class="bi {{ config('navigation-icons.servidores') }} nova-sidebar-icon"></i><span>Servidores</span>
                         </a>
                         <a class="nova-sidebar-link {{ $section === 'recipients' ? 'active' : '' }}" href="{{ route('monitor.recipients') }}"
                            @if ($section === 'recipients') aria-current="page" @endif>
-                            <i class="bi bi-send-check nova-sidebar-icon"></i><span>Destinatarios</span>
+                            <i class="bi {{ config('navigation-icons.destinatarios') }} nova-sidebar-icon"></i><span>Destinatarios</span>
                         </a>
                     @endif
                 </nav>
+                @include('nova.partials.sidebar-compact-control', ['sidebarId' => 'monitorSidebar'])
             </aside>
 
             <div class="nova-content monitor-content">
@@ -634,7 +637,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ asset('assets/nova-ui.js') }}"></script>
+    <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
     @php $monitorJsVersion = @filemtime(public_path('assets/server-monitor.js')) ?: '1'; @endphp
     <script src="{{ asset('assets/server-monitor.js') }}?v={{ $monitorJsVersion }}"
             data-monitor-status-url="{{ route('monitor.status') }}"

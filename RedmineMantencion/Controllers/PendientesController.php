@@ -54,12 +54,6 @@ class PendientesController extends Controller
             fn ($categoria) => trim((string) (is_array($categoria) ? ($categoria['nombre'] ?? $categoria['id'] ?? '') : $categoria)),
             is_array($categorias) ? $categorias : []
         ))));
-        $categoryOptionsJson = htmlspecialchars(
-            json_encode($categoryOptions, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT),
-            ENT_QUOTES,
-            'UTF-8'
-        );
-
         $pendientesService = $this->pendientes;
 
         return view('redmine-mantencion.pendientes-manual', get_defined_vars());

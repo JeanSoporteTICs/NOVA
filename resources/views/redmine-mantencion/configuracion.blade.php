@@ -159,7 +159,7 @@
       <div class="rm-panel-body">
         <div class="row g-3">
           <div class="col-lg-5">
-            <form method="post" action="<?= $h($configBaseUrl) ?>" class="h-100 p-3 border rounded-4 bg-white">
+            <form method="post" action="<?= $h($configPanelUrl('nextcloud')) ?>" class="h-100 p-3 border rounded-4 bg-white">
               <input type="hidden" name="action" value="save_nextcloud_config">
               <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
               <h6 class="fw-bold mb-3"><i class="bi bi-sliders text-primary"></i> Parámetros</h6>
@@ -213,7 +213,7 @@
                   <h6 class="fw-bold mb-1"><i class="bi bi-folder2-open text-info"></i> Grupos consultados</h6>
                   <div class="text-muted small">Se almacenan para buscar coincidencias al cargar el Excel.</div>
                 </div>
-                <form method="post" action="<?= $h($configBaseUrl) ?>" class="m-0">
+                <form method="post" action="<?= $h($configPanelUrl('nextcloud')) ?>" class="m-0">
                   <input type="hidden" name="action" value="fetch_nextcloud_groups">
                   <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                   <button class="btn-nova btn-nova-info" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
@@ -221,7 +221,7 @@
                   </button>
                 </form>
                 <?php if (!empty($nextcloudGroups)): ?>
-                  <form method="post" action="<?= $h($configBaseUrl) ?>" class="m-0" data-app-confirm="¿Eliminar todos los grupos guardados?">
+                  <form method="post" action="<?= $h($configPanelUrl('nextcloud')) ?>" class="m-0" data-app-confirm="¿Eliminar todos los grupos guardados?">
                     <input type="hidden" name="action" value="clear_nextcloud_groups">
                     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                     <button class="btn-nova btn-nova-danger" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
@@ -294,7 +294,7 @@
   </div>
 </div>
 
-<?php $renderOptionsTable = function($id, $title, $items, $type, $h) use ($csrf, $activeConfigPanel) { ?>
+<?php $renderOptionsTable = function($id, $title, $items, $type, $h) use ($csrf, $activeConfigPanel, $configBaseUrl) { ?>
 <div class="rm-config-view-panel <?= $activeConfigPanel === $type ? 'is-active' : '' ?>" id="<?= $h($id) ?>" tabindex="-1" aria-hidden="true">
   <div class="rm-panel-shell rm-panel-xl">
     <div class="rm-panel-card">
@@ -448,10 +448,10 @@
             <input name="categories_url" class="form-control" value="<?= $h($cfg['categories_url'] ?? '') ?>" placeholder="Ej: https://tu-host/projects/xxx/settings/categories">
           </div>
           <div class="col-12">
-            <div class="nova-alert-card is-info mb-0">
+           <div class="nova-alert-card is-info mb-0">
               <i class="bi bi-person-lock"></i>
               La API de Redmine es personal por usuario y se configura en Cuentas conectadas.
-            </div>
+            </div> 
           </div>
           <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">Campos personalizados</h6></div>
           <div class="col-md-4">

@@ -71,7 +71,7 @@
           </div>
           <div class="security-activity-filter-actions">
             <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Aplicar filtros</button>
-            <a href="activity.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i> Limpiar</a>
+            <a href="<?= $h($activityActionUrl) ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i> Limpiar</a>
           </div>
         </form>
 
@@ -97,7 +97,7 @@
             <i class="bi bi-search"></i>
             <h3><?= $hasFilters ? 'No hay coincidencias' : 'Todavía no hay eventos' ?></h3>
             <p><?= $hasFilters ? 'Prueba ampliando las fechas o quitando alguno de los filtros.' : 'Los nuevos eventos de Mantención aparecerán aquí.' ?></p>
-            <?php if ($hasFilters): ?><a href="activity.php" class="btn btn-outline-primary"><i class="bi bi-arrow-counterclockwise"></i> Limpiar filtros</a><?php endif; ?>
+            <?php if ($hasFilters): ?><a href="<?= $h($activityActionUrl) ?>" class="btn btn-outline-primary"><i class="bi bi-arrow-counterclockwise"></i> Limpiar filtros</a><?php endif; ?>
           </div>
         <?php else: ?>
           <div class="security-console-wrap">

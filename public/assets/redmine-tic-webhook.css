@@ -15,16 +15,65 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 14px;
     }
-    .manual-extra-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 2px; }
-    .manual-switch { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; margin: 0; font-weight: 800; color: #334155; white-space: nowrap; }
-    .manual-switch .form-check-input { width: 2.6rem; height: 1.35rem; margin: 0; }
-    .manual-extra-time { flex: 0 1 260px; min-width: 220px; }
+    .rm-manual-horizontal-field {
+        --rm-manual-label-width: 112px;
+        display: grid;
+        grid-template-columns: minmax(88px, var(--rm-manual-label-width)) minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+    .rm-manual-horizontal-field > .form-label {
+        margin: 0;
+        text-align: right;
+        line-height: 1.25;
+    }
+    .rm-manual-horizontal-field.is-textarea { align-items: start; }
+    .rm-manual-horizontal-field.is-textarea > .form-label { padding-top: .68rem; }
+    .rm-manual-horizontal-field > :is(.form-control, .form-select, .rm-assignee-row, .select2-container) {
+        min-width: 0;
+        width: 100% !important;
+    }
+    .rm-manual-description-field {
+        display: grid;
+        grid-template-columns: minmax(88px, 112px) minmax(0, 1fr);
+        align-items: start;
+        gap: 12px;
+        min-width: 0;
+    }
+    .rm-manual-description-field > .form-label {
+        margin: 0;
+        padding-top: .68rem;
+        text-align: right;
+        line-height: 1.25;
+    }
+    .rm-manual-description-control,
+    .rm-manual-description-control > :is(.nova-description-tabs, [role="tabpanel"], .nova-description-editor, .nova-description-preview) {
+        box-sizing: border-box;
+        min-width: 0;
+        width: 100%;
+    }
+    .rm-manual-description-control .nova-description-tabs { margin-bottom: 10px; }
+    .rm-manual-inline-grid .rm-manual-horizontal-field { --rm-manual-label-width: 96px; }
+    .manual-extra-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+        gap: 14px;
+        padding-top: 2px;
+    }
     .rm-assignee-row { display: flex; align-items: stretch; gap: 8px; }
-    .rm-assignee-row .nova-search-select { flex: 1 1 auto; min-width: 0; }
+    .rm-assignee-row .nova-search-select,
+    .rm-assignee-row .rm-assignee-select { flex: 1 1 auto; min-width: 0; }
     .rm-assign-me-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; font-weight: 800; white-space: nowrap; }
     @media (max-width: 575.98px) {
-        .manual-extra-row { align-items: stretch; }
-        .manual-extra-time { flex-basis: 100%; min-width: 0; }
+        .rm-manual-horizontal-field,
+        .rm-manual-inline-grid .rm-manual-horizontal-field,
+        .rm-manual-description-field,
+        .manual-extra-row { grid-template-columns: 1fr; gap: 7px; }
+        .rm-manual-horizontal-field > .form-label,
+        .rm-manual-horizontal-field.is-textarea > .form-label,
+        .rm-manual-description-field > .form-label { padding-top: 0; text-align: left; }
         .rm-manual-inline-grid { grid-template-columns: 1fr; }
         .rm-assignee-row { flex-direction: column; }
         .rm-assign-me-btn { width: 100%; justify-content: center; }

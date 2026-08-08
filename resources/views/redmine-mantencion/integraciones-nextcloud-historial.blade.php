@@ -31,7 +31,7 @@
           <div class="row g-3 align-items-end">
             <div class="col-12 col-lg-8">
               <label class="form-label" for="nextcloud-history-search"><i class="bi bi-search"></i> Buscar</label>
-              <input class="form-control" id="nextcloud-history-search" type="search" placeholder="Usuario, nombre, correo o detalle" autocomplete="off">
+              <input class="form-control" id="nextcloud-history-search" type="search" placeholder="Lote, usuario, nombre, correo o detalle" autocomplete="off">
             </div>
             <div class="col-12 col-lg-4">
               <label class="form-label" for="nextcloud-history-group"><i class="bi bi-people"></i> Grupo</label>
@@ -63,9 +63,12 @@
       </div>
     <?php endif; ?>
 
-    <?php foreach ($batches as $batch): ?>
-      <?php
-        $tableId = 'nextcloud-history-' . preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($batch['id'] ?? uniqid()));
+    <?php
+      $historyRows = [];
+      foreach ($batches as $batch) {
+        $safeBatchId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($batch['id'] ?? uniqid()));
+        $tableId = 'nextcloud-history-' . $safeBatchId;
+        $modalId = 'nextcloud-history-modal-' . $safeBatchId;
         $createdUsers = (array)(($batch['created_users'] ?? null) ?: ($batch['users'] ?? []));
         $existingUsers = (array)($batch['existing_users'] ?? []);
         $failedUsers = (array)($batch['failed_users'] ?? []);
@@ -102,57 +105,190 @@
                 $batchUsers[$idx]['_row'] = 'table-danger nextcloud-row-failed';
             }
         }
-      ?>
-      <div class="card nextcloud-panel mb-3" data-history-batch>
-        <div class="card-body p-4">
-          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
-            <div>
-              <h5 class="mb-1">Lote <?= $h($batch['id'] ?? '') ?></h5>
-              <div class="text-muted small">
-                Creado: <?= $h(date('d-m-Y H:i', strtotime((string)($batch['created_at'] ?? 'now')))) ?>
+        $createdCount = count(array_filter($batchUsers, static fn($item): bool => (string)($item['status'] ?? '') === 'created'));
+        $existingCount = count(array_filter($batchUsers, static fn($item): bool => (string)($item['status'] ?? '') === 'existing'));
+        $failedCount = max(0, count($batchUsers) - $createdCount - $existingCount);
+        $batchGroups = [];
+        $searchParts = [
+            (string)($batch['id'] ?? ''),
+            (string)($batch['created_at'] ?? ''),
+            (string)($batch['solicitante'] ?? ''),
+            (string)($batch['solicitante_nombre'] ?? ''),
+            (string)($batch['solicitante_rut'] ?? ''),
+            (string)($batch['solicitante_correo'] ?? ''),
+        ];
+        $firstIssue = '';
+        foreach ($batchUsers as $item) {
+            $groupName = trim((string)($item['group'] ?? ''));
+            if ($groupName !== '') $batchGroups[$groupName] = true;
+            foreach (['userid', 'displayName', 'email', 'group', 'message'] as $field) {
+                $searchParts[] = (string)($item[$field] ?? '');
+            }
+            if ($firstIssue === '' && (string)($item['status'] ?? '') !== 'created') {
+                $firstIssue = trim((string)($item['message'] ?? ''));
+            }
+        }
+        $batchGroups = array_keys($batchGroups);
+        natcasesort($batchGroups);
+        $batchGroups = array_values($batchGroups);
+        $createdTimestamp = strtotime((string)($batch['created_at'] ?? ''));
+        $historyRows[] = [
+            'batch' => $batch,
+            'users' => $batchUsers,
+            'table_id' => $tableId,
+            'modal_id' => $modalId,
+            'created_count' => $createdCount,
+            'existing_count' => $existingCount,
+            'failed_count' => $failedCount,
+            'groups' => $batchGroups,
+            'date' => $createdTimestamp !== false ? date('d-m-Y H:i', $createdTimestamp) : 'Sin fecha',
+            'search' => implode(' ', $searchParts),
+            'detail' => $firstIssue !== '' ? $firstIssue : 'Importación completada sin incidencias.',
+        ];
+      }
+    ?>
+
+    <?php if ($historyRows): ?>
+      <section class="card nextcloud-panel nextcloud-history-shell" aria-label="Importaciones de Nextcloud">
+        <div class="nextcloud-history-head">
+          <div>
+            <h2><i class="bi bi-cloud-check" aria-hidden="true"></i> Importaciones procesadas</h2>
+            <p>Resumen por lote. Abre el detalle para revisar todos los usuarios.</p>
+          </div>
+          <span class="nextcloud-history-total"><?= count($historyRows) ?> lote<?= count($historyRows) === 1 ? '' : 's' ?></span>
+        </div>
+        <div class="table-responsive nextcloud-history-wrap">
+          <table class="table align-middle mb-0 nextcloud-history-table">
+            <thead>
+              <tr>
+                <th>Fecha / lote</th>
+                <th>Solicitante / contacto</th>
+                <th>Resultado</th>
+                <th>Grupos / detalle</th>
+                <th class="text-end">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($historyRows as $row): ?>
+                <?php
+                  $batch = $row['batch'];
+                  $requesterName = trim((string)($batch['solicitante_nombre'] ?? ''));
+                  if ($requesterName === '') $requesterName = trim((string)($batch['solicitante'] ?? ''));
+                  $statusClass = $row['failed_count'] > 0 ? 'is-danger' : ($row['existing_count'] > 0 ? 'is-warning' : 'is-success');
+                  $statusLabel = $row['failed_count'] > 0 ? 'Con errores' : ($row['existing_count'] > 0 ? 'Completado con existentes' : 'Completado');
+                ?>
+                <tr data-history-batch data-history-search="<?= $h($row['search']) ?>" data-history-groups="<?= $h(implode('|', $row['groups'])) ?>">
+                  <td class="nextcloud-history-date" data-label="Fecha / lote">
+                    <span><i class="bi bi-calendar3" aria-hidden="true"></i><?= $h($row['date']) ?></span>
+                    <small class="nextcloud-history-id">#<?= $h($batch['id'] ?? '') ?></small>
+                  </td>
+                  <td data-label="Solicitante / contacto">
+                    <div class="nextcloud-history-requester">
+                      <strong><?= $h($requesterName !== '' ? $requesterName : 'Sin información') ?></strong>
+                      <div class="nextcloud-history-contact">
+                        <span title="<?= $h($batch['solicitante_correo'] ?? '') ?>"><i class="bi bi-envelope" aria-hidden="true"></i><?= $h(($batch['solicitante_correo'] ?? '') !== '' ? $batch['solicitante_correo'] : 'No informado') ?></span>
+                        <span><i class="bi bi-person-vcard" aria-hidden="true"></i><?= $h(($batch['solicitante_rut'] ?? '') !== '' ? $batch['solicitante_rut'] : 'RUT no informado') ?></span>
+                      </div>
+                    </div>
+                  </td>
+                  <td data-label="Resultado">
+                    <span class="nextcloud-history-status <?= $h($statusClass) ?>"><?= $h($statusLabel) ?></span>
+                    <div class="nextcloud-history-metrics">
+                      <span class="is-created"><i class="bi bi-check-circle"></i><?= (int)$row['created_count'] ?> creados</span>
+                      <span class="is-existing"><i class="bi bi-person-check"></i><?= (int)$row['existing_count'] ?> existentes</span>
+                      <span class="is-failed"><i class="bi bi-exclamation-circle"></i><?= (int)$row['failed_count'] ?> errores</span>
+                    </div>
+                  </td>
+                  <td data-label="Grupos / detalle">
+                    <div class="nextcloud-history-context">
+                      <div class="nextcloud-history-groups">
+                        <?php if (!$row['groups']): ?>
+                          <span class="is-empty">Sin grupo</span>
+                        <?php else: ?>
+                          <?php foreach (array_slice($row['groups'], 0, 2) as $groupName): ?>
+                            <span title="<?= $h($groupName) ?>"><?= $h($groupName) ?></span>
+                          <?php endforeach; ?>
+                          <?php if (count($row['groups']) > 2): ?><span>+<?= count($row['groups']) - 2 ?></span><?php endif; ?>
+                        <?php endif; ?>
+                      </div>
+                      <span class="nextcloud-history-detail" title="<?= $h($row['detail']) ?>"><?= $h($row['detail']) ?></span>
+                    </div>
+                  </td>
+                  <td class="text-end" data-label="Acción">
+                    <button type="button" class="btn-nova btn-nova-primary nextcloud-history-open" data-bs-toggle="modal" data-bs-target="#<?= $h($row['modal_id']) ?>" aria-label="Ver detalle del lote <?= $h($batch['id'] ?? '') ?>" title="Ver detalle">
+                      <i class="bi bi-table" aria-hidden="true"></i>
+                    </button>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <?php foreach ($historyRows as $row): ?>
+        <?php
+          $batch = $row['batch'];
+          $requesterName = trim((string)($batch['solicitante_nombre'] ?? ''));
+          if ($requesterName === '') $requesterName = trim((string)($batch['solicitante'] ?? ''));
+        ?>
+        <div class="modal fade nextcloud-history-modal" id="<?= $h($row['modal_id']) ?>" tabindex="-1" aria-labelledby="<?= $h($row['modal_id']) ?>-title" aria-hidden="true">
+          <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header">
+                <div>
+                  <p class="nextcloud-history-modal-kicker">Detalle de importación</p>
+                  <h2 class="modal-title" id="<?= $h($row['modal_id']) ?>-title">Lote #<?= $h($batch['id'] ?? '') ?></h2>
+                  <span><?= $h($row['date']) ?> · <?= count($row['users']) ?> usuario<?= count($row['users']) === 1 ? '' : 's' ?></span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+              </div>
+              <div class="modal-body">
+                <div class="nextcloud-history-requester-card">
+                  <div><span>Nombre del solicitante</span><strong><?= $h($requesterName !== '' ? $requesterName : 'No informado') ?></strong></div>
+                  <div><span>RUT</span><strong><?= $h(($batch['solicitante_rut'] ?? '') !== '' ? $batch['solicitante_rut'] : 'No informado') ?></strong></div>
+                  <div><span>Correo</span><strong><?= $h(($batch['solicitante_correo'] ?? '') !== '' ? $batch['solicitante_correo'] : 'No informado') ?></strong></div>
+                </div>
+                <div class="table-responsive nextcloud-history-detail-wrap">
+                  <table class="table table-sm align-middle mb-0 nextcloud-history-detail-table" id="<?= $h($row['table_id']) ?>">
+                    <thead>
+                      <tr>
+                        <th>Estado</th>
+                        <th>Usuario</th>
+                        <th>Nombre</th>
+                        <th>Correo</th>
+                        <th>Grupo</th>
+                        <th>Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($row['users'] as $item): ?>
+                        <tr class="<?= $h($item['_row'] ?? '') ?>">
+                          <td data-label="Estado"><span class="badge text-bg-<?= $h($item['_badge'] ?? 'secondary') ?>"><?= $h($item['_status'] ?? '') ?></span></td>
+                          <td data-label="Usuario"><strong><?= $h($item['userid'] ?? '') ?></strong></td>
+                          <td data-label="Nombre"><?= $h($item['displayName'] ?? '') ?></td>
+                          <td data-label="Correo"><?= $h($item['email'] ?? '') ?></td>
+                          <td data-label="Grupo"><?= $h($item['group'] ?? '') ?></td>
+                          <td data-label="Detalle"><?= $h($item['message'] ?? '') ?></td>
+                        </tr>
+                      <?php endforeach; ?>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
               </div>
             </div>
-            <div class="d-flex flex-wrap gap-2">
-              <button type="button" class="btn btn-outline-primary" data-copy-table="#<?= $h($tableId) ?>">
-                <i class="bi bi-clipboard"></i> Copiar tabla
-              </button>
-            </div>
-          </div>
-          <h6 class="mb-2">Resultado de importación</h6>
-          <div class="table-responsive border rounded-4 overflow-hidden">
-            <table class="table table-sm mb-0 align-middle" id="<?= $h($tableId) ?>">
-              <thead class="table-light">
-                <tr>
-                  <th>Estado</th>
-                  <th>Nombre de usuario</th>
-                  <th>Nombre a desplegar</th>
-                  <th>Correo</th>
-                  <th>Grupo</th>
-                  <th>Detalle</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($batchUsers as $item): ?>
-                  <tr class="<?= $h($item['_row'] ?? '') ?>" data-history-row data-history-group="<?= $h($item['group'] ?? '') ?>">
-                    <td><span class="badge text-bg-<?= $h($item['_badge'] ?? 'secondary') ?>"><?= $h($item['_status'] ?? '') ?></span></td>
-                    <td><?= $h($item['userid'] ?? '') ?></td>
-                    <td><?= $h($item['displayName'] ?? '') ?></td>
-                    <td><?= $h($item['email'] ?? '') ?></td>
-                    <td><?= $h($item['group'] ?? '') ?></td>
-                    <td><?= $h($item['message'] ?? '') ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
           </div>
         </div>
-      </div>
-    <?php endforeach; ?>
+      <?php endforeach; ?>
+    <?php endif; ?>
   </div>
 </div>
 
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
-<script>
+<script data-partial-nav-script>
 document.addEventListener('DOMContentLoaded', () => {
   const search = document.getElementById('nextcloud-history-search');
   const group = document.getElementById('nextcloud-history-group');
@@ -162,48 +298,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyFilters = () => {
     const term = normalize(search?.value);
     const selectedGroup = normalize(group?.value);
-    let visibleRows = 0;
+    let visibleBatches = 0;
     document.querySelectorAll('[data-history-batch]').forEach(batch => {
-      let batchRows = 0;
-      batch.querySelectorAll('[data-history-row]').forEach(row => {
-        const matchesSearch = term === '' || normalize(row.textContent).includes(term);
-        const matchesGroup = selectedGroup === '' || normalize(row.dataset.historyGroup) === selectedGroup;
-        row.hidden = !(matchesSearch && matchesGroup);
-        if (!row.hidden) {
-          batchRows += 1;
-          visibleRows += 1;
-        }
-      });
-      batch.hidden = batchRows === 0;
+      const matchesSearch = term === '' || normalize(batch.dataset.historySearch).includes(term);
+      const batchGroups = String(batch.dataset.historyGroups || '').split('|').map(normalize);
+      const matchesGroup = selectedGroup === '' || batchGroups.includes(selectedGroup);
+      batch.hidden = !(matchesSearch && matchesGroup);
+      if (!batch.hidden) visibleBatches += 1;
     });
-    if (count) count.textContent = `${visibleRows} registro(s) encontrado(s)`;
-    if (noResults) noResults.hidden = visibleRows !== 0;
+    if (count) count.textContent = `${visibleBatches} importación${visibleBatches === 1 ? '' : 'es'} encontrada${visibleBatches === 1 ? '' : 's'}`;
+    if (noResults) noResults.hidden = visibleBatches !== 0;
   };
   search?.addEventListener('input', applyFilters);
   group?.addEventListener('change', applyFilters);
   applyFilters();
-
-  document.querySelectorAll('[data-copy-table]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const table = document.querySelector(button.dataset.copyTable);
-      if (!table) return;
-      const rowsText = Array.from(table.querySelectorAll('tr')).filter(row => !row.hidden).map(row => {
-        return Array.from(row.children).map(cell => cell.innerText.trim()).join('\t');
-      }).join('\n');
-      try {
-        await navigator.clipboard.writeText(rowsText);
-        button.innerHTML = '<i class="bi bi-check2"></i> Copiado';
-        setTimeout(() => { button.innerHTML = '<i class="bi bi-clipboard"></i> Copiar tabla'; }, 2000);
-      } catch (error) {
-        const area = document.createElement('textarea');
-        area.value = rowsText;
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand('copy');
-        area.remove();
-      }
-    });
-  });
 });
 </script>
 </body>

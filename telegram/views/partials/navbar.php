@@ -7,8 +7,20 @@ $homeUrl = function_exists('route') ? route('home') : '/NOVA/public/index.php';
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $currentUser = $_SESSION['user'] ?? [];
+if (function_exists('request')) {
+  $novaSessionUser = request()->session()->get('nova_user');
+  if (is_array($novaSessionUser) && $novaSessionUser !== []) {
+    $currentUser = array_merge($currentUser, $novaSessionUser);
+  }
+}
+$navFirstName = trim((string) ($currentUser['name'] ?? $currentUser['nombre'] ?? ''));
+$navLastName = trim((string) ($currentUser['apellido'] ?? ''));
+$navDisplayName = trim($navFirstName . ($navLastName !== '' ? ' ' . $navLastName : ''));
+if ($navDisplayName === '') {
+  $navDisplayName = trim((string) ($currentUser['username'] ?? $currentUser['usuario'] ?? '')) ?: 'Usuario';
+}
 $navItems = [
-  ['key' => 'mantenedor', 'label' => 'Mantenedor', 'href' => $baseUrl, 'icon' => 'bi-sliders'],
+  ['key' => 'mantenedor', 'label' => 'Mantenedor', 'href' => $baseUrl, 'icon' => config('navigation-icons.configuracion')],
 ];
 
 ?>
@@ -23,7 +35,7 @@ $navItems = [
     </button>
     <div class="d-flex align-items-center gap-2 ms-auto telegram-nav-actions">
       <?php include __DIR__ . '/session-control.php'; ?>
-      <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($currentUser['nombre'] ?? $currentUser['name'] ?? 'Usuario') ?></span>
+      <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($navDisplayName) ?></span>
       <a class="btn btn-outline-light" href="<?= $h($homeUrl) ?>"><i class="bi bi-house-door"></i>NOVA</a>
       <form method="POST" action="<?= $h($logoutUrl) ?>" class="d-inline m-0">
         <input type="hidden" name="_token" value="<?= $h($csrfToken) ?>">
@@ -47,6 +59,11 @@ $navItems = [
         </a>
       <?php endforeach; ?>
     </nav>
+    <div class="nova-sidebar-footer">
+      <button class="nova-sidebar-collapse-toggle" type="button" aria-controls="novaSidebar" aria-pressed="false" aria-label="Contraer men&uacute;" title="Contraer men&uacute;">
+        <i class="bi bi-chevron-double-left" aria-hidden="true"></i><span>Contraer men&uacute;</span>
+      </button>
+    </div>
   </aside>
 
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>

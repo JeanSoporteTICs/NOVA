@@ -1,9 +1,9 @@
 .nc-browser-section { overflow: hidden; }
 #nc-browser { position: relative; }
 .nc-busy-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 2600;
   display: none;
   align-items: center;
   justify-content: center;
@@ -14,7 +14,8 @@
 .nc-busy-overlay.is-active { display: flex; }
 .nc-busy-card {
   width: min(320px, calc(100% - 2rem));
-  min-height: 168px;
+  min-height: 220px;
+  padding: 1rem;
   border-radius: .9rem;
   box-shadow: 0 24px 55px rgba(15, 23, 42, .28);
   display: flex;
@@ -27,83 +28,13 @@
 .nc-busy-card.blue-on-white {
   background-color: #fff;
 }
-.nc-busy-card.blue-on-white .centerCircle {
-  background-color: #fff;
-}
-.nc-busy-card.blue-on-white .centerCircle,
-.nc-busy-card.blue-on-white .leftCircle,
-.nc-busy-card.blue-on-white .rightCircle {
-  border-color: #0082c9;
-}
-.nc-busy-card .centerCircle,
-.nc-busy-card .leftCircle,
-.nc-busy-card .rightCircle {
-  position: absolute;
-  left: 50%;
-  border-radius: 50%;
-  border: 10px solid;
-}
-.nc-busy-card .centerCircle {
-  width: 32px;
-  height: 32px;
-  top: 46px;
-  margin-left: -26px;
-  z-index: 10;
-}
-.nc-busy-card .leftCircle,
-.nc-busy-card .rightCircle {
-  top: 55px;
-  width: 14px;
-  height: 14px;
-  animation-name: ncMoveEar;
-  animation-duration: 3000ms;
-  animation-timing-function: ease;
-  animation-fill-mode: forwards;
-  animation-delay: 350ms;
-}
-.nc-busy-card .leftCircle {
-  margin-left: -57px;
-  transform: translate(40px, 0);
-}
-.nc-busy-card .rightCircle {
-  margin-left: 23px;
-  transform: translate(-40px, 0);
-}
-.nc-busy-card .group {
-  position: relative;
-  width: 144px;
-  height: 112px;
-  margin: 0 auto;
-  animation-name: ncRotateEars;
-  animation-duration: 1800ms;
-  animation-timing-function: ease;
-  animation-iteration-count: infinite;
-  animation-delay: 750ms;
-}
+.nc-busy-card .nova-nextcloud-loader { width: min(260px, 100%); }
 .nc-busy-text {
   color: #0f172a;
   font-size: .9rem;
   font-weight: 800;
   text-align: center;
-  padding: 0 1rem 1rem;
-}
-@keyframes ncMoveEar {
-  10%, 100% {
-    transform: initial;
-    opacity: 1;
-  }
-}
-@keyframes ncRotateEars {
-  60%, 100% {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .nc-busy-card .group,
-  .nc-busy-card .leftCircle,
-  .nc-busy-card .rightCircle {
-    animation: none;
-  }
+  padding: 0 .5rem .35rem;
 }
 .nc-browser-head {
   display: flex;

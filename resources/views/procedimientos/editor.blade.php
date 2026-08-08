@@ -4,7 +4,7 @@
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $fileName }} · Procedimientos</title>
     @include('nova.partials.favicon')
-    <link href="{{ asset('assets/nova-ui.css') }}" rel="stylesheet">
+    <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
     <script src="{{ rtrim($onlyOfficeUrl, '/') }}/web-apps/apps/api/documents/api.js"></script>
 </head>
 <body class="nova-page onlyoffice-editor-page">
