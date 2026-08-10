@@ -288,8 +288,10 @@ class ConfiguracionController extends Controller
                     session()->put('mantencion_roles_flash_type', 'success');
                 }
                 session()->put('mantencion_roles_selected', (string) (array_key_first($rolesData) ?? 'usuario'));
-                $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
-                    . '/redmine-mantencion/app/configuracion?panel=roles';
+                $rolesRedirectUrl = route('redmine.mantencion.section', [
+                    'section' => 'configuracion',
+                    'panel' => 'roles',
+                ]);
 
                 return redirect($rolesRedirectUrl, 303);
             } elseif ($action === 'save_roles' && $canManageRoles) {
@@ -384,15 +386,19 @@ class ConfiguracionController extends Controller
                     session()->put('mantencion_roles_flash', 'Permisos guardados correctamente.');
                     session()->put('mantencion_roles_flash_type', 'success');
                     session()->put('mantencion_roles_selected', $selectedRole);
-                    $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
-                        . '/redmine-mantencion/app/configuracion?panel=roles';
+                    $rolesRedirectUrl = route('redmine.mantencion.section', [
+                        'section' => 'configuracion',
+                        'panel' => 'roles',
+                    ]);
 
                     return redirect($rolesRedirectUrl, 303);
                 }
                 session()->put('mantencion_roles_flash', 'El nombre del rol debe tener entre 2 y 40 caracteres y usar solo letras, números, guion o guion bajo.');
                 session()->put('mantencion_roles_flash_type', 'warning');
-                $rolesRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
-                    . '/redmine-mantencion/app/configuracion?panel=roles';
+                $rolesRedirectUrl = route('redmine.mantencion.section', [
+                    'section' => 'configuracion',
+                    'panel' => 'roles',
+                ]);
 
                 return redirect($rolesRedirectUrl, 303);
             }
@@ -493,8 +499,11 @@ class ConfiguracionController extends Controller
                     $this->roles->saveUserPermissions($selectedUser, $cfgUser);
                     session()->put('mantencion_usuarios_flash', 'Permisos actualizados para el usuario ID ' . $selectedUser);
                     session()->put('mantencion_usuarios_flash_type', 'success');
-                    $usersRedirectUrl = ($_SERVER['SCRIPT_NAME'] ?? '/nova/public/index.php')
-                        . '/redmine-mantencion/app/configuracion?panel=usuarios&user_id=' . rawurlencode($selectedUser);
+                    $usersRedirectUrl = route('redmine.mantencion.section', [
+                        'section' => 'configuracion',
+                        'panel' => 'usuarios',
+                        'user_id' => $selectedUser,
+                    ]);
 
                     return redirect($usersRedirectUrl, 303);
                 }
