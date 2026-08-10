@@ -276,12 +276,27 @@
             </div>
             <div class="modal-body">
                 <p class="telegram-help-intro">Tu Chat ID es el número que permite a NOVA enviarte mensajes de forma personal. Obtenlo con el bot NOVA siguiendo estos pasos:</p>
+                <div class="telegram-help-connect">
+                    <div class="telegram-help-bot-copy">
+                        <span class="telegram-help-bot-label"><i class="bi bi-robot"></i> Bot oficial de NOVA</span>
+                        <strong>@NVKerrigan_Bot</strong>
+                        <p>Búscalo por su nombre en Telegram o escanea el código QR para abrirlo directamente.</p>
+                        <a href="https://t.me/NVKerrigan_Bot" target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                            Abrir bot en Telegram
+                        </a>
+                    </div>
+                    <a class="telegram-help-qr" href="https://t.me/NVKerrigan_Bot" target="_blank" rel="noopener noreferrer" aria-label="Abrir el bot arroba NVKerrigan Bot en Telegram">
+                        <img src="{{ asset('assets/img/telegram-nvkerrigan-bot-qr.svg') }}" alt="Código QR para abrir el bot @NVKerrigan_Bot en Telegram">
+                        <span><i class="bi bi-qr-code-scan"></i> Escanea con tu teléfono</span>
+                    </a>
+                </div>
                 <ol class="telegram-help-steps">
                     <li>
                         <span class="telegram-help-step-number">1</span>
                         <div>
                             <strong>Abre el bot NOVA</strong>
-                            <p>En Telegram, busca y abre el bot que te indicó el administrador de NOVA.</p>
+                            <p>Busca <code>@NVKerrigan_Bot</code> en Telegram o escanea el QR que aparece arriba.</p>
                         </div>
                     </li>
                     <li>
@@ -295,7 +310,7 @@
                         <span class="telegram-help-step-number">3</span>
                         <div>
                             <strong>Solicita tu identificador</strong>
-                            <p>Envía <code>/id</code>. El bot responderá con tu Chat ID.</p>
+                            <p>Dentro del canal de NOVA, la primera vez escribe <code>@getidsbot</code>. El bot mostrará tu Chat ID.</p>
                         </div>
                     </li>
                     <li>

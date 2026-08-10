@@ -9732,6 +9732,100 @@ body:not(.nova-page):not(.emach-page):not(.telegram-page) {
   line-height: 1.55;
 }
 
+.telegram-help-connect {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 158px;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.2rem;
+  padding: 1rem;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f5f3ff 0%, #eff6ff 100%);
+}
+
+.telegram-help-bot-copy {
+  min-width: 0;
+}
+
+.telegram-help-bot-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: .35rem;
+  color: #6d28d9;
+  font-size: .7rem;
+  font-weight: 950;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.telegram-help-bot-copy > strong {
+  display: block;
+  color: #4c1d95;
+  font-size: 1.08rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.telegram-help-bot-copy p {
+  margin: .38rem 0 .65rem;
+  color: #5b6475;
+  font-size: .83rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.telegram-help-bot-copy a {
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
+  color: #2563eb;
+  font-size: .8rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.telegram-help-bot-copy a:hover,
+.telegram-help-bot-copy a:focus-visible {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.telegram-help-qr {
+  display: grid;
+  gap: .42rem;
+  justify-items: center;
+  padding: .55rem;
+  border: 1px solid #c4b5fd;
+  border-radius: 10px;
+  background: #fff;
+  color: #5b21b6;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(76, 29, 149, .1);
+}
+
+.telegram-help-qr img {
+  display: block;
+  width: 132px;
+  height: 132px;
+}
+
+.telegram-help-qr span {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .68rem;
+  font-weight: 900;
+}
+
+.telegram-help-qr:hover,
+.telegram-help-qr:focus-visible {
+  border-color: #7c3aed;
+  color: #4c1d95;
+  transform: translateY(-1px);
+}
+
 .telegram-help-steps {
   display: grid;
   gap: 0;
@@ -9856,6 +9950,15 @@ body:not(.nova-page):not(.emach-page):not(.telegram-page) {
 
   .telegram-card .btn-nova {
     width: 100%;
+  }
+
+  .telegram-help-connect {
+    grid-template-columns: 1fr;
+  }
+
+  .telegram-help-qr {
+    width: min(100%, 180px);
+    justify-self: center;
   }
 
   .telegram-help-modal .modal-footer {
