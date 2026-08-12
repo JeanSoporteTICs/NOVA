@@ -761,6 +761,7 @@
       const submitRedmineStatus = async (statusForm) => {
         if (statusForm.dataset.statusSubmitting === '1') return;
         statusForm.dataset.statusSubmitting = '1';
+        const statusActionUrl = statusForm.getAttribute('action') || window.location.href;
 
         const currentCard = document.getElementById('historico-table-card');
         const currentLoader = currentCard?.querySelector('#table-loader');
@@ -768,7 +769,7 @@
         currentLoader?.classList.remove('d-none');
 
         try {
-          const response = await fetch(statusForm.action, {
+          const response = await fetch(statusActionUrl, {
             method: 'POST',
             body: new FormData(statusForm),
             headers: {
@@ -781,7 +782,7 @@
             throw new Error(payload?.message || `No se pudo cambiar el estado (HTTP ${response.status}).`);
           }
 
-          await refreshHistoricoTable(statusForm.action);
+          await refreshHistoricoTable(statusActionUrl);
           if (Array.isArray(payload.errors) && payload.errors.length > 0) {
             window.NovaToast?.warning(payload.message || 'Algunos reportes no pudieron actualizarse.');
           } else {
