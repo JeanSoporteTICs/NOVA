@@ -30,6 +30,7 @@ final class MantencionNextcloudUserManagementTest extends TestCase
             ->assertSee('Contraseñas de usuarios Nextcloud')
             ->assertSee('Conecta una cuenta administradora')
             ->assertSee('Configurar credenciales')
+            ->assertSee(route('integrations.nova'), false)
             ->assertSee('Crear usuarios')
             ->assertSee('Administrar usuarios');
     }
@@ -43,6 +44,8 @@ final class MantencionNextcloudUserManagementTest extends TestCase
         self::assertIsString($controller);
         self::assertIsString($service);
         self::assertStringContainsString('nextcloud_cached_groups()', $controller);
+        self::assertStringContainsString("\$credentialsUrl = route('integrations.nova')", $controller);
+        self::assertStringNotContainsString("\$credentialsUrl = route('integrations.redmine_mantencion')", $controller);
         self::assertStringNotContainsString('nextcloud_directory_groups()', $controller);
         self::assertStringNotContainsString('function nextcloud_directory_groups', $service);
     }

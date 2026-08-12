@@ -29,7 +29,7 @@ class NextcloudGestionUsuariosController extends Controller
         $managementUrl = route('redmine.mantencion.nextcloud-users.manage');
         $groupUsersUrl = route('redmine.mantencion.nextcloud-users.group-users');
         $passwordSuggestionUrl = route('redmine.mantencion.nextcloud-users.password-suggestion');
-        $credentialsUrl = route('integrations.redmine_mantencion');
+        $credentialsUrl = route('integrations.nova');
         $groupsConfigUrl = route('redmine.mantencion.section', [
             'section' => 'configuracion',
             'panel' => 'nextcloud',

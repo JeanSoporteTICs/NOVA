@@ -127,6 +127,8 @@ class HistoricoController extends Controller
             }
 
             $updated = 0;
+            $updatedIds = [];
+            $errors = [];
             $statusId = (int) ($_POST['status_id'] ?? 0);
             $statusName = $this->historico->redmineStatusName($statusId);
             $requestedIds = is_array($_POST['redmine_ids'] ?? null)
@@ -163,7 +165,6 @@ class HistoricoController extends Controller
                     }
                 }
 
-                $errors = [];
                 foreach ($requestedIds as $ticketId) {
                     if (! isset($allowedTickets[$ticketId])) {
                         $errors[] = '#'.$ticketId.': no pertenece a tu histórico disponible.';
@@ -191,6 +192,7 @@ class HistoricoController extends Controller
                     }
 
                     $reportRepo?->updateRedmineStatus($ticketId, $statusId, $statusName);
+                    $updatedIds[] = $ticketId;
                     $updated++;
                 }
 
@@ -208,6 +210,20 @@ class HistoricoController extends Controller
                     'Estado "'.$statusName.'" solicitado para '.count($requestedIds)
                         .' ticket(s); actualizados='.$updated.'; fallidos='.count($errors)
                 );
+            }
+
+            if (request()->expectsJson()) {
+                $responseStatus = $ok ? 200 : ($canChangeHistoryStatus ? 422 : 403);
+
+                return response()->json([
+                    'ok' => $ok,
+                    'message' => $alert,
+                    'updated' => $updated,
+                    'updated_ids' => $updatedIds,
+                    'status_id' => $statusId,
+                    'status_name' => $statusName,
+                    'errors' => $errors,
+                ], $responseStatus);
             }
         }
 

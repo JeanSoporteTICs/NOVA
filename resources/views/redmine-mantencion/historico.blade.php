@@ -1,4 +1,3 @@
-?>
 <!doctype html>
 <html lang="es">
 <head>
@@ -135,7 +134,8 @@
               <?php endforeach; ?>
             </ul>
           </div>
-          <form method="post" action="<?= $h($historicoActionUrl) ?>" id="historico-bulk-status-form" class="d-none"
+          <form method="post" action="<?= $h($historicoActionUrl) ?>" id="historico-bulk-status-form" class="d-none js-redmine-status-form"
+                data-app-no-loading="1"
                 data-app-confirm-title="Cambiar estado en Redmine"
                 data-app-confirm-tone="info"
                 data-app-confirm-text="Cambiar estado">
@@ -351,7 +351,8 @@
                                   <form
                                     method="post"
                                     action="<?= $h($historicoActionUrl) ?>"
-                                    class="m-0"
+                                    class="m-0 js-redmine-status-form"
+                                    data-app-no-loading="1"
                                     data-app-confirm="¿Cambiar el ticket #<?= $h($redmineId) ?> a <?= $h($statusLabel) ?>?"
                                     data-app-confirm-title="Cambiar estado en Redmine"
                                     data-app-confirm-tone="info"
@@ -528,6 +529,7 @@
 
       setLoading(false);
 
+      const initializeHistoricoTable = () => {
       const statusBadges = Array.from(document.querySelectorAll('.js-redmine-status[data-redmine-id]'));
       const syncPanel = document.getElementById('redmine-sync-panel');
       const syncBar = document.getElementById('redmine-sync-bar');
@@ -722,6 +724,84 @@
       };
 
       syncRedmineStatuses();
+      };
+
+      const refreshHistoricoTable = async (url) => {
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'text/html',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          throw new Error(`No se pudo actualizar la tabla (HTTP ${response.status}).`);
+        }
+
+        const html = await response.text();
+        const documentResult = new DOMParser().parseFromString(html, 'text/html');
+        const updatedCard = documentResult.getElementById('historico-table-card');
+        const currentCard = document.getElementById('historico-table-card');
+        if (!updatedCard || !currentCard) {
+          throw new Error('El servidor no devolvió la tabla del histórico.');
+        }
+
+        currentCard.replaceWith(updatedCard);
+        initializeHistoricoTable();
+      };
+
+      const submitRedmineStatus = async (statusForm) => {
+        if (statusForm.dataset.statusSubmitting === '1') return;
+        statusForm.dataset.statusSubmitting = '1';
+
+        const currentCard = document.getElementById('historico-table-card');
+        const currentLoader = currentCard?.querySelector('#table-loader');
+        currentCard?.classList.add('nova-card-loading');
+        currentLoader?.classList.remove('d-none');
+
+        try {
+          const response = await fetch(statusForm.action, {
+            method: 'POST',
+            body: new FormData(statusForm),
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !payload || payload.ok !== true) {
+            throw new Error(payload?.message || `No se pudo cambiar el estado (HTTP ${response.status}).`);
+          }
+
+          await refreshHistoricoTable(statusForm.action);
+          if (Array.isArray(payload.errors) && payload.errors.length > 0) {
+            window.NovaToast?.warning(payload.message || 'Algunos reportes no pudieron actualizarse.');
+          } else {
+            window.NovaToast?.success(payload.message || 'Estados actualizados correctamente.');
+          }
+        } catch (error) {
+          currentCard?.classList.remove('nova-card-loading');
+          currentLoader?.classList.add('d-none');
+          window.NovaToast?.error(error.message || 'No se pudo cambiar el estado en Redmine.');
+        } finally {
+          delete statusForm.dataset.statusSubmitting;
+          delete statusForm.dataset.appConfirmAccepted;
+        }
+      };
+
+      document.addEventListener('submit', event => {
+        const statusForm = event.target instanceof HTMLFormElement && event.target.matches('.js-redmine-status-form')
+          ? event.target
+          : null;
+        if (!statusForm) return;
+        if (statusForm.matches('[data-app-confirm]') && statusForm.dataset.appConfirmAccepted !== '1') return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        submitRedmineStatus(statusForm);
+      });
+
+      initializeHistoricoTable();
 
       const historicoDetalleModal = document.getElementById('historicoDetalleModal');
       if (historicoDetalleModal) {
