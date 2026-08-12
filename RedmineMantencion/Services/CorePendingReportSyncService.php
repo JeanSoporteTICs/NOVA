@@ -68,6 +68,11 @@ final class CorePendingReportSyncService
         $incoming['redmine_id'] = $current['redmine_id'] ?? ($incoming['redmine_id'] ?? '');
         $incoming['procesado_ts'] = $current['procesado_ts'] ?? ($incoming['procesado_ts'] ?? '');
         $incoming['id'] = $current['id'] ?? ($incoming['id'] ?? '');
+        foreach (['hora_extra', 'tiempo_estimado'] as $localField) {
+            if (array_key_exists($localField, $current)) {
+                $incoming[$localField] = $current[$localField];
+            }
+        }
 
         $merged = array_merge($current, $incoming);
         // rowToMessage() exposes DB aliases such as estado_redmine and anexo.
