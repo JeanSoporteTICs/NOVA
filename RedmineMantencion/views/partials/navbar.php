@@ -192,8 +192,10 @@ $navItems = [
     <div class="nova-integration-nextcloud" id="nova-integration-nextcloud" hidden>
       <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
     </div>
-    <strong id="nova-integration-title">Consultando integraci&oacute;n</strong>
-    <span id="nova-integration-detail">La operaci&oacute;n puede tardar unos segundos.</span>
+    <div class="nova-integration-copy">
+      <strong id="nova-integration-title">Consultando integraci&oacute;n</strong>
+      <span id="nova-integration-detail">La operaci&oacute;n puede tardar unos segundos.</span>
+    </div>
     <div class="nova-integration-bar" aria-hidden="true"><i></i></div>
   </div>
 </div>
