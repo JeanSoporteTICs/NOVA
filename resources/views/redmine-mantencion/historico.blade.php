@@ -761,6 +761,7 @@
       const submitRedmineStatus = async (statusForm) => {
         if (statusForm.dataset.statusSubmitting === '1') return;
         statusForm.dataset.statusSubmitting = '1';
+        const loadingStartedAt = performance.now();
         const statusActionUrl = statusForm.getAttribute('action') || window.location.href;
         const selectedIds = String(new FormData(statusForm).get('redmine_ids') || '')
           .split(',')
@@ -771,8 +772,11 @@
             ? `Enviando cambios para ${selectedIds.length} reportes y actualizando la tabla.`
             : 'Enviando el cambio y actualizando la tabla.',
           icon: 'bi-arrow-repeat',
+          mediaSrc: <?= json_encode($mantencionBaseUrl.'/assets/img/redmine.gif', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
         });
 
+        let notificationType = 'success';
+        let notificationMessage = '';
         try {
           const response = await fetch(statusActionUrl, {
             method: 'POST',
@@ -789,17 +793,24 @@
 
           await refreshHistoricoTable(statusActionUrl);
           if (Array.isArray(payload.errors) && payload.errors.length > 0) {
-            window.NovaToast?.warning(payload.message || 'Algunos reportes no pudieron actualizarse.');
+            notificationType = 'warning';
+            notificationMessage = payload.message || 'Algunos reportes no pudieron actualizarse.';
           } else {
-            window.NovaToast?.success(payload.message || 'Estados actualizados correctamente.');
+            notificationMessage = payload.message || 'Estados actualizados correctamente.';
           }
         } catch (error) {
-          window.NovaToast?.error(error.message || 'No se pudo cambiar el estado en Redmine.');
+          notificationType = 'error';
+          notificationMessage = error.message || 'No se pudo cambiar el estado en Redmine.';
         } finally {
+          const remainingLoadingTime = Math.max(0, 2000 - (performance.now() - loadingStartedAt));
+          if (remainingLoadingTime > 0) {
+            await new Promise(resolve => window.setTimeout(resolve, remainingLoadingTime));
+          }
           window.appUi?.setIntegrationLoading?.(false);
           delete statusForm.dataset.statusSubmitting;
           delete statusForm.dataset.appConfirmAccepted;
         }
+        window.NovaToast?.[notificationType]?.(notificationMessage);
       };
 
       document.addEventListener('submit', event => {

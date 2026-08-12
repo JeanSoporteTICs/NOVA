@@ -187,6 +187,7 @@ $navItems = [
 <div class="app-page-loader" id="app-page-loader" aria-hidden="true"></div>
 <div class="nova-integration-overlay" id="nova-integration-overlay" role="status" aria-live="polite" aria-hidden="true">
   <div class="nova-integration-card">
+    <img class="nova-integration-provider-media" id="nova-integration-provider-media" alt="" hidden>
     <span class="nova-integration-icon"><i class="bi bi-cloud-arrow-down"></i></span>
     <div class="nova-integration-nextcloud" id="nova-integration-nextcloud" hidden>
       <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
@@ -256,20 +257,37 @@ $navItems = [
     const icon = integrationOverlay.querySelector('.nova-integration-icon i');
     const iconContainer = integrationOverlay.querySelector('.nova-integration-icon');
     const nextcloudLoader = document.getElementById('nova-integration-nextcloud');
+    const providerMedia = document.getElementById('nova-integration-provider-media');
     if (state) {
       const isNextcloud = options.provider === 'nextcloud';
+      const mediaSrc = String(options.mediaSrc || '').trim();
       if (title) title.textContent = options.title || 'Consultando integración';
       if (detail) detail.textContent = options.detail || 'La operación puede tardar unos segundos.';
       if (icon) icon.className = 'bi ' + (options.icon || 'bi-cloud-arrow-down');
       if (nextcloudLoader) nextcloudLoader.hidden = !isNextcloud;
       if (iconContainer) iconContainer.hidden = isNextcloud;
+      if (providerMedia) {
+        if (mediaSrc) {
+          providerMedia.setAttribute('src', mediaSrc);
+          providerMedia.hidden = false;
+        } else {
+          providerMedia.hidden = true;
+          providerMedia.removeAttribute('src');
+        }
+      }
       integrationOverlay.classList.toggle('is-nextcloud', isNextcloud);
+      integrationOverlay.classList.toggle('has-provider-media', mediaSrc !== '');
       integrationOverlay.classList.add('is-active');
       integrationOverlay.setAttribute('aria-hidden', 'false');
       document.body.classList.add('nova-integration-loading');
     } else {
       integrationOverlay.classList.remove('is-active');
+      integrationOverlay.classList.remove('has-provider-media');
       integrationOverlay.setAttribute('aria-hidden', 'true');
+      if (providerMedia) {
+        providerMedia.hidden = true;
+        providerMedia.removeAttribute('src');
+      }
       document.body.classList.remove('nova-integration-loading');
     }
   };
