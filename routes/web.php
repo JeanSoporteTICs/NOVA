@@ -12,6 +12,7 @@ use App\Modulos\RedmineMantencion\Controllers\ConfiguracionController as Mantenc
 use App\Modulos\RedmineMantencion\Controllers\ActivityController as MantencionActivityController;
 use App\Modulos\RedmineMantencion\Controllers\NextcloudUsuariosController as MantencionNextcloudUsuariosController;
 use App\Modulos\RedmineMantencion\Controllers\NextcloudHistorialController as MantencionNextcloudHistorialController;
+use App\Modulos\RedmineMantencion\Controllers\NextcloudGestionUsuariosController as MantencionNextcloudGestionUsuariosController;
 use App\Modulos\Nova\Controllers\ModuleAdminController;
 use App\Modulos\Nova\Controllers\NovaAdministrationController;
 use App\Modulos\Nova\Controllers\NovaAuthController;
@@ -167,6 +168,14 @@ Route::match(['GET', 'POST'], '/redmine-mantencion/app', [MantencionDashboardCon
     ->name('redmine.mantencion.dashboard');
 Route::get('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'show'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion');
 Route::post('/redmine-mantencion/app/mis-integraciones', [UserIntegrationController::class, 'update'])->defaults('module', 'redmine-mantencion')->name('integrations.redmine_mantencion.update');
+Route::get('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar', [MantencionNextcloudGestionUsuariosController::class, 'index'])
+    ->name('redmine.mantencion.nextcloud-users.manage');
+Route::get('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar/grupo', [MantencionNextcloudGestionUsuariosController::class, 'groupUsers'])
+    ->middleware('throttle:30,1')
+    ->name('redmine.mantencion.nextcloud-users.group-users');
+Route::post('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar', [MantencionNextcloudGestionUsuariosController::class, 'update'])
+    ->middleware('throttle:10,1')
+    ->name('redmine.mantencion.nextcloud-users.update');
 Route::match(['GET', 'POST'], '/nc_browser_ajax.php', fn () => redirect()->route('procedimientos.index'))
     ->name('redmine.mantencion.nc-browser-legacy');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app/{section}', function (Request $request, MantencionDashboardController $dashboard, MantencionHistoricoController $historico, MantencionHorasExtraController $horasExtra, MantencionPendientesController $pendientes, MantencionUsuariosController $usuarios, MantencionEstadisticasController $estadisticas, MantencionConfiguracionController $configuracion, MantencionActivityController $actividad, MantencionNextcloudUsuariosController $nextcloudUsuarios, MantencionNextcloudHistorialController $nextcloudHistorial, string $section) {

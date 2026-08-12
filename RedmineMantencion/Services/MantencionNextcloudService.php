@@ -326,6 +326,128 @@ class MantencionNextcloudService
         return ['groups' => $this->nextcloud_groups_from_response($res['data'] ?? [])];
     }
 
+    /**
+     * Devuelve los IDs pertenecientes a un solo grupo. No consulta detalles
+     * de perfil, cuotas ni correos porque esta pantalla solo cambia claves.
+     *
+     * @param array<string,mixed> $configOverride Solo para pruebas aisladas.
+     * @param callable|null $requester Solo para pruebas aisladas.
+     * @return array{ok?:bool,error?:string,group?:string,users?:array<int,array{id:string}>}
+     */
+    public function nextcloud_group_users(string $group, array $configOverride = [], ?callable $requester = null): array {
+        $group = $this->nextcloud_limited_text($group, 255);
+        if ($group === '') {
+            return ['error' => 'Selecciona un grupo de Nextcloud.'];
+        }
+
+        $cfg = array_replace($this->nextcloud_config(), $configOverride);
+        if (trim((string)($cfg['url'] ?? '')) === '' || trim((string)($cfg['admin_user'] ?? '')) === '' || trim((string)($cfg['admin_pass'] ?? '')) === '') {
+            return ['error' => 'Configura tus credenciales administrativas de Nextcloud para consultar los usuarios.'];
+        }
+
+        $requester ??= static fn(array $requestCfg, string $method, string $path, array $payload = [], int $timeout = 30): array
+            => nextcloud_request($requestCfg, $method, $path, $payload, $timeout);
+        $response = $requester($cfg, 'GET', '/groups/'.rawurlencode($group), [], 30);
+        if (empty($response['ok'])) {
+            $message = trim((string)($response['message'] ?? ''));
+            return ['error' => $message !== '' ? $message : 'No fue posible consultar los usuarios del grupo.'];
+        }
+
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $source = $data['users'] ?? $data;
+        if (is_array($source) && isset($source['element'])) {
+            $source = $source['element'];
+        }
+        if (is_string($source) || is_numeric($source)) {
+            $source = [$source];
+        } elseif (!is_array($source)) {
+            $source = [];
+        }
+
+        $ids = [];
+        foreach ($source as $key => $entry) {
+            $id = is_array($entry)
+                ? trim((string)($entry['id'] ?? $entry['userid'] ?? (is_string($key) ? $key : '')))
+                : trim((string)$entry);
+            if ($id !== '') {
+                $ids[$id] = true;
+            }
+        }
+        $ids = array_keys($ids);
+        natcasesort($ids);
+
+        return [
+            'ok' => true,
+            'group' => $group,
+            'users' => array_map(static fn(string $id): array => ['id' => $id], array_values($ids)),
+        ];
+    }
+
+    /**
+     * Única modificación autorizada por el directorio agrupado.
+     *
+     * @param array<string,mixed> $input
+     * @param array<string,mixed> $configOverride Solo para pruebas aisladas.
+     * @param callable|null $requester Solo para pruebas aisladas.
+     * @return array{ok:bool,type:string,message:string,updated_fields?:array<int,string>}
+     */
+    public function nextcloud_change_user_password(array $input, array $configOverride = [], ?callable $requester = null): array {
+        $cfg = array_replace($this->nextcloud_config(), $configOverride);
+        if (trim((string)($cfg['url'] ?? '')) === '' || trim((string)($cfg['admin_user'] ?? '')) === '' || trim((string)($cfg['admin_pass'] ?? '')) === '') {
+            return ['ok' => false, 'type' => 'error', 'message' => 'Configura tus credenciales administrativas de Nextcloud antes de cambiar la contraseña.'];
+        }
+
+        $userid = trim((string)($input['userid'] ?? ''));
+        if ($userid === '' || strlen($userid) > 255 || preg_match('/[\x00-\x1F\x7F]/', $userid)) {
+            return ['ok' => false, 'type' => 'error', 'message' => 'El identificador del usuario de Nextcloud no es válido.'];
+        }
+
+        $password = (string)($input['password'] ?? '');
+        $passwordConfirmation = (string)($input['password_confirmation'] ?? '');
+        if (strlen($password) < 8 || strlen($password) > 256) {
+            return ['ok' => false, 'type' => 'error', 'message' => 'La nueva contraseña debe tener entre 8 y 256 caracteres.'];
+        }
+        if (!hash_equals($password, $passwordConfirmation)) {
+            return ['ok' => false, 'type' => 'error', 'message' => 'La confirmación de contraseña no coincide.'];
+        }
+
+        $requester ??= static fn(array $requestCfg, string $method, string $path, array $payload = [], int $timeout = 30): array
+            => nextcloud_request($requestCfg, $method, $path, $payload, $timeout);
+        $response = $requester($cfg, 'PUT', '/users/'.rawurlencode($userid), [
+            'key' => 'password',
+            'value' => $password,
+        ], 30);
+
+        if (function_exists('nextcloud_log_action')) {
+            nextcloud_log_action(
+                !empty($response['ok']) ? 'NEXTCLOUD_USER_PASSWORD_UPDATE' : 'NEXTCLOUD_USER_PASSWORD_UPDATE_FAIL',
+                'Usuario '.$userid.' | cambio de contraseña '.(!empty($response['ok']) ? 'OK' : 'FAIL')
+            );
+        }
+
+        if (!empty($response['ok'])) {
+            return [
+                'ok' => true,
+                'type' => 'success',
+                'message' => 'Contraseña actualizada para '.$userid.'.',
+                'updated_fields' => ['password'],
+            ];
+        }
+
+        $message = trim((string)($response['message'] ?? ''));
+        return [
+            'ok' => false,
+            'type' => 'error',
+            'message' => $message !== '' ? 'Nextcloud rechazó la contraseña: '.$message.'.' : 'Nextcloud no pudo cambiar la contraseña.',
+        ];
+    }
+
+    private function nextcloud_limited_text(mixed $value, int $length): string {
+        $clean = trim((string)$value);
+        $clean = (string)preg_replace('/[\x00-\x1F\x7F]/u', '', $clean);
+        return function_exists('mb_substr') ? mb_substr($clean, 0, $length) : substr($clean, 0, $length);
+    }
+
     public function nextcloud_generate_password(string $displayName, string $userid): string {
         $parts = preg_split('/\s+/', trim($displayName)) ?: [];
         $name = $parts[0] ?? 'Usuario';

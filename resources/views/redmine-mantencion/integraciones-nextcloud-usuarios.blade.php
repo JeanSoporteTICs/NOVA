@@ -18,6 +18,7 @@
       $heroExtras = '';
       include base_path('RedmineMantencion/views/partials/hero.php');
     ?>
+    <?php $nextcloudUsersSection = 'create'; include base_path('RedmineMantencion/views/partials/nextcloud-users-nav.php'); ?>
 
     <?php if (trim((string)$flash) !== ''): ?>
       <div class="nova-alert-card is-warning mb-3" role="alert">

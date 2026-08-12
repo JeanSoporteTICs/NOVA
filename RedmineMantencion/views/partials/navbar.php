@@ -43,7 +43,8 @@ $navItems = [
                 'icon' => config('navigation-icons.nextcloud'),
                 'can' => auth_can('integraciones_nextcloud'),
                 'children' => [
-                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Nextcloud', 'href' => $mantencionAppUrl . '/integraciones-nextcloud-usuarios', 'icon' => config('navigation-icons.nextcloud'), 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_usuarios', 'label' => 'Crear usuarios', 'href' => $mantencionAppUrl . '/integraciones-nextcloud-usuarios', 'icon' => config('navigation-icons.usuarios'), 'can' => auth_can('integraciones_nextcloud')],
+                    ['key' => 'integraciones_nextcloud_gestion_usuarios', 'label' => 'Administrar usuarios', 'href' => $mantencionAppUrl . '/integraciones-nextcloud-usuarios/administrar', 'icon' => 'bi-person-gear', 'can' => auth_can('integraciones_nextcloud')],
                     ['key' => 'integraciones_nextcloud_grupos', 'label' => 'Grupos', 'href' => $mantencionAppUrl . '/configuracion?panel=nextcloud', 'icon' => config('navigation-icons.grupos'), 'can' => auth_can('integraciones_nextcloud')],
                     ['key' => 'integraciones_nextcloud_historial', 'label' => 'Historial', 'href' => $mantencionAppUrl . '/integraciones-nextcloud-historial', 'icon' => config('navigation-icons.historial'), 'can' => auth_can('integraciones_nextcloud')],
                 ],
@@ -272,6 +273,27 @@ $navItems = [
       document.body.classList.remove('nova-integration-loading');
     }
   };
+  // Toda navegación que consulta o administra usuarios remotos usa el
+  // loader animado de Nextcloud, incluso antes de que la vista destino exista.
+  document.addEventListener('click', function (e) {
+    const link = e.target.closest('a[href]');
+    if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
+    const rawHref = String(link.getAttribute('href') || '').trim();
+    if (!rawHref || rawHref === '#' || rawHref.startsWith('#') || link.hasAttribute('data-bs-toggle') || link.getAttribute('role') === 'button') return;
+    let target;
+    try {
+      target = new URL(link.href, window.location.href);
+    } catch (error) {
+      return;
+    }
+    if (target.origin !== window.location.origin || !target.pathname.toLowerCase().includes('/integraciones-nextcloud-usuarios')) return;
+    const isManagement = target.pathname.toLowerCase().endsWith('/administrar');
+    window.appUi.setIntegrationLoading(true, {
+      title: isManagement ? 'Cargando grupos guardados' : 'Preparando usuarios de Nextcloud',
+      detail: isManagement ? 'Preparando el catálogo consultado previamente.' : 'Conectando con Nextcloud y preparando la información.',
+      provider: 'nextcloud'
+    });
+  }, true);
   const integrationCopyForForm = function (form, submitter) {
     const actionInput = form.querySelector('input[name="action"]');
     const action = ((actionInput && actionInput.value) || '') + ' ' + ((submitter && submitter.value) || '') + ' ' + ((submitter && submitter.textContent) || '');
@@ -457,7 +479,17 @@ window.addEventListener('load', () => {
         window.location.href = url;
         return;
       }
-      window.appUi?.setLoading?.(true);
+      const isNextcloudUsersPage = targetPath.includes('/integraciones-nextcloud-usuarios');
+      if (isNextcloudUsersPage) {
+        const isManagement = targetPath.endsWith('/administrar');
+        window.appUi?.setIntegrationLoading?.(true, {
+          title: isManagement ? 'Cargando grupos guardados' : 'Preparando usuarios de Nextcloud',
+          detail: isManagement ? 'Preparando el catálogo consultado previamente.' : 'Conectando con Nextcloud y preparando la información.',
+          provider: 'nextcloud'
+        });
+      } else {
+        window.appUi?.setLoading?.(true);
+      }
       try {
         const res = await fetch(url, { headers: { 'X-Requested-With': 'partial-nav' } });
         let text = await res.text();
@@ -498,6 +530,7 @@ window.addEventListener('load', () => {
         window.location.href = url;
       } finally {
         window.appUi?.setLoading?.(false);
+        window.appUi?.setIntegrationLoading?.(false);
         _loadPageBusy = false;
       }
     };
