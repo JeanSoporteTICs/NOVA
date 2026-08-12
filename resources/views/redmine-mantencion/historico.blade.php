@@ -762,11 +762,16 @@
         if (statusForm.dataset.statusSubmitting === '1') return;
         statusForm.dataset.statusSubmitting = '1';
         const statusActionUrl = statusForm.getAttribute('action') || window.location.href;
-
-        const currentCard = document.getElementById('historico-table-card');
-        const currentLoader = currentCard?.querySelector('#table-loader');
-        currentCard?.classList.add('nova-card-loading');
-        currentLoader?.classList.remove('d-none');
+        const selectedIds = String(new FormData(statusForm).get('redmine_ids') || '')
+          .split(',')
+          .filter(Boolean);
+        window.appUi?.setIntegrationLoading?.(true, {
+          title: selectedIds.length > 1 ? 'Actualizando estados en Redmine' : 'Actualizando estado en Redmine',
+          detail: selectedIds.length > 1
+            ? `Enviando cambios para ${selectedIds.length} reportes y actualizando la tabla.`
+            : 'Enviando el cambio y actualizando la tabla.',
+          icon: 'bi-arrow-repeat',
+        });
 
         try {
           const response = await fetch(statusActionUrl, {
@@ -789,10 +794,9 @@
             window.NovaToast?.success(payload.message || 'Estados actualizados correctamente.');
           }
         } catch (error) {
-          currentCard?.classList.remove('nova-card-loading');
-          currentLoader?.classList.add('d-none');
           window.NovaToast?.error(error.message || 'No se pudo cambiar el estado en Redmine.');
         } finally {
+          window.appUi?.setIntegrationLoading?.(false);
           delete statusForm.dataset.statusSubmitting;
           delete statusForm.dataset.appConfirmAccepted;
         }
