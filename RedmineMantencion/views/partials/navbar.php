@@ -258,6 +258,7 @@ $navItems = [
     const detail = document.getElementById('nova-integration-detail');
     const icon = integrationOverlay.querySelector('.nova-integration-icon i');
     const iconContainer = integrationOverlay.querySelector('.nova-integration-icon');
+    const integrationCard = integrationOverlay.querySelector('.nova-integration-card');
     const nextcloudLoader = document.getElementById('nova-integration-nextcloud');
     const providerMedia = document.getElementById('nova-integration-provider-media');
     if (state) {
@@ -279,12 +280,14 @@ $navItems = [
       }
       integrationOverlay.classList.toggle('is-nextcloud', isNextcloud);
       integrationOverlay.classList.toggle('has-provider-media', mediaSrc !== '');
+      integrationCard?.classList.toggle('is-provider-layout', mediaSrc !== '');
       integrationOverlay.classList.add('is-active');
       integrationOverlay.setAttribute('aria-hidden', 'false');
       document.body.classList.add('nova-integration-loading');
     } else {
       integrationOverlay.classList.remove('is-active');
       integrationOverlay.classList.remove('has-provider-media');
+      integrationCard?.classList.remove('is-provider-layout');
       integrationOverlay.setAttribute('aria-hidden', 'true');
       if (providerMedia) {
         providerMedia.hidden = true;
