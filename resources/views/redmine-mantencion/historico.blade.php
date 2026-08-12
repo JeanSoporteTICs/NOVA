@@ -31,6 +31,7 @@
           ['label' => 'Desde', 'name' => 'desde', 'type' => 'date', 'value' => $f_desde, 'col' => 2, 'aria_label' => 'Fecha desde'],
           ['label' => 'Hasta', 'name' => 'hasta', 'type' => 'date', 'value' => $f_hasta, 'col' => 2, 'aria_label' => 'Fecha hasta'],
           ['label' => 'Fuente', 'name' => 'fuente', 'type' => 'select', 'options' => ['' => 'Todas', 'reportes' => 'Reportes', 'horas_extra' => 'Horas extra'], 'value' => $f_fuente, 'col' => 2],
+          ['label' => 'Estado Redmine', 'name' => 'estado_redmine', 'type' => 'select', 'options' => ['' => 'Todos'] + $redmineStatusesSel, 'value' => $f_estado_redmine, 'col' => 2],
         ];
         if (!$scopeBloqueado) {
           $filterFields[] = [
@@ -399,6 +400,7 @@
             <input type="hidden" name="desde" value="<?= $h($f_desde) ?>">
             <input type="hidden" name="hasta" value="<?= $h($f_hasta) ?>">
             <input type="hidden" name="fuente" value="<?= $h($f_fuente) ?>">
+            <input type="hidden" name="estado_redmine" value="<?= $h($f_estado_redmine) ?>">
             <input type="hidden" name="descripcion" value="<?= $h($f_descripcion) ?>">
             <input type="hidden" name="buscar" value="<?= $h($f_busqueda) ?>">
             <input type="hidden" name="categoria" value="<?= $h($f_categoria) ?>">

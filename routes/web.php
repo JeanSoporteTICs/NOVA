@@ -173,6 +173,9 @@ Route::get('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar
 Route::get('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar/grupo', [MantencionNextcloudGestionUsuariosController::class, 'groupUsers'])
     ->middleware('throttle:30,1')
     ->name('redmine.mantencion.nextcloud-users.group-users');
+Route::post('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar/generar-password', [MantencionNextcloudGestionUsuariosController::class, 'suggestPassword'])
+    ->middleware('throttle:30,1')
+    ->name('redmine.mantencion.nextcloud-users.password-suggestion');
 Route::post('/redmine-mantencion/app/integraciones-nextcloud-usuarios/administrar', [MantencionNextcloudGestionUsuariosController::class, 'update'])
     ->middleware('throttle:10,1')
     ->name('redmine.mantencion.nextcloud-users.update');

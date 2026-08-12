@@ -35,6 +35,13 @@ namespace App\Modulos\RedmineMantencion\ExternalClients;
  */
 final class NextcloudWebdavClient
 {
+    // Nextcloud puede aplicar hasta 25 segundos de demora a una solicitud
+    // autenticada por su protección anti-fuerza-bruta. El listado inicial
+    // necesita margen adicional para ejecutar y procesar el PROPFIND.
+    private const DIRECTORY_CONNECT_TIMEOUT_SECONDS = 8;
+
+    private const DIRECTORY_TIMEOUT_SECONDS = 40;
+
     /**
      * @param array{url?:string,admin_user?:string} $cfg
      */
@@ -199,8 +206,8 @@ final class NextcloudWebdavClient
                 'Accept: application/xml',
             ],
             CURLOPT_POSTFIELDS => $propfindBody,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 5,
+            CURLOPT_CONNECTTIMEOUT => self::DIRECTORY_CONNECT_TIMEOUT_SECONDS,
+            CURLOPT_TIMEOUT => self::DIRECTORY_TIMEOUT_SECONDS,
         ]);
 
         $t0 = microtime(true);

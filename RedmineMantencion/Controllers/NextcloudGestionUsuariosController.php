@@ -28,6 +28,7 @@ class NextcloudGestionUsuariosController extends Controller
         $csrf = legacy_csrf_token();
         $managementUrl = route('redmine.mantencion.nextcloud-users.manage');
         $groupUsersUrl = route('redmine.mantencion.nextcloud-users.group-users');
+        $passwordSuggestionUrl = route('redmine.mantencion.nextcloud-users.password-suggestion');
         $credentialsUrl = route('integrations.redmine_mantencion');
         $groupsConfigUrl = route('redmine.mantencion.section', [
             'section' => 'configuracion',
@@ -86,6 +87,21 @@ class NextcloudGestionUsuariosController extends Controller
             'group' => (string) ($result['group'] ?? ''),
             'users' => is_array($result['users'] ?? null) ? $result['users'] : [],
         ]);
+    }
+
+    public function suggestPassword(): JsonResponse
+    {
+        $this->bootAndAuthorize();
+        if (function_exists('csrf_validate')) {
+            csrf_validate();
+        }
+
+        $result = $this->nextcloud->nextcloud_password_suggestion(request()->only([
+            'userid',
+            'display_name',
+        ]));
+
+        return response()->json($result, ! empty($result['ok']) ? 200 : 422);
     }
 
     private function bootAndAuthorize(): void

@@ -10,9 +10,7 @@ use Illuminate\Http\RedirectResponse;
 
 class HistoricoController extends Controller
 {
-    public function __construct(private readonly MantencionHistoricoService $historico)
-    {
-    }
+    public function __construct(private readonly MantencionHistoricoService $historico) {}
 
     /**
      * Histórico. Migrado desde RedmineMantencion/views/Historico/historico.php
@@ -25,7 +23,7 @@ class HistoricoController extends Controller
         require_once base_path('RedmineMantencion/controllers/storage.php');
         require_once base_path('RedmineMantencion/controllers/maintenance.php');
 
-        if (!auth_can('historico')) {
+        if (! auth_can('historico')) {
             return redirect(legacy_app_url());
         }
 
@@ -46,7 +44,7 @@ class HistoricoController extends Controller
             if (function_exists('csrf_validate')) {
                 csrf_validate();
             }
-            if ($maintenanceMode || !auth_can('historico_eliminar')) {
+            if ($maintenanceMode || ! auth_can('historico_eliminar')) {
                 abort(403, 'No tienes permiso para eliminar registros del histórico.');
             }
             $id = trim($_POST['id']);
@@ -87,22 +85,23 @@ class HistoricoController extends Controller
         $f_usuario = trim($_GET['usuario'] ?? '');
         $f_categoria = strtolower(trim($_GET['categoria'] ?? ''));
         $f_fuente = $_GET['fuente'] ?? '';
+        $f_estado_redmine = trim((string) ($_GET['estado_redmine'] ?? ''));
         $f_busqueda = trim($_GET['buscar'] ?? '');
         $f_descripcion = trim($_GET['descripcion'] ?? '');
         $perPageOptions = [25, 50, 100];
         $perPage = (int) ($_GET['per_page'] ?? 25);
-        if (!in_array($perPage, $perPageOptions, true)) {
+        if (! in_array($perPage, $perPageOptions, true)) {
             $perPage = 25;
         }
         $currentPage = max(1, (int) ($_GET['page'] ?? 1));
         $scopePermitido = 'asignados';
         $scopeBloqueado = ($scopePermitido === 'asignados');
-        $canChangeHistoryStatus = !$maintenanceMode && auth_can('historico_estado');
-        $canDeleteHistory = !$maintenanceMode && auth_can('historico_eliminar');
+        $canChangeHistoryStatus = ! $maintenanceMode && auth_can('historico_estado');
+        $canDeleteHistory = ! $maintenanceMode && auth_can('historico_eliminar');
         $showActions = $canChangeHistoryStatus || $canDeleteHistory;
         $tableColspan = 9 + ($canChangeHistoryStatus ? 1 : 0) + ($showActions ? 1 : 0);
         $f_scope = $_GET['mensajes_scope'] ?? ($scopePermitido === 'todos' ? 'todos' : 'asignados');
-        if (!in_array($f_scope, ['todos', 'asignados'], true)) {
+        if (! in_array($f_scope, ['todos', 'asignados'], true)) {
             $f_scope = 'asignados';
         }
         if ($scopePermitido === 'asignados') {
@@ -142,7 +141,7 @@ class HistoricoController extends Controller
                 $requestedIds
             )))), 0, 100);
 
-            if (!$canChangeHistoryStatus) {
+            if (! $canChangeHistoryStatus) {
                 http_response_code(403);
                 $alert = 'No tienes permiso para cambiar estados desde el histórico.';
             } elseif ($statusName === null) {
@@ -155,7 +154,7 @@ class HistoricoController extends Controller
                 $reportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
                 $allowedTickets = [];
                 foreach ($reportRepo?->archivedMessages() ?? [] as $archivedRow) {
-                    if (!is_array($archivedRow) || !$this->historico->recordMatchesCurrentUser($archivedRow, $userId, $userNames)) {
+                    if (! is_array($archivedRow) || ! $this->historico->recordMatchesCurrentUser($archivedRow, $userId, $userNames)) {
                         continue;
                     }
                     $ticketId = trim((string) ($archivedRow['redmine_id'] ?? ''));
@@ -166,24 +165,28 @@ class HistoricoController extends Controller
 
                 $errors = [];
                 foreach ($requestedIds as $ticketId) {
-                    if (!isset($allowedTickets[$ticketId])) {
-                        $errors[] = '#' . $ticketId . ': no pertenece a tu histórico disponible.';
+                    if (! isset($allowedTickets[$ticketId])) {
+                        $errors[] = '#'.$ticketId.': no pertenece a tu histórico disponible.';
+
                         continue;
                     }
 
                     $currentStatus = $this->historico->fetchRedmineStatus($redminePlatformUrl, $ticketId, $redmineToken);
-                    if (!($currentStatus['available'] ?? false)) {
-                        $errors[] = '#' . $ticketId . ': no se pudo confirmar el estado actual.';
+                    if (! ($currentStatus['available'] ?? false)) {
+                        $errors[] = '#'.$ticketId.': no se pudo confirmar el estado actual.';
+
                         continue;
                     }
                     if ($currentStatus['closed'] ?? false) {
-                        $errors[] = '#' . $ticketId . ': ya está cerrado en Redmine.';
+                        $errors[] = '#'.$ticketId.': ya está cerrado en Redmine.';
+
                         continue;
                     }
 
                     $result = $this->historico->updateRedmineStatus($redminePlatformUrl, $ticketId, $statusId, $redmineToken);
-                    if (!($result['ok'] ?? false)) {
-                        $errors[] = '#' . $ticketId . ': ' . trim((string) ($result['error'] ?? 'no se pudo actualizar.'));
+                    if (! ($result['ok'] ?? false)) {
+                        $errors[] = '#'.$ticketId.': '.trim((string) ($result['error'] ?? 'no se pudo actualizar.'));
+
                         continue;
                     }
 
@@ -192,18 +195,18 @@ class HistoricoController extends Controller
                 }
 
                 $ok = $updated > 0;
-                $alert = $updated . ' reporte(s) actualizado(s) a “' . $statusName . '” en Redmine.';
+                $alert = $updated.' reporte(s) actualizado(s) a “'.$statusName.'” en Redmine.';
                 if ($errors !== []) {
-                    $alert .= ' No actualizados: ' . implode(' ', array_slice($errors, 0, 5));
+                    $alert .= ' No actualizados: '.implode(' ', array_slice($errors, 0, 5));
                     if (count($errors) > 5) {
-                        $alert .= ' y ' . (count($errors) - 5) . ' más.';
+                        $alert .= ' y '.(count($errors) - 5).' más.';
                     }
                 }
 
                 dashboard_log_action(
                     'REDMINE_STATUS_UPDATE',
-                    'Estado "' . $statusName . '" solicitado para ' . count($requestedIds)
-                        . ' ticket(s); actualizados=' . $updated . '; fallidos=' . count($errors)
+                    'Estado "'.$statusName.'" solicitado para '.count($requestedIds)
+                        .' ticket(s); actualizados='.$updated.'; fallidos='.count($errors)
                 );
             }
         }
@@ -233,12 +236,20 @@ class HistoricoController extends Controller
         $items = array_merge($items, $this->historico->loadReportes());
         $items = array_merge($items, $this->historico->loadHorasExtras());
 
+        $redmineStatusesSel = [];
+        foreach ($redmineStatusOptions as $statusLabel) {
+            $statusLabel = trim((string) $statusLabel);
+            if ($statusLabel !== '') {
+                $redmineStatusesSel[$statusLabel] = $statusLabel;
+            }
+        }
+
         $filtered = [];
         foreach ($items as $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
-            if (!in_array(strtolower(trim((string) ($row['estado'] ?? ''))), ['procesado', 'archivado'], true)) {
+            if (! in_array(strtolower(trim((string) ($row['estado'] ?? ''))), ['procesado', 'archivado'], true)) {
                 continue;
             }
             $fecha = $this->historico->normDate($row['fecha'] ?? ($row['fecha_inicio'] ?? ''));
@@ -254,23 +265,33 @@ class HistoricoController extends Controller
             if ($f_fuente && ($row['_fuente'] ?? '') !== $f_fuente) {
                 continue;
             }
+            if ($f_estado_redmine !== '') {
+                $rowRedmineStatus = trim((string) ($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? ''));
+                if ($rowRedmineStatus === '') {
+                    $rowStatusId = (int) ($row['status_id'] ?? $row['estado_id'] ?? 0);
+                    $rowRedmineStatus = trim((string) ($redmineStatusOptions[$rowStatusId] ?? ''));
+                }
+                if (dashboard_normalize_text($rowRedmineStatus) !== dashboard_normalize_text($f_estado_redmine)) {
+                    continue;
+                }
+            }
             if ($f_usuario !== '' && (string) ($row['asignado_a'] ?? '') !== (string) $f_usuario) {
                 continue;
             }
-            if ($f_scope === 'asignados' && !$this->historico->recordMatchesCurrentUser($row, $userId, $userNames)) {
+            if ($f_scope === 'asignados' && ! $this->historico->recordMatchesCurrentUser($row, $userId, $userNames)) {
                 continue;
             }
             $cat = strtolower($row['categoria'] ?? '');
             if ($f_categoria !== '' && $cat !== $f_categoria) {
                 continue;
             }
-            if (!$this->historico->matchesSearch($row, $f_busqueda)) {
+            if (! $this->historico->matchesSearch($row, $f_busqueda)) {
                 continue;
             }
             if ($f_descripcion !== '') {
                 $descriptionNeedle = dashboard_normalize_text($f_descripcion);
                 $descriptionText = dashboard_normalize_text((string) ($row['descripcion'] ?? ''));
-                if ($descriptionNeedle !== '' && !str_contains($descriptionText, $descriptionNeedle)) {
+                if ($descriptionNeedle !== '' && ! str_contains($descriptionText, $descriptionNeedle)) {
                     continue;
                 }
             }
@@ -296,31 +317,35 @@ class HistoricoController extends Controller
         $visibleRows = count($pagedRows);
         $historicoFilterChips = [];
         if ($f_desde !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-calendar-event', 'label' => 'Desde ' . $this->historico->formatDate($f_desde), 'remove' => 'desde'];
+            $historicoFilterChips[] = ['icon' => 'bi-calendar-event', 'label' => 'Desde '.$this->historico->formatDate($f_desde), 'remove' => 'desde'];
         }
         if ($f_hasta !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-calendar-check', 'label' => 'Hasta ' . $this->historico->formatDate($f_hasta), 'remove' => 'hasta'];
+            $historicoFilterChips[] = ['icon' => 'bi-calendar-check', 'label' => 'Hasta '.$this->historico->formatDate($f_hasta), 'remove' => 'hasta'];
         }
         if ($f_fuente !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-inboxes', 'label' => 'Fuente ' . $f_fuente, 'remove' => 'fuente'];
+            $historicoFilterChips[] = ['icon' => 'bi-inboxes', 'label' => 'Fuente '.$f_fuente, 'remove' => 'fuente'];
+        }
+        if ($f_estado_redmine !== '') {
+            $historicoFilterChips[] = ['icon' => 'bi-kanban', 'label' => 'Estado Redmine '.$f_estado_redmine, 'remove' => 'estado_redmine'];
         }
         if ($f_busqueda !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-search', 'label' => 'Busqueda ' . $f_busqueda, 'remove' => 'buscar'];
+            $historicoFilterChips[] = ['icon' => 'bi-search', 'label' => 'Busqueda '.$f_busqueda, 'remove' => 'buscar'];
         }
         if ($f_descripcion !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-card-text', 'label' => 'Descripción ' . $f_descripcion, 'remove' => 'descripcion'];
+            $historicoFilterChips[] = ['icon' => 'bi-card-text', 'label' => 'Descripción '.$f_descripcion, 'remove' => 'descripcion'];
         }
         if ($f_categoria !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-tags', 'label' => 'Categoria ' . $f_categoria, 'remove' => 'categoria'];
+            $historicoFilterChips[] = ['icon' => 'bi-tags', 'label' => 'Categoria '.$f_categoria, 'remove' => 'categoria'];
         }
-        if (!$scopeBloqueado && $f_usuario !== '') {
-            $historicoFilterChips[] = ['icon' => 'bi-person', 'label' => 'Asignado ' . $f_usuario, 'remove' => 'usuario'];
+        if (! $scopeBloqueado && $f_usuario !== '') {
+            $historicoFilterChips[] = ['icon' => 'bi-person', 'label' => 'Asignado '.$f_usuario, 'remove' => 'usuario'];
         }
         $historicoBaseUrl = route('redmine.mantencion.section', ['section' => 'historico']);
         $historicoStateQuery = array_filter([
             'desde' => $f_desde,
             'hasta' => $f_hasta,
             'fuente' => $f_fuente,
+            'estado_redmine' => $f_estado_redmine,
             'descripcion' => $f_descripcion,
             'buscar' => $f_busqueda,
             'categoria' => $f_categoria,
@@ -329,27 +354,27 @@ class HistoricoController extends Controller
             'per_page' => $perPage,
             'page' => $currentPage,
         ], static fn ($value): bool => $value !== '');
-        $historicoActionUrl = $historicoBaseUrl . '?' . http_build_query($historicoStateQuery);
+        $historicoActionUrl = $historicoBaseUrl.'?'.http_build_query($historicoStateQuery);
         $historicoChipUrl = static function (string $key) use ($perPage, $historicoBaseUrl): string {
             $query = $_GET;
             unset($query[$key]);
             $query['page'] = 1;
             $query['per_page'] = $perPage;
 
-            return $historicoBaseUrl . ($query ? '?' . http_build_query($query) : '');
+            return $historicoBaseUrl.($query ? '?'.http_build_query($query) : '');
         };
         $historicoPageUrl = static function (int $page) use ($perPage, $historicoBaseUrl): string {
             $query = $_GET;
             $query['page'] = max(1, $page);
             $query['per_page'] = $perPage;
 
-            return $historicoBaseUrl . '?' . http_build_query($query);
+            return $historicoBaseUrl.'?'.http_build_query($query);
         };
 
         $usuariosSel = [];
         $catsSel = [];
         foreach ($items as $r) {
-            if (!is_array($r)) {
+            if (! is_array($r)) {
                 continue;
             }
             $usuariosSel[(string) ($r['asignado_a'] ?? '')] = $r['asignado_nombre'] ?? ($r['asignado_a'] ?? '');

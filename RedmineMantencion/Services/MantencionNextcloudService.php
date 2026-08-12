@@ -327,12 +327,13 @@ class MantencionNextcloudService
     }
 
     /**
-     * Devuelve los IDs pertenecientes a un solo grupo. No consulta detalles
-     * de perfil, cuotas ni correos porque esta pantalla solo cambia claves.
+     * Devuelve las identidades pertenecientes a un solo grupo mediante el
+     * endpoint detallado de Nextcloud. Para versiones antiguas conserva el
+     * endpoint de IDs y completa nombres desde NOVA o el historial local.
      *
      * @param array<string,mixed> $configOverride Solo para pruebas aisladas.
      * @param callable|null $requester Solo para pruebas aisladas.
-     * @return array{ok?:bool,error?:string,group?:string,users?:array<int,array{id:string}>}
+     * @return array{ok?:bool,error?:string,group?:string,users?:array<int,array{id:string,display_name:string,first_name:string,last_name:string,email:string,quota_label:string}>}
      */
     public function nextcloud_group_users(string $group, array $configOverride = [], ?callable $requester = null): array {
         $group = $this->nextcloud_limited_text($group, 255);
@@ -347,7 +348,11 @@ class MantencionNextcloudService
 
         $requester ??= static fn(array $requestCfg, string $method, string $path, array $payload = [], int $timeout = 30): array
             => nextcloud_request($requestCfg, $method, $path, $payload, $timeout);
-        $response = $requester($cfg, 'GET', '/groups/'.rawurlencode($group), [], 30);
+        $groupPath = '/groups/'.rawurlencode($group);
+        $response = $requester($cfg, 'GET', $groupPath.'/users/details', [], 45);
+        if (empty($response['ok']) && in_array((int)($response['http'] ?? 0), [404, 405], true)) {
+            $response = $requester($cfg, 'GET', $groupPath, [], 45);
+        }
         if (empty($response['ok'])) {
             $message = trim((string)($response['message'] ?? ''));
             return ['error' => $message !== '' ? $message : 'No fue posible consultar los usuarios del grupo.'];
@@ -364,22 +369,197 @@ class MantencionNextcloudService
             $source = [];
         }
 
-        $ids = [];
+        $usersById = [];
         foreach ($source as $key => $entry) {
             $id = is_array($entry)
                 ? trim((string)($entry['id'] ?? $entry['userid'] ?? (is_string($key) ? $key : '')))
                 : trim((string)$entry);
             if ($id !== '') {
-                $ids[$id] = true;
+                $displayName = is_array($entry)
+                    ? trim((string)($entry['displayname'] ?? $entry['displayName'] ?? $entry['display-name'] ?? ''))
+                    : '';
+                $email = is_array($entry) ? trim((string)($entry['email'] ?? '')) : '';
+                $quota = is_array($entry) ? ($entry['quota'] ?? null) : null;
+                $existing = $usersById[$id] ?? [];
+                $quotaLabel = $this->nextcloud_quota_label($quota);
+                $usersById[$id] = [
+                    'id' => $id,
+                    'display_name' => $displayName !== '' ? $displayName : (string)($existing['display_name'] ?? ''),
+                    'first_name' => '',
+                    'last_name' => '',
+                    'email' => $email !== '' ? $email : (string)($existing['email'] ?? ''),
+                    'quota_label' => $quotaLabel !== '' ? $quotaLabel : (string)($existing['quota_label'] ?? ''),
+                ];
             }
         }
-        $ids = array_keys($ids);
-        natcasesort($ids);
+        uksort($usersById, 'strnatcasecmp');
 
         return [
             'ok' => true,
             'group' => $group,
-            'users' => array_map(static fn(string $id): array => ['id' => $id], array_values($ids)),
+            'users' => $this->nextcloud_enrich_user_identities(array_values($usersById)),
+        ];
+    }
+
+    /**
+     * @param array<int,array{id:string,display_name?:string,first_name?:string,last_name?:string,email?:string,quota_label?:string}> $users
+     * @return array<int,array{id:string,display_name:string,first_name:string,last_name:string,email:string,quota_label:string}>
+     */
+    public function nextcloud_enrich_user_identities(array $users): array {
+        $ids = array_values(array_unique(array_filter(array_map(
+            static fn(array $user): string => trim((string)($user['id'] ?? '')),
+            $users
+        ))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $identityKeys = static function (string $value): array {
+            $value = trim($value);
+            $normalized = strtolower((string)preg_replace('/[^0-9a-z]/i', '', $value));
+            return array_values(array_unique(array_filter([strtolower($value), $normalized])));
+        };
+        $normalizedIds = array_values(array_unique(array_filter(array_map(
+            static fn(string $id): string => strtolower((string)preg_replace('/[^0-9a-z]/i', '', $id)),
+            $ids
+        ))));
+
+        $centralByKey = [];
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')) {
+                $rows = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+                    ->where(function ($query) use ($ids, $normalizedIds): void {
+                        $query->whereIn('usuario', $ids)
+                            ->orWhereIn('rut', $ids)
+                            ->orWhereIn('uuid', $ids)
+                            ->orWhereIn('redmine_id', $ids);
+                        if ($normalizedIds !== []) {
+                            $placeholders = implode(',', array_fill(0, count($normalizedIds), '?'));
+                            $query->orWhereRaw("LOWER(REPLACE(REPLACE(REPLACE(usuario, '.', ''), '-', ''), ' ', '')) IN ({$placeholders})", $normalizedIds)
+                                ->orWhereRaw("LOWER(REPLACE(REPLACE(REPLACE(rut, '.', ''), '-', ''), ' ', '')) IN ({$placeholders})", $normalizedIds);
+                        }
+                    })
+                    ->get(['usuario', 'rut', 'uuid', 'redmine_id', 'nombre', 'apellido', 'email']);
+
+                foreach ($rows as $row) {
+                    $identity = [
+                        'first_name' => trim((string)($row->nombre ?? '')),
+                        'last_name' => trim((string)($row->apellido ?? '')),
+                        'email' => trim((string)($row->email ?? '')),
+                    ];
+                    $identity['display_name'] = trim($identity['first_name'].' '.$identity['last_name']);
+                    foreach (['usuario', 'rut', 'uuid', 'redmine_id'] as $field) {
+                        foreach ($identityKeys((string)($row->{$field} ?? '')) as $key) {
+                            $centralByKey[$key] ??= $identity;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable) {
+            $centralByKey = [];
+        }
+
+        $historyById = [];
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('redmine_mantencion_nextcloud_historial_usuarios')) {
+                $historyRows = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_usuarios')
+                    ->whereIn('userid', $ids)
+                    ->orderByDesc('id')
+                    ->get(['userid', 'display_name', 'email']);
+                foreach ($historyRows as $row) {
+                    $id = trim((string)($row->userid ?? ''));
+                    $displayName = trim((string)($row->display_name ?? ''));
+                    if ($id !== '') {
+                        $historyById[$id] ??= [
+                            'display_name' => $displayName,
+                            'email' => trim((string)($row->email ?? '')),
+                        ];
+                    }
+                }
+            }
+        } catch (Throwable) {
+            $historyById = [];
+        }
+
+        return array_map(static function (array $user) use ($identityKeys, $centralByKey, $historyById): array {
+            $id = trim((string)($user['id'] ?? ''));
+            $identity = null;
+            foreach ($identityKeys($id) as $key) {
+                if (isset($centralByKey[$key])) {
+                    $identity = $centralByKey[$key];
+                    break;
+                }
+            }
+            $firstName = trim((string)($identity['first_name'] ?? $user['first_name'] ?? ''));
+            $lastName = trim((string)($identity['last_name'] ?? $user['last_name'] ?? ''));
+            $displayName = trim((string)($user['display_name'] ?? ''));
+            if ($displayName === '' || $displayName === $id) {
+                $displayName = trim((string)($identity['display_name'] ?? $historyById[$id]['display_name'] ?? ''));
+            }
+            $email = trim((string)($user['email'] ?? $identity['email'] ?? $historyById[$id]['email'] ?? ''));
+
+            return [
+                'id' => $id,
+                'display_name' => $displayName !== '' ? $displayName : $id,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => $email,
+                'quota_label' => trim((string)($user['quota_label'] ?? '')),
+            ];
+        }, $users);
+    }
+
+    private function nextcloud_quota_label(mixed $quota): string {
+        $value = is_array($quota) ? ($quota['quota'] ?? $quota['total'] ?? null) : $quota;
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        if (in_array($normalized, ['none', 'unlimited', '-3'], true)) {
+            return 'Ilimitada';
+        }
+        if ($normalized === 'default') {
+            return 'Predeterminada';
+        }
+        if ($normalized === '-2') {
+            return 'Sin información';
+        }
+        if ($normalized === '-1') {
+            return 'Calculando';
+        }
+        if (!is_numeric($value)) {
+            return trim((string)$value);
+        }
+
+        $bytes = max(0, (float)$value);
+        $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+        $unit = 0;
+        while ($bytes >= 1024 && $unit < count($units) - 1) {
+            $bytes /= 1024;
+            $unit++;
+        }
+        $precision = $unit === 0 || abs($bytes - round($bytes)) < 0.05 ? 0 : 1;
+
+        return number_format($bytes, $precision, ',', '.').' '.$units[$unit];
+    }
+
+    /**
+     * Genera una sugerencia con la misma regla usada al crear usuarios.
+     *
+     * @param array<string,mixed> $input
+     * @return array{ok:bool,password?:string,message?:string}
+     */
+    public function nextcloud_password_suggestion(array $input): array {
+        $userid = $this->nextcloud_limited_text($input['userid'] ?? '', 255);
+        $displayName = $this->nextcloud_limited_text($input['display_name'] ?? '', 255);
+        if ($userid === '') {
+            return ['ok' => false, 'message' => 'No se pudo identificar al usuario de Nextcloud.'];
+        }
+
+        return [
+            'ok' => true,
+            'password' => $this->nextcloud_generate_password($displayName !== '' ? $displayName : $userid, $userid),
         ];
     }
 
