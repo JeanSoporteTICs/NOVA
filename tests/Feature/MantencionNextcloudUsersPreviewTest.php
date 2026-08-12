@@ -202,6 +202,17 @@ final class MantencionNextcloudUsersPreviewTest extends TestCase
         self::assertStringContainsString("'timeout' => \$errno === CURLE_OPERATION_TIMEDOUT", $client);
     }
 
+    public function test_webdav_directory_listing_allows_nextcloud_authentication_delay(): void
+    {
+        $client = file_get_contents(base_path('RedmineMantencion/ExternalClients/NextcloudWebdavClient.php'));
+
+        self::assertIsString($client);
+        self::assertStringContainsString('DIRECTORY_CONNECT_TIMEOUT_SECONDS = 8', $client);
+        self::assertStringContainsString('DIRECTORY_TIMEOUT_SECONDS = 40', $client);
+        self::assertStringContainsString('CURLOPT_TIMEOUT => self::DIRECTORY_TIMEOUT_SECONDS', $client);
+        self::assertStringNotContainsString('CURLOPT_TIMEOUT => 5', $client);
+    }
+
     public function test_requester_form_does_not_duplicate_or_prefill_the_logged_user(): void
     {
         $url = '/redmine-mantencion/app/integraciones-nextcloud-usuarios';

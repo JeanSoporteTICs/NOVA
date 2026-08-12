@@ -1307,12 +1307,95 @@ button.nova-metric:hover {
 
 .nova-integration-card {
   width: min(460px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
   padding: 28px 24px;
   border-radius: 16px;
   background: #fff;
   border: 1px solid rgba(215, 226, 239, 0.92);
   box-shadow: 0 32px 80px rgba(15, 23, 42, 0.28);
   text-align: center;
+}
+
+.nova-integration-provider-media {
+  display: block;
+  width: min(220px, 70vw);
+  max-height: 150px;
+  margin: 0 auto 16px;
+  object-fit: contain;
+}
+
+.nova-integration-provider-media[hidden] {
+  display: none;
+}
+
+.nova-integration-copy {
+  min-width: 0;
+}
+
+.nova-integration-overlay.has-provider-media .nova-integration-card,
+.nova-integration-card.is-provider-layout {
+  width: min(520px, 100%);
+  padding: 28px 24px 24px;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-areas:
+    "media media"
+    "icon copy"
+    "bar bar";
+  column-gap: 14px;
+  align-items: center;
+}
+
+.nova-integration-overlay.has-provider-media .nova-integration-provider-media,
+.nova-integration-card.is-provider-layout .nova-integration-provider-media {
+  grid-area: media;
+  width: min(150px, 48vw);
+  height: 112px;
+  margin: 0 auto 16px;
+}
+
+.nova-integration-overlay.has-provider-media .nova-integration-icon,
+.nova-integration-card.is-provider-layout .nova-integration-icon {
+  grid-area: icon;
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  border-radius: 14px;
+  font-size: 1.25rem;
+}
+
+.nova-integration-overlay.has-provider-media .nova-integration-copy,
+.nova-integration-card.is-provider-layout .nova-integration-copy {
+  grid-area: copy;
+}
+
+.nova-integration-overlay.has-provider-media .nova-integration-card strong,
+.nova-integration-overlay.has-provider-media .nova-integration-card span,
+.nova-integration-card.is-provider-layout strong,
+.nova-integration-card.is-provider-layout span {
+  text-align: left;
+}
+
+.nova-integration-overlay.has-provider-media .nova-integration-bar,
+.nova-integration-card.is-provider-layout .nova-integration-bar {
+  grid-area: bar;
+  width: 100%;
+  margin-top: 16px;
+}
+
+@media (max-width: 575.98px) {
+  .nova-integration-overlay.has-provider-media .nova-integration-card,
+  .nova-integration-card.is-provider-layout {
+    padding: 22px 20px;
+  }
+
+  .nova-integration-overlay.has-provider-media .nova-integration-provider-media,
+  .nova-integration-card.is-provider-layout .nova-integration-provider-media {
+    height: 92px;
+    margin-bottom: 12px;
+  }
 }
 
 .nova-integration-icon {
@@ -1326,6 +1409,12 @@ button.nova-metric:hover {
   color: #fff;
   font-size: 2rem;
   box-shadow: 0 18px 38px rgba(37, 99, 235, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-integration-overlay.has-provider-media .nova-integration-provider-media {
+    display: none;
+  }
 }
 
 .nova-integration-nextcloud {
