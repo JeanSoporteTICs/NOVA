@@ -238,14 +238,29 @@ class HistoricoController extends Controller
             ))));
             $ids = array_slice($ids, 0, 100);
             $statuses = [];
+            $changedIds = [];
+            $reportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
             foreach ($ids as $id) {
                 if ($id === '') {
                     continue;
                 }
                 $statuses[$id] = $this->historico->fetchRedmineStatus($redminePlatformUrl, $id, $redmineToken);
+                $remoteStatus = $statuses[$id];
+                $remoteStatusId = (int) ($remoteStatus['id'] ?? 0);
+                $remoteStatusName = trim((string) ($remoteStatus['name'] ?? ''));
+                if (($remoteStatus['available'] ?? false) && $remoteStatusId > 0 && $remoteStatusName !== '') {
+                    $changedRows = $reportRepo?->updateRedmineStatus($id, $remoteStatusId, $remoteStatusName) ?? 0;
+                    if ($changedRows > 0) {
+                        $changedIds[] = $id;
+                    }
+                }
             }
 
-            return response()->json(['ok' => true, 'statuses' => $statuses]);
+            return response()->json([
+                'ok' => true,
+                'statuses' => $statuses,
+                'changed_ids' => array_values(array_unique($changedIds)),
+            ]);
         }
 
         $items = [];

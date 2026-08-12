@@ -529,6 +529,8 @@
 
       setLoading(false);
 
+      const activeRedmineStatusFilter = <?= json_encode($f_estado_redmine, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
       const initializeHistoricoTable = () => {
       const statusBadges = Array.from(document.querySelectorAll('.js-redmine-status[data-redmine-id]'));
       const syncPanel = document.getElementById('redmine-sync-panel');
@@ -646,12 +648,11 @@
           ? 'historico-redmine-status--unknown'
           : (closed ? 'historico-redmine-status--closed' : redmineStatusTone(statusName));
         const iconClass = !available ? 'bi-question-circle' : (closed ? 'bi-lock-fill' : 'bi-folder2-open');
-        const label = !available ? 'No disponible' : (closed ? 'Cerrado' : 'Abierto');
-        const detail = available && !closed && statusName ? `<small>${escapeHtml(statusName)}</small>` : '';
+        const label = !available ? 'No disponible' : (statusName || (closed ? 'Cerrada' : 'Abierto'));
 
         badge.className = `historico-redmine-status js-redmine-status ${cssClass}`;
         badge.title = available ? `Redmine: ${statusName}` : message;
-        badge.innerHTML = `<i class="bi ${iconClass}"></i><span>${escapeHtml(label)}</span>${detail}`;
+        badge.innerHTML = `<i class="bi ${iconClass}"></i><span>${escapeHtml(label)}</span>`;
 
         const redmineId = badge.getAttribute('data-redmine-id') || '';
         if (redmineId) {
@@ -680,6 +681,7 @@
         }
 
         let done = 0;
+        let tableNeedsRefresh = false;
         if (syncPanel) syncPanel.classList.remove('d-none');
         if (syncCount) syncCount.textContent = `0/${ids.length}`;
         if (syncBar) syncBar.style.width = '0%';
@@ -698,6 +700,9 @@
             }
             const payload = await response.json();
             const statuses = payload && payload.statuses ? payload.statuses : {};
+            if (Array.isArray(payload?.changed_ids) && payload.changed_ids.length > 0) {
+              tableNeedsRefresh = true;
+            }
             chunk.forEach(id => {
               document.querySelectorAll(`.js-redmine-status[data-redmine-id="${CSS.escape(id)}"]`).forEach(badge => {
                 setBadgeStatus(badge, statuses[id] || { available: false, message: 'Sin respuesta desde Redmine' });
@@ -720,6 +725,9 @@
         if (syncPanel) {
           syncPanel.classList.add('historico-redmine-sync--done');
           setTimeout(() => syncPanel.classList.add('d-none'), 1200);
+        }
+        if (activeRedmineStatusFilter && tableNeedsRefresh) {
+          await refreshHistoricoTable(redmineStatusEndpoint);
         }
       };
 

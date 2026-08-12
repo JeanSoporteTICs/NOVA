@@ -12,12 +12,12 @@ final class MantencionReportRepository
     private const MODULE_KEY = 'redmine-mantencion';
 
     private ?int $moduleId = null;
+
     private bool $moduleIdResolved = false;
+
     private ?bool $tableReadyCache = null;
 
-    public function __construct(private readonly MantencionCatalogRepository $catalogs)
-    {
-    }
+    public function __construct(private readonly MantencionCatalogRepository $catalogs) {}
 
     public function tableReady(): bool
     {
@@ -106,7 +106,7 @@ final class MantencionReportRepository
     /**
      * Physically delete report rows by their fuente_id values.
      *
-     * @param array<int,string> $fuenteIds
+     * @param  array<int,string>  $fuenteIds
      */
     public function deleteByFuenteIds(array $fuenteIds): void
     {
@@ -149,6 +149,13 @@ final class MantencionReportRepository
             return DB::table('redmine_mantencion_reportes')
                 ->where('modulo_id', $moduleId)
                 ->where('numero_ticket_redmine', (int) $ticketId)
+                ->where(function ($query) use ($statusId, $statusName): void {
+                    $query
+                        ->whereNull('estado_id')
+                        ->orWhere('estado_id', '!=', (string) $statusId)
+                        ->orWhereNull('estado_redmine')
+                        ->orWhere('estado_redmine', '!=', trim($statusName));
+                })
                 ->update([
                     'estado_id' => (string) $statusId,
                     'estado_redmine' => trim($statusName),
@@ -184,8 +191,8 @@ final class MantencionReportRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $messages
-     * @return array<string,int|null>  trimmed categoria name (same casing as payload()) => categoria_id
+     * @param  array<int,array<string,mixed>>  $messages
+     * @return array<string,int|null> trimmed categoria name (same casing as payload()) => categoria_id
      */
     private function prefetchCategoriaIds(array $messages): array
     {
@@ -221,7 +228,7 @@ final class MantencionReportRepository
     }
 
     /**
-     * @param array<int,string> $statuses
+     * @param  array<int,string>  $statuses
      * @return array<int,array<string,mixed>>
      */
     private function messagesByStatuses(array $statuses): array
@@ -254,10 +261,10 @@ final class MantencionReportRepository
     }
 
     /**
-     * @param array<string,mixed> $message
-     * @param array<string,int|null>|null $categoriaIds  optional prefetched name=>id map
-     *        (see syncMessages()/prefetchCategoriaIds()); when omitted, the categoria
-     *        is resolved with its own query as before — safe for standalone calls.
+     * @param  array<string,mixed>  $message
+     * @param  array<string,int|null>|null  $categoriaIds  optional prefetched name=>id map
+     *                                                     (see syncMessages()/prefetchCategoriaIds()); when omitted, the categoria
+     *                                                     is resolved with its own query as before — safe for standalone calls.
      */
     public function upsertMessage(array $message, array $config = [], ?array $categoriaIds = null): bool
     {
@@ -298,11 +305,13 @@ final class MantencionReportRepository
                 // was reconciled through the stable CORE request ID.
                 $values['fuente_id'] = trim((string) ($existing->fuente_id ?? '')) ?: $fuenteId;
                 DB::table('redmine_mantencion_reportes')->where('id', $existing->id)->update($values);
+
                 return true;
             }
 
             $values['creado_at'] = now();
             DB::table('redmine_mantencion_reportes')->insert($values);
+
             return true;
         } catch (\Throwable $exception) {
             Log::error('No se pudo persistir un reporte de Mantencion.', [
@@ -415,7 +424,7 @@ final class MantencionReportRepository
             'fecha_inicio' => $fechaInicio,
             'fecha_fin' => $fechaFin,
             'hora' => $hora,
-            'core_fecha_creacion' => trim($fecha . ' ' . $hora),
+            'core_fecha_creacion' => trim($fecha.' '.$hora),
             'tiempo_estimado' => $row->tiempo_estimado !== null ? (string) $row->tiempo_estimado : '',
             'correo' => trim((string) ($row->correo ?? '')),
             'core_email' => trim((string) ($row->correo ?? '')),
@@ -514,6 +523,7 @@ final class MantencionReportRepository
 
         if (($message['fuente'] ?? '') === 'core') {
             $value = trim((string) ($message['core_solicitud_id'] ?? $message['fuente_id'] ?? ''));
+
             return $value !== '' ? $value : null;
         }
 
@@ -561,12 +571,14 @@ final class MantencionReportRepository
     private function decimalOrNull(string $value): ?float
     {
         $value = str_replace(',', '.', trim($value));
+
         return is_numeric($value) ? (float) $value : null;
     }
 
     private function integerOrNull(string $value): ?int
     {
         $value = trim($value);
+
         return ctype_digit($value) ? (int) $value : null;
     }
 
