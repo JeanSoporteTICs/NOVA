@@ -371,7 +371,10 @@ class HistoricoController extends Controller
         if (! $scopeBloqueado && $f_usuario !== '') {
             $historicoFilterChips[] = ['icon' => 'bi-person', 'label' => 'Asignado '.$f_usuario, 'remove' => 'usuario'];
         }
-        $historicoBaseUrl = route('redmine.mantencion.section', ['section' => 'historico']);
+        $currentRequestUri = preg_replace('/\?.*$/', '', (string) request()->getRequestUri());
+        $historicoBaseUrl = is_string($currentRequestUri) && $currentRequestUri !== ''
+            ? $currentRequestUri
+            : route('redmine.mantencion.section', ['section' => 'historico']);
         $historicoStateQuery = array_filter([
             'desde' => $f_desde,
             'hasta' => $f_hasta,
