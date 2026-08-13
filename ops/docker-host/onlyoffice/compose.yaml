@@ -4,6 +4,13 @@ services:
     container_name: OnlyOffice
     restart: unless-stopped
     env_file: /home/odin/docker/compose/onlyoffice/.env
+    environment:
+      # Document Server descarga el archivo desde una URL temporal de NOVA.
+      # NOVA vive en la red privada 10.x / nova_backend, por lo que esta
+      # excepción es necesaria para abrir documentos internos.
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+      # Mantener bloqueados los endpoints de metadatos del host/cloud.
+      ALLOW_META_IP_ADDRESS: "false"
     volumes:
       - onlyoffice_var_lib_onlyoffice:/var/lib/onlyoffice
       - onlyoffice_var_lib_postgresql:/var/lib/postgresql

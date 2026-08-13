@@ -45,6 +45,9 @@ La instalación definitiva usa redes separadas y un único punto de entrada:
 - MariaDB, phpMyAdmin y OnlyOffice no publican puertos al host.
 - OnlyOffice se consume a través de Apache en `/onlyoffice/`; su URL NOVA es
   `http://<servidor>/onlyoffice`.
+- OnlyOffice usa `ALLOW_PRIVATE_IP_ADDRESS=true` para poder descargar desde las
+  URL temporales privadas de NOVA; `ALLOW_META_IP_ADDRESS` se mantiene en
+  `false`. Al modificar estos valores se debe recrear el contenedor.
 
 Las copias auditables de los Compose del host viven en `ops/docker-host/`. Las
 ubicaciones operativas actuales son `/opt/docker/apache-web` y

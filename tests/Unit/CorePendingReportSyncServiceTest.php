@@ -66,6 +66,32 @@ class CorePendingReportSyncServiceTest extends TestCase
         $this->assertFalse($merge['changed']);
     }
 
+    public function test_core_refresh_preserves_local_hours_extra_values(): void
+    {
+        $service = app(CorePendingReportSyncService::class);
+        $current = [
+            'fuente' => 'core',
+            'fuente_id' => 'core-id:100',
+            'id_core' => '100',
+            'estado' => 'pendiente',
+            'core_estado' => 'En Revision',
+            'hora_extra' => '1',
+            'tiempo_estimado' => '2.5',
+        ];
+        $incoming = array_merge($current, [
+            'core_estado' => 'Gestionada',
+            'hora_extra' => '0',
+            'tiempo_estimado' => '',
+        ]);
+
+        $merge = $service->mergePending($current, $incoming);
+
+        $this->assertTrue($merge['eligible']);
+        $this->assertTrue($merge['changed']);
+        $this->assertSame('1', $merge['message']['hora_extra']);
+        $this->assertSame('2.5', $merge['message']['tiempo_estimado']);
+    }
+
     public function test_processed_or_error_reports_are_never_refreshed_from_core(): void
     {
         $service = app(CorePendingReportSyncService::class);
@@ -102,6 +128,8 @@ class CorePendingReportSyncServiceTest extends TestCase
             'asunto' => 'Solicitud CORE',
             'descripcion' => 'Estado CORE: En Revisión',
             'fecha' => '25-07-2026',
+            'hora_extra' => '1',
+            'tiempo_estimado' => '2.5',
         ]]);
 
         $current = collect($repo->activeMessages())
@@ -117,6 +145,8 @@ class CorePendingReportSyncServiceTest extends TestCase
             'asunto' => 'Solicitud CORE',
             'descripcion' => 'Estado CORE: Gestionada',
             'fecha' => '25-07-2026',
+            'hora_extra' => '0',
+            'tiempo_estimado' => '',
         ];
         $merge = app(CorePendingReportSyncService::class)->mergePending($current, $incoming);
         $this->assertTrue($merge['changed']);
@@ -130,5 +160,7 @@ class CorePendingReportSyncServiceTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertSame($oldSource, (string) $rows->first()->fuente_id);
         $this->assertSame('Gestionada', (string) $rows->first()->estado_redmine);
+        $this->assertSame(1, (int) $rows->first()->hora_extra);
+        $this->assertSame(2.5, (float) $rows->first()->tiempo_estimado);
     }
 }

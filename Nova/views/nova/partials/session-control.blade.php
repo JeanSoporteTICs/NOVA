@@ -22,7 +22,7 @@
                     <div class="form-text text-danger fw-semibold" data-nova-session-message></div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-outline-secondary" type="button" data-nova-session-logout>Cerrar sesion</button>
+                    <button class="btn btn-outline-secondary" type="button" data-nova-session-logout>Cancelar</button>
                     <button class="btn btn-primary" type="button" data-nova-session-extend>Continuar sesion</button>
                 </div>
             </div>
@@ -54,8 +54,6 @@
             const logoutButton = sessionModalElement.querySelector('[data-nova-session-logout]');
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const sessionIdentity = @json((string) session('nova_user.id', ''));
-            const loginUrl = @json(route('login'));
-
             const fallbackCloseModal = () => {
                 sessionModalElement.classList.remove('show');
                 sessionModalElement.setAttribute('aria-hidden', 'true');
@@ -124,10 +122,6 @@
             };
 
             logoutButton?.addEventListener('click', () => {
-                if (sessionExpired) {
-                    window.location.assign(loginUrl);
-                    return;
-                }
                 const logoutForm = document.createElement('form');
                 logoutForm.method = 'POST';
                 logoutForm.action = @json(route('logout'));
@@ -181,6 +175,12 @@
                 if (!sessionModalElement.classList.contains('show')) return;
                 event.preventDefault();
                 if (extendButton && !extendButton.disabled) extendButton.click();
+            });
+
+            sessionModalElement.addEventListener('hide.bs.modal', (event) => {
+                if (!modalShown) return;
+                event.preventDefault();
+                window.setTimeout(() => passwordInput?.focus(), 0);
             });
 
             document.addEventListener('visibilitychange', restartSessionTimer);

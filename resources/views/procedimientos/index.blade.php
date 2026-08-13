@@ -12,7 +12,7 @@
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
     <script defer src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
 </head>
-<body class="nova-page bg-light">
+<body class="nova-page bg-light procedimientos-page">
     <nav class="navbar rm-navbar">
         <div class="container-fluid px-3 px-lg-4">
             <a class="navbar-brand text-white fw-bold d-flex align-items-center gap-3" href="{{ route('procedimientos.index') }}">

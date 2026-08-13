@@ -13,7 +13,6 @@ $emachBaseUrl = function_exists('url') ? rtrim(url('/emach'), '/') : '/emach';
 $homeUrl = function_exists('route') ? route('home') : '/NOVA/public/index.php';
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $sessionExtendUrl = function_exists('route') ? route('session.extend') : '/NOVA/public/session/extend';
-$loginUrl = function_exists('route') ? route('login') : '/NOVA/public/login';
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $currentUser = $_SESSION['user'] ?? [];
 if (function_exists('request')) {
@@ -99,15 +98,13 @@ window.addEventListener('load', () => {
   let expiresAt = Date.now() + (remaining * 1000);
   const logoutUrl = '<?= $h($logoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($sessionExtendUrl) ?>';
-  const loginUrl = '<?= $h($loginUrl) ?>';
   const sessionIdentity = '<?= $h($sessionIdentity) ?>';
   const csrfToken = '<?= $h($csrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const modalEl = document.getElementById('sessionModal');
-  const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl) : null;
+  const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false}) : null;
   const modalTitleEl = modalEl ? modalEl.querySelector('.modal-title') : null;
   const modalBodyTextEl = modalEl ? modalEl.querySelector('.modal-body > p') : null;
   let modalShown = false;
-  let sessionExpired = false;
   let tickHandle = null;
 
   function setTimerAppearance(secondsLeft) {
@@ -122,7 +119,6 @@ window.addEventListener('load', () => {
   }
 
   function setModalState(expired) {
-    sessionExpired = expired;
     if (modalTitleEl) modalTitleEl.textContent = expired ? 'Sesion expirada' : 'Sesion por expirar';
     if (modalBodyTextEl) {
       modalBodyTextEl.textContent = expired
@@ -134,7 +130,7 @@ window.addEventListener('load', () => {
       extendBtn.disabled = false;
       extendBtn.textContent = 'Continuar sesion';
     }
-    if (closeBtn) closeBtn.textContent = expired ? 'Cancelar' : 'Cerrar sesion';
+    if (closeBtn) closeBtn.textContent = 'Cancelar';
   }
 
   function getRemainingSeconds() {
@@ -189,10 +185,6 @@ window.addEventListener('load', () => {
   }
 
   function submitLogout() {
-    if (sessionExpired) {
-      window.location.assign(loginUrl);
-      return;
-    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = logoutUrl;
@@ -259,17 +251,21 @@ window.addEventListener('load', () => {
       event.preventDefault();
       if (extendBtn && !extendBtn.disabled) extendBtn.click();
     });
+    modalEl.addEventListener('hide.bs.modal', (event) => {
+      if (!modalShown) return;
+      event.preventDefault();
+      setTimeout(() => extendPwd?.focus(), 0);
+    });
   }
   setModalState(false);
 });
 </script>
 
-<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Sesion por expirar</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="modal-body">
         <p>Tu sesion expira pronto. Ingresa tu contrasena para continuar.</p>
@@ -280,7 +276,7 @@ window.addEventListener('load', () => {
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" id="btn-logout-session">Cerrar sesion</button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-logout-session">Cancelar</button>
         <button type="button" class="btn btn-primary" id="btn-extend-session">Continuar sesion</button>
       </div>
     </div>

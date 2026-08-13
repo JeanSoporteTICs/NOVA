@@ -10,7 +10,6 @@ $lastActivity = function_exists('session')
 $remaining = max(0, $sessionTimeout - (time() - $lastActivity));
 $logoutUrl = function_exists('route') ? route('logout') : '/NOVA/public/logout';
 $sessionExtendUrl = function_exists('route') ? route('session.extend') : '/NOVA/public/session/extend';
-$loginUrl = function_exists('route') ? route('login') : '/NOVA/public/login';
 $csrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $sessionIdentity = function_exists('session') ? (string) session('nova_user.id', '') : (string) ($_SESSION['user']['id'] ?? '');
 
@@ -38,7 +37,6 @@ window.addEventListener('load', () => {
   const modal = window.bootstrap ? new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false}) : null;
   const logoutUrl = '<?= $h($logoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($sessionExtendUrl) ?>';
-  const loginUrl = '<?= $h($loginUrl) ?>';
   const sessionIdentity = '<?= $h($sessionIdentity) ?>';
   const csrfToken = '<?= $h($csrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
@@ -63,7 +61,7 @@ window.addEventListener('load', () => {
       extendBtn.disabled = false;
       extendBtn.textContent = 'Continuar sesion';
     }
-    if (closeBtn) closeBtn.textContent = 'Cerrar sesion';
+    if (closeBtn) closeBtn.textContent = 'Cancelar';
   }
 
   function secondsLeft() {
@@ -100,10 +98,6 @@ window.addEventListener('load', () => {
   }
 
   function submitLogout() {
-    if (secondsLeft() <= 0) {
-      window.location.assign(loginUrl);
-      return;
-    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = logoutUrl;
@@ -159,13 +153,19 @@ window.addEventListener('load', () => {
     if (extendBtn && !extendBtn.disabled) extendBtn.click();
   });
 
+  modalEl.addEventListener('hide.bs.modal', (event) => {
+    if (!modalShown) return;
+    event.preventDefault();
+    setTimeout(() => extendPwd?.focus(), 0);
+  });
+
   document.addEventListener('visibilitychange', restart);
   window.addEventListener('focus', restart);
   restart();
 });
 </script>
 
-<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
@@ -180,7 +180,7 @@ window.addEventListener('load', () => {
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" id="btn-logout-session">Cerrar sesion</button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-logout-session">Cancelar</button>
         <button type="button" class="btn btn-primary" id="btn-extend-session">Continuar sesion</button>
       </div>
     </div>

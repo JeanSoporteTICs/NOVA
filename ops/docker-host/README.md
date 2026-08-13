@@ -10,6 +10,12 @@
 OnlyOffice se publica exclusivamente detrás de Apache en `/onlyoffice/`.
 MariaDB y phpMyAdmin no publican puertos al host.
 
+El contenedor de OnlyOffice permite direcciones IP privadas porque Document
+Server debe descargar los archivos desde las URL temporales de NOVA, que se
+sirven dentro de `10.x`/`nova_backend`. Los endpoints de metadatos permanecen
+bloqueados. Después de cambiar esta configuración hay que recrear el servicio
+`onlyoffice` para que su script de inicio actualice `local.json`.
+
 Apache acepta `/nova` y `/NOVA`; la variante minúscula redirige a `/NOVA`
 para mantener una sola URL canónica y una única sesión de aplicación.
 
