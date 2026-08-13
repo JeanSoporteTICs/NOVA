@@ -427,6 +427,30 @@ function nc_browser_handle(): void
                 'Subir archivo | path ' . $remotePath . ' | bytes ' . strlen($binary) . ' | mime ' . $mime
             );
 
+        case 'create_office':
+            $dirPath = nextcloud_path_safe(trim((string) ($_POST['path'] ?? '/')));
+            $type = strtolower(trim((string) ($_POST['document_type'] ?? 'docx')));
+            $rawTitle = trim((string) ($_POST['title'] ?? ''));
+            $title = $rawTitle === '' ? '' : nc_browser_safe_name($rawTitle);
+            $document = app(\App\Modulos\Procedimientos\Services\BlankOfficeDocumentFactory::class)->create($title, $type);
+            if ($document === null) {
+                nc_browser_json(['ok' => false, 'error' => 'Tipo de documento no válido.'], 422);
+            }
+
+            $remotePath = rtrim($dirPath, '/') . '/' . $document['name'];
+            $res = nextcloud_webdav_request($cfg, 'PUT', $remotePath, $document['binary'], [
+                'Content-Type: ' . $document['mime'],
+            ]);
+            nc_browser_json_after_write(
+                $res['ok']
+                    ? ['ok' => true, 'path' => $remotePath, 'name' => $document['name']]
+                    : ['ok' => false, 'error' => ($res['message'] ?? '') ?: 'No se pudo crear el documento.'],
+                $userId,
+                200,
+                'NEXTCLOUD_CREATE_OFFICE',
+                'Crear documento ' . strtoupper($type) . ' | path ' . $remotePath
+            );
+
         // ── Sharing ────────────────────────────────────────────────────────────
 
         case 'share_link':

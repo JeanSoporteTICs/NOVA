@@ -29,7 +29,7 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
 <!-- ══════════════════════════════════════════════════════════════════
      Nextcloud personal file-browser section
      ══════════════════════════════════════════════════════════════════ -->
-<section class="nc-browser-section card shadow-sm mb-4" id="nc-browser-section">
+<section class="nc-browser-section card shadow-sm mb-0" id="nc-browser-section">
   <div class="nc-browser-head">
     <span class="nc-browser-icon"><i class="bi bi-cloud-fill"></i></span>
     <div>
@@ -69,6 +69,9 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
         <?php if ($canEditProcedures): ?>
         <button type="button" class="btn-nova btn-nova-primary" id="nc-mkdir-btn">
           <i class="bi bi-folder-plus"></i> Nueva carpeta
+        </button>
+        <button type="button" class="btn-nova btn-nova-success" id="nc-create-office-btn">
+          <i class="bi bi-file-earmark-plus"></i> Crear archivo
         </button>
         <label class="btn-nova btn-nova-info mb-0" for="nc-upload-input" role="button">
           <i class="bi bi-upload"></i> Subir
@@ -199,6 +202,48 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
     </div>
   </div>
 
+  <!-- Create Office document -->
+  <div class="modal fade" id="ncCreateOfficeModal" tabindex="-1" aria-labelledby="ncCreateOfficeLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title" id="ncCreateOfficeLabel"><i class="bi bi-file-earmark-plus"></i> Crear archivo</h5>
+            <div class="text-muted small">Se guardará directamente en la carpeta actual de Nextcloud.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="ncCreateOfficeName" class="form-label">Nombre</label>
+            <input type="text" class="form-control" id="ncCreateOfficeName" maxlength="255" placeholder="Nombre del archivo" autocomplete="off">
+          </div>
+          <label class="form-label">Tipo de archivo</label>
+          <div class="row g-2">
+            <div class="col-12 col-sm-6">
+              <input class="btn-check" type="radio" name="ncCreateOfficeType" id="ncCreateDocx" value="docx" checked>
+              <label class="btn btn-outline-primary w-100 text-start p-3" for="ncCreateDocx">
+                <i class="bi bi-file-earmark-word me-2"></i> Word
+              </label>
+            </div>
+            <div class="col-12 col-sm-6">
+              <input class="btn-check" type="radio" name="ncCreateOfficeType" id="ncCreateXlsx" value="xlsx">
+              <label class="btn btn-outline-success w-100 text-start p-3" for="ncCreateXlsx">
+                <i class="bi bi-file-earmark-spreadsheet me-2"></i> Excel
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn-nova btn-nova-success" id="ncCreateOfficeConfirm">
+            <i class="bi bi-file-earmark-plus"></i> Crear
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Delete confirmation -->
   <div class="modal fade" id="ncDeleteModal" tabindex="-1" aria-labelledby="ncDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -287,6 +332,11 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
   const browser    = document.getElementById('nc-browser');
   if (!browser) return;
 
+  const busyOverlay = document.getElementById('nc-busy-overlay');
+  if (busyOverlay && busyOverlay.parentElement !== document.body) {
+    document.body.appendChild(busyOverlay);
+  }
+
   const AJAX       = browser.dataset.ajax;
   const EDITOR     = browser.dataset.editorUrl || '';
   const CSRF       = browser.dataset.csrf;
@@ -343,6 +393,7 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
       transfer: 'Moviendo o copiando...',
       delete: 'Eliminando en Nextcloud...',
       upload: 'Subiendo a Nextcloud...',
+      create_office: 'Creando archivo Office...',
       share_user: 'Compartiendo con usuario...',
     }[action] || 'Consultando Nextcloud...';
   }
@@ -783,6 +834,48 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
 
   document.getElementById('ncMkdirName')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('ncMkdirConfirm')?.click();
+  });
+
+  // Create Word or Excel file
+  document.getElementById('nc-create-office-btn')?.addEventListener('click', () => {
+    const input = document.getElementById('ncCreateOfficeName');
+    if (input) input.value = '';
+    const docx = document.getElementById('ncCreateDocx');
+    if (docx) docx.checked = true;
+    focusWhenShown('ncCreateOfficeModal', 'ncCreateOfficeName', false);
+    getModal('ncCreateOfficeModal')?.show();
+  });
+
+  document.getElementById('ncCreateOfficeConfirm')?.addEventListener('click', async () => {
+    const input = document.getElementById('ncCreateOfficeName');
+    const checkedType = document.querySelector('input[name="ncCreateOfficeType"]:checked');
+    const title = input ? input.value.trim() : '';
+    const type = checkedType ? checkedType.value : 'docx';
+    if (!title) {
+      input?.focus();
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('path', currentPath);
+    fd.append('title', title);
+    fd.append('document_type', type);
+    getModal('ncCreateOfficeModal')?.hide();
+    try {
+      const data = await apiFetch({ action: 'create_office' }, 'POST', fd);
+      if (data.ok) {
+        showStatus('Archivo "' + data.name + '" creado.');
+        await loadDirectory(currentPath, true);
+      } else {
+        showStatus(data.error || 'Error al crear el archivo.', 'error');
+      }
+    } catch {
+      showStatus('Error de red al crear el archivo.', 'error');
+    }
+  });
+
+  document.getElementById('ncCreateOfficeName')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('ncCreateOfficeConfirm')?.click();
   });
 
   // Rename

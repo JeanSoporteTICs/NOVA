@@ -19,7 +19,6 @@ $mantencionAppUrl = function_exists('url') ? rtrim(url('/redmine-mantencion/app'
 $novaHomeUrl = function_exists('route') ? route('home') : '/NOVA/public/index.php';
 $novaLogoutUrl = function_exists('route') ? route('logout') : $mantencionBaseUrl . '/logout.php';
 $novaSessionExtendUrl = function_exists('route') ? route('session.extend') : $mantencionBaseUrl . '/session_extend.php';
-$novaLoginUrl = function_exists('route') ? route('login') : $novaHomeUrl . '/login';
 $novaCsrfToken = function_exists('csrf_token') ? csrf_token() : '';
 $novaSessionIdentity = (string) session('nova_user.id', '');
 $navItems = [
@@ -584,15 +583,13 @@ window.addEventListener('load', () => {
   let expiresAt = Date.now() + (remaining * 1000);
   const logoutUrl = '<?= $h($novaLogoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($novaSessionExtendUrl) ?>';
-  const loginUrl = '<?= $h($novaLoginUrl) ?>';
   const sessionIdentity = '<?= $h($novaSessionIdentity) ?>';
   const csrfToken = '<?= $h($novaCsrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const modalEl = document.getElementById('sessionModal');
-  const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl) : null;
+  const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false}) : null;
   const modalTitleEl = modalEl ? modalEl.querySelector('.modal-title') : null;
   const modalBodyTextEl = modalEl ? modalEl.querySelector('.modal-body > p') : null;
   let modalShown = false;
-  let sessionExpired = false;
 
   let tickHandle = null;
   function setTimerAppearance(secondsLeft) {
@@ -607,7 +604,6 @@ window.addEventListener('load', () => {
   }
 
   function setModalState(expired) {
-    sessionExpired = expired;
     if (modalTitleEl) modalTitleEl.textContent = expired ? 'Sesión expirada' : 'Sesión por expirar';
     if (modalBodyTextEl) {
       modalBodyTextEl.textContent = expired
@@ -623,7 +619,7 @@ window.addEventListener('load', () => {
       extendBtn.textContent = 'Continuar sesión';
     }
     if (closeBtn) {
-      closeBtn.textContent = expired ? 'Cancelar' : 'Cerrar sesión';
+      closeBtn.textContent = 'Cancelar';
     }
   }
 
@@ -693,10 +689,6 @@ window.addEventListener('load', () => {
   };
 
   function submitLogout() {
-    if (sessionExpired) {
-      window.location.assign(loginUrl);
-      return;
-    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = logoutUrl;
@@ -762,6 +754,11 @@ window.addEventListener('load', () => {
       event.preventDefault();
       if (extendBtn && !extendBtn.disabled) extendBtn.click();
     });
+    modalEl.addEventListener('hide.bs.modal', (event) => {
+      if (!modalShown) return;
+      event.preventDefault();
+      setTimeout(() => extendPwd?.focus(), 0);
+    });
   }
   setModalState(false);
 });
@@ -810,12 +807,11 @@ window.addEventListener('load', () => {
 <?php endif; ?>
 
 <!-- Modal sesión -->
-<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Sesión por expirar</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <p>Tu sesión expira pronto. &iquest;Deseas continuar?</p>
@@ -826,7 +822,7 @@ window.addEventListener('load', () => {
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" id="btn-logout-session">Cerrar sesión</button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-logout-session">Cancelar</button>
         <button type="button" class="btn btn-primary" id="btn-extend-session">Continuar sesión</button>
       </div>
     </div>
