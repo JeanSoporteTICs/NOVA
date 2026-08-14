@@ -109,6 +109,34 @@ class MantencionDashboardService
         return $counts;
     }
 
+    public function dashboard_core_empty_import_message(array $result, string $assigned = ''): string {
+        $trace = is_array($result['trace'] ?? null) ? $result['trace'] : [];
+        $rowsRaw = (int)($trace['rows_raw'] ?? 0);
+        $rowsAfterDate = (int)($trace['rows_after_date_filter'] ?? 0);
+        $rowsAfterUser = (int)($trace['rows_after_user_match'] ?? 0);
+        $skippedExisting = (int)($trace['skipped_existing_db'] ?? 0);
+        $skippedUnchanged = (int)($trace['skipped_unchanged'] ?? 0);
+
+        if ($rowsRaw === 0) {
+            return 'CORE no devolvió solicitudes para consultar.';
+        }
+        if ($rowsAfterDate === 0) {
+            return 'CORE devolvió ' . $rowsRaw . ' solicitudes, pero ninguna corresponde al rango de fechas seleccionado. Para actualizar un reporte existente, el rango debe incluir su fecha de creación en CORE.';
+        }
+        if ($rowsAfterUser === 0) {
+            $userText = trim($assigned) !== '' ? ' "' . trim($assigned) . '"' : ' seleccionado';
+            return 'Se encontraron ' . $rowsAfterDate . ' solicitudes dentro del rango, pero ninguna corresponde al usuario' . $userText . '. Revisa el usuario asignado en CORE.';
+        }
+        if ($skippedExisting > 0) {
+            return 'No se importaron cambios: ' . $skippedExisting . ' solicitudes encontradas ya existen en NOVA o están archivadas.';
+        }
+        if ($skippedUnchanged > 0) {
+            return 'Los reportes encontrados ya están actualizados y no presentan cambios en CORE.';
+        }
+
+        return 'No se encontraron reportes nuevos ni cambios de estado para importar.';
+    }
+
     public function message_is_procesado(array $message): bool {
         return strtolower(trim((string) ($message['estado'] ?? ''))) === 'procesado';
     }
@@ -417,26 +445,7 @@ class MantencionDashboardService
                             $flashMsg .= ' | No se pudieron guardar las credenciales.';
                         }
                         if ((int)($result['imported'] ?? 0) === 0 && (int)($result['updated'] ?? 0) === 0 && is_array($result['trace'] ?? null)) {
-                            $trace = $result['trace'];
-                            $flashMsg .= ' | Diagnostico: rows_raw=' . (int)($trace['rows_raw'] ?? 0)
-                                . ', rows_after_date_filter=' . (int)($trace['rows_after_date_filter'] ?? 0)
-                                . ', rows_after_user_match=' . (int)($trace['rows_after_user_match'] ?? 0)
-                                . ', skipped_user_mismatch=' . (int)($trace['skipped_user_mismatch'] ?? 0)
-                                . ', skipped_existing_db=' . (int)($trace['skipped_existing_db'] ?? 0);
-                            if (is_array($result['trace_sample'] ?? null)) {
-                                $sample = $result['trace_sample'];
-                                $flashMsg .= ' | sample_core_id=' . (string)($sample['core_id'] ?? '')
-                                    . ', sample_assigned="' . (string)($sample['core_assigned'] ?? '')
-                                    . '", filter_assigned="' . (string)($sample['filter_assigned'] ?? '')
-                                    . '", sample_match=' . (string)($sample['match_result'] ?? 'none')
-                                    . ', nova_logged="' . (string)($sample['nova_logged_user'] ?? '')
-                                    . '", nova_core_user="' . (string)($sample['nova_core_user'] ?? '')
-                                    . '", nova_user_id="' . (string)($sample['nova_user_id'] ?? '')
-                                    . ', sample_reason=' . (string)($sample['skip_reason'] ?? '');
-                            }
-                            if (trim((string)($result['trace_assigned_summary'] ?? '')) !== '') {
-                                $flashMsg .= ' | assigned_summary=' . (string)$result['trace_assigned_summary'];
-                            }
+                            $flashMsg .= ' | ' . $this->dashboard_core_empty_import_message($result, $assigned);
                         }
                         dashboard_log_action(
                             'CORE_IMPORT',
