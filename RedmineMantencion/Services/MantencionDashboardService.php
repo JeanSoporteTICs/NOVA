@@ -109,32 +109,8 @@ class MantencionDashboardService
         return $counts;
     }
 
-    public function dashboard_core_empty_import_message(array $result, string $assigned = ''): string {
-        $trace = is_array($result['trace'] ?? null) ? $result['trace'] : [];
-        $rowsRaw = (int)($trace['rows_raw'] ?? 0);
-        $rowsAfterDate = (int)($trace['rows_after_date_filter'] ?? 0);
-        $rowsAfterUser = (int)($trace['rows_after_user_match'] ?? 0);
-        $skippedExisting = (int)($trace['skipped_existing_db'] ?? 0);
-        $skippedUnchanged = (int)($trace['skipped_unchanged'] ?? 0);
-
-        if ($rowsRaw === 0) {
-            return 'CORE no devolvió solicitudes para consultar.';
-        }
-        if ($rowsAfterDate === 0) {
-            return 'CORE devolvió ' . $rowsRaw . ' solicitudes, pero ninguna corresponde al rango de fechas seleccionado. Para actualizar un reporte existente, el rango debe incluir su fecha de creación en CORE.';
-        }
-        if ($rowsAfterUser === 0) {
-            $userText = trim($assigned) !== '' ? ' "' . trim($assigned) . '"' : ' seleccionado';
-            return 'Se encontraron ' . $rowsAfterDate . ' solicitudes dentro del rango, pero ninguna corresponde al usuario' . $userText . '. Revisa el usuario asignado en CORE.';
-        }
-        if ($skippedExisting > 0) {
-            return 'No se importaron cambios: ' . $skippedExisting . ' solicitudes encontradas ya existen en NOVA o están archivadas.';
-        }
-        if ($skippedUnchanged > 0) {
-            return 'Los reportes encontrados ya están actualizados y no presentan cambios en CORE.';
-        }
-
-        return 'No se encontraron reportes nuevos ni cambios de estado para importar.';
+    public function dashboard_core_empty_import_message(): string {
+        return 'No hay reportes nuevos ni reportes por actualizar.';
     }
 
     public function message_is_procesado(array $message): bool {
@@ -445,7 +421,7 @@ class MantencionDashboardService
                             $flashMsg .= ' | No se pudieron guardar las credenciales.';
                         }
                         if ((int)($result['imported'] ?? 0) === 0 && (int)($result['updated'] ?? 0) === 0 && is_array($result['trace'] ?? null)) {
-                            $flashMsg .= ' | ' . $this->dashboard_core_empty_import_message($result, $assigned);
+                            $flashMsg .= ' | ' . $this->dashboard_core_empty_import_message();
                         }
                         dashboard_log_action(
                             'CORE_IMPORT',
