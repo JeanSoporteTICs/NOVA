@@ -372,7 +372,7 @@
                         <div class="col-12 col-md-3"><label class="form-label">Tipo</label><input class="form-control" name="tipo"></div>
                         <div class="col-12 col-md-3">
                             <label class="form-label">Estado</label>
-                            <select class="form-select" name="estado">
+                            <select class="form-select tic-dashboard-select2" name="estado" data-tic-dashboard-select2 data-placeholder="Seleccionar estado">
                                 <option value="pendiente">pendiente</option>
                                 <option value="procesado">procesado</option>
                                 <option value="error">error</option>
@@ -416,7 +416,7 @@
 
                         <div class="col-12 col-md-3">
                             <label class="form-label">Hora extra</label>
-                            <select class="form-select" name="hora_extra" @disabled(!$canEditHoursExtra)>
+                            <select class="form-select tic-dashboard-select2" name="hora_extra" data-tic-dashboard-select2 data-placeholder="Seleccionar hora extra" @disabled(!$canEditHoursExtra)>
                                 <option value="NO">No</option>
                                 <option value="SI">Si</option>
                             </select>
@@ -691,7 +691,7 @@
             };
             form.elements.id.value = button.dataset.reportId || '';
             form.elements.tipo.value = button.dataset.reportTipo || '';
-            form.elements.estado.value = button.dataset.reportEstado || 'pendiente';
+            setDashboardSelectValue(form.elements.estado, button.dataset.reportEstado || 'pendiente');
             form.elements.asunto.value = button.dataset.reportAsunto || '';
             form.elements.prioridad.value = button.dataset.reportPrioridad || '';
             setDashboardSelectValue(
@@ -722,7 +722,10 @@
                     ? `Actual: ${button.dataset.reportAsignadoNombre}`
                     : (assigneeId !== '' ? 'Asignado por defecto al usuario conectado.' : 'No se pudo identificar un usuario activo para la asignacion predeterminada.');
             }
-            form.elements.hora_extra.value = (button.dataset.reportHoraExtra || 'NO').toUpperCase() === 'SI' ? 'SI' : 'NO';
+            setDashboardSelectValue(
+                form.elements.hora_extra,
+                (button.dataset.reportHoraExtra || 'NO').toUpperCase() === 'SI' ? 'SI' : 'NO'
+            );
             form.elements.fecha_inicio.value = toDateInput(button.dataset.reportFechaInicio);
             form.elements.fecha_fin.value = toDateInput(button.dataset.reportFechaFin);
             form.elements.tiempo_estimado.value = button.dataset.reportTiempoEstimado || '';

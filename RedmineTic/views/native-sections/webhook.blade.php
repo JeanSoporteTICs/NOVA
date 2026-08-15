@@ -78,7 +78,7 @@
                 </div>
                 <div class="col-md-6 rm-manual-horizontal-field">
                     <label class="form-label" for="manual-prioridad">Prioridad</label>
-                    <select class="form-select" id="manual-prioridad" name="prioridad">
+                    <select class="form-select tic-webhook-select2" id="manual-prioridad" name="prioridad" data-tic-webhook-select2 data-placeholder="Seleccionar prioridad">
                         <option value="NORMAL">NORMAL</option>
                         <option value="BAJA">BAJA</option>
                         <option value="ALTA">ALTA</option>
@@ -163,7 +163,7 @@
                         <div class="manual-extra-row">
                             <div class="rm-manual-horizontal-field">
                                 <label class="form-label" for="manual-hora-extra">Hora extra</label>
-                                <select class="form-select" id="manual-hora-extra" name="hora_extra">
+                                <select class="form-select tic-webhook-select2" id="manual-hora-extra" name="hora_extra" data-tic-webhook-select2 data-placeholder="Seleccionar hora extra">
                                     <option value="NO">No</option>
                                     <option value="SI">Sí</option>
                                 </select>

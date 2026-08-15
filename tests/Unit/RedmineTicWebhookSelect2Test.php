@@ -16,10 +16,12 @@ final class RedmineTicWebhookSelect2Test extends TestCase
         self::assertIsString($view);
         self::assertIsString($layout);
         self::assertIsString($styles);
-        self::assertSame(3, substr_count($view, '<select class="form-select tic-webhook-select2"'));
+        self::assertSame(5, substr_count($view, '<select class="form-select tic-webhook-select2"'));
+        self::assertStringContainsString('id="manual-prioridad" name="prioridad" data-tic-webhook-select2', $view);
         self::assertStringContainsString('id="manual-asignado" name="asignado_a"', $view);
         self::assertStringContainsString('id="manual-categoria" name="categoria"', $view);
         self::assertStringContainsString('id="manual-unidad-solicitante" name="unidad_solicitante"', $view);
+        self::assertStringContainsString('id="manual-hora-extra" name="hora_extra" data-tic-webhook-select2', $view);
         self::assertStringContainsString("dropdownCssClass: 'tic-select2-dropdown'", $view);
         self::assertStringContainsString("window.jQuery(assigneeSelect).trigger('change')", $view);
         self::assertStringContainsString("in_array(\$section, ['dashboard', 'webhook'], true)", $layout);

@@ -94,4 +94,12 @@ class MantencionDashboardPermissionTest extends TestCase
             'core_estado' => 'En Revisión',
         ]));
     }
+
+    public function test_core_empty_import_message_is_simple(): void
+    {
+        $this->assertSame(
+            'No hay reportes nuevos ni reportes por actualizar.',
+            self::$dashboardService->dashboard_core_empty_import_message(),
+        );
+    }
 }

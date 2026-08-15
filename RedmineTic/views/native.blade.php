@@ -200,6 +200,13 @@
             document.body.appendChild(modal);
         };
 
+        let modalBackdropPointerTarget = null;
+        document.addEventListener('pointerdown', (event) => {
+            modalBackdropPointerTarget = event.target instanceof Element && event.target.classList.contains('modal')
+                ? event.target
+                : null;
+        }, true);
+
         document.addEventListener('click', (event) => {
             const modalTrigger = event.target.closest('[data-bs-toggle="modal"][data-bs-target]');
             if (!modalTrigger) return;
@@ -414,7 +421,9 @@
             }
 
             const modal = event.target.classList?.contains('modal') ? event.target : null;
-            if (modal && modal.dataset.novaSessionModal !== '') window.appUi.closeModal(modal);
+            const startedOnBackdrop = modal !== null && modalBackdropPointerTarget === modal;
+            modalBackdropPointerTarget = null;
+            if (startedOnBackdrop && modal.dataset.novaSessionModal !== '') window.appUi.closeModal(modal);
         });
 
         document.addEventListener('keydown', (event) => {
