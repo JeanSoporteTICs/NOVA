@@ -706,7 +706,7 @@
                 form.elements.unidad_solicitante,
                 button.dataset.reportUnidadSolicitante || '',
                 button.dataset.reportUnidadSolicitante || '',
-                true
+                false
             );
             const reportAssigneeId = String(button.dataset.reportAsignado || '').trim();
             const assigneeId = reportAssigneeId || currentDashboardAssigneeId;

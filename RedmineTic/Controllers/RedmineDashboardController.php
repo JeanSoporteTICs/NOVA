@@ -138,7 +138,18 @@ class RedmineDashboardController extends Controller
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $config = $redmine->configuration();
 
+        $unitCatalogError = '';
+        if ($redmine->projectKey() === 'redmine_tic' && in_array($section, ['dashboard', 'webhook'], true)) {
+            $unitSync = $redmine->syncUnitsFromRedmine(is_array($user) ? (string) ($user['id'] ?? '') : '');
+            if (!$unitSync['ok']) {
+                $unitCatalogError = 'No fue posible actualizar las unidades desde Redmine: ' . $unitSync['error'];
+            }
+        }
+
         $sectionData = $redmine->nativeSectionData($section, $dashboardFilter, $request->query(), is_array($user) ? $user : []);
+        if ($unitCatalogError !== '') {
+            $sectionData['units'] = [];
+        }
         if ($section === 'actividad') {
             $sectionData['activityData'] = $redmine->activityData(
                 $request->query(),
@@ -156,6 +167,7 @@ class RedmineDashboardController extends Controller
             'dashboardFilter' => $dashboardFilter,
             'redmineMaintenance' => $redmine->dashboardSummary()['maintenance'],
             'redmineRetentionHours' => max(1, (int) ($config['retencion_horas'] ?? 24)),
+            'unitCatalogError' => $unitCatalogError,
             'allowedConfigPanels' => array_keys(array_filter(
                 self::CONFIG_PANEL_PERMISSIONS,
                 fn (string $permission): bool => $this->can($permissions, $permission)

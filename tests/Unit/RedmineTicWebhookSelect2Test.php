@@ -73,4 +73,24 @@ final class RedmineTicWebhookSelect2Test extends TestCase
             $view
         );
     }
+
+    public function test_dashboard_and_webhook_refresh_units_before_rendering_selectors(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $controller = file_get_contents($root.'/RedmineTic/Controllers/RedmineDashboardController.php');
+        $layout = file_get_contents($root.'/RedmineTic/views/native.blade.php');
+        $dashboard = file_get_contents($root.'/RedmineTic/views/native-sections/dashboard.blade.php');
+
+        self::assertIsString($controller);
+        self::assertIsString($layout);
+        self::assertIsString($dashboard);
+        self::assertStringContainsString("in_array(\$section, ['dashboard', 'webhook'], true)", $controller);
+        self::assertStringContainsString('$redmine->syncUnitsFromRedmine(', $controller);
+        self::assertStringContainsString("\$sectionData['units'] = [];", $controller);
+        self::assertStringContainsString('El selector permanecerá vacío para evitar utilizar unidades obsoletas.', $layout);
+        self::assertMatchesRegularExpression(
+            '/form\.elements\.unidad_solicitante,\s*button\.dataset\.reportUnidadSolicitante \|\| \'\',\s*button\.dataset\.reportUnidadSolicitante \|\| \'\',\s*false/s',
+            $dashboard
+        );
+    }
 }
