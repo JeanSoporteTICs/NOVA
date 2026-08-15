@@ -148,6 +148,19 @@ class RedmineIssueSenderServiceTest extends TestCase
         $this->assertSame('0', $field['value']);
     }
 
+    public function test_build_issue_payload_preserves_exact_redmine_unit_value(): void
+    {
+        $config = $this->baseConfig(['cf_unidad_solicitante' => 11]);
+        $payload = $this->service()->buildIssuePayload(
+            $this->baseReport(['unidad_solicitante' => 'UNI_CORE_Exacta']),
+            $config,
+            $this->noopCategoryResolver()
+        );
+
+        $field = collect($payload['custom_fields'])->firstWhere('id', 11);
+        $this->assertSame('UNI_CORE_Exacta', $field['value']);
+    }
+
     public function test_send_short_circuits_with_error_when_platform_url_is_not_configured(): void
     {
         $result = $this->service()->send($this->baseReport(), $this->baseConfig(['platform_url' => '']), 'fake-token', $this->noopCategoryResolver());

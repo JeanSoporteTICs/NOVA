@@ -154,6 +154,38 @@ class RedmineTicConfigCatalogTest extends TestCase
         $this->assertCount($before, $facade->units());
     }
 
+    public function test_redmine_possible_values_preserve_external_value_and_label(): void
+    {
+        $rows = $this->catalogRepo()->rowsFromRedminePossibleValues([
+            ['value' => 'UNI_CORE_01', 'label' => 'Unidad Clínica Norte'],
+            'ARCHIVO',
+            ['value' => '', 'label' => 'Inválida'],
+        ]);
+
+        $this->assertSame([
+            ['id' => 'UNI_CORE_01', 'nombre' => 'Unidad Clínica Norte'],
+            ['id' => 'ARCHIVO', 'nombre' => 'ARCHIVO'],
+        ], $rows);
+    }
+
+    public function test_active_external_value_matches_label_but_returns_exact_redmine_key(): void
+    {
+        $repo = $this->catalogRepo();
+        $repo->saveCatalogRowsToDatabase('unidad', [[
+            'id' => 'UNI_CORE_Exacta',
+            'nombre' => 'Unidad Clínica Ñuble',
+        ]], false);
+        $catalogId = $repo->idForValue('unidad', 'UNI_CORE_Exacta');
+
+        $this->assertSame('UNI_CORE_Exacta', $repo->activeExternalValue('unidad', 'unidad clinica nuble'));
+        $this->assertSame('UNI_CORE_Exacta', $repo->activeExternalValue('unidad', 'uni_core_exacta'));
+        $this->assertSame('UNI_CORE_Exacta', $repo->activeExternalValueById('unidad', $catalogId));
+
+        $repo->deleteUnit('UNI_CORE_Exacta');
+        $this->assertNull($repo->activeExternalValue('unidad', 'Unidad Clínica Ñuble'));
+        $this->assertNull($repo->activeExternalValueById('unidad', $catalogId));
+    }
+
     public function test_saving_configuration_twice_does_not_duplicate_rows(): void
     {
         $facade = $this->facade();

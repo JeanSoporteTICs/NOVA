@@ -56,6 +56,7 @@ class RedmineReportRepository
             'prioridad' => (string) ($row->prioridad ?? ''),
             'categoria' => $this->catalogRepo()->nameById($row->categoria_catalogo_id ?? null) ?: (string) ($row->categoria ?? ''),
             'unidad' => $this->catalogRepo()->nameById($row->unidad_catalogo_id ?? null) ?: (string) ($row->unidad ?? ''),
+            'unidad_solicitante_catalogo_id' => (int) ($row->unidad_solicitante_catalogo_id ?? 0),
             'unidad_solicitante' => $this->catalogRepo()->nameById($row->unidad_solicitante_catalogo_id ?? null) ?: (string) ($row->unidad_solicitante ?? ''),
             'solicitante' => (string) ($row->solicitante ?? ''),
             'asunto' => (string) ($row->asunto ?? ''),

@@ -714,7 +714,8 @@ final class RedmineDataRepository
     {
         $config = $this->configuration();
         $token = $this->userApiToken($userId);
-        $url = trim((string) ($config['unidades_url'] ?? '')) ?: RedmineUrlSupport::redmineCustomFieldUrl((string) ($config['platform_url'] ?? ''), '11');
+        $fieldId = trim((string) ($config['cf_unidad_solicitante'] ?? '')) ?: '11';
+        $url = trim((string) ($config['unidades_url'] ?? '')) ?: RedmineUrlSupport::redmineCustomFieldUrl((string) ($config['platform_url'] ?? ''), $fieldId);
         if ($url === '') {
             return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => 'Falta URL de unidades Redmine.'];
         }
@@ -736,7 +737,7 @@ final class RedmineDataRepository
             $values = $data['custom_field']['possible_values'];
         } elseif (is_array($data['custom_fields'] ?? null)) {
             foreach ($data['custom_fields'] as $field) {
-                if (is_array($field) && (string) ($field['id'] ?? '') === '11' && is_array($field['possible_values'] ?? null)) {
+                if (is_array($field) && (string) ($field['id'] ?? '') === $fieldId && is_array($field['possible_values'] ?? null)) {
                     $values = $field['possible_values'];
                     break;
                 }
@@ -746,14 +747,7 @@ final class RedmineDataRepository
             return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => 'La respuesta de Redmine no contiene possible_values.'];
         }
 
-        $rows = [];
-        foreach ($values as $value) {
-            $name = is_array($value) ? trim((string) ($value['value'] ?? '')) : trim((string) $value);
-            if ($name === '') {
-                continue;
-            }
-            $rows[] = ['id' => $name, 'nombre' => $name];
-        }
+        $rows = $this->catalogRepo()->rowsFromRedminePossibleValues($values);
 
         $changed = $this->catalogRowsChanged($this->units(), $rows);
         if ($changed) {
@@ -1751,8 +1745,64 @@ final class RedmineDataRepository
             return ['attempts' => $attempts, 'success' => 0, 'errors' => [$message], 'redmine_ids' => []];
         }
 
+        $unitFieldConfigured = trim((string) ($config['cf_unidad_solicitante'] ?? '')) !== '';
+        $reportsRequireUnitValidation = $unitFieldConfigured && collect($reports)->contains(
+            static fn (array $report): bool => trim((string) ($report['unidad_solicitante'] ?? $report['unidad'] ?? '')) !== ''
+        );
+        if ($reportsRequireUnitValidation) {
+            $sync = $this->syncUnitsFromRedmine($userId);
+            if (!$sync['ok']) {
+                $attempts = count($reports);
+                $message = 'No se pudo validar la lista vigente de unidades en Redmine: ' . $sync['error'];
+                $this->appendActivityLog('envio_redmine_error', [
+                    'user_id' => $userId ?? '',
+                    'http_code' => 0,
+                    'error' => $message,
+                ]);
+
+                return ['attempts' => $attempts, 'success' => 0, 'errors' => [$message], 'redmine_ids' => []];
+            }
+        }
+
         foreach ($reports as $report) {
             $attempts++;
+            if ($unitFieldConfigured) {
+                $selectedUnit = trim((string) ($report['unidad_solicitante'] ?? $report['unidad'] ?? ''));
+                if ($selectedUnit !== '') {
+                    $externalUnitValue = $this->catalogRepo()->activeExternalValueById(
+                        'unidad',
+                        $report['unidad_solicitante_catalogo_id'] ?? null
+                    ) ?? $this->catalogRepo()->activeExternalValue('unidad', $selectedUnit);
+                    if ($externalUnitValue === null) {
+                        $message = 'La unidad solicitante "' . $selectedUnit . '" ya no está disponible en Redmine. Edita el reporte y selecciona una unidad vigente.';
+                        $report['estado'] = 'error';
+                        $report['procesado_ts'] = now('America/Santiago')->toAtomString();
+                        $errors[] = 'No se pudo enviar ' . ($report['id'] ?? 'sin-id') . ': ' . $message;
+                        $this->appendSendLog([
+                            'ts' => now('America/Santiago')->toAtomString(),
+                            'message_id' => $report['id'] ?? '',
+                            'http_code' => 0,
+                            'error' => $message,
+                            'body' => '',
+                            'payload' => [],
+                        ]);
+                        $this->appendActivityLog('envio_redmine_error', [
+                            'message_id' => $report['id'] ?? '',
+                            'user_id' => $userId ?? '',
+                            'http_code' => 0,
+                            'error' => $message,
+                            'asunto' => $report['asunto'] ?? '',
+                            'categoria' => $report['categoria'] ?? '',
+                            'unidad' => $report['unidad'] ?? '',
+                        ]);
+                        $this->persistSentReport($moduleId, $report);
+                        continue;
+                    }
+
+                    $report['unidad_solicitante'] = $externalUnitValue;
+                }
+            }
+
             $result = $this->issueSender()->send($report, $config, $token, fn (string $category): int => $this->redmineCategoryId($category));
             $payload = $result['payload'];
             $this->appendSendLog([

@@ -14,6 +14,8 @@ class RedmineCatalogRepository
 {
     private ?array $idsByTypeValue = null;
     private ?array $namesById      = null;
+    private ?array $externalValuesByTypeValue = null;
+    private ?array $activeExternalValuesById = null;
     private ?bool $tableAvailableCache = null;
 
     public function __construct(
@@ -86,6 +88,59 @@ class RedmineCatalogRepository
         return (string) ($this->namesById[$id] ?? '');
     }
 
+    /**
+     * Returns the exact external key expected by Redmine for an active row.
+     */
+    public function activeExternalValue(string $type, mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '' || !$this->tableAvailable()) {
+            return null;
+        }
+
+        $this->loadLookup();
+        $key = $type . ':' . $this->normalizeLookupValue($value);
+        $externalValue = $this->externalValuesByTypeValue[$key] ?? null;
+
+        return is_string($externalValue) && $externalValue !== '' ? $externalValue : null;
+    }
+
+    public function activeExternalValueById(string $type, mixed $id): ?string
+    {
+        $id = (int) $id;
+        if ($id <= 0 || !$this->tableAvailable()) {
+            return null;
+        }
+
+        $this->loadLookup();
+        $externalValue = $this->activeExternalValuesById[$type . ':' . $id] ?? null;
+
+        return is_string($externalValue) && $externalValue !== '' ? $externalValue : null;
+    }
+
+    /**
+     * @param array<int,mixed> $values
+     * @return array<int,array{id:string,nombre:string}>
+     */
+    public function rowsFromRedminePossibleValues(array $values): array
+    {
+        $rows = [];
+        foreach ($values as $value) {
+            $externalValue = is_array($value)
+                ? trim((string) ($value['value'] ?? ''))
+                : trim((string) $value);
+            $label = is_array($value)
+                ? trim((string) ($value['label'] ?? $externalValue))
+                : $externalValue;
+            if ($externalValue === '' || $label === '') {
+                continue;
+            }
+            $rows[] = ['id' => $externalValue, 'nombre' => $label];
+        }
+
+        return $rows;
+    }
+
     // ---- DB operations (also used by syncCategoriesFromRedmine etc. in RDR) ----
 
     public function tableAvailable(): bool
@@ -141,6 +196,7 @@ class RedmineCatalogRepository
                 DB::table('catalogos_modulo')->updateOrInsert(
                     ['modulo_id' => $moduleId, 'tipo' => $type, 'clave_externa' => $key],
                     [
+                        'clave_externa' => $key,
                         'nombre'         => $name,
                         'predeterminado' => !empty($row['predeterminado']) ? 1 : 0,
                         'activo'         => !array_key_exists('activo', $row) || !empty($row['activo']) ? 1 : 0,
@@ -166,6 +222,8 @@ class RedmineCatalogRepository
         // Invalidate lookup cache
         $this->idsByTypeValue = null;
         $this->namesById      = null;
+        $this->externalValuesByTypeValue = null;
+        $this->activeExternalValuesById = null;
     }
 
     // ---- private helpers ----
@@ -226,21 +284,32 @@ class RedmineCatalogRepository
             return 0;
         }
 
-        return DB::table('catalogos_modulo')
+        $updated = DB::table('catalogos_modulo')
             ->where('modulo_id', $moduleId)
             ->where('tipo', $type)
             ->where('clave_externa', $id)
             ->update(['activo' => 0, 'actualizado_at' => now()]);
+
+        if ($updated > 0) {
+            $this->idsByTypeValue = null;
+            $this->namesById = null;
+            $this->externalValuesByTypeValue = null;
+            $this->activeExternalValuesById = null;
+        }
+
+        return $updated;
     }
 
     private function loadLookup(): void
     {
-        if ($this->idsByTypeValue !== null && $this->namesById !== null) {
+        if ($this->idsByTypeValue !== null && $this->namesById !== null && $this->externalValuesByTypeValue !== null && $this->activeExternalValuesById !== null) {
             return;
         }
 
         $this->idsByTypeValue = [];
         $this->namesById      = [];
+        $this->externalValuesByTypeValue = [];
+        $this->activeExternalValuesById = [];
         $moduleId             = $this->moduleId();
         if ($moduleId === null) {
             return;
@@ -260,6 +329,7 @@ class RedmineCatalogRepository
             $id   = (int) ($row->id ?? 0);
             $type = trim((string) ($row->tipo ?? ''));
             $name = trim((string) ($row->nombre ?? ''));
+            $externalValue = trim((string) ($row->clave_externa ?? ''));
             if ($id <= 0 || $type === '') {
                 continue;
             }
@@ -268,10 +338,12 @@ class RedmineCatalogRepository
             if (empty($row->activo)) {
                 continue;
             }
+            $this->activeExternalValuesById[$type . ':' . $id] = $externalValue;
             foreach ([$row->clave_externa ?? '', $name] as $candidate) {
                 $candidate = $this->normalizeLookupValue((string) $candidate);
                 if ($candidate !== '') {
                     $this->idsByTypeValue[$type . ':' . $candidate] = $id;
+                    $this->externalValuesByTypeValue[$type . ':' . $candidate] = $externalValue;
                 }
             }
         }
@@ -312,6 +384,8 @@ class RedmineCatalogRepository
 
         $this->idsByTypeValue = null;
         $this->namesById      = null;
+        $this->externalValuesByTypeValue = null;
+        $this->activeExternalValuesById = null;
         $this->loadLookup();
 
         return $id !== null ? (int) $id : null;
