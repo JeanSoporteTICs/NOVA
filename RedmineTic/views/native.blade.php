@@ -107,13 +107,6 @@
                     </div>
                 @endif
 
-                @if (!empty($unitCatalogError))
-                    <div class="nova-alert-card is-warning mb-3" role="alert">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <span>{{ $unitCatalogError }} El selector permanecerá vacío para evitar utilizar unidades obsoletas.</span>
-                    </div>
-                @endif
-
                 @if ($section === 'dashboard')
                     @include('redmine_tic::native-sections.dashboard')
                 @elseif ($section === 'usuarios')

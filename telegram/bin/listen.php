@@ -409,7 +409,7 @@ function telegram_emach_last_mark_reply(array $user): string
 
     $mark = $marks[0];
 
-    return telegram_command_settings()->render('emach_success', [
+    return telegram_command_settings()->renderEmachMark([
         'fecha' => $mark['fecha'] ?: '-',
         'hora' => $mark['marcas'] ?: '-',
         'tipo' => $mark['tipo'] ?: '-',

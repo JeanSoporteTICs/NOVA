@@ -49,10 +49,10 @@ class TelegramCommandCatalog
                 'module' => 'EMACH',
                 'description' => 'Consulta la ultima marcacion EMACH del usuario asociado al Chat ID.',
                 'input' => 'Sin parametros. Requiere credenciales EMACH guardadas.',
-                'response' => $this->settings->render('emach_success', [
+                'response' => $this->settings->renderEmachMark([
                     'fecha' => 'dd/mm/aaaa',
                     'hora' => 'hh:mm',
-                    'tipo' => 'entrada/salida',
+                    'tipo' => 'ENTRADA',
                     'reloj' => 'reloj',
                 ]),
                 'enabled' => $this->settings->commandEnabled('emach'),

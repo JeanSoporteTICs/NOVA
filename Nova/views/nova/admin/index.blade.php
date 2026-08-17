@@ -450,6 +450,11 @@
 
                 @if ($section === 'telegram-mensajes')
                     @php
+                        $emachMessageVariants = [
+                            ['key' => 'emach_success_entrada', 'label' => 'Entrada', 'icon' => '🟢'],
+                            ['key' => 'emach_success_salida', 'label' => 'Salida', 'icon' => '🔴'],
+                            ['key' => 'emach_success', 'label' => 'Otro tipo', 'icon' => '⚪'],
+                        ];
                         $messageLabels = [
                             'help_header' => 'Encabezado de ayuda',
                             'status' => 'Respuesta de /estado',
@@ -462,7 +467,7 @@
                             'tic_mode_status_active' => 'Estado modo TIC activo',
                             'tic_mode_status_inactive' => 'Estado modo TIC inactivo',
                             'tic_mode_invalid_format' => 'Formato TIC inválido',
-                            'emach_success' => 'Marcación EMACH',
+                            'emach_success_entrada' => 'Marcación EMACH',
                             'emach_missing_chat_id' => 'EMACH sin Chat ID',
                             'emach_user_lookup_error' => 'EMACH sin conexión NOVA',
                             'emach_missing_credentials' => 'EMACH sin credenciales',
@@ -474,7 +479,7 @@
                         $commandMessageMap = [
                             'help' => 'help_header',
                             'status' => 'status',
-                            'emach' => 'emach_success',
+                            'emach' => 'emach_success_entrada',
                             'tic' => 'tic_success',
                             'test' => 'test',
                         ];
@@ -490,7 +495,7 @@
                             'tic_mode_status_active' => 'Indica que el modo diario está activo y su vencimiento.',
                             'tic_mode_status_inactive' => 'Indica cómo activar el modo diario.',
                             'tic_mode_invalid_format' => 'Se muestra cuando un mensaje diario no contiene los tres campos requeridos.',
-                            'emach_success' => 'Respuesta con la última marcación encontrada.',
+                            'emach_success_entrada' => 'Personaliza el mensaje según el tipo de la última marcación encontrada.',
                             'emach_missing_chat_id' => 'Se muestra si el Chat ID que escribio al bot no esta asociado a un usuario NOVA.',
                             'emach_user_lookup_error' => 'Se muestra si el listener de Docker no puede consultar usuarios NOVA en la base de datos.',
                             'emach_missing_credentials' => 'Se muestra si el usuario no tiene credenciales EMACH guardadas.',
@@ -506,7 +511,7 @@
                             'tic_error' => ['{error}' => 'Detalle del error'],
                             'tic_mode_activated' => ['{hasta}' => 'Fecha y hora de término'],
                             'tic_mode_status_active' => ['{hasta}' => 'Fecha y hora de término'],
-                            'emach_success' => ['{fecha}' => 'Fecha de marcación', '{hora}' => 'Hora de marcación', '{tipo}' => 'Entrada o salida', '{reloj}' => 'Reloj utilizado'],
+                            'emach_success_entrada' => ['{fecha}' => 'Fecha de marcación', '{hora}' => 'Hora de marcación', '{tipo}' => 'Tipo informado por EMACH', '{reloj}' => 'Reloj utilizado'],
                             'emach_error' => ['{error}' => 'Detalle del error'],
                         ];
                         $systemMessageKeys = array_diff(array_keys($messageLabels), array_values($commandMessageMap));
@@ -530,6 +535,7 @@
                                 'description' => (string) ($command['description'] ?? ''),
                                 'input' => (string) ($command['input'] ?? ''),
                                 'enabled' => (bool) ($command['enabled'] ?? true),
+                                'variants' => $commandKey === 'emach' ? $emachMessageVariants : [],
                             ];
                         }
                         foreach ($systemMessageKeys as $key) {
@@ -545,6 +551,7 @@
                                 'description' => '',
                                 'input' => '',
                                 'enabled' => true,
+                                'variants' => [],
                             ];
                         }
                         $firstMessageKey = (string) ($messageRows[0]['key'] ?? '');
@@ -591,6 +598,7 @@
                                             $messageKey = (string) $row['key'];
                                             $messageValue = old("messages.{$messageKey}", $messages[$messageKey] ?? '');
                                             $messagePlaceholders = $messagePlaceholdersMap[$messageKey] ?? [];
+                                            $messageVariants = $row['variants'] ?? [];
                                         @endphp
                                             <article class="telegram-message-editor {{ $messageKey === $firstMessageKey ? 'is-active' : '' }}" data-telegram-message-panel="{{ $messageKey }}">
                                                 <div class="telegram-message-editor-head">
@@ -620,19 +628,62 @@
                                                     </label>
                                                 @endif
 
-                                                <div>
-                                                    <label for="telegram-message-{{ $messageKey }}">Mensaje programado</label>
-                                                    <textarea class="form-control" id="telegram-message-{{ $messageKey }}" name="messages[{{ $messageKey }}]" rows="7" spellcheck="true">{{ $messageValue }}</textarea>
-                                                    <p class="telegram-edit-help"><i class="bi bi-info-circle"></i> Los campos entre llaves, como <code>{fecha}</code>, son completados automáticamente por NOVA.</p>
-                                                    @if ($messagePlaceholders !== [])
-                                                        <div class="telegram-placeholder-list" aria-label="Campos disponibles">
-                                                            <span>Datos disponibles:</span>
-                                                            @foreach ($messagePlaceholders as $placeholder => $description)
-                                                                <code title="{{ $description }}">{{ $placeholder }}</code>
-                                                            @endforeach
+                                                @if ($messageVariants !== [])
+                                                    <div class="telegram-message-variant-picker" role="tablist" aria-label="Tipo de marcación EMACH">
+                                                        @foreach ($messageVariants as $variant)
+                                                            <button
+                                                                class="telegram-message-variant-option {{ $loop->first ? 'is-active' : '' }}"
+                                                                id="telegram-emach-tab-{{ $variant['key'] }}"
+                                                                type="button"
+                                                                role="tab"
+                                                                aria-selected="{{ $loop->first ? 'true' : 'false' }}"
+                                                                aria-controls="telegram-emach-panel-{{ $variant['key'] }}"
+                                                                data-telegram-emach-variant-option="{{ $variant['key'] }}"
+                                                            >
+                                                                <span aria-hidden="true">{{ $variant['icon'] }}</span>
+                                                                <strong>{{ $variant['label'] }}</strong>
+                                                            </button>
+                                                        @endforeach
+                                                    </div>
+
+                                                    @foreach ($messageVariants as $variant)
+                                                        @php
+                                                            $variantKey = (string) $variant['key'];
+                                                            $variantValue = old("messages.{$variantKey}", $messages[$variantKey] ?? '');
+                                                        @endphp
+                                                        <div
+                                                            class="telegram-message-variant-panel {{ $loop->first ? 'is-active' : '' }}"
+                                                            id="telegram-emach-panel-{{ $variantKey }}"
+                                                            role="tabpanel"
+                                                            aria-labelledby="telegram-emach-tab-{{ $variantKey }}"
+                                                            data-telegram-emach-variant="{{ $variantKey }}"
+                                                        >
+                                                            <label for="telegram-message-{{ $variantKey }}">Mensaje para {{ $variant['label'] }}</label>
+                                                            <textarea class="form-control" id="telegram-message-{{ $variantKey }}" name="messages[{{ $variantKey }}]" rows="7" spellcheck="true">{{ $variantValue }}</textarea>
+                                                            <p class="telegram-edit-help"><i class="bi bi-info-circle"></i> NOVA elegirá esta plantilla automáticamente cuando el tipo sea <strong>{{ $variant['label'] }}</strong>.</p>
+                                                            <div class="telegram-placeholder-list" aria-label="Campos disponibles">
+                                                                <span>Datos disponibles:</span>
+                                                                @foreach ($messagePlaceholders as $placeholder => $description)
+                                                                    <code title="{{ $description }}">{{ $placeholder }}</code>
+                                                                @endforeach
+                                                            </div>
                                                         </div>
-                                                    @endif
-                                                </div>
+                                                    @endforeach
+                                                @else
+                                                    <div>
+                                                        <label for="telegram-message-{{ $messageKey }}">Mensaje programado</label>
+                                                        <textarea class="form-control" id="telegram-message-{{ $messageKey }}" name="messages[{{ $messageKey }}]" rows="7" spellcheck="true">{{ $messageValue }}</textarea>
+                                                        <p class="telegram-edit-help"><i class="bi bi-info-circle"></i> Los campos entre llaves, como <code>{fecha}</code>, son completados automáticamente por NOVA.</p>
+                                                        @if ($messagePlaceholders !== [])
+                                                            <div class="telegram-placeholder-list" aria-label="Campos disponibles">
+                                                                <span>Datos disponibles:</span>
+                                                                @foreach ($messagePlaceholders as $placeholder => $description)
+                                                                    <code title="{{ $description }}">{{ $placeholder }}</code>
+                                                                @endforeach
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                @endif
                                             </article>
                                         @endforeach
                                     </div>
@@ -1398,6 +1449,21 @@
         telegramMessageOptions.forEach((option) => {
             option.addEventListener('click', () => {
                 setActiveTelegramMessage(option.dataset.telegramMessageOption || '');
+            });
+        });
+
+        document.querySelectorAll('[data-telegram-emach-variant-option]').forEach((option) => {
+            option.addEventListener('click', () => {
+                const editor = option.closest('[data-telegram-message-panel]');
+                const variant = option.dataset.telegramEmachVariantOption || '';
+                editor?.querySelectorAll('[data-telegram-emach-variant-option]').forEach((candidate) => {
+                    const active = candidate.dataset.telegramEmachVariantOption === variant;
+                    candidate.classList.toggle('is-active', active);
+                    candidate.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+                editor?.querySelectorAll('[data-telegram-emach-variant]').forEach((panel) => {
+                    panel.classList.toggle('is-active', panel.dataset.telegramEmachVariant === variant);
+                });
             });
         });
 

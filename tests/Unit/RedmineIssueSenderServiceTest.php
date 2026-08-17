@@ -20,7 +20,7 @@ class RedmineIssueSenderServiceTest extends TestCase
 {
     private function service(): RedmineIssueSenderService
     {
-        return new RedmineIssueSenderService();
+        return new RedmineIssueSenderService;
     }
 
     private function baseConfig(array $overrides = []): array
@@ -170,5 +170,30 @@ class RedmineIssueSenderServiceTest extends TestCase
         $this->assertSame('URL no configurada', $result['error']);
         $this->assertArrayHasKey('payload', $result);
         $this->assertArrayHasKey('issue', $result['payload']);
+    }
+
+    public function test_failure_message_exposes_redmine_validation_errors(): void
+    {
+        $message = $this->service()->failureMessage([
+            'http_code' => 422,
+            'body' => json_encode(['errors' => ['Unidad solicitante no está incluida en la lista']]),
+            'error' => '',
+        ]);
+
+        $this->assertSame('Unidad solicitante no está incluida en la lista', $message);
+    }
+
+    public function test_failure_message_prioritizes_transport_errors_and_has_http_fallback(): void
+    {
+        $this->assertSame('Tiempo de espera agotado', $this->service()->failureMessage([
+            'http_code' => 0,
+            'body' => '',
+            'error' => 'Tiempo de espera agotado',
+        ]));
+        $this->assertSame('Redmine rechazó la creación del reporte (HTTP 403).', $this->service()->failureMessage([
+            'http_code' => 403,
+            'body' => '',
+            'error' => '',
+        ]));
     }
 }

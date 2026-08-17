@@ -1745,24 +1745,11 @@ final class RedmineDataRepository
             return ['attempts' => $attempts, 'success' => 0, 'errors' => [$message], 'redmine_ids' => []];
         }
 
+        // The runtime catalog comes from NOVA's database. Do not refresh it
+        // with the reporting user's token: Redmine restricts custom-field
+        // definitions to administrators. Redmine still performs the final
+        // validation of the submitted value when the issue is created.
         $unitFieldConfigured = trim((string) ($config['cf_unidad_solicitante'] ?? '')) !== '';
-        $reportsRequireUnitValidation = $unitFieldConfigured && collect($reports)->contains(
-            static fn (array $report): bool => trim((string) ($report['unidad_solicitante'] ?? $report['unidad'] ?? '')) !== ''
-        );
-        if ($reportsRequireUnitValidation) {
-            $sync = $this->syncUnitsFromRedmine($userId);
-            if (!$sync['ok']) {
-                $attempts = count($reports);
-                $message = 'No se pudo validar la lista vigente de unidades en Redmine: ' . $sync['error'];
-                $this->appendActivityLog('envio_redmine_error', [
-                    'user_id' => $userId ?? '',
-                    'http_code' => 0,
-                    'error' => $message,
-                ]);
-
-                return ['attempts' => $attempts, 'success' => 0, 'errors' => [$message], 'redmine_ids' => []];
-            }
-        }
 
         foreach ($reports as $report) {
             $attempts++;
@@ -1774,7 +1761,7 @@ final class RedmineDataRepository
                         $report['unidad_solicitante_catalogo_id'] ?? null
                     ) ?? $this->catalogRepo()->activeExternalValue('unidad', $selectedUnit);
                     if ($externalUnitValue === null) {
-                        $message = 'La unidad solicitante "' . $selectedUnit . '" ya no está disponible en Redmine. Edita el reporte y selecciona una unidad vigente.';
+                        $message = 'La unidad solicitante "' . $selectedUnit . '" no está disponible en el catálogo activo de NOVA. Edita el reporte y selecciona una unidad vigente.';
                         $report['estado'] = 'error';
                         $report['procesado_ts'] = now('America/Santiago')->toAtomString();
                         $errors[] = 'No se pudo enviar ' . ($report['id'] ?? 'sin-id') . ': ' . $message;
@@ -1839,12 +1826,13 @@ final class RedmineDataRepository
 
             $report['estado'] = 'error';
             $report['procesado_ts'] = now('America/Santiago')->toAtomString();
-            $errors[] = 'No se pudo enviar ' . ($report['id'] ?? 'sin-id') . ': ' . ($result['error'] ?: $result['body']);
+            $failureMessage = $this->issueSender()->failureMessage($result);
+            $errors[] = 'No se pudo enviar ' . ($report['id'] ?? 'sin-id') . ': ' . $failureMessage;
             $this->appendActivityLog('envio_redmine_error', [
                 'message_id' => $report['id'] ?? '',
                 'user_id' => $userId ?? '',
                 'http_code' => $result['http_code'],
-                'error' => $result['error'] ?: $result['body'],
+                'error' => $failureMessage,
                 'asunto' => $report['asunto'] ?? '',
                 'categoria' => $report['categoria'] ?? '',
                 'unidad' => $report['unidad'] ?? '',

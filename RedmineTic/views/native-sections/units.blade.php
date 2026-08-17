@@ -8,7 +8,7 @@
 <div class="rm-catalog-action-head">
     <div>
         <strong><i class="bi bi-cloud-download"></i> Sincronizacion Redmine</strong>
-        <span>Actualiza este catalogo usando el campo personalizado de unidades.</span>
+        <span>Actualiza este catálogo con una API Key de administrador Redmine. Los selectores de usuarios leen estos registros desde NOVA.</span>
     </div>
     <form method="post" action="{{ $redmineRoute('redmine.native.units.action') }}">
         @csrf

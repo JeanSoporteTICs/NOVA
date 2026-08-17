@@ -74,20 +74,34 @@ final class RedmineTicWebhookSelect2Test extends TestCase
         );
     }
 
-    public function test_dashboard_and_webhook_refresh_units_before_rendering_selectors(): void
+    public function test_dashboard_and_webhook_load_units_from_database_without_remote_refresh(): void
     {
         $root = dirname(__DIR__, 2);
         $controller = file_get_contents($root.'/RedmineTic/Controllers/RedmineDashboardController.php');
         $layout = file_get_contents($root.'/RedmineTic/views/native.blade.php');
         $dashboard = file_get_contents($root.'/RedmineTic/views/native-sections/dashboard.blade.php');
+        $repository = file_get_contents($root.'/RedmineTic/Repositories/RedmineDataRepository.php');
 
         self::assertIsString($controller);
         self::assertIsString($layout);
         self::assertIsString($dashboard);
-        self::assertStringContainsString("in_array(\$section, ['dashboard', 'webhook'], true)", $controller);
-        self::assertStringContainsString('$redmine->syncUnitsFromRedmine(', $controller);
-        self::assertStringContainsString("\$sectionData['units'] = [];", $controller);
-        self::assertStringContainsString('El selector permanecerá vacío para evitar utilizar unidades obsoletas.', $layout);
+        self::assertIsString($repository);
+        $showStart = strpos($controller, 'public function show(');
+        $showEnd = strpos($controller, 'public function dashboardAction(', $showStart ?: 0);
+        $showMethod = substr($controller, $showStart ?: 0, ($showEnd ?: strlen($controller)) - ($showStart ?: 0));
+        self::assertStringNotContainsString('$redmine->syncUnitsFromRedmine(', $showMethod);
+        self::assertStringNotContainsString("\$sectionData['units'] = [];", $showMethod);
+        self::assertSame(1, substr_count($controller, '$redmine->syncUnitsFromRedmine('));
+        self::assertStringNotContainsString('El selector permanecerá vacío para evitar utilizar unidades obsoletas.', $layout);
+        self::assertStringContainsString("'dashboard' => array_merge(\$this->dashboardData", $repository);
+        self::assertStringContainsString("'units' => \$this->units()", $repository);
+        self::assertStringNotContainsString('No se pudo validar la lista vigente de unidades en Redmine', $repository);
+        self::assertStringContainsString("activeExternalValueById(\n                        'unidad'", $repository);
+        $sendStart = strpos($repository, 'public function sendReportsToRedmine(');
+        $sendEnd = strpos($repository, 'private function persistSentReport(', $sendStart ?: 0);
+        $sendMethod = substr($repository, $sendStart ?: 0, ($sendEnd ?: strlen($repository)) - ($sendStart ?: 0));
+        self::assertStringNotContainsString('syncUnitsFromRedmine(', $sendMethod);
+        self::assertStringContainsString('Redmine still performs the final', $sendMethod);
         self::assertMatchesRegularExpression(
             '/form\.elements\.unidad_solicitante,\s*button\.dataset\.reportUnidadSolicitante \|\| \'\',\s*button\.dataset\.reportUnidadSolicitante \|\| \'\',\s*false/s',
             $dashboard

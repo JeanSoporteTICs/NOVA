@@ -17,8 +17,8 @@ namespace RedmineTic\Services;
 final class RedmineIssueSenderService
 {
     /**
-     * @param array<string,mixed> $report
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $report
+     * @param  array<string,mixed>  $config
      * @return array{http_code:int,body:string,error:string,payload:array<string,mixed>}
      */
     public function send(array $report, array $config, string $token, callable $categoryIdResolver): array
@@ -30,8 +30,46 @@ final class RedmineIssueSenderService
     }
 
     /**
-     * @param array<string,mixed> $report
-     * @param array<string,mixed> $config
+     * Converts a rejected Redmine response into a message suitable for the UI.
+     * Redmine performs the definitive validation of list custom-field values
+     * when the issue is created.
+     *
+     * @param  array{http_code?:int,body?:string,error?:string}  $result
+     */
+    public function failureMessage(array $result): string
+    {
+        $transportError = trim((string) ($result['error'] ?? ''));
+        if ($transportError !== '') {
+            return $transportError;
+        }
+
+        $body = trim((string) ($result['body'] ?? ''));
+        $decoded = json_decode($body, true);
+        $errors = is_array($decoded) ? ($decoded['errors'] ?? []) : [];
+        if (is_array($errors)) {
+            $errors = array_values(array_filter(array_map(
+                static fn (mixed $error): string => trim((string) $error),
+                $errors
+            )));
+            if ($errors !== []) {
+                return implode(' ', $errors);
+            }
+        }
+
+        if ($body !== '') {
+            return $body;
+        }
+
+        $httpCode = (int) ($result['http_code'] ?? 0);
+
+        return $httpCode > 0
+            ? 'Redmine rechazó la creación del reporte (HTTP '.$httpCode.').'
+            : 'No fue posible conectar con Redmine.';
+    }
+
+    /**
+     * @param  array<string,mixed>  $report
+     * @param  array<string,mixed>  $config
      * @return array<string,mixed>
      */
     public function buildIssuePayload(array $report, array $config, callable $categoryIdResolver): array
@@ -61,7 +99,7 @@ final class RedmineIssueSenderService
         if (is_numeric($report['tiempo_estimado'] ?? null)) {
             $issue['estimated_hours'] = (float) $report['tiempo_estimado'];
         }
-        if (!empty($report['asignado_a'])) {
+        if (! empty($report['asignado_a'])) {
             $issue['assigned_to_id'] = $report['asignado_a'];
         }
 
@@ -85,8 +123,8 @@ final class RedmineIssueSenderService
     }
 
     /**
-     * @param array<string,mixed> $config
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $config
+     * @param  array<string,mixed>  $payload
      * @return array{http_code:int,body:string,error:string}
      */
     private function postRedmineIssue(array $config, array $payload, string $token): array
@@ -95,14 +133,14 @@ final class RedmineIssueSenderService
         if ($url === '') {
             return ['http_code' => 0, 'body' => '', 'error' => 'URL no configurada'];
         }
-        if (!function_exists('curl_init')) {
+        if (! function_exists('curl_init')) {
             return ['http_code' => 0, 'body' => '', 'error' => 'Extension cURL no disponible'];
         }
 
         $ch = curl_init($url);
         $headers = ['Content-Type: application/json', 'Accept: application/json'];
         if ($token !== '') {
-            $headers[] = 'X-Redmine-API-Key: ' . $token;
+            $headers[] = 'X-Redmine-API-Key: '.$token;
         }
         curl_setopt_array($ch, [
             CURLOPT_POST => true,

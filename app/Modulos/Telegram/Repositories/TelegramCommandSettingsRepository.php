@@ -71,6 +71,32 @@ class TelegramCommandSettingsRepository
     }
 
     /**
+     * @param  array<string,mixed>  $replace
+     */
+    public function renderEmachMark(array $replace): string
+    {
+        return $this->render(
+            $this->emachMessageKey((string) ($replace['tipo'] ?? '')),
+            $replace
+        );
+    }
+
+    public function emachMessageKey(string $type): string
+    {
+        $normalizedType = strtoupper(trim($type));
+
+        if (str_contains($normalizedType, 'ENTRADA')) {
+            return 'emach_success_entrada';
+        }
+
+        if (str_contains($normalizedType, 'SALIDA')) {
+            return 'emach_success_salida';
+        }
+
+        return 'emach_success';
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function defaults(): array
@@ -97,7 +123,9 @@ class TelegramCommandSettingsRepository
                 'tic_mode_status_active' => "El modo TIC está activo hasta {hasta}.\nFormato: problema, unidad, solicitante",
                 'tic_mode_status_inactive' => 'El modo TIC está inactivo. Usa /tic activar para habilitarlo durante el día.',
                 'tic_mode_invalid_format' => "No se creó el reporte.\nUsa el formato: problema, unidad, solicitante",
-                'emach_success' => "Última marcación EMACH\nFecha: {fecha}\nHora: {hora}\nTipo: {tipo}\nReloj: {reloj}",
+                'emach_success_entrada' => "📍Última marcación EMACH\n📅Fecha: {fecha}\n🕒Hora: {hora}\n🟢Tipo: {tipo}\n🕰️Reloj: {reloj}",
+                'emach_success_salida' => "📍Última marcación EMACH\n📅Fecha: {fecha}\n🕒Hora: {hora}\n🔴Tipo: {tipo}\n🕰️Reloj: {reloj}",
+                'emach_success' => "📍Última marcación EMACH\n📅Fecha: {fecha}\n🕒Hora: {hora}\nTipo: {tipo}\n🕰️Reloj: {reloj}",
                 'emach_missing_chat_id' => 'Tu Chat ID no está asociado a un usuario NOVA. Ingresa a NOVA > Mis integraciones y guarda tu TELEGRAM_CHAT_ID.',
                 'emach_user_lookup_error' => 'No pude consultar tu usuario NOVA desde el servicio Telegram. Revisa la conexión de Docker con la base de datos.',
                 'emach_missing_credentials' => 'No tienes credenciales EMACH guardadas en NOVA.',
