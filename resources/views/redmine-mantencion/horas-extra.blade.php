@@ -183,7 +183,9 @@ const horaFinInput = document.getElementById('md-hora-fin');
 const calcularEmachBtn = document.getElementById('md-calcular-emach');
 const emachStatusEl = document.getElementById('md-emach-status');
 const emachSuggestionEndpoint = '<?= $h(function_exists('url') ? url('/emach/horas-extra-sugerencia') : '/emach/horas-extra-sugerencia') ?>';
-const laravelCsrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+const currentLaravelCsrfToken = () => window.NovaCsrfForms?.token?.()
+  || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  || '';
 
 function parseTimeInput(value) {
   if (!value) return null;
@@ -269,7 +271,7 @@ if (calcularEmachBtn && editModal && emachStatusEl) {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': laravelCsrfToken
+          'X-CSRF-TOKEN': currentLaravelCsrfToken()
         },
         body: JSON.stringify({ fecha })
       });

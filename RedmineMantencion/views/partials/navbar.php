@@ -584,7 +584,7 @@ window.addEventListener('load', () => {
   const logoutUrl = '<?= $h($novaLogoutUrl) ?>';
   const sessionExtendUrl = '<?= $h($novaSessionExtendUrl) ?>';
   const sessionIdentity = '<?= $h($novaSessionIdentity) ?>';
-  const csrfToken = '<?= $h($novaCsrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  let csrfToken = '<?= $h($novaCsrfToken) ?>' || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const modalEl = document.getElementById('sessionModal');
   const modal = (window.bootstrap && modalEl) ? new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false}) : null;
   const modalTitleEl = modalEl ? modalEl.querySelector('.modal-title') : null;
@@ -674,6 +674,19 @@ window.addEventListener('load', () => {
 
   function applySessionRefresh(data) {
     if (!data || !data.ok) return false;
+    const refreshedCsrfToken = String(data.csrf_token || '').trim();
+    if (refreshedCsrfToken) {
+      csrfToken = refreshedCsrfToken;
+      if (!window.NovaCsrfForms?.setToken?.(refreshedCsrfToken)) {
+        document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', refreshedCsrfToken);
+        document.querySelectorAll('input[name="_token"], input[name="csrf_token"]').forEach(input => {
+          input.value = refreshedCsrfToken;
+        });
+        document.querySelectorAll('[data-csrf]').forEach(element => {
+          element.dataset.csrf = refreshedCsrfToken;
+        });
+      }
+    }
     remaining = parseInt(data.remaining ?? data.timeout ?? baseTimeout, 10) || baseTimeout;
     expiresAt = Date.now() + (remaining * 1000);
     modalShown = false;
@@ -731,13 +744,9 @@ window.addEventListener('load', () => {
         });
         const data = await resp.json();
         if (data.ok) {
-          remaining = parseInt(data.remaining ?? data.timeout ?? baseTimeout, 10) || baseTimeout;
-          expiresAt = Date.now() + (remaining * 1000);
-          modalShown = false;
-          setModalState(false);
+          applySessionRefresh(data);
           extendPwd.value = '';
           if (extendMsg) extendMsg.textContent = 'Sesión extendida.';
-          restartTick();
           if (modal) setTimeout(() => modal.hide(), 400);
         } else {
           if (extendMsg) extendMsg.textContent = data.msg || 'Contraseña incorrecta.';

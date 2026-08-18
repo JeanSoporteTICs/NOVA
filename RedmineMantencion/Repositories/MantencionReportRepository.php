@@ -442,6 +442,7 @@ final class MantencionReportRepository
     {
         $fuente = trim((string) ($message['fuente'] ?? ''));
         $fuenteId = trim((string) ($message['fuente_id'] ?? $message['id'] ?? ''));
+        $estado = trim((string) ($message['estado'] ?? 'pendiente')) ?: 'pendiente';
         $projectId = trim((string) ($message['project_id'] ?? $config['project_id'] ?? ''));
         $trackerId = trim((string) ($message['tipo_id'] ?? $message['tracker_id'] ?? $config['tracker_id'] ?? ''));
         $statusId = trim((string) ($message['status_id'] ?? $config['status_id'] ?? ''));
@@ -461,7 +462,7 @@ final class MantencionReportRepository
             'tipo_id' => $trackerId !== '' ? $trackerId : null,
             'asunto' => trim((string) ($message['asunto'] ?? $message['mensaje'] ?? '')) ?: null,
             'descripcion' => trim((string) ($message['descripcion'] ?? '')) ?: null,
-            'estado' => trim((string) ($message['estado'] ?? 'pendiente')) ?: 'pendiente',
+            'estado' => $estado,
             'estado_redmine' => trim((string) ($message['estado_redmine'] ?? $message['core_estado'] ?? '')) ?: null,
             'estado_id' => $statusId !== '' ? $statusId : null,
             'prioridad' => trim((string) ($message['prioridad'] ?? '')) ?: null,
@@ -484,8 +485,32 @@ final class MantencionReportRepository
             'correo' => trim((string) ($message['core_email'] ?? $message['correo'] ?? '')) ?: null,
             'hora_extra' => $this->truthy((string) ($message['hora_extra'] ?? '')),
             'numero_ticket_redmine' => $redmineId,
-            'actualizado_at' => now(),
+            // En Mantencion, procesado_ts se proyecta desde actualizado_at. Al
+            // resincronizar la cola completa (por ejemplo, tras importar CORE),
+            // conservar esa fecha evita reiniciar la retencion de reportes que
+            // ya estaban procesados o con error.
+            'actualizado_at' => $this->workflowTimestamp($estado, $message['procesado_ts'] ?? null),
         ];
+    }
+
+    private function workflowTimestamp(string $estado, mixed $procesadoTs): mixed
+    {
+        if (! in_array(strtolower(trim($estado)), ['procesado', 'error', 'archivado'], true)) {
+            return now();
+        }
+
+        $value = trim((string) $procesadoTs);
+        if ($value === '') {
+            return now();
+        }
+
+        try {
+            return Carbon::parse($value)
+                ->setTimezone((string) config('app.timezone', 'UTC'))
+                ->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            return now();
+        }
     }
 
     /** @return array<string,mixed> */

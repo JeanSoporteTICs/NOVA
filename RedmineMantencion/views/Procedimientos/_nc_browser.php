@@ -339,7 +339,10 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
 
   const AJAX       = browser.dataset.ajax;
   const EDITOR     = browser.dataset.editorUrl || '';
-  const CSRF       = browser.dataset.csrf;
+  const currentCsrfToken = () => window.NovaCsrfForms?.token?.()
+    || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    || browser.dataset.csrf
+    || '';
   const CAN_EDIT   = browser.dataset.canEdit === '1';
   let   currentPath = '/';
   let   transferBrowsePath = '/';
@@ -470,7 +473,7 @@ $ncEditorUrl = isset($ncEditorUrlOverride) ? (string) $ncEditorUrlOverride : '';
     if (method === 'POST') {
       if (!body) body = new FormData();
       // Auth uses X-CSRF-Token header
-      opts.headers = { 'X-CSRF-Token': CSRF };
+      opts.headers = { 'X-CSRF-Token': currentCsrfToken() };
       opts.body = body;
     }
     setBusy(true, busyMessage(params.action));

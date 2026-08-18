@@ -452,7 +452,9 @@ document.addEventListener('DOMContentLoaded', () => {
     generatePassword.innerHTML = '<span class="nova-spinner" aria-hidden="true"></span> Generando';
     try {
       const body = new URLSearchParams({
-        csrf_token: '<?= $h($csrf) ?>',
+        csrf_token: window.NovaCsrfForms?.token?.()
+          || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+          || '<?= $h($csrf) ?>',
         userid: selectedUser.id || '',
         display_name: selectedUser.displayName || selectedUser.id || ''
       });

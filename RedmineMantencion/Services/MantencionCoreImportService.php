@@ -1466,6 +1466,7 @@ class MantencionCoreImportService
         $dbCoreIds = ($dbImportRepo !== null) ? $dbImportRepo->getExistingCoreIds() : [];
         $imported = 0;
         $updated = 0;
+        $messagesToPersist = [];
         foreach ($rows as $row) {
             $message = $this->dashboard_core_build_message($row, $catalogs, $users);
             if (!$this->dashboard_core_row_matches_filters($message, $filters)) {
@@ -1494,6 +1495,7 @@ class MantencionCoreImportService
                 }
 
                 $messages[$existingIndex] = $merge['message'];
+                $messagesToPersist[] = $merge['message'];
                 $updated++;
                 $traceCounters['updated']++;
                 continue;
@@ -1519,6 +1521,7 @@ class MantencionCoreImportService
             // Archive blobs are intentionally not checked here: if the record was deleted
             // from redmine_mantencion_reportes it must be importable again.
             $messages[] = $message;
+            $messagesToPersist[] = $message;
             $existingIndexes = $coreSync->indexes($messages);
             $imported++;
             $traceCounters['imported']++;
@@ -1527,7 +1530,10 @@ class MantencionCoreImportService
         $cfg['core_last_error'] = '';
         save_platform_config($cfg);
         if ($imported > 0 || $updated > 0) {
-            save_messages($messages);
+            // Persistir solo filas nuevas o pendientes realmente modificadas.
+            // Guardar toda la cola tambien tocaba actualizado_at de reportes
+            // procesados y reiniciaba indebidamente su reloj de retencion.
+            save_messages($messagesToPersist);
         }
         $this->dashboard_core_log_import_trace($traceCounters, $traceSample);
         return [
