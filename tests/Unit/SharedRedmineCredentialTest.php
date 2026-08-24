@@ -122,4 +122,53 @@ class SharedRedmineCredentialTest extends TestCase
         $this->assertFalse($state['stored']);
         $this->assertFalse($state['has_secret']);
     }
+
+    public function test_core_username_without_a_decryptable_password_is_not_reported_as_configured(): void
+    {
+        $user = $this->makeNovaUser();
+        $invalidSecret = base64_encode(json_encode([
+            'iv' => base64_encode(str_repeat('x', 16)),
+            'value' => base64_encode('invalid-ciphertext'),
+            'mac' => hash('sha256', 'invalid-mac'),
+        ]));
+        DB::table('integraciones_usuario')->insert([
+            'usuario_id' => $user['db_id'],
+            'tipo' => 'core',
+            'usuario_externo' => 'core-user',
+            'valor_secreto' => $invalidSecret,
+            'creado_at' => now(),
+            'actualizado_at' => now(),
+        ]);
+
+        $repository = app(UserIntegrationRepository::class);
+        $state = $repository->integrationForSession($user['session'], 'core');
+
+        $this->assertFalse($state['stored']);
+        $this->assertTrue($state['has_external_user']);
+        $this->assertFalse($state['has_secret']);
+        $this->assertFalse($repository->credentialForSession($user['session'], 'core')['stored']);
+    }
+
+    public function test_complete_core_credentials_are_reported_as_configured_and_can_be_reused(): void
+    {
+        $user = $this->makeNovaUser();
+        $repository = app(UserIntegrationRepository::class);
+
+        $this->assertTrue($repository->saveCredentialForSession(
+            $user['session'],
+            'core',
+            'core-user',
+            'core-password'
+        ));
+
+        $state = $repository->integrationForSession($user['session'], 'core');
+        $credentials = $repository->credentialForSession($user['session'], 'core');
+
+        $this->assertTrue($state['stored']);
+        $this->assertTrue($state['has_external_user']);
+        $this->assertTrue($state['has_secret']);
+        $this->assertSame('core-user', $credentials['user']);
+        $this->assertSame('core-password', $credentials['secret']);
+        $this->assertTrue($credentials['stored']);
+    }
 }

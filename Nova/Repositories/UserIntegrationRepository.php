@@ -223,9 +223,12 @@ final class UserIntegrationRepository
                 $externalUser = trim((string) ($row->usuario_externo ?? ''));
                 $secret = trim((string) ($row->valor_secreto ?? ''));
                 $hasSecret = $secret !== '' && SecretValue::inspect($secret)['decryptable'];
+                // Una integración solo está configurada cuando el secreto se
+                // puede descifrar. CORE antes aparecía listo con solo el
+                // usuario, aunque su contraseña ya no fuera utilizable.
                 $stored = $this->isRedmineType($type)
-                    ? $secret !== ''
-                    : ($externalUser !== '' || $hasSecret);
+                    ? $hasSecret
+                    : ($externalUser !== '' && $hasSecret);
                 $result[$type] = [
                     'type' => $type,
                     'external_user' => $externalUser,

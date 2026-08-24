@@ -17,6 +17,9 @@
         $hasExternal = (bool) ($state['has_external_user'] ?? false);
         $needsExternal = !empty($definition['external_required']);
 
+        if (!$stored && ($hasSecret || $hasExternal)) {
+            return ['class' => 'is-warning', 'label' => 'Requiere actualizar credenciales', 'icon' => 'bi-exclamation-circle-fill'];
+        }
         if (!$stored) {
             return ['class' => 'is-empty', 'label' => 'Sin configurar', 'icon' => 'bi-circle'];
         }

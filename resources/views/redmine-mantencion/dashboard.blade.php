@@ -103,7 +103,9 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
         <?php endif; ?>
       </div>
       </div>
-      <button type="button" class="btn-nova btn-nova-primary dashboard-import-button" data-bs-toggle="modal" data-bs-target="<?= $corePendingToken !== '' ? '#coreTotpModal' : '#coreCredentialsModal' ?>" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+      <button type="<?= ($hasSavedCoreCredentials && $corePendingToken === '') ? 'submit' : 'button' ?>" class="btn-nova btn-nova-primary dashboard-import-button"
+        <?php if ($corePendingToken !== ''): ?>data-bs-toggle="modal" data-bs-target="#coreTotpModal"<?php elseif (!$hasSavedCoreCredentials): ?>data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"<?php endif; ?>
+        <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
         <i class="bi bi-cloud-download"></i> Importar desde CORE
       </button>
     </div>

@@ -196,7 +196,9 @@ class CoreTotpAuthenticationTest extends TestCase
         $this->assertStringContainsString('name="core_runtime_totp"', $view);
         $this->assertStringContainsString('autocomplete="one-time-code"', $view);
         $this->assertStringContainsString('El código es temporal, se usa solo en esta consulta y nunca se guarda.', $view);
-        $this->assertStringContainsString("\$corePendingToken !== '' ? '#coreTotpModal' : '#coreCredentialsModal'", $view);
+        $this->assertStringContainsString("(\$hasSavedCoreCredentials && \$corePendingToken === '') ? 'submit' : 'button'", $view);
+        $this->assertStringContainsString("\$corePendingToken !== ''", $view);
+        $this->assertStringContainsString("!\$hasSavedCoreCredentials", $view);
         $credentialsStart = strpos($view, 'id="coreCredentialsModal"');
         $totpStart = strpos($view, 'id="coreTotpModal"');
         $scriptStart = strpos($view, '<script>', $totpStart);
