@@ -331,6 +331,48 @@ class MantencionCoreImportService
         return core_credentials_for_user($this->dashboard_core_current_credential_user_key());
     }
 
+    public function dashboard_core_save_credentials_for_current_user(string $coreUser, string $corePass): bool {
+        $coreUser = trim($coreUser);
+        $corePass = trim($corePass);
+        if ($coreUser === '' || $corePass === '') {
+            return false;
+        }
+
+        if (function_exists('session') && function_exists('app')) {
+            try {
+                $novaUser = session('nova_user');
+                if (is_array($novaUser) && !empty($novaUser)) {
+                    return app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)
+                        ->saveCredentialForSession($novaUser, 'core', $coreUser, $corePass);
+                }
+            } catch (\Throwable) {
+                // Compatibilidad para ejecuciones legacy sin sesión Laravel.
+            }
+        }
+
+        return core_credentials_save_for_user(
+            $this->dashboard_core_current_credential_user_key(),
+            $coreUser,
+            $corePass
+        );
+    }
+
+    public function dashboard_core_clear_credentials_for_current_user(): bool {
+        if (function_exists('session') && function_exists('app')) {
+            try {
+                $novaUser = session('nova_user');
+                if (is_array($novaUser) && !empty($novaUser)) {
+                    return app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)
+                        ->deleteCredentialForSession($novaUser, 'core');
+                }
+            } catch (\Throwable) {
+                // Compatibilidad para ejecuciones legacy sin sesión Laravel.
+            }
+        }
+
+        return core_credentials_clear_for_user($this->dashboard_core_current_credential_user_key());
+    }
+
     public function dashboard_core_curl(string $url, array $options = []): array {
         $ch = curl_init($url);
         $default = [
@@ -1071,6 +1113,236 @@ class MantencionCoreImportService
         return $form;
     }
 
+    public function dashboard_core_parse_totp_form(string $html, string $baseUrl): array {
+        $result = [
+            'action' => $baseUrl,
+            'field' => '',
+            'has_totp_form' => false,
+            'fields' => [],
+        ];
+        if ($html === '' || !preg_match_all('/<form\b([^>]*)>(.*?)<\/form>/is', $html, $forms, PREG_SET_ORDER)) {
+            return $result;
+        }
+
+        $totpNames = [
+            'totp', 'otp', 'mfa', '2fa', 'authenticator', 'verification_code',
+            'verificationcode', 'code', 'codigo', 'token',
+        ];
+        foreach ($forms as $match) {
+            $attrs = (string)($match[1] ?? '');
+            $inner = (string)($match[2] ?? '');
+            if (str_contains($inner, 'name="login_string"') || str_contains($inner, "name='login_string'")) {
+                continue;
+            }
+            if (!preg_match_all('/<input\b([^>]*)>/is', $inner, $inputs, PREG_SET_ORDER)) {
+                continue;
+            }
+
+            $fields = [];
+            $totpField = '';
+            foreach ($inputs as $input) {
+                $inputAttrs = (string)($input[1] ?? '');
+                if (!preg_match('/name\s*=\s*(["\'])(.*?)\1/i', $inputAttrs, $nameMatch)) {
+                    continue;
+                }
+                $name = trim(html_entity_decode((string)$nameMatch[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                if ($name === '') {
+                    continue;
+                }
+                $value = '';
+                if (preg_match('/value\s*=\s*(["\'])(.*?)\1/i', $inputAttrs, $valueMatch)) {
+                    $value = html_entity_decode((string)$valueMatch[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                }
+                $fields[$name] = $value;
+
+                $normalizedName = strtolower(str_replace(['-', '[', ']', '.'], ['_', '', '', '_'], $name));
+                $inputType = '';
+                if (preg_match('/type\s*=\s*(["\'])(.*?)\1/i', $inputAttrs, $typeMatch)) {
+                    $inputType = strtolower(trim((string)$typeMatch[2]));
+                }
+                $isTotpName = in_array($normalizedName, $totpNames, true)
+                    || preg_match('/(^|_)(totp|otp|mfa|2fa)(_|$)/', $normalizedName) === 1;
+                if ($normalizedName === 'token' && $inputType === 'hidden') {
+                    $isTotpName = false;
+                }
+                if ($totpField === '' && $isTotpName) {
+                    $totpField = $name;
+                }
+            }
+            if ($totpField === '') {
+                continue;
+            }
+
+            $result['has_totp_form'] = true;
+            $result['field'] = $totpField;
+            $result['fields'] = $fields;
+            if (preg_match('/action\s*=\s*(["\'])(.*?)\1/i', $attrs, $actionMatch)) {
+                $action = trim(html_entity_decode((string)$actionMatch[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                if ($action !== '') {
+                    if (preg_match('~^https?://~i', $action)) {
+                        $result['action'] = $action;
+                    } else {
+                        $parts = parse_url($baseUrl);
+                        $origin = ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? '');
+                        if (isset($parts['port'])) {
+                            $origin .= ':' . $parts['port'];
+                        }
+                        $result['action'] = str_starts_with($action, '/')
+                            ? $origin . $action
+                            : rtrim(dirname($baseUrl), '/') . '/' . ltrim($action, '/');
+                    }
+                }
+            }
+            break;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Opens a CORE session and distinguishes invalid primary credentials from
+     * a valid login that is waiting for the user's optional TOTP challenge.
+     * The caller owns and must remove cookie_jar when authentication succeeds.
+     */
+    public function dashboard_core_begin_authentication(string $loginUrl, array $credentials): array {
+        $credentials = $this->dashboard_core_runtime_credentials($credentials);
+        $base = [
+            'authenticated' => false,
+            'credentials_validated' => false,
+            'requires_totp' => false,
+            'cookie_jar' => '',
+            'login_response' => [],
+            'error' => '',
+        ];
+        if (!$this->dashboard_core_has_runtime_credentials($credentials)) {
+            return array_merge($base, ['error' => 'Debes ingresar credenciales de CORE para esta consulta.']);
+        }
+
+        $cookieJar = tempnam(sys_get_temp_dir(), 'core_sync_');
+        if ($cookieJar === false) {
+            return array_merge($base, ['error' => 'No se pudo crear un archivo temporal para la sesión CORE.']);
+        }
+        $fail = static function (array $values) use ($base, $cookieJar): array {
+            @unlink($cookieJar);
+            return array_merge($base, $values);
+        };
+
+        $loginPage = $this->dashboard_core_curl($loginUrl, [
+            CURLOPT_COOKIEJAR => $cookieJar,
+            CURLOPT_COOKIEFILE => $cookieJar,
+        ]);
+        if (($loginPage['error'] ?? '') !== '') {
+            return $fail(['error' => 'No se pudo abrir CORE: ' . $loginPage['error']]);
+        }
+        $formBaseUrl = trim((string)($loginPage['effective_url'] ?? '')) !== ''
+            ? (string)$loginPage['effective_url']
+            : $loginUrl;
+        $form = $this->dashboard_core_parse_login_form((string)($loginPage['body'] ?? ''), $formBaseUrl);
+        if (empty($form['has_login_form'])) {
+            return $fail(['error' => 'No se encontró el formulario de acceso de CORE.']);
+        }
+
+        $payloadFields = is_array($form['fields'] ?? null) ? $form['fields'] : [];
+        $payloadFields['csrf_token'] = (string)($form['csrf_token'] ?? '');
+        $payloadFields['login_string'] = $credentials['user'];
+        $payloadFields['login_pass'] = $credentials['pass'];
+        if (!array_key_exists('submit', $payloadFields) || trim((string)$payloadFields['submit']) === '') {
+            $payloadFields['submit'] = 'Ingresar';
+        }
+        $login = $this->dashboard_core_curl((string)$form['action'], [
+            CURLOPT_COOKIEJAR => $cookieJar,
+            CURLOPT_COOKIEFILE => $cookieJar,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($payloadFields),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+        ]);
+        if (($login['error'] ?? '') !== '') {
+            return $fail(['error' => 'No se pudo autenticar en CORE: ' . $login['error']]);
+        }
+
+        $responseBase = trim((string)($login['effective_url'] ?? '')) !== ''
+            ? (string)$login['effective_url']
+            : (string)$form['action'];
+        $totpForm = $this->dashboard_core_parse_totp_form((string)($login['body'] ?? ''), $responseBase);
+        $totpAttempted = false;
+        if (!empty($totpForm['has_totp_form'])) {
+            if ($credentials['totp'] === '') {
+                return $fail([
+                    'credentials_validated' => true,
+                    'requires_totp' => true,
+                ]);
+            }
+            if (!preg_match('/^\d{6,8}$/', $credentials['totp'])) {
+                return $fail([
+                    'credentials_validated' => true,
+                    'requires_totp' => true,
+                    'error' => 'El código TOTP debe contener entre 6 y 8 dígitos.',
+                ]);
+            }
+
+            $totpFields = is_array($totpForm['fields'] ?? null) ? $totpForm['fields'] : [];
+            $totpFields[(string)$totpForm['field']] = $credentials['totp'];
+            $totpAttempted = true;
+            $login = $this->dashboard_core_curl((string)$totpForm['action'], [
+                CURLOPT_COOKIEJAR => $cookieJar,
+                CURLOPT_COOKIEFILE => $cookieJar,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query($totpFields),
+                CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+            ]);
+            if (($login['error'] ?? '') !== '') {
+                return $fail([
+                    'credentials_validated' => true,
+                    'requires_totp' => true,
+                    'error' => 'No se pudo verificar el código TOTP en CORE: ' . $login['error'],
+                ]);
+            }
+            $afterTotpBase = trim((string)($login['effective_url'] ?? '')) !== ''
+                ? (string)$login['effective_url']
+                : (string)$totpForm['action'];
+            if (!empty($this->dashboard_core_parse_totp_form((string)($login['body'] ?? ''), $afterTotpBase)['has_totp_form'])) {
+                return $fail([
+                    'credentials_validated' => true,
+                    'requires_totp' => true,
+                    'error' => 'CORE rechazó el código TOTP. Verifica el código e inténtalo nuevamente.',
+                ]);
+            }
+        }
+
+        $loginBase = trim((string)($login['effective_url'] ?? '')) !== ''
+            ? (string)$login['effective_url']
+            : (string)$form['action'];
+        if ($this->dashboard_core_response_requires_auth($login)
+            || !empty($this->dashboard_core_parse_login_form((string)($login['body'] ?? ''), $loginBase)['has_login_form'])) {
+            if ($totpAttempted) {
+                return $fail([
+                    'credentials_validated' => true,
+                    'requires_totp' => true,
+                    'error' => 'CORE rechazó el código TOTP. Verifica el código e inténtalo nuevamente.',
+                ]);
+            }
+            return $fail(['error' => 'CORE rechazó las credenciales ingresadas. Verifica usuario y contraseña.']);
+        }
+
+        return array_merge($base, [
+            'authenticated' => true,
+            'credentials_validated' => true,
+            'cookie_jar' => $cookieJar,
+            'login_response' => $login,
+        ]);
+    }
+
+    public function dashboard_validate_core_credentials(string $loginUrl, array $credentials): array {
+        $result = $this->dashboard_core_begin_authentication($loginUrl, $credentials);
+        $cookieJar = trim((string)($result['cookie_jar'] ?? ''));
+        if ($cookieJar !== '') {
+            @unlink($cookieJar);
+        }
+        unset($result['cookie_jar'], $result['login_response']);
+
+        return $result;
+    }
+
     public function dashboard_core_pick_first_recursive(array $item, array $keys): string {
         $direct = $this->dashboard_core_pick_first_value($item, $keys);
         if ($direct !== '') {
@@ -1158,6 +1430,7 @@ class MantencionCoreImportService
         return [
             'user' => trim((string)($input['user'] ?? '')),
             'pass' => trim((string)($input['pass'] ?? '')),
+            'totp' => trim((string)($input['totp'] ?? '')),
         ];
     }
 
@@ -1263,58 +1536,28 @@ class MantencionCoreImportService
         if (!$this->dashboard_core_has_runtime_credentials($credentials)) {
             return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'Debes ingresar credenciales de CORE para esta consulta.', 'authenticated' => false];
         }
-        $cookieJar = tempnam(sys_get_temp_dir(), 'core_sync_');
-        if ($cookieJar === false) {
-            return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo crear un archivo temporal para la sesión CORE.', 'authenticated' => false];
-        }
         $sourceUrl = trim($sourceUrl);
         $loginUrl = trim((string)($loginUrl ?? ''));
         if ($sourceUrl === '') {
-            @unlink($cookieJar);
             return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'Falta configurar la URL de origen de CORE.', 'authenticated' => false];
         }
         if ($loginUrl === '') {
             $loginUrl = $sourceUrl;
         }
-        $loginPage = $this->dashboard_core_curl($loginUrl, [
-            CURLOPT_COOKIEJAR => $cookieJar,
-            CURLOPT_COOKIEFILE => $cookieJar,
-        ]);
-        if ($loginPage['error'] !== '') {
-            @unlink($cookieJar);
-            return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo abrir CORE: ' . $loginPage['error'], 'authenticated' => false];
+        $auth = $this->dashboard_core_begin_authentication($loginUrl, $credentials);
+        if (empty($auth['authenticated'])) {
+            return [
+                'skipped' => false,
+                'imported' => 0,
+                'updated' => 0,
+                'error' => (string)($auth['error'] ?? ''),
+                'authenticated' => false,
+                'credentials_validated' => !empty($auth['credentials_validated']),
+                'requires_totp' => !empty($auth['requires_totp']),
+            ];
         }
-        $formBaseUrl = trim((string)($loginPage['effective_url'] ?? '')) !== ''
-            ? (string)$loginPage['effective_url']
-            : $loginUrl;
-        $form = $this->dashboard_core_parse_login_form($loginPage['body'], $formBaseUrl);
-        if (!$form['has_login_form']) {
-            @unlink($cookieJar);
-            return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se encontró el formulario de acceso de CORE.', 'authenticated' => false];
-        }
-        $payloadFields = is_array($form['fields'] ?? null) ? $form['fields'] : [];
-        $payloadFields['csrf_token'] = $form['csrf_token'];
-        $payloadFields['login_string'] = (string)$credentials['user'];
-        $payloadFields['login_pass'] = (string)$credentials['pass'];
-        if (!array_key_exists('submit', $payloadFields) || trim((string)$payloadFields['submit']) === '') {
-            $payloadFields['submit'] = 'Ingresar';
-        }
-        $payload = http_build_query($payloadFields);
-        $login = $this->dashboard_core_curl($form['action'], [
-            CURLOPT_COOKIEJAR => $cookieJar,
-            CURLOPT_COOKIEFILE => $cookieJar,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
-        ]);
-        if ($login['error'] !== '') {
-            @unlink($cookieJar);
-            return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'No se pudo autenticar en CORE: ' . $login['error'], 'authenticated' => false];
-        }
-        if ($this->dashboard_core_response_requires_auth($login) || $this->dashboard_core_parse_login_form($login['body'], (string)($login['effective_url'] ?? $form['action']))['has_login_form']) {
-            @unlink($cookieJar);
-            return ['skipped' => false, 'imported' => 0, 'updated' => 0, 'error' => 'CORE rechazó las credenciales ingresadas. Verifica usuario y contraseña.', 'authenticated' => false];
-        }
+        $cookieJar = (string)$auth['cookie_jar'];
+        $login = is_array($auth['login_response'] ?? null) ? $auth['login_response'] : [];
         $coreAuthenticated = true;
         $rows = [];
         $page = ['body' => '', 'error' => '', 'http_code' => 0, 'effective_url' => ''];

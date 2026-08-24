@@ -4,6 +4,9 @@ namespace App\Modulos\RedmineMantencion\Services;
 
 class MantencionDashboardService
 {
+    private const CORE_PENDING_SESSION_KEY = 'mantencion_dashboard_core_pending_totp';
+    private const CORE_PENDING_TTL_SECONDS = 180;
+
     private readonly MantencionCoreImportService $coreImport;
     private readonly MantencionRedmineSyncService $redmineSync;
     private readonly MantencionRetentionService $retention;
@@ -111,6 +114,40 @@ class MantencionDashboardService
 
     public function dashboard_core_empty_import_message(): string {
         return 'No hay reportes nuevos ni reportes por actualizar.';
+    }
+
+    public function dashboard_store_pending_core_totp(array $payload): string {
+        $token = bin2hex(random_bytes(24));
+        $payload['token'] = $token;
+        $payload['expires_at'] = time() + self::CORE_PENDING_TTL_SECONDS;
+        session()->put(self::CORE_PENDING_SESSION_KEY, encrypt($payload));
+
+        return $token;
+    }
+
+    public function dashboard_pending_core_totp(string $token = ''): array {
+        $encrypted = session()->get(self::CORE_PENDING_SESSION_KEY);
+        if (!is_string($encrypted) || $encrypted === '') {
+            return [];
+        }
+        try {
+            $payload = decrypt($encrypted);
+        } catch (\Throwable) {
+            $this->dashboard_forget_pending_core_totp();
+            return [];
+        }
+        if (!is_array($payload)
+            || (int)($payload['expires_at'] ?? 0) < time()
+            || ($token !== '' && !hash_equals((string)($payload['token'] ?? ''), $token))) {
+            $this->dashboard_forget_pending_core_totp();
+            return [];
+        }
+
+        return $payload;
+    }
+
+    public function dashboard_forget_pending_core_totp(): void {
+        session()->forget(self::CORE_PENDING_SESSION_KEY);
     }
 
     public function message_is_procesado(array $message): bool {
@@ -363,6 +400,15 @@ class MantencionDashboardService
                     if (function_exists('maintenance_mode_block_if_enabled')) {
                         maintenance_mode_block_if_enabled();
                     }
+                    $coreAttemptKey = 'mantencion-core-auth:' . auth_get_user_id() . ':' . (string)request()->ip();
+                    if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($coreAttemptKey, 8)) {
+                        $flashMsg = 'Demasiados intentos de conexión con CORE. Espera '
+                            . \Illuminate\Support\Facades\RateLimiter::availableIn($coreAttemptKey)
+                            . ' segundos antes de intentar nuevamente.';
+                        $ajaxPayload['ok'] = false;
+                        break;
+                    }
+                    \Illuminate\Support\Facades\RateLimiter::hit($coreAttemptKey, 60);
                     $desde = trim((string)($_POST['core_desde'] ?? ''));
                     $hasta = trim((string)($_POST['core_hasta'] ?? ''));
                     $canSelectCoreAssignee = $this->coreImport->dashboard_can_select_core_assignee();
@@ -374,7 +420,24 @@ class MantencionDashboardService
                     }
                     $coreUser = trim((string)($_POST['core_runtime_user'] ?? ''));
                     $corePass = trim((string)($_POST['core_runtime_pass'] ?? ''));
+                    $coreTotp = trim((string)($_POST['core_runtime_totp'] ?? ''));
+                    $pendingToken = trim((string)($_POST['core_pending_token'] ?? ''));
                     $rememberCore = !empty($_POST['core_remember_credentials']);
+                    if ($pendingToken !== '') {
+                        $pending = $this->dashboard_pending_core_totp($pendingToken);
+                        if ($pending === []) {
+                            $flashMsg = 'La validación TOTP venció. Inicia nuevamente la conexión con CORE.';
+                            $ajaxPayload['ok'] = false;
+                            session()->put('mantencion_dashboard_open_core_credentials_modal', true);
+                            break;
+                        }
+                        $coreUser = trim((string)($pending['user'] ?? ''));
+                        $corePass = trim((string)($pending['pass'] ?? ''));
+                        $rememberCore = !empty($pending['remember']);
+                        $desde = trim((string)($pending['desde'] ?? $desde));
+                        $hasta = trim((string)($pending['hasta'] ?? $hasta));
+                        $assigned = trim((string)($pending['assigned'] ?? $assigned));
+                    }
                     if ($coreUser === '' || $corePass === '') {
                         $savedCoreCredentials = $this->coreImport->dashboard_core_credentials_for_current_user();
                         if ($coreUser === '') {
@@ -385,7 +448,6 @@ class MantencionDashboardService
                         }
                     }
                     $currentUserData = dashboard_current_user();
-                    $coreCredentialUserKey = $this->coreImport->dashboard_core_current_credential_user_key($currentUserData);
                     $result = $this->coreImport->dashboard_sync_core_history($messages, [
                         'desde' => $desde,
                         'hasta' => $hasta,
@@ -394,18 +456,40 @@ class MantencionDashboardService
                     ], true, [
                         'user' => $coreUser,
                         'pass' => $corePass,
+                        'totp' => $coreTotp,
                     ]);
+                    if (!empty($result['requires_totp'])) {
+                        if ($pendingToken === '') {
+                            $pendingToken = $this->dashboard_store_pending_core_totp([
+                                'user' => $coreUser,
+                                'pass' => $corePass,
+                                'remember' => $rememberCore,
+                                'desde' => $desde,
+                                'hasta' => $hasta,
+                                'assigned' => $assigned,
+                            ]);
+                        }
+                        session()->put('mantencion_dashboard_open_core_totp_modal', true);
+                        session()->put('mantencion_dashboard_core_pending_token', $pendingToken);
+                        $flashMsg = trim((string)($result['error'] ?? '')) !== ''
+                            ? (string)$result['error']
+                            : 'Credenciales CORE validadas. Ingresa el código TOTP para continuar.';
+                        $ajaxPayload['ok'] = false;
+                        break;
+                    }
                     $coreCredentialsSaved = null;
                     if ($rememberCore && $coreUser !== '' && $corePass !== '' && (empty($result['error']) || !empty($result['authenticated']))) {
-                        $coreCredentialsSaved = core_credentials_save_for_user($coreCredentialUserKey, $coreUser, $corePass);
+                        $coreCredentialsSaved = $this->coreImport->dashboard_core_save_credentials_for_current_user($coreUser, $corePass);
                         if (!$coreCredentialsSaved) {
                             dashboard_log_action('CORE_CREDENTIALS_SAVE_FAIL', 'No se pudieron guardar las credenciales CORE del usuario conectado.');
                         }
                     }
                     if (!empty($result['error'])) {
                         $flashMsg = $result['error'];
-                        if (str_contains(dashboard_normalize_text($flashMsg), 'core rechazo las credenciales')) {
-                            core_credentials_clear_for_user($coreCredentialUserKey);
+                        if (empty($result['credentials_validated'])
+                            && str_contains(dashboard_normalize_text($flashMsg), 'core rechazo las credenciales')) {
+                            $this->coreImport->dashboard_core_clear_credentials_for_current_user();
+                            $this->dashboard_forget_pending_core_totp();
                             session()->put('mantencion_dashboard_open_core_credentials_modal', true);
                             session()->put('mantencion_dashboard_core_runtime_user', $coreUser);
                         }
@@ -414,6 +498,9 @@ class MantencionDashboardService
                         }
                         dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE desde ' . $desde . ' hasta ' . $hasta . ': ' . $result['error']);
                     } else {
+                        \Illuminate\Support\Facades\RateLimiter::clear($coreAttemptKey);
+                        $this->dashboard_forget_pending_core_totp();
+                        session()->forget('mantencion_dashboard_core_pending_token');
                         $flashMsg = 'Importación CORE completada. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
                         if ($coreCredentialsSaved === true) {
                             $flashMsg .= ' | Credenciales guardadas en tu cuenta.';

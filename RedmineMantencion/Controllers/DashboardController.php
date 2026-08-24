@@ -46,6 +46,11 @@ class DashboardController extends Controller
 
         $flashSession = session()->pull('mantencion_flash');
         $openCoreCredentialsModal = (bool) session()->pull('mantencion_dashboard_open_core_credentials_modal', false);
+        $openCoreTotpModal = (bool) session()->pull('mantencion_dashboard_open_core_totp_modal', false);
+        $corePendingToken = trim((string) session()->pull('mantencion_dashboard_core_pending_token', ''));
+        $corePending = $corePendingToken !== ''
+            ? $this->dashboardService->dashboard_pending_core_totp($corePendingToken)
+            : [];
         $coreRuntimeUserSession = trim((string) session()->pull('mantencion_dashboard_core_runtime_user', ''));
 
         $dashboardResult = $this->dashboardService->handle_request();
@@ -79,6 +84,11 @@ class DashboardController extends Controller
         $coreAssignedName = $this->coreImport->dashboard_can_select_core_assignee()
             ? (string) ($_GET['core_assigned_name'] ?? $this->coreImport->dashboard_default_core_assigned_name())
             : $this->coreImport->dashboard_default_core_assigned_name();
+        if ($corePending !== []) {
+            $coreDesde = trim((string)($corePending['desde'] ?? $coreDesde));
+            $coreHasta = trim((string)($corePending['hasta'] ?? $coreHasta));
+            $coreAssignedName = trim((string)($corePending['assigned'] ?? $coreAssignedName));
+        }
         $currentRole = auth_get_user_role();
         $canEditReports = auth_can('reportes_editar');
         $canDeleteReports = auth_can('reportes_eliminar');

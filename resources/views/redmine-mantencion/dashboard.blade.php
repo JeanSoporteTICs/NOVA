@@ -66,6 +66,8 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
     <input type="hidden" name="action" value="import_core_history">
     <input type="hidden" name="core_runtime_user" id="core-runtime-user-hidden" value="">
     <input type="hidden" name="core_runtime_pass" id="core-runtime-pass-hidden" value="">
+    <input type="hidden" name="core_runtime_totp" id="core-runtime-totp-hidden" value="">
+    <input type="hidden" name="core_pending_token" id="core-pending-token" value="<?= $h($corePendingToken) ?>">
     <input type="hidden" name="core_remember_credentials" id="core-remember-hidden" value="0">
     <div class="dashboard-panel__header">
       <div>
@@ -101,7 +103,9 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
         <?php endif; ?>
       </div>
       </div>
-      <button type="<?= $hasSavedCoreCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-primary dashboard-import-button" <?= $hasSavedCoreCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"' ?> <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+      <button type="<?= ($hasSavedCoreCredentials && $corePendingToken === '') ? 'submit' : 'button' ?>" class="btn-nova btn-nova-primary dashboard-import-button"
+        <?php if ($corePendingToken !== ''): ?>data-bs-toggle="modal" data-bs-target="#coreTotpModal"<?php elseif (!$hasSavedCoreCredentials): ?>data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"<?php endif; ?>
+        <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
         <i class="bi bi-cloud-download"></i> Importar desde CORE
       </button>
     </div>
@@ -561,7 +565,35 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn-nova btn-nova-primary" id="core-credentials-submit-btn">Consultar CORE</button>
+        <button type="button" class="btn-nova btn-nova-primary" id="core-credentials-submit-btn">Validar credenciales</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="coreTotpModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Verificación TOTP de CORE</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="core-credentials-animation" aria-hidden="true">
+          <img src="<?= $h($mantencionBaseUrl) ?>/assets/img/animacion-carga.gif" alt="">
+        </div>
+        <div class="nova-integration-status is-success mb-3">
+          <i class="bi bi-check-circle-fill"></i>
+          <span>Usuario y contraseña validados correctamente.</span>
+        </div>
+        <label class="form-label" for="core-runtime-totp-input">Código TOTP</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]{6,8}" maxlength="8" autocomplete="one-time-code"
+          class="form-control text-center fs-4" id="core-runtime-totp-input" placeholder="000000">
+        <div class="form-text">Ingresa el código de tu aplicación autenticadora. Este código nunca se guarda.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-nova btn-nova-primary" id="core-totp-submit-btn">Verificar e importar</button>
       </div>
     </div>
   </div>
@@ -1830,9 +1862,13 @@ const coreRuntimeUserInput = document.getElementById('core-runtime-user-input');
 const coreRuntimePassInput = document.getElementById('core-runtime-pass-input');
 const coreRuntimeUserHidden = document.getElementById('core-runtime-user-hidden');
 const coreRuntimePassHidden = document.getElementById('core-runtime-pass-hidden');
+const coreRuntimeTotpInput = document.getElementById('core-runtime-totp-input');
+const coreRuntimeTotpHidden = document.getElementById('core-runtime-totp-hidden');
+const corePendingToken = document.getElementById('core-pending-token')?.value || '';
 const coreRememberInput = document.getElementById('core-remember-input');
 const coreRememberHidden = document.getElementById('core-remember-hidden');
 const coreCredentialsModal = document.getElementById('coreCredentialsModal');
+const coreTotpModal = document.getElementById('coreTotpModal');
 const coreImportOverlay = document.getElementById('core-import-overlay');
 const coreImportProgressBar = document.getElementById('core-import-progress-bar');
 const coreImportProgressPercent = document.getElementById('core-import-progress-percent');
@@ -1842,6 +1878,7 @@ const dashboardProgressGif = document.getElementById('dashboard-progress-gif');
 const dashboardCoreLoading = document.getElementById('dashboard-core-loading');
 const hasSavedCoreCredentials = <?= $hasSavedCoreCredentials ? 'true' : 'false' ?>;
 const shouldOpenCoreCredentialsModal = <?= $openCoreCredentialsModal ? 'true' : 'false' ?>;
+const shouldOpenCoreTotpModal = <?= $openCoreTotpModal ? 'true' : 'false' ?>;
 let coreImportProgressTimer = null;
 
 if (coreImportOverlay && coreImportOverlay.parentElement !== document.body) {
@@ -1936,7 +1973,7 @@ if (coreImportForm) {
     if (coreRuntimeUserHidden) coreRuntimeUserHidden.value = coreRuntimeUserInput?.value || '';
     if (coreRuntimePassHidden) coreRuntimePassHidden.value = coreRuntimePassInput?.value || '';
     if (coreRememberHidden) coreRememberHidden.value = coreRememberInput?.checked ? '1' : '0';
-    if (!hasSavedCoreCredentials && (!coreRuntimeUserHidden?.value.trim() || !coreRuntimePassHidden?.value.trim())) {
+    if (!hasSavedCoreCredentials && !corePendingToken && (!coreRuntimeUserHidden?.value.trim() || !coreRuntimePassHidden?.value.trim())) {
       event.preventDefault();
       window.appModal?.show({
         title: 'Credenciales requeridas',
@@ -1947,6 +1984,36 @@ if (coreImportForm) {
     }
     showDashboardProgress('core');
   });
+}
+
+if (coreTotpModal) {
+  const coreTotpSubmitBtn = document.getElementById('core-totp-submit-btn');
+  coreRuntimeTotpInput?.addEventListener('input', () => {
+    coreRuntimeTotpInput.value = coreRuntimeTotpInput.value.replace(/\D/g, '').slice(0, 8);
+  });
+  coreTotpSubmitBtn?.addEventListener('click', () => {
+    const code = coreRuntimeTotpInput?.value.trim() || '';
+    if (!/^\d{6,8}$/.test(code)) {
+      window.appModal?.show({
+        title: 'Código TOTP requerido',
+        message: 'Ingresa un código numérico de 6 a 8 dígitos.',
+        tone: 'warning'
+      });
+      return;
+    }
+    if (coreRuntimeTotpHidden) coreRuntimeTotpHidden.value = code;
+    bootstrap.Modal.getOrCreateInstance(coreTotpModal).hide();
+    window.setTimeout(() => coreImportForm?.requestSubmit(), 160);
+  });
+  coreTotpModal.addEventListener('hidden.bs.modal', () => {
+    if (coreRuntimeTotpInput) coreRuntimeTotpInput.value = '';
+  });
+  if (shouldOpenCoreTotpModal && window.bootstrap?.Modal) {
+    window.setTimeout(() => {
+      window.bootstrap.Modal.getOrCreateInstance(coreTotpModal).show();
+      coreRuntimeTotpInput?.focus();
+    }, 250);
+  }
 }
 
 if (coreCredentialsModal) {

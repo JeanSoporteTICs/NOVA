@@ -223,9 +223,13 @@ final class UserIntegrationRepository
                 $externalUser = trim((string) ($row->usuario_externo ?? ''));
                 $secret = trim((string) ($row->valor_secreto ?? ''));
                 $hasSecret = $secret !== '' && SecretValue::inspect($secret)['decryptable'];
+                // A row is usable only when its secret can actually be
+                // decrypted.  Previously CORE was reported as configured
+                // when just usuario_externo existed, even if valor_secreto
+                // belonged to an old APP_KEY and could no longer be read.
                 $stored = $this->isRedmineType($type)
-                    ? $secret !== ''
-                    : ($externalUser !== '' || $hasSecret);
+                    ? $hasSecret
+                    : ($externalUser !== '' && $hasSecret);
                 $result[$type] = [
                     'type' => $type,
                     'external_user' => $externalUser,

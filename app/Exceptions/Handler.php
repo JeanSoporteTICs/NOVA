@@ -34,6 +34,8 @@ class Handler extends ExceptionHandler
         'current_password',
         'password',
         'password_confirmation',
+        'core_runtime_pass',
+        'core_runtime_totp',
     ];
 
     /**
