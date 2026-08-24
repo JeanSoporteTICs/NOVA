@@ -13,6 +13,8 @@ class TrimStrings extends Middleware
      */
     protected $except = [
         'current_password',
+        'core_runtime_pass',
+        'core_runtime_totp',
         'password',
         'password_confirmation',
     ];

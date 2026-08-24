@@ -84,7 +84,7 @@ class MantencionDashboardService
         return match ($action) {
             'update', 'process_selected', 'archive_selected', 'reset_errors' => 'reportes_editar',
             'delete', 'delete_selected' => 'reportes_eliminar',
-            'import_core_history' => 'reportes_importar_core',
+            'validate_core_credentials', 'import_core_history' => 'reportes_importar_core',
             'toggle_hora_extra' => 'horas_extra_editar',
             default => null,
         };
@@ -111,6 +111,13 @@ class MantencionDashboardService
 
     public function dashboard_core_empty_import_message(): string {
         return 'No hay reportes nuevos ni reportes por actualizar.';
+    }
+
+    private function dashboard_core_auth_rate_limit_key(string $factor): string {
+        $userId = function_exists('auth_get_user_id') ? trim((string)auth_get_user_id()) : 'guest';
+        $ip = function_exists('request') ? (string)(request()->ip() ?? '') : (string)($_SERVER['REMOTE_ADDR'] ?? '');
+
+        return 'mantencion:core-auth:' . $factor . ':' . hash('sha256', $userId . '|' . $ip);
     }
 
     public function message_is_procesado(array $message): bool {
@@ -359,9 +366,14 @@ class MantencionDashboardService
                 case 'process_selected':
                     // se resuelve después del switch para incluir resultados del envío.
                     break;
-                case 'import_core_history':
-                    if (function_exists('maintenance_mode_block_if_enabled')) {
-                        maintenance_mode_block_if_enabled();
+                case 'validate_core_credentials':
+                    $credentialsRateKey = $this->dashboard_core_auth_rate_limit_key('credentials');
+                    if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($credentialsRateKey, 5)) {
+                        $waitSeconds = \Illuminate\Support\Facades\RateLimiter::availableIn($credentialsRateKey);
+                        $flashMsg = 'Demasiados intentos de acceso a CORE. Espera ' . max(1, $waitSeconds) . ' segundos.';
+                        $ajaxPayload['ok'] = false;
+                        session()->put('mantencion_dashboard_open_core_credentials_modal', true);
+                        break;
                     }
                     $desde = trim((string)($_POST['core_desde'] ?? ''));
                     $hasta = trim((string)($_POST['core_hasta'] ?? ''));
@@ -372,10 +384,13 @@ class MantencionDashboardService
                         $ajaxPayload['ok'] = false;
                         break;
                     }
-                    $coreUser = trim((string)($_POST['core_runtime_user'] ?? ''));
-                    $corePass = trim((string)($_POST['core_runtime_pass'] ?? ''));
-                    $rememberCore = !empty($_POST['core_remember_credentials']);
-                    if ($coreUser === '' || $corePass === '') {
+
+                    $submittedCoreUser = trim((string)($_POST['core_runtime_user'] ?? ''));
+                    $submittedCorePass = trim((string)($_POST['core_runtime_pass'] ?? ''));
+                    $coreUser = $submittedCoreUser;
+                    $corePass = $submittedCorePass;
+                    $usingSavedCredentials = $coreUser === '' || $corePass === '';
+                    if ($usingSavedCredentials) {
                         $savedCoreCredentials = $this->coreImport->dashboard_core_credentials_for_current_user();
                         if ($coreUser === '') {
                             $coreUser = trim((string)($savedCoreCredentials['user'] ?? ''));
@@ -384,6 +399,165 @@ class MantencionDashboardService
                             $corePass = trim((string)($savedCoreCredentials['pass'] ?? ''));
                         }
                     }
+
+                    $validation = $this->coreImport->dashboard_validate_core_credentials([
+                        'user' => $coreUser,
+                        'pass' => $corePass,
+                    ]);
+                    if (empty($validation['validated'])) {
+                        \Illuminate\Support\Facades\RateLimiter::hit($credentialsRateKey, 60);
+                        $flashMsg = (string)($validation['error'] ?? 'CORE no pudo validar las credenciales.');
+                        $ajaxPayload['ok'] = false;
+                        session()->put('mantencion_dashboard_open_core_credentials_modal', true);
+                        if ($submittedCoreUser !== '') {
+                            session()->put('mantencion_dashboard_core_runtime_user', $submittedCoreUser);
+                        }
+                        if ($usingSavedCredentials && str_contains(dashboard_normalize_text($flashMsg), 'core rechazo las credenciales')) {
+                            core_credentials_clear_for_user($this->coreImport->dashboard_core_current_credential_user_key(dashboard_current_user()));
+                        }
+                        break;
+                    }
+                    \Illuminate\Support\Facades\RateLimiter::clear($credentialsRateKey);
+
+                    $rememberCore = !empty($_POST['core_remember_credentials']);
+                    $coreCredentialsSaved = null;
+                    if ($rememberCore && $submittedCoreUser !== '' && $submittedCorePass !== '') {
+                        $credentialUserKey = $this->coreImport->dashboard_core_current_credential_user_key(dashboard_current_user());
+                        $coreCredentialsSaved = core_credentials_save_for_user($credentialUserKey, $submittedCoreUser, $submittedCorePass);
+                    }
+
+                    $requiresTotp = !empty($validation['requires_totp']);
+                    if (!$requiresTotp) {
+                        $currentUserData = dashboard_current_user();
+                        $result = $this->coreImport->dashboard_sync_core_history($messages, [
+                            'desde' => $desde,
+                            'hasta' => $hasta,
+                            'assigned' => $assigned,
+                            '_current_user' => !$canSelectCoreAssignee && is_array($currentUserData) ? $currentUserData : [],
+                        ], true, [
+                            'user' => $coreUser,
+                            'pass' => $corePass,
+                            'totp' => '',
+                        ]);
+
+                        $normalizedImportError = dashboard_normalize_text((string)($result['error'] ?? ''));
+                        if (str_contains($normalizedImportError, 'totp')) {
+                            // Si CORE cambia el requisito entre ambas llamadas,
+                            // continuar de forma segura por el segundo factor.
+                            $requiresTotp = true;
+                        } elseif (!empty($result['error'])) {
+                            $flashMsg = (string)$result['error'];
+                            $ajaxPayload['ok'] = false;
+                            if (str_contains($normalizedImportError, 'core rechazo las credenciales')) {
+                                session()->put('mantencion_dashboard_open_core_credentials_modal', true);
+                            }
+                            dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE sin TOTP desde ' . $desde . ' hasta ' . $hasta . ': ' . $flashMsg);
+                            break;
+                        } else {
+                            $flashMsg = 'Importación CORE completada sin TOTP. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
+                            if ($coreCredentialsSaved === true) {
+                                $flashMsg .= ' | Credenciales guardadas en tu cuenta.';
+                            } elseif ($coreCredentialsSaved === false) {
+                                $flashMsg .= ' | No se pudieron guardar las credenciales.';
+                            }
+                            if ((int)($result['imported'] ?? 0) === 0 && (int)($result['updated'] ?? 0) === 0 && is_array($result['trace'] ?? null)) {
+                                $flashMsg .= ' | ' . $this->dashboard_core_empty_import_message();
+                            }
+                            $ajaxPayload['requires_totp'] = false;
+                            $ajaxPayload['imported'] = (int)($result['imported'] ?? 0);
+                            $ajaxPayload['updated'] = (int)($result['updated'] ?? 0);
+                            dashboard_log_action(
+                                'CORE_IMPORT',
+                                'Obtuvo datos CORE sin TOTP desde ' . $desde . ' hasta ' . $hasta
+                                . ' | asignado "' . $assigned . '"'
+                                . ' | nuevos ' . (int)($result['imported'] ?? 0)
+                                . ' | actualizados ' . (int)($result['updated'] ?? 0)
+                            );
+                            break;
+                        }
+                    }
+
+                    $pendingToken = bin2hex(random_bytes(24));
+                    try {
+                        $encryptedCredentials = encrypt(json_encode([
+                            'user' => $coreUser,
+                            'pass' => $corePass,
+                        ], JSON_THROW_ON_ERROR));
+                    } catch (\Throwable) {
+                        $flashMsg = 'No se pudo proteger temporalmente la sesión de acceso a CORE.';
+                        $ajaxPayload['ok'] = false;
+                        break;
+                    }
+
+                    session()->put('mantencion_core_totp_pending', [
+                        'token' => $pendingToken,
+                        'credentials' => $encryptedCredentials,
+                        'issued_at' => time(),
+                        'desde' => $desde,
+                        'hasta' => $hasta,
+                        'assigned' => $assigned,
+                    ]);
+
+                    $flashMsg = 'Credenciales CORE validadas. Ingresa el código TOTP para continuar.';
+                    if ($coreCredentialsSaved === true) {
+                        $flashMsg .= ' Las credenciales quedaron guardadas en tu cuenta.';
+                    } elseif ($coreCredentialsSaved === false) {
+                        $flashMsg .= ' No se pudieron guardar las credenciales, pero puedes continuar con esta consulta.';
+                    }
+                    $ajaxPayload['requires_totp'] = true;
+                    $ajaxPayload['challenge_token'] = $pendingToken;
+                    $ajaxPayload['credentials_saved'] = $coreCredentialsSaved;
+                    session()->put('mantencion_dashboard_open_core_totp_modal', !$ajaxAction);
+                    dashboard_log_action('CORE_CREDENTIALS_VALIDATED', 'Credenciales CORE validadas; pendiente segundo factor TOTP.');
+                    break;
+                case 'import_core_history':
+                    if (function_exists('maintenance_mode_block_if_enabled')) {
+                        maintenance_mode_block_if_enabled();
+                    }
+                    $totpRateKey = $this->dashboard_core_auth_rate_limit_key('totp');
+                    if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($totpRateKey, 6)) {
+                        $waitSeconds = \Illuminate\Support\Facades\RateLimiter::availableIn($totpRateKey);
+                        $flashMsg = 'Demasiados intentos TOTP. Espera ' . max(1, $waitSeconds) . ' segundos.';
+                        $ajaxPayload['ok'] = false;
+                        session()->put('mantencion_dashboard_open_core_totp_modal', true);
+                        break;
+                    }
+                    $pendingToken = trim((string)($_POST['core_pending_token'] ?? ''));
+                    $pendingCoreAuth = session()->pull('mantencion_core_totp_pending');
+                    if (!is_array($pendingCoreAuth)
+                        || $pendingToken === ''
+                        || !hash_equals((string)($pendingCoreAuth['token'] ?? ''), $pendingToken)
+                        || (time() - (int)($pendingCoreAuth['issued_at'] ?? 0)) > 180) {
+                        $flashMsg = 'La validación previa de CORE venció. Valida nuevamente tu usuario y contraseña.';
+                        $ajaxPayload['ok'] = false;
+                        session()->put('mantencion_dashboard_open_core_credentials_modal', true);
+                        break;
+                    }
+
+                    try {
+                        $decryptedCredentials = json_decode(decrypt((string)($pendingCoreAuth['credentials'] ?? '')), true, 8, JSON_THROW_ON_ERROR);
+                    } catch (\Throwable) {
+                        $decryptedCredentials = [];
+                    }
+                    $coreUser = trim((string)($decryptedCredentials['user'] ?? ''));
+                    $corePass = trim((string)($decryptedCredentials['pass'] ?? ''));
+                    if ($coreUser === '' || $corePass === '') {
+                        $flashMsg = 'No se pudo recuperar la validación temporal de CORE. Ingresa nuevamente tus credenciales.';
+                        $ajaxPayload['ok'] = false;
+                        session()->put('mantencion_dashboard_open_core_credentials_modal', true);
+                        break;
+                    }
+
+                    $desde = trim((string)($pendingCoreAuth['desde'] ?? ''));
+                    $hasta = trim((string)($pendingCoreAuth['hasta'] ?? ''));
+                    $canSelectCoreAssignee = $this->coreImport->dashboard_can_select_core_assignee();
+                    $assigned = $this->dashboard_enforced_assigned_name((string)($pendingCoreAuth['assigned'] ?? ''));
+                    if (!$canSelectCoreAssignee && $assigned === '') {
+                        $flashMsg = 'No se pudo identificar al usuario conectado para filtrar las solicitudes de CORE.';
+                        $ajaxPayload['ok'] = false;
+                        break;
+                    }
+                    $coreTotp = preg_replace('/\s+/', '', trim((string)($_POST['core_runtime_totp'] ?? ''))) ?? '';
                     $currentUserData = dashboard_current_user();
                     $coreCredentialUserKey = $this->coreImport->dashboard_core_current_credential_user_key($currentUserData);
                     $result = $this->coreImport->dashboard_sync_core_history($messages, [
@@ -394,32 +568,26 @@ class MantencionDashboardService
                     ], true, [
                         'user' => $coreUser,
                         'pass' => $corePass,
+                        'totp' => $coreTotp,
                     ]);
-                    $coreCredentialsSaved = null;
-                    if ($rememberCore && $coreUser !== '' && $corePass !== '' && (empty($result['error']) || !empty($result['authenticated']))) {
-                        $coreCredentialsSaved = core_credentials_save_for_user($coreCredentialUserKey, $coreUser, $corePass);
-                        if (!$coreCredentialsSaved) {
-                            dashboard_log_action('CORE_CREDENTIALS_SAVE_FAIL', 'No se pudieron guardar las credenciales CORE del usuario conectado.');
-                        }
-                    }
                     if (!empty($result['error'])) {
                         $flashMsg = $result['error'];
-                        if (str_contains(dashboard_normalize_text($flashMsg), 'core rechazo las credenciales')) {
+                        $normalizedCoreError = dashboard_normalize_text($flashMsg);
+                        if (str_contains($normalizedCoreError, 'core rechazo las credenciales')) {
                             core_credentials_clear_for_user($coreCredentialUserKey);
                             session()->put('mantencion_dashboard_open_core_credentials_modal', true);
                             session()->put('mantencion_dashboard_core_runtime_user', $coreUser);
-                        }
-                        if ($coreCredentialsSaved === false) {
-                            $flashMsg .= ' Además, no se pudieron guardar las credenciales en tu cuenta NOVA.';
+                        } elseif (str_contains($normalizedCoreError, 'totp')) {
+                            \Illuminate\Support\Facades\RateLimiter::hit($totpRateKey, 60);
+                            // El codigo es efimero: se vuelve a pedir sin borrar
+                            // las credenciales personales que CORE ya valido.
+                            session()->put('mantencion_core_totp_pending', $pendingCoreAuth);
+                            session()->put('mantencion_dashboard_open_core_totp_modal', true);
                         }
                         dashboard_log_action('CORE_IMPORT_FAIL', 'Error al obtener datos CORE desde ' . $desde . ' hasta ' . $hasta . ': ' . $result['error']);
                     } else {
+                        \Illuminate\Support\Facades\RateLimiter::clear($totpRateKey);
                         $flashMsg = 'Importación CORE completada. Nuevos: ' . (int)($result['imported'] ?? 0) . ' | actualizados: ' . (int)($result['updated'] ?? 0);
-                        if ($coreCredentialsSaved === true) {
-                            $flashMsg .= ' | Credenciales guardadas en tu cuenta.';
-                        } elseif ($coreCredentialsSaved === false) {
-                            $flashMsg .= ' | No se pudieron guardar las credenciales.';
-                        }
                         if ((int)($result['imported'] ?? 0) === 0 && (int)($result['updated'] ?? 0) === 0 && is_array($result['trace'] ?? null)) {
                             $flashMsg .= ' | ' . $this->dashboard_core_empty_import_message();
                         }

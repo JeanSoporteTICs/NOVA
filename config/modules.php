@@ -32,6 +32,9 @@ return [
         'description' => 'Gestiona reportes, pendientes e integraciones de mantencion.',
         'icon' => 'bi-tools',
         'type' => 'native',
+        // Mantención todavía valida `csrf_token` dentro de sus controladores
+        // legacy. TIC es nativo y debe pasar por VerifyCsrfToken de Laravel.
+        'legacy_csrf_validation' => true,
         'path' => $modulePath('NOVA_REDMINE_MANTENCION_PATH', 'RedmineMantencion'),
         'entry' => 'laravel:redmine.mantencion.dashboard',
         'allowed_static_roots' => [

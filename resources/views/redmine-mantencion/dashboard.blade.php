@@ -63,9 +63,11 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
   <form method="post" action="<?= $h($dashboardActionUrl) ?>" class="dashboard-panel" id="core-import-form" data-app-no-loading="1" data-no-page-loader="true">
     <input type="hidden" name="_token" value="<?= $h(function_exists('csrf_token') ? csrf_token() : '') ?>">
     <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-    <input type="hidden" name="action" value="import_core_history">
+    <input type="hidden" name="action" id="core-import-action" value="validate_core_credentials">
     <input type="hidden" name="core_runtime_user" id="core-runtime-user-hidden" value="">
     <input type="hidden" name="core_runtime_pass" id="core-runtime-pass-hidden" value="">
+    <input type="hidden" name="core_runtime_totp" id="core-runtime-totp-hidden" value="">
+    <input type="hidden" name="core_pending_token" id="core-pending-token-hidden" value="<?= $h($corePendingToken) ?>">
     <input type="hidden" name="core_remember_credentials" id="core-remember-hidden" value="0">
     <div class="dashboard-panel__header">
       <div>
@@ -101,7 +103,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
         <?php endif; ?>
       </div>
       </div>
-      <button type="<?= $hasSavedCoreCredentials ? 'submit' : 'button' ?>" class="btn-nova btn-nova-primary dashboard-import-button" <?= $hasSavedCoreCredentials ? '' : 'data-bs-toggle="modal" data-bs-target="#coreCredentialsModal"' ?> <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
+      <button type="button" class="btn-nova btn-nova-primary dashboard-import-button" data-bs-toggle="modal" data-bs-target="<?= $corePendingToken !== '' ? '#coreTotpModal' : '#coreCredentialsModal' ?>" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
         <i class="bi bi-cloud-download"></i> Importar desde CORE
       </button>
     </div>
@@ -529,7 +531,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Credenciales CORE</h5>
+        <h5 class="modal-title">Acceso seguro a CORE</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
@@ -539,12 +541,12 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label">Usuario CORE</label>
-            <input type="text" class="form-control" id="core-runtime-user-input" placeholder="RUT sin DV o email" autocomplete="username" value="<?= $h($coreRuntimeUserSession) ?>">
+            <input type="text" class="form-control" id="core-runtime-user-input" placeholder="<?= $hasSavedCoreCredentials ? 'Usar usuario guardado' : 'RUT sin DV o email' ?>" autocomplete="username" value="<?= $h($coreRuntimeUserSession) ?>">
           </div>
           <div class="col-12">
             <label class="form-label">Contraseña CORE</label>
             <div class="input-group">
-              <input type="password" class="form-control" id="core-runtime-pass-input" placeholder="Solo se usa para esta consulta" autocomplete="current-password">
+              <input type="password" class="form-control" id="core-runtime-pass-input" placeholder="<?= $hasSavedCoreCredentials ? 'Usar contraseña guardada' : 'Solo se usa para esta consulta' ?>" autocomplete="current-password">
               <button class="btn btn-outline-secondary" type="button" id="core-toggle-password" aria-label="Ver contraseña" title="Ver contraseña">
                 <i class="bi bi-eye"></i>
               </button>
@@ -555,13 +557,47 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               <input class="form-check-input" type="checkbox" id="core-remember-input">
               <label class="form-check-label" for="core-remember-input">Recordar credenciales CORE para mi usuario</label>
             </div>
-            <div class="form-text">La contraseña se guarda cifrada y no se volverá a mostrar en pantalla.</div>
+            <div class="form-text">Solo el usuario y la contraseña se guardan cifrados; el código TOTP se excluye.</div>
           </div>
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn-nova btn-nova-primary" id="core-credentials-submit-btn">Consultar CORE</button>
+        <button type="button" class="btn-nova btn-nova-primary" id="core-credentials-submit-btn">Validar credenciales</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="coreTotpModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Verificación TOTP de CORE</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="core-credentials-animation" aria-hidden="true">
+          <img src="<?= $h($mantencionBaseUrl) ?>/assets/img/animacion-carga.gif" alt="">
+        </div>
+        <div class="nova-integration-status is-success mb-3">
+          <i class="bi bi-check-circle-fill nova-integration-status-icon"></i>
+          <div class="nova-integration-status-body">
+            <strong>Credenciales validadas</strong>
+            <span>CORE validó tu usuario y contraseña.</span>
+          </div>
+        </div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label" for="core-runtime-totp-input">Código TOTP</label>
+            <input type="text" class="form-control" id="core-runtime-totp-input" placeholder="Código de tu aplicación autenticadora" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="8" pattern="[0-9]{6,8}">
+            <div class="form-text">El código es temporal, se usa solo en esta consulta y nunca se guarda.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-nova btn-nova-primary" id="core-totp-submit-btn">Verificar e importar</button>
       </div>
     </div>
   </div>
@@ -1828,11 +1864,16 @@ if (logModal) {
 const coreImportForm = document.getElementById('core-import-form');
 const coreRuntimeUserInput = document.getElementById('core-runtime-user-input');
 const coreRuntimePassInput = document.getElementById('core-runtime-pass-input');
+const coreRuntimeTotpInput = document.getElementById('core-runtime-totp-input');
+const coreImportAction = document.getElementById('core-import-action');
 const coreRuntimeUserHidden = document.getElementById('core-runtime-user-hidden');
 const coreRuntimePassHidden = document.getElementById('core-runtime-pass-hidden');
+const coreRuntimeTotpHidden = document.getElementById('core-runtime-totp-hidden');
+const corePendingTokenHidden = document.getElementById('core-pending-token-hidden');
 const coreRememberInput = document.getElementById('core-remember-input');
 const coreRememberHidden = document.getElementById('core-remember-hidden');
 const coreCredentialsModal = document.getElementById('coreCredentialsModal');
+const coreTotpModal = document.getElementById('coreTotpModal');
 const coreImportOverlay = document.getElementById('core-import-overlay');
 const coreImportProgressBar = document.getElementById('core-import-progress-bar');
 const coreImportProgressPercent = document.getElementById('core-import-progress-percent');
@@ -1842,6 +1883,7 @@ const dashboardProgressGif = document.getElementById('dashboard-progress-gif');
 const dashboardCoreLoading = document.getElementById('dashboard-core-loading');
 const hasSavedCoreCredentials = <?= $hasSavedCoreCredentials ? 'true' : 'false' ?>;
 const shouldOpenCoreCredentialsModal = <?= $openCoreCredentialsModal ? 'true' : 'false' ?>;
+const shouldOpenCoreTotpModal = <?= $openCoreTotpModal ? 'true' : 'false' ?>;
 let coreImportProgressTimer = null;
 
 if (coreImportOverlay && coreImportOverlay.parentElement !== document.body) {
@@ -1868,6 +1910,12 @@ function showDashboardProgress(mode = 'core') {
   }
   if (!coreImportOverlay || !coreImportProgressBar) return;
   const stepSets = {
+    coreAuth: [
+      { at: 12, text: 'Conectando con CORE...', step: 'Abriendo sesión segura' },
+      { at: 42, text: 'Validando usuario y contraseña...', step: 'Primer factor' },
+      { at: 68, text: 'Comprobando si CORE requiere TOTP...', step: 'Política de seguridad del usuario' },
+      { at: 88, text: 'Continuando la consulta...', step: 'Importando directamente si no requiere TOTP' }
+    ],
     core: [
       { at: 8, text: 'Conectando con CORE...', step: 'Abriendo sesión' },
       { at: 24, text: 'Autenticando credenciales...', step: 'Validando acceso' },
@@ -1886,6 +1934,7 @@ function showDashboardProgress(mode = 'core') {
     ]
   };
   const titles = {
+    coreAuth: 'Validando acceso a CORE',
     core: 'Importando desde CORE',
     redmine: 'Enviando reportes a Redmine'
   };
@@ -1933,10 +1982,12 @@ function showDashboardProgress(mode = 'core') {
 
 if (coreImportForm) {
   coreImportForm.addEventListener('submit', event => {
+    const action = coreImportAction?.value || 'validate_core_credentials';
     if (coreRuntimeUserHidden) coreRuntimeUserHidden.value = coreRuntimeUserInput?.value || '';
     if (coreRuntimePassHidden) coreRuntimePassHidden.value = coreRuntimePassInput?.value || '';
+    if (coreRuntimeTotpHidden) coreRuntimeTotpHidden.value = (coreRuntimeTotpInput?.value || '').replace(/\s+/g, '');
     if (coreRememberHidden) coreRememberHidden.value = coreRememberInput?.checked ? '1' : '0';
-    if (!hasSavedCoreCredentials && (!coreRuntimeUserHidden?.value.trim() || !coreRuntimePassHidden?.value.trim())) {
+    if (action === 'validate_core_credentials' && !hasSavedCoreCredentials && (!coreRuntimeUserHidden?.value.trim() || !coreRuntimePassHidden?.value.trim())) {
       event.preventDefault();
       window.appModal?.show({
         title: 'Credenciales requeridas',
@@ -1945,7 +1996,16 @@ if (coreImportForm) {
       });
       return;
     }
-    showDashboardProgress('core');
+    if (action === 'import_core_history' && (!corePendingTokenHidden?.value || !/^\d{6,8}$/.test(coreRuntimeTotpHidden?.value || ''))) {
+      event.preventDefault();
+      window.appModal?.show({
+        title: 'Código TOTP requerido',
+        message: 'Ingresa el código vigente de 6 a 8 dígitos de tu aplicación autenticadora.',
+        tone: 'warning'
+      });
+      return;
+    }
+    showDashboardProgress(action === 'validate_core_credentials' ? 'coreAuth' : 'core');
   });
 }
 
@@ -1959,6 +2019,8 @@ if (coreCredentialsModal) {
     }
     if (coreRuntimePassInput) coreRuntimePassInput.value = '';
     if (coreRuntimePassHidden) coreRuntimePassHidden.value = '';
+    if (coreRuntimeTotpInput) coreRuntimeTotpInput.value = '';
+    if (coreRuntimeTotpHidden) coreRuntimeTotpHidden.value = '';
   });
 
   const coreCredentialsSubmitBtn = document.getElementById('core-credentials-submit-btn');
@@ -1966,14 +2028,17 @@ if (coreCredentialsModal) {
     coreCredentialsSubmitBtn.addEventListener('click', () => {
       const user = coreRuntimeUserInput?.value.trim() || '';
       const pass = coreRuntimePassInput?.value.trim() || '';
-      if (!user || !pass) {
+      if ((!hasSavedCoreCredentials && (!user || !pass)) || (hasSavedCoreCredentials && Boolean(user) !== Boolean(pass))) {
         window.appModal?.show({
           title: 'Credenciales requeridas',
-          message: 'Debes ingresar usuario y contraseña de CORE.',
+          message: hasSavedCoreCredentials
+            ? 'Para reemplazar las credenciales guardadas debes ingresar usuario y contraseña.'
+            : 'Debes ingresar usuario y contraseña de CORE.',
           tone: 'warning'
         });
         return;
       }
+      if (coreImportAction) coreImportAction.value = 'validate_core_credentials';
       _coreSubmitAfterClose = true;
       bootstrap.Modal.getOrCreateInstance(coreCredentialsModal).hide();
     });
@@ -1982,7 +2047,42 @@ if (coreCredentialsModal) {
   if (shouldOpenCoreCredentialsModal && window.bootstrap?.Modal) {
     window.setTimeout(() => {
       window.bootstrap.Modal.getOrCreateInstance(coreCredentialsModal).show();
-      coreRuntimePassInput?.focus();
+      (hasSavedCoreCredentials ? coreCredentialsSubmitBtn : coreRuntimePassInput)?.focus();
+    }, 250);
+  }
+}
+
+if (coreTotpModal) {
+  let _coreTotpSubmitAfterClose = false;
+
+  coreTotpModal.addEventListener('hidden.bs.modal', () => {
+    if (_coreTotpSubmitAfterClose) {
+      _coreTotpSubmitAfterClose = false;
+      if (coreImportForm) coreImportForm.requestSubmit();
+    }
+    if (coreRuntimeTotpInput) coreRuntimeTotpInput.value = '';
+    if (coreRuntimeTotpHidden) coreRuntimeTotpHidden.value = '';
+  });
+
+  document.getElementById('core-totp-submit-btn')?.addEventListener('click', () => {
+    const totp = (coreRuntimeTotpInput?.value || '').replace(/\s+/g, '');
+    if (!/^\d{6,8}$/.test(totp)) {
+      window.appModal?.show({
+        title: 'Código TOTP requerido',
+        message: 'Ingresa el código vigente de 6 a 8 dígitos de tu aplicación autenticadora.',
+        tone: 'warning'
+      });
+      return;
+    }
+    if (coreImportAction) coreImportAction.value = 'import_core_history';
+    _coreTotpSubmitAfterClose = true;
+    bootstrap.Modal.getOrCreateInstance(coreTotpModal).hide();
+  });
+
+  if (shouldOpenCoreTotpModal && corePendingTokenHidden?.value && window.bootstrap?.Modal) {
+    window.setTimeout(() => {
+      window.bootstrap.Modal.getOrCreateInstance(coreTotpModal).show();
+      coreRuntimeTotpInput?.focus();
     }, 250);
   }
 }

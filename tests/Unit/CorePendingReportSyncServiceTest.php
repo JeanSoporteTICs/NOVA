@@ -163,4 +163,41 @@ class CorePendingReportSyncServiceTest extends TestCase
         $this->assertSame(1, (int) $rows->first()->hora_extra);
         $this->assertSame(2.5, (float) $rows->first()->tiempo_estimado);
     }
+
+    public function test_repository_preserves_processed_timestamp_when_message_is_resaved(): void
+    {
+        $repo = app(MantencionReportRepository::class);
+        $coreId = (string) random_int(90000000, 99999999);
+        $sourceId = 'core-id:' . $coreId;
+        $processedAt = '2026-08-18T08:15:00-04:00';
+
+        $repo->syncMessages([[
+            'fuente' => 'core',
+            'fuente_id' => $sourceId,
+            'id_core' => $coreId,
+            'estado' => 'procesado',
+            'asunto' => 'Solicitud CORE procesada',
+            'fecha' => '18-08-2026',
+            'procesado_ts' => $processedAt,
+        ]]);
+
+        $message = collect($repo->activeMessages())
+            ->first(fn (array $row): bool => ($row['id_core'] ?? '') === $coreId);
+        $this->assertIsArray($message);
+
+        $before = DB::table('redmine_mantencion_reportes')
+            ->where('fuente', 'core')
+            ->where('id_core', $coreId)
+            ->value('actualizado_at');
+
+        $repo->syncMessages([$message]);
+
+        $after = DB::table('redmine_mantencion_reportes')
+            ->where('fuente', 'core')
+            ->where('id_core', $coreId)
+            ->value('actualizado_at');
+
+        $this->assertSame((string) $before, (string) $after);
+        $this->assertSame('2026-08-18 08:15:00', (string) $after);
+    }
 }

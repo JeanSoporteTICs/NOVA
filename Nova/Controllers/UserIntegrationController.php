@@ -100,7 +100,7 @@ class UserIntegrationController extends Controller
                 ],
                 'core' => [
                     'label' => 'CORE',
-                    'description' => 'Credenciales personales para importar solicitudes desde CORE.',
+                    'description' => 'Credenciales personales para importar solicitudes desde CORE. El código TOTP se solicita solo cuando CORE lo requiere y no se guarda.',
                     'icon' => 'bi-database-down',
                     'external_label' => 'Usuario CORE',
                     'secret_label' => 'Contrasena CORE',

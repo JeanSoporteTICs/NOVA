@@ -41,6 +41,7 @@ class MantencionDashboardPermissionTest extends TestCase
 
     public function test_core_import_and_hours_extra_keep_independent_permissions(): void
     {
+        $this->assertSame('reportes_importar_core', self::$dashboardService->dashboard_required_permission_for_action('validate_core_credentials'));
         $this->assertSame('reportes_importar_core', self::$dashboardService->dashboard_required_permission_for_action('import_core_history'));
         $this->assertSame('horas_extra_editar', self::$dashboardService->dashboard_required_permission_for_action('toggle_hora_extra'));
     }

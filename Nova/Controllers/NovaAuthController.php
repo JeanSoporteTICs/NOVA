@@ -120,6 +120,10 @@ class NovaAuthController extends Controller
             'ok'        => true,
             'timeout'   => $timeout,
             'remaining' => $timeout,
+            // Si la sesión Laravel ya había vencido, regenerate() también
+            // rota este token. La página abierta debe reemplazar sus tokens
+            // antes de permitir cualquier POST sin perder datos del usuario.
+            'csrf_token' => $request->session()->token(),
         ]);
     }
 }

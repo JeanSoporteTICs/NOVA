@@ -20,11 +20,11 @@ class VerifyCsrfToken extends Middleware
         $legacyModules = array_filter(
             config('modules', []),
             static fn (array $module): bool => ($module['type'] ?? 'legacy') === 'legacy'
-                || !empty($module['allowed_php_roots'] ?? [])
+                || ! empty($module['legacy_csrf_validation'] ?? false)
         );
 
         foreach (array_keys($legacyModules) as $module) {
-            if ($request->is($module . '/*')) {
+            if ($request->is($module.'/*')) {
                 return true;
             }
         }

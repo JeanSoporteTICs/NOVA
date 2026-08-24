@@ -52,8 +52,23 @@
             const messageBox = sessionModalElement.querySelector('[data-nova-session-message]');
             const extendButton = sessionModalElement.querySelector('[data-nova-session-extend]');
             const logoutButton = sessionModalElement.querySelector('[data-nova-session-logout]');
-            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            let csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const sessionIdentity = @json((string) session('nova_user.id', ''));
+            const applyRefreshedCsrfToken = (data) => {
+                const refreshedToken = String(data?.csrf_token || '').trim();
+                if (!refreshedToken) return;
+
+                csrf = refreshedToken;
+                if (!window.NovaCsrfForms?.setToken?.(refreshedToken)) {
+                    document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', refreshedToken);
+                    document.querySelectorAll('input[name="_token"], input[name="csrf_token"]').forEach((input) => {
+                        input.value = refreshedToken;
+                    });
+                    document.querySelectorAll('[data-csrf]').forEach((element) => {
+                        element.dataset.csrf = refreshedToken;
+                    });
+                }
+            };
             const fallbackCloseModal = () => {
                 sessionModalElement.classList.remove('show');
                 sessionModalElement.setAttribute('aria-hidden', 'true');
@@ -159,6 +174,7 @@
                     if (!response.ok || !data.ok) {
                         throw new Error(data.msg || 'No se pudo extender la sesion.');
                     }
+                    applyRefreshedCsrfToken(data);
                     expiresAt = Date.now() + ((parseInt(data.remaining || data.timeout || String(baseTimeout), 10) || baseTimeout) * 1000);
                     if (passwordInput) passwordInput.value = '';
                     hideSessionModal();

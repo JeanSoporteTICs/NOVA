@@ -379,7 +379,9 @@
             // Reutiliza el mismo endpoint que ya usa Horas Extra TIC — no se
             // duplica la logica de calculo, solo se invoca desde esta vista.
             const emachEndpoint = @json(route('emach.overtime-suggestion'));
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const currentCsrfToken = () => window.NovaCsrfForms?.token?.()
+                || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                || '';
 
             emachButton?.addEventListener('click', async () => {
                 if (!emachStatus) return;
@@ -392,7 +394,7 @@
                         headers: {
                             'Accept': 'application/json',
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken,
+                            'X-CSRF-TOKEN': currentCsrfToken(),
                         },
                         body: JSON.stringify({ fecha: fieldFecha.value || '' }),
                     });

@@ -241,7 +241,9 @@
         const status = modal?.querySelector('[data-emach-hours-status]');
         const form = modal?.querySelector('form');
         const endpoint = @json(route('emach.overtime-suggestion'));
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const currentCsrfToken = () => window.NovaCsrfForms?.token?.()
+            || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || '';
         if (!modal || !button || !status || !form) return;
 
         const applySuggestion = (suggestion, message) => {
@@ -271,7 +273,7 @@
                     headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
+                        'X-CSRF-TOKEN': currentCsrfToken(),
                     },
                     body: JSON.stringify({ fecha: form.elements.fecha.value || form.elements.fecha_display.value || '' }),
                 });

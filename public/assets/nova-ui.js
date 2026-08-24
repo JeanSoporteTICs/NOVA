@@ -1221,10 +1221,40 @@ window.NovaOptimisticToggle = NovaOptimisticToggle;
 // `csrf_token`; adding `_token` centrally prevents individual actions from
 // failing when the legacy PHP session is renewed between page load and submit.
 const NovaCsrfForms = (() => {
+    function token() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+
+    function setToken(value, root = document) {
+        const refreshedToken = String(value || '').trim();
+        if (!refreshedToken) return false;
+
+        let meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta && document.head) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'csrf-token');
+            document.head.appendChild(meta);
+        }
+        meta?.setAttribute('content', refreshedToken);
+
+        root.querySelectorAll?.('input[name="_token"], input[name="csrf_token"]').forEach(input => {
+            input.value = refreshedToken;
+        });
+        root.querySelectorAll?.('[data-csrf]').forEach(element => {
+            element.dataset.csrf = refreshedToken;
+        });
+
+        document.dispatchEvent(new CustomEvent('nova:csrf-token-updated', {
+            detail: { token: refreshedToken }
+        }));
+
+        return true;
+    }
+
     function ensureToken(form) {
         if (!(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post') return;
-        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        if (!token) return;
+        const currentToken = token();
+        if (!currentToken) return;
         let input = form.querySelector('input[name="_token"]');
         if (!input) {
             input = document.createElement('input');
@@ -1232,7 +1262,10 @@ const NovaCsrfForms = (() => {
             input.name = '_token';
             form.prepend(input);
         }
-        input.value = token;
+        input.value = currentToken;
+
+        const legacyInput = form.querySelector('input[name="csrf_token"]');
+        if (legacyInput) legacyInput.value = currentToken;
     }
 
     function initialize(root = document) {
@@ -1242,7 +1275,7 @@ const NovaCsrfForms = (() => {
     document.addEventListener('DOMContentLoaded', () => initialize());
     document.addEventListener('submit', event => ensureToken(event.target), true);
 
-    return { initialize, ensureToken };
+    return { initialize, ensureToken, setToken, token };
 })();
 
 window.NovaCsrfForms = NovaCsrfForms;

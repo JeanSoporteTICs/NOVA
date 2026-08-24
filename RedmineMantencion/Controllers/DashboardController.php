@@ -46,6 +46,14 @@ class DashboardController extends Controller
 
         $flashSession = session()->pull('mantencion_flash');
         $openCoreCredentialsModal = (bool) session()->pull('mantencion_dashboard_open_core_credentials_modal', false);
+        $openCoreTotpModal = (bool) session()->pull('mantencion_dashboard_open_core_totp_modal', false);
+        $pendingCoreTotp = session()->get('mantencion_core_totp_pending');
+        if (is_array($pendingCoreTotp) && (time() - (int)($pendingCoreTotp['issued_at'] ?? 0)) > 180) {
+            session()->forget('mantencion_core_totp_pending');
+            $pendingCoreTotp = null;
+            $openCoreTotpModal = false;
+        }
+        $corePendingToken = is_array($pendingCoreTotp) ? trim((string)($pendingCoreTotp['token'] ?? '')) : '';
         $coreRuntimeUserSession = trim((string) session()->pull('mantencion_dashboard_core_runtime_user', ''));
 
         $dashboardResult = $this->dashboardService->handle_request();
