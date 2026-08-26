@@ -101,6 +101,10 @@
     $archivedRows = max(0, $totalFiltered - $hoursRows);
     $canHistoryActions = empty($redmineMaintenance['enabled'])
         && !empty($canHistoryActionsPermission);
+    $historyScope = !empty($effectivePermissions['all'])
+        || strtolower(trim((string) ($effectivePermissions['historico_scope'] ?? $effectivePermissions['historico'] ?? ''))) === 'todos'
+            ? 'Todos'
+            : 'Solo asignados';
     $redmineStatusOptions = [];
     foreach ((array) ($config['estados'] ?? []) as $statusOption) {
         if (!is_array($statusOption)) continue;
@@ -212,12 +216,15 @@
             <span class="text-muted ms-2">Mostrando {{ $visibleRows }} de {{ $totalFiltered }} registros</span>
         </div>
         <div class="historico-summary__tools">
+            <span class="nova-status-badge is-info">
+                <i class="bi bi-eye"></i> Alcance: {{ $historyScope }}
+            </span>
             @if ($canHistoryActions)
-                <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="¿Consultar y guardar los estados actuales de todos los tickets TIC?" data-app-confirm-title="Sincronizar estados Redmine" data-app-confirm-tone="info" data-app-confirm-text="Sincronizar">
+                <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="¿Consultar Redmine y actualizar únicamente el campo estado_redmine de todos los tickets TIC almacenados?" data-app-confirm-title="Sincronizar todos los estados Redmine" data-app-confirm-tone="info" data-app-confirm-text="Sincronizar">
                     @csrf
                     <input type="hidden" name="action" value="sync_redmine_statuses">
-                    <button type="submit" class="btn-nova btn-nova-info">
-                        <i class="bi bi-arrow-repeat"></i>Sincronizar estados
+                    <button type="submit" class="btn-nova btn-nova-info" title="Actualiza únicamente estado_redmine en todos los reportes TIC">
+                        <i class="bi bi-arrow-repeat"></i>Sincronizar todos los estados
                     </button>
                 </form>
                 <div class="dropdown historico-bulk-status">

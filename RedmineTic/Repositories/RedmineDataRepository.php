@@ -2852,6 +2852,10 @@ final class RedmineDataRepository
             return [];
         }
 
+        if ($this->scopeForUser($user, $scopeKey) === 'todos') {
+            return array_values($reports);
+        }
+
         $userId = trim((string) ($user['redmine_id'] ?? $user['id'] ?? data_get($user, 'legacy.id', '')));
         if ($userId === '') {
             return [];

@@ -652,7 +652,6 @@ class RedmineReportRepository
                     })
                     ->update([
                         'estado_redmine' => $statusName,
-                        'actualizado_at' => now(),
                     ]);
             }
         } catch (\Throwable) {
