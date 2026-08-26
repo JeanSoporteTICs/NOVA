@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\TestCase;
 use RedmineTic\Controllers\RedmineDashboardController;
+use RedmineTic\Repositories\RedmineDataRepository;
 use RedmineTic\Repositories\RedminePermissionRepository;
 use ReflectionClass;
 
@@ -36,6 +37,36 @@ class RedmineDashboardPermissionTest extends TestCase
 
         $this->assertFalse($this->can($permissions, 'mensajes_acceso'));
         $this->assertTrue($this->can($permissions, 'estadisticas'));
+    }
+
+    public function test_history_scope_todos_does_not_filter_reports_by_assignee(): void
+    {
+        $reports = [
+            ['id' => '1', 'asignado_a' => '10'],
+            ['id' => '2', 'asignado_a' => '20'],
+        ];
+        $user = [
+            'id' => '1',
+            'redmine_id' => '10',
+            'legacy' => ['permisos' => ['historico_scope' => 'todos']],
+        ];
+
+        $this->assertSame($reports, $this->filterReportsByUserScope($reports, $user, 'historico_scope'));
+    }
+
+    public function test_global_root_scope_does_not_filter_history_reports(): void
+    {
+        $reports = [
+            ['id' => '1', 'asignado_a' => '10'],
+            ['id' => '2', 'asignado_a' => '20'],
+        ];
+        $user = [
+            'id' => '1',
+            'redmine_id' => '10',
+            'legacy' => ['permisos' => ['all' => true, 'historico_scope' => 'asignados']],
+        ];
+
+        $this->assertSame($reports, $this->filterReportsByUserScope($reports, $user, 'historico_scope'));
     }
 
     public function test_only_nova_root_can_change_permission_scopes(): void
@@ -107,7 +138,7 @@ class RedmineDashboardPermissionTest extends TestCase
     }
 
     /**
-     * @param array<string,mixed> $permissions
+     * @param  array<string,mixed>  $permissions
      */
     private function can(array $permissions, string $permission): bool
     {
@@ -119,8 +150,8 @@ class RedmineDashboardPermissionTest extends TestCase
     }
 
     /**
-     * @param array<string,mixed> $permissions
-     * @param array<string,mixed> $currentPermissions
+     * @param  array<string,mixed>  $permissions
+     * @param  array<string,mixed>  $currentPermissions
      * @return array<string,mixed>
      */
     private function restrictedScopes(array $permissions, array $currentPermissions, string $novaRole): array
@@ -142,5 +173,18 @@ class RedmineDashboardPermissionTest extends TestCase
         $method = new \ReflectionMethod(RedmineDashboardController::class, 'permissionPayload');
 
         return $method->invoke($controller, $request);
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $reports
+     * @param  array<string,mixed>  $user
+     * @return array<int,array<string,mixed>>
+     */
+    private function filterReportsByUserScope(array $reports, array $user, string $scope): array
+    {
+        $repository = new RedmineDataRepository;
+        $method = new \ReflectionMethod(RedmineDataRepository::class, 'filterReportsByUserScope');
+
+        return $method->invoke($repository, $reports, $user, $scope);
     }
 }
