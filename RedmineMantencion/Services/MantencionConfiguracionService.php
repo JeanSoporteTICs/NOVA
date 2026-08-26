@@ -2,70 +2,78 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use App\Support\Reports\AutomaticReportSchedule;
+
 class MantencionConfiguracionService
 {
     public function loadConfig()
     {
         $repo = config_mantencion_repository();
         $data = $repo !== null ? $repo->loadAll() : [];
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             $data = [];
         }
         $data['platform_token'] = '';
-        if (!array_key_exists('categories_url', $data)) {
+        if (! array_key_exists('categories_url', $data)) {
             $data['categories_url'] = '';
         }
-        if (!array_key_exists('unidades_url', $data)) {
+        if (! array_key_exists('unidades_url', $data)) {
             $data['unidades_url'] = '';
         }
-        if (!array_key_exists('cf_solicitante', $data) || $data['cf_solicitante'] === null || $data['cf_solicitante'] === '') {
+        if (! array_key_exists('cf_solicitante', $data) || $data['cf_solicitante'] === null || $data['cf_solicitante'] === '') {
             $data['cf_solicitante'] = 3;
         }
-        if (!array_key_exists('cf_unidad', $data) || $data['cf_unidad'] === null || $data['cf_unidad'] === '') {
+        if (! array_key_exists('cf_unidad', $data) || $data['cf_unidad'] === null || $data['cf_unidad'] === '') {
             $data['cf_unidad'] = 5;
         }
-        if (!array_key_exists('cf_unidad_solicitante', $data)) {
+        if (! array_key_exists('cf_unidad_solicitante', $data)) {
             $data['cf_unidad_solicitante'] = 11;
         }
-        if (!array_key_exists('cf_hora_extra', $data)) {
+        if (! array_key_exists('cf_hora_extra', $data)) {
             $data['cf_hora_extra'] = 12;
         }
-        if (!array_key_exists('hora_extra_tiempo_estimado', $data)) {
+        if (! array_key_exists('hora_extra_tiempo_estimado', $data)) {
             $data['hora_extra_tiempo_estimado'] = '1';
         }
-        if (!array_key_exists('source_mode', $data)) {
+        if (! array_key_exists('source_mode', $data)) {
             $data['source_mode'] = 'core';
         }
-        if (!array_key_exists('core_enabled', $data)) {
+        if (! array_key_exists('core_enabled', $data)) {
             $data['core_enabled'] = true;
         }
-        if (!array_key_exists('core_admin_url', $data)) {
+        if (! array_key_exists('core_admin_url', $data)) {
             $data['core_admin_url'] = 'https://www.hbvaldivia.cl/core/solicitudes/administrador';
         }
-        if (!array_key_exists('core_historico_url', $data)) {
+        if (! array_key_exists('core_historico_url', $data)) {
             $data['core_historico_url'] = 'https://www.hbvaldivia.cl/core/solicitudes/administrador/obtener_solicitudes_historicas';
         }
-        if (!array_key_exists('core_sync_minutes', $data)) {
+        if (! array_key_exists('core_sync_minutes', $data)) {
             $data['core_sync_minutes'] = 2;
         }
-        if (!array_key_exists('core_last_sync', $data)) {
+        if (! array_key_exists('core_last_sync', $data)) {
             $data['core_last_sync'] = '';
         }
-        if (!array_key_exists('core_last_error', $data)) {
+        if (! array_key_exists('core_last_error', $data)) {
             $data['core_last_error'] = '';
         }
-        if (!array_key_exists('informes_nuevos_habilitado', $data)) {
+        if (! array_key_exists('informes_nuevos_habilitado', $data)) {
             $data['informes_nuevos_habilitado'] = true;
         }
-        if (!array_key_exists('informes_nuevos_dias', $data)) {
+        if (! array_key_exists('informes_nuevos_dias', $data)) {
             $data['informes_nuevos_dias'] = 2;
         }
+        $schedule = AutomaticReportSchedule::settings($data);
+        $data['informes_nuevos_dias_desde'] = $schedule['days_from'];
+        $data['informes_nuevos_dias_hasta'] = $schedule['days_to'];
+        $data['informes_nuevos_periodo'] = $schedule['period'];
+        $data['informes_nuevos_dia'] = $schedule['day'];
+        $data['informes_nuevos_hora'] = $schedule['time'];
         foreach (['trackers', 'prioridades', 'estados'] as $k) {
-            if (!isset($data[$k]) || !is_array($data[$k])) {
+            if (! isset($data[$k]) || ! is_array($data[$k])) {
                 $data[$k] = [];
             }
         }
-        if (!isset($data['session_timeout'])) {
+        if (! isset($data['session_timeout'])) {
             $data['session_timeout'] = 300;
         }
 
@@ -144,6 +152,25 @@ class MantencionConfiguracionService
             }
             if (array_key_exists('informes_nuevos_dias', $_POST)) {
                 $cfg['informes_nuevos_dias'] = max(1, min(30, (int) $_POST['informes_nuevos_dias']));
+            }
+            if (array_key_exists('informes_nuevos_dias_desde', $_POST)
+                || array_key_exists('informes_nuevos_dias_hasta', $_POST)
+                || array_key_exists('informes_nuevos_periodo', $_POST)
+                || array_key_exists('informes_nuevos_dia', $_POST)
+                || array_key_exists('informes_nuevos_hora', $_POST)) {
+                $schedule = AutomaticReportSchedule::settings(array_merge($cfg, [
+                    'informes_nuevos_dias_desde' => $_POST['informes_nuevos_dias_desde'] ?? 2,
+                    'informes_nuevos_dias_hasta' => $_POST['informes_nuevos_dias_hasta'] ?? 365,
+                    'informes_nuevos_periodo' => $_POST['informes_nuevos_periodo'] ?? 'previous_week',
+                    'informes_nuevos_dia' => $_POST['informes_nuevos_dia'] ?? '1',
+                    'informes_nuevos_hora' => $_POST['informes_nuevos_hora'] ?? '09:00',
+                ]));
+                $cfg['informes_nuevos_dias'] = $schedule['days_from'];
+                $cfg['informes_nuevos_dias_desde'] = $schedule['days_from'];
+                $cfg['informes_nuevos_dias_hasta'] = $schedule['days_to'];
+                $cfg['informes_nuevos_periodo'] = $schedule['period'];
+                $cfg['informes_nuevos_dia'] = $schedule['day'];
+                $cfg['informes_nuevos_hora'] = $schedule['time'];
             }
             $cfg['session_timeout'] = max(60, (int) ($_POST['session_timeout'] ?? ($cfg['session_timeout'] ?? 300)));
             $this->saveConfig($cfg);

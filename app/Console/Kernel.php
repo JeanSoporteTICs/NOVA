@@ -15,8 +15,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('redmine:archive-processed')->hourly();
-        $schedule->command('redmine:notify-stale-new')->dailyAt('09:00')->withoutOverlapping();
-        $schedule->command('redmine:mantencion-notify-stale-new')->dailyAt('09:00')->withoutOverlapping();
+        $schedule->command('redmine:notify-stale-new')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('redmine:mantencion-notify-stale-new')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**

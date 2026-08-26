@@ -117,6 +117,24 @@ php artisan nova:health-alerts
 php artisan nova:monitor-servers
 ```
 
+Para preparar, revisar, confirmar y publicar todos los cambios no ignorados en
+`main` y `desarrollo` con una sola operación:
+
+```bash
+./scripts/git-publicar.sh "descripcion breve del cambio"
+```
+
+También puede ejecutarse sin argumentos; en ese caso solicitará el mensaje del
+commit directamente en la terminal:
+
+```bash
+./scripts/git-publicar.sh
+```
+
+El script exige estar en la rama `main`, ejecuta `git add -A`, valida el diff y
+muestra los archivos antes de pedir confirmación. El commit y el push atómico
+requieren confirmaciones separadas; cancelar no elimina cambios locales.
+
 Telegram puede administrarse con:
 
 ```bash

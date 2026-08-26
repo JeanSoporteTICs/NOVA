@@ -662,7 +662,7 @@ class RedmineReportRepository
     }
 
     /** @return array<int,string> */
-    public function staleNewIssueIdsForAssignee(int $moduleId, string $assigneeId, \DateTimeInterface $cutoff): array
+    public function staleNewIssueIdsForAssignee(int $moduleId, string $assigneeId, \DateTimeInterface $start, \DateTimeInterface $end): array
     {
         $assigneeId = trim($assigneeId);
         if (! $this->tableAvailable() || $moduleId <= 0 || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
@@ -675,7 +675,8 @@ class RedmineReportRepository
                 ->where('asignado_a', (int) $assigneeId)
                 ->where('estado_redmine', 'Nueva')
                 ->whereNotNull('redmine_id')
-                ->where('creado_at', '<', $cutoff)
+                ->where('creado_at', '>=', $start)
+                ->where('creado_at', '<', $end)
                 ->orderBy('redmine_id')
                 ->pluck('redmine_id')
                 ->map(static fn ($id): string => (string) $id)
@@ -687,7 +688,7 @@ class RedmineReportRepository
         }
     }
 
-    public function unsyncedIssueCountForAssignee(int $moduleId, string $assigneeId, \DateTimeInterface $cutoff): int
+    public function unsyncedIssueCountForAssignee(int $moduleId, string $assigneeId, \DateTimeInterface $start, \DateTimeInterface $end): int
     {
         $assigneeId = trim($assigneeId);
         if (! $this->tableAvailable() || $moduleId <= 0 || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
@@ -702,7 +703,8 @@ class RedmineReportRepository
                 ->where(function ($query): void {
                     $query->whereNull('estado_redmine')->orWhere('estado_redmine', '');
                 })
-                ->where('creado_at', '<', $cutoff)
+                ->where('creado_at', '>=', $start)
+                ->where('creado_at', '<', $end)
                 ->count();
         } catch (\Throwable) {
             return 0;
