@@ -213,6 +213,13 @@
         </div>
         <div class="historico-summary__tools">
             @if ($canHistoryActions)
+                <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="¿Consultar y guardar los estados actuales de todos los tickets TIC?" data-app-confirm-title="Sincronizar estados Redmine" data-app-confirm-tone="info" data-app-confirm-text="Sincronizar">
+                    @csrf
+                    <input type="hidden" name="action" value="sync_redmine_statuses">
+                    <button type="submit" class="btn-nova btn-nova-info">
+                        <i class="bi bi-arrow-repeat"></i>Sincronizar estados
+                    </button>
+                </form>
                 <div class="dropdown historico-bulk-status">
                     <button
                         type="button"

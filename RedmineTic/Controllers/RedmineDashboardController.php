@@ -371,11 +371,12 @@ class RedmineDashboardController extends Controller
         if ($request->input('config_action') === 'send_reports_now') {
             $result = app(StaleNewReportNotifier::class)->run(true);
             $message = sprintf(
-                'Comprobación TIC finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s) y %d error(es).',
+                'Comprobación TIC finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
                 (int) ($result['sent'] ?? 0),
                 (int) ($result['empty'] ?? 0),
                 (int) ($result['skipped'] ?? 0),
-                (int) ($result['failed'] ?? 0)
+                (int) ($result['failed'] ?? 0),
+                (int) ($result['unsynced'] ?? 0)
             );
 
             return redirect()
@@ -547,7 +548,24 @@ class RedmineDashboardController extends Controller
             return $blocked;
         }
 
-        if ((string) $request->input('action', 'delete') === 'update_redmine_status') {
+        $action = (string) $request->input('action', 'delete');
+        if ($action === 'sync_redmine_statuses') {
+            $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+            $result = $redmine->synchronizeAllIssueStatuses(is_array($user) ? (string) ($user['id'] ?? '') : '');
+            $message = $result['error'] !== ''
+                ? $result['error']
+                : sprintf(
+                    'Estados Redmine sincronizados: %d ticket(s) consultado(s) y %d registro(s) actualizado(s).',
+                    $result['requested'],
+                    $result['updated']
+                );
+
+            return back()
+                ->with('redmine_status', $message)
+                ->with('redmine_status_type', $result['error'] === '' ? 'success' : 'danger');
+        }
+
+        if ($action === 'update_redmine_status') {
             $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
             $result = $redmine->updateHistoryIssueStatuses(
                 $this->ids($request->input('redmine_ids', [])),
@@ -597,6 +615,7 @@ class RedmineDashboardController extends Controller
 
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $statuses = $redmine->issueStatuses($ids, is_array($user) ? (string) ($user['id'] ?? '') : '');
+        $redmine->persistIssueStatuses($statuses);
 
         return response()->json(['ok' => true, 'statuses' => $statuses]);
     }

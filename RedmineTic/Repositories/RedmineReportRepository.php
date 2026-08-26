@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Schema;
 class RedmineReportRepository
 {
     private ?RedmineCatalogRepository $catalogRepoInst = null;
+
     private ?bool $tableAvailableCache = null;
 
     public function __construct(
@@ -69,7 +70,7 @@ class RedmineReportRepository
             'mensaje' => (string) ($row->mensaje ?? ''),
             'asignado_a' => (string) ($row->asignado_a ?? ''),
             'asignado_nombre' => $assignedNameResolver((string) ($row->asignado_a ?? '')),
-            'hora_extra' => !empty($row->hora_extra) ? 'SI' : 'NO',
+            'hora_extra' => ! empty($row->hora_extra) ? 'SI' : 'NO',
             'tiempo_estimado' => $row->tiempo_estimado !== null ? (string) $row->tiempo_estimado : '',
             'origen' => (string) ($row->origen ?? ''),
             'procesado_ts' => $processedAt !== null ? (string) $processedAt : '',
@@ -80,7 +81,7 @@ class RedmineReportRepository
     /**
      * Public report array -> DB payload ready for insert/update.
      *
-     * @param array<string,mixed> $report
+     * @param  array<string,mixed>  $report
      * @return array<string,mixed>
      */
     public function payload(int $moduleId, array $report, bool $archived): array
@@ -142,7 +143,7 @@ class RedmineReportRepository
     public function unsignedIntegerOrNull($value): ?int
     {
         $value = trim((string) $value);
-        if ($value === '' || !ctype_digit($value)) {
+        if ($value === '' || ! ctype_digit($value)) {
             return null;
         }
 
@@ -260,7 +261,7 @@ class RedmineReportRepository
      */
     public function findActiveById(int $moduleId, string $id, callable $assignedNameResolver): ?array
     {
-        if (!$this->tableAvailable() || $moduleId <= 0) {
+        if (! $this->tableAvailable() || $moduleId <= 0) {
             return null;
         }
 
@@ -292,12 +293,12 @@ class RedmineReportRepository
      * silently absent from the result (same as the pre-extraction
      * in_array()-based filtering, which never matched them either).
      *
-     * @param string[] $ids
+     * @param  string[]  $ids
      * @return array<int,array<string,mixed>>
      */
     public function findActiveByIds(int $moduleId, array $ids, callable $assignedNameResolver): array
     {
-        if (!$this->tableAvailable() || $moduleId <= 0 || $ids === []) {
+        if (! $this->tableAvailable() || $moduleId <= 0 || $ids === []) {
             return [];
         }
 
@@ -330,12 +331,12 @@ class RedmineReportRepository
      * in $states — a single WHERE estado IN (...) instead of hydrating the
      * entire active set and filtering by state in PHP.
      *
-     * @param string[] $states
+     * @param  string[]  $states
      * @return array<int,array<string,mixed>>
      */
     public function findActiveByStates(int $moduleId, array $states, callable $assignedNameResolver): array
     {
-        if (!$this->tableAvailable() || $moduleId <= 0 || $states === []) {
+        if (! $this->tableAvailable() || $moduleId <= 0 || $states === []) {
             return [];
         }
 
@@ -358,11 +359,11 @@ class RedmineReportRepository
      * outside the selection. Returns the number of rows actually deleted
      * (ids that don't match any existing active row simply don't count).
      *
-     * @param string[] $ids
+     * @param  string[]  $ids
      */
     public function deleteActiveByIds(int $moduleId, array $ids): int
     {
-        if (!$this->tableAvailable() || $moduleId <= 0 || $ids === []) {
+        if (! $this->tableAvailable() || $moduleId <= 0 || $ids === []) {
             return 0;
         }
 
@@ -392,11 +393,11 @@ class RedmineReportRepository
      * the statement executed without error — matching the pre-extraction
      * behavior, this does NOT check the affected-row count.
      *
-     * @param array<string,mixed> $values
+     * @param  array<string,mixed>  $values
      */
     public function updateActiveFields(int $moduleId, string $id, array $values): bool
     {
-        if (!$this->tableAvailable() || $moduleId <= 0) {
+        if (! $this->tableAvailable() || $moduleId <= 0) {
             return false;
         }
 
@@ -425,7 +426,7 @@ class RedmineReportRepository
      */
     public function updateActiveHoursExtraFlag(int $moduleId, string $id, bool $enabled): bool
     {
-        if (!$this->tableAvailable() || $moduleId <= 0) {
+        if (! $this->tableAvailable() || $moduleId <= 0) {
             return false;
         }
 
@@ -458,7 +459,7 @@ class RedmineReportRepository
      */
     public function deleteActiveById(int $moduleId, string $id): int
     {
-        if (!$this->tableAvailable() || $moduleId <= 0) {
+        if (! $this->tableAvailable() || $moduleId <= 0) {
             return 0;
         }
 
@@ -485,12 +486,12 @@ class RedmineReportRepository
      * missing or a DB exception) so the caller can fall back to the input
      * array unchanged without invalidating any cache.
      *
-     * @param array<string,mixed> $report
+     * @param  array<string,mixed>  $report
      * @return array<string,mixed>|null
      */
     public function insertReport(int $moduleId, array $report, bool $archived): ?array
     {
-        if (!$this->tableAvailable()) {
+        if (! $this->tableAvailable()) {
             return null;
         }
 
@@ -509,12 +510,12 @@ class RedmineReportRepository
      * archive-one-report flow and by the maintenance bundle restore (each
      * report is still processed one at a time).
      *
-     * @param array<string,mixed> $report
+     * @param  array<string,mixed>  $report
      * @return array<string,mixed>
      */
     public function upsertArchived(int $moduleId, array $report): array
     {
-        if (!$this->tableAvailable()) {
+        if (! $this->tableAvailable()) {
             return $report;
         }
 
@@ -541,7 +542,7 @@ class RedmineReportRepository
      */
     public function deleteRow(int $moduleId, int $reportId): int
     {
-        if (!$this->tableAvailable() || $moduleId <= 0 || $reportId <= 0) {
+        if (! $this->tableAvailable() || $moduleId <= 0 || $reportId <= 0) {
             return 0;
         }
 
@@ -560,7 +561,7 @@ class RedmineReportRepository
      */
     public function deleteArchived(string $id): int
     {
-        if (!$this->tableAvailable() || trim($id) === '') {
+        if (! $this->tableAvailable() || trim($id) === '') {
             return 0;
         }
 
@@ -585,8 +586,8 @@ class RedmineReportRepository
         $redmineId = trim($redmineId);
         $statusName = trim($statusName);
         if (
-            !$this->tableAvailable()
-            || !preg_match('/^\d+$/', $redmineId)
+            ! $this->tableAvailable()
+            || ! preg_match('/^\d+$/', $redmineId)
             || $statusName === ''
         ) {
             return 0;
@@ -612,11 +613,109 @@ class RedmineReportRepository
     }
 
     /**
+     * Persists statuses obtained from Redmine for every local report that
+     * belongs to this module. Rows are grouped by status so a full project
+     * synchronization requires only a handful of UPDATE statements.
+     *
+     * @param  array<string,string>  $statusesByRedmineId
+     */
+    public function syncRedmineStatuses(array $statusesByRedmineId): int
+    {
+        if (! $this->tableAvailable() || $statusesByRedmineId === []) {
+            return 0;
+        }
+
+        $moduleId = $this->moduleId();
+        if ($moduleId === null) {
+            return 0;
+        }
+
+        $idsByStatus = [];
+        foreach ($statusesByRedmineId as $redmineId => $statusName) {
+            $redmineId = trim((string) $redmineId);
+            $statusName = trim((string) $statusName);
+            if (! preg_match('/^[1-9]\d*$/', $redmineId) || $statusName === '') {
+                continue;
+            }
+            $idsByStatus[$statusName][] = (int) $redmineId;
+        }
+
+        $updated = 0;
+        try {
+            foreach ($idsByStatus as $statusName => $redmineIds) {
+                $updated += DB::table('redmine_tic_reportes')
+                    ->where('modulo_id', $moduleId)
+                    ->whereIn('redmine_id', array_values(array_unique($redmineIds)))
+                    ->where(function ($query) use ($statusName): void {
+                        $query->whereNull('estado_redmine')
+                            ->orWhere('estado_redmine', '<>', $statusName);
+                    })
+                    ->update([
+                        'estado_redmine' => $statusName,
+                        'actualizado_at' => now(),
+                    ]);
+            }
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        return $updated;
+    }
+
+    /** @return array<int,string> */
+    public function staleNewIssueIdsForAssignee(int $moduleId, string $assigneeId, \DateTimeInterface $cutoff): array
+    {
+        $assigneeId = trim($assigneeId);
+        if (! $this->tableAvailable() || $moduleId <= 0 || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
+            return [];
+        }
+
+        try {
+            return DB::table('redmine_tic_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('asignado_a', (int) $assigneeId)
+                ->where('estado_redmine', 'Nueva')
+                ->whereNotNull('redmine_id')
+                ->where('creado_at', '<', $cutoff)
+                ->orderBy('redmine_id')
+                ->pluck('redmine_id')
+                ->map(static fn ($id): string => (string) $id)
+                ->unique()
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    public function unsyncedIssueCountForAssignee(int $moduleId, string $assigneeId, \DateTimeInterface $cutoff): int
+    {
+        $assigneeId = trim($assigneeId);
+        if (! $this->tableAvailable() || $moduleId <= 0 || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
+            return 0;
+        }
+
+        try {
+            return DB::table('redmine_tic_reportes')
+                ->where('modulo_id', $moduleId)
+                ->where('asignado_a', (int) $assigneeId)
+                ->whereNotNull('redmine_id')
+                ->where(function ($query): void {
+                    $query->whereNull('estado_redmine')->orWhere('estado_redmine', '');
+                })
+                ->where('creado_at', '<', $cutoff)
+                ->count();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
      * Hard-deletes all active (non-archived) report rows not in $keepIds.
      */
     public function deleteActiveExcept(int $moduleId, array $keepIds): void
     {
-        if (!$this->tableAvailable() || $moduleId <= 0) {
+        if (! $this->tableAvailable() || $moduleId <= 0) {
             return;
         }
 
@@ -645,16 +744,16 @@ class RedmineReportRepository
             }
 
             DB::table('modulos_nova')->insert([
-                'clave_modulo'   => $this->projectKey,
-                'nombre'         => $this->projectName,
-                'descripcion'    => '',
-                'icono'          => '',
-                'tipo'           => 'native',
-                'ruta'           => $this->projectKey,
-                'entrada'        => 'laravel:redmine.native.dashboard',
-                'habilitado'     => 1,
-                'orden'          => 100,
-                'creado_at'      => now(),
+                'clave_modulo' => $this->projectKey,
+                'nombre' => $this->projectName,
+                'descripcion' => '',
+                'icono' => '',
+                'tipo' => 'native',
+                'ruta' => $this->projectKey,
+                'entrada' => 'laravel:redmine.native.dashboard',
+                'habilitado' => 1,
+                'orden' => 100,
+                'creado_at' => now(),
                 'actualizado_at' => now(),
             ]);
 

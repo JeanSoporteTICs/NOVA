@@ -7,16 +7,16 @@ use Tests\TestCase;
 
 final class MantencionStaleNewReportNotifierTest extends TestCase
 {
-    public function test_remote_query_filters_new_issues_by_assignee_and_age(): void
+    public function test_database_query_filters_new_issues_by_assignee_and_age(): void
     {
-        $service = file_get_contents(dirname(__DIR__, 2).'/RedmineMantencion/Services/RedmineIssueStatusService.php');
+        $service = file_get_contents(dirname(__DIR__, 2).'/RedmineMantencion/Services/MantencionStaleNewReportNotifier.php');
 
         self::assertIsString($service);
         self::assertStringContainsString('function staleNewIssueIdsForAssignee(', $service);
-        self::assertStringContainsString("'assigned_to_id' => \$assigneeId", $service);
-        self::assertStringContainsString("'status_id' => (string) \$statusId", $service);
-        self::assertStringContainsString("'created_on' => '<='.\$cutoff->format('Y-m-d')", $service);
-        self::assertStringContainsString("!== 'nueva'", $service);
+        self::assertStringContainsString("DB::table('redmine_mantencion_reportes')", $service);
+        self::assertStringContainsString("->where('id_redmine_asignado', (int) \$assigneeId)", $service);
+        self::assertStringContainsString("->where('estado_redmine', 'Nueva')", $service);
+        self::assertStringContainsString("->where('creado_at', '<', now('UTC')->subDays", $service);
     }
 
     public function test_notification_identifies_mantencion_and_reports_the_count(): void
