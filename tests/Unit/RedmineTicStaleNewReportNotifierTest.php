@@ -32,12 +32,16 @@ final class RedmineTicStaleNewReportNotifierTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         $view = file_get_contents($root.'/RedmineTic/views/native-sections/config.blade.php');
+        $controller = file_get_contents($root.'/RedmineTic/Controllers/RedmineDashboardController.php');
         $listener = file_get_contents($root.'/telegram/bin/listen.php');
         $schedule = file_get_contents($root.'/app/Console/Kernel.php');
 
         $this->assertStringContainsString("'informes' => ['label' => 'Informes'", $view);
         $this->assertStringContainsString('name="informes_nuevos_habilitado"', $view);
         $this->assertStringContainsString('name="informes_nuevos_dias"', $view);
+        $this->assertStringContainsString('value="send_reports_now"', $view);
+        $this->assertStringContainsString("input('config_action') === 'send_reports_now'", $controller);
+        $this->assertStringContainsString('app(StaleNewReportNotifier::class)->run(true)', $controller);
         $this->assertStringContainsString('telegram_run_tic_daily_reports', $listener);
         $this->assertStringContainsString("redmine:notify-stale-new')->dailyAt('09:00')", $schedule);
     }
