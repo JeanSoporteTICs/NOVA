@@ -722,12 +722,9 @@
     @php
         $reportsEnabled = filter_var(data_get($config, 'informes_nuevos_habilitado', true), FILTER_VALIDATE_BOOL);
         $reportSchedule = \App\Support\Reports\AutomaticReportSchedule::settings($config);
-        $reportsDaysFrom = $reportSchedule['days_from'];
-        $reportsDaysTo = $reportSchedule['days_to'];
-        $reportsPeriod = $reportSchedule['period'];
         $reportsDay = $reportSchedule['day'];
         $reportsTime = $reportSchedule['time'];
-        $reportDayLabels = ['daily' => 'Todos los días', '1' => 'Lunes', '2' => 'Martes', '3' => 'Miércoles', '4' => 'Jueves', '5' => 'Viernes', '6' => 'Sábado', '7' => 'Domingo'];
+        $reportDayLabels = ['1' => 'Lunes', '2' => 'Martes', '3' => 'Miércoles', '4' => 'Jueves', '5' => 'Viernes', '6' => 'Sábado', '7' => 'Domingo'];
     @endphp
     <section class="card nova-card rm-panel rm-config-feature-form">
         <div class="rm-feature-head">
@@ -735,11 +732,11 @@
             <div>
                 <small>Recordatorio Telegram</small>
                 <h2>Informes automáticos</h2>
-                <p>Envía el resumen de tickets abiertos con estado Nueva correspondientes al período definido.</p>
+                <p>Informa los tickets creados durante la semana anterior que todavía permanecen abiertos en estado Nueva.</p>
             </div>
             <div class="rm-feature-meter {{ $reportsEnabled ? 'is-ok' : 'is-warning' }}">
                 <strong>{{ $reportsEnabled ? 'Activo' : 'Pausado' }}</strong>
-                <span>{{ $reportsPeriod === 'previous_week' ? 'Semana anterior' : $reportsDaysFrom.' a '.$reportsDaysTo.' días' }}</span>
+                <span>Semana anterior</span>
             </div>
         </div>
 
@@ -748,7 +745,7 @@
             <label class="rm-config-field-card">
                 <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
                 <span class="rm-config-field-copy">
-                    <strong>Enviar recordatorio programado</strong>
+                    <strong>Enviar informe semanal</strong>
                     <small>El mensaje enumera los tickets asignados que continúan en estado Nueva.</small>
                 </span>
                 <input type="hidden" name="informes_nuevos_habilitado" value="0">
@@ -756,40 +753,10 @@
             </label>
 
             <div class="rm-config-field-card mt-3">
-                <span class="rm-config-field-icon"><i class="bi bi-calendar-range"></i></span>
-                <span class="rm-config-field-copy">
-                    <strong>Período del informe</strong>
-                    <small>La semana anterior comprende desde el lunes hasta el domingo recién pasado.</small>
-                </span>
-                <select class="form-select" name="informes_nuevos_periodo" aria-label="Período del informe" required>
-                    <option value="previous_week" @selected($reportsPeriod === 'previous_week')>Semana calendario anterior</option>
-                    <option value="age_range" @selected($reportsPeriod === 'age_range')>Rango de antigüedad personalizado</option>
-                </select>
-            </div>
-
-            <div class="rm-config-field-card mt-3">
-                <span class="rm-config-field-icon"><i class="bi bi-calendar2-week"></i></span>
-                <span class="rm-config-field-copy">
-                    <strong>Rango de antigüedad</strong>
-                    <small>Se usa solamente con el período personalizado.</small>
-                </span>
-                <div class="row g-2 align-items-center">
-                    <div class="col-6">
-                        <label class="form-label small" for="reports-days-from">Desde</label>
-                        <input id="reports-days-from" class="form-control" type="number" min="1" max="365" name="informes_nuevos_dias_desde" value="{{ $reportsDaysFrom }}" required>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small" for="reports-days-to">Hasta</label>
-                        <input id="reports-days-to" class="form-control" type="number" min="1" max="365" name="informes_nuevos_dias_hasta" value="{{ $reportsDaysTo }}" required>
-                    </div>
-                </div>
-            </div>
-
-            <div class="rm-config-field-card mt-3">
-                <span class="rm-config-field-icon"><i class="bi bi-clock"></i></span>
+                <span class="rm-config-field-icon"><i class="bi bi-calendar-week"></i></span>
                 <span class="rm-config-field-copy">
                     <strong>Día y hora de envío</strong>
-                    <small>Para el resumen semanal se recomienda mantener el lunes.</small>
+                    <small>El período informado siempre será el lunes a domingo de la semana anterior.</small>
                 </span>
                 <div class="row g-2 align-items-center">
                     <div class="col-sm-7">
@@ -809,7 +776,7 @@
 
             <div class="nova-integration-status is-info mt-3">
                 <i class="bi bi-calendar-check"></i>
-                <span>Programación configurada: {{ $reportDayLabels[$reportsDay] ?? 'Todos los días' }} a las {{ $reportsTime }}. Cada responsable recibe como máximo un mensaje en el día programado.</span>
+                <span>Programado para {{ $reportDayLabels[$reportsDay] ?? 'Lunes' }} a las {{ $reportsTime }}. Cada responsable recibe como máximo un informe semanal.</span>
             </div>
         </form>
 

@@ -53,7 +53,7 @@ final class MantencionStaleNewReportNotifier
             return $result;
         }
 
-        $window = AutomaticReportSchedule::reportWindow($config, now(AutomaticReportSchedule::TIMEZONE));
+        $window = AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE));
 
         foreach ($users as $user) {
             $assigneeId = trim((string) ($user->redmine_id ?? ''));
@@ -132,7 +132,7 @@ final class MantencionStaleNewReportNotifier
             .$greeting."\n"
             ."Tienes {$count} {$reportWord} {$openWord}.\n"
             ."Estado: Nueva\n"
-            ."Período informado: {$periodLabel}\n"
+            ."Semana informada: {$periodLabel}\n"
             .'Tickets: '.$this->ticketSummary($ids)."\n"
             .'Revisa tus tickets asignados en Redmine.';
     }

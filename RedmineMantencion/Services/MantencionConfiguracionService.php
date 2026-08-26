@@ -59,13 +59,7 @@ class MantencionConfiguracionService
         if (! array_key_exists('informes_nuevos_habilitado', $data)) {
             $data['informes_nuevos_habilitado'] = true;
         }
-        if (! array_key_exists('informes_nuevos_dias', $data)) {
-            $data['informes_nuevos_dias'] = 2;
-        }
         $schedule = AutomaticReportSchedule::settings($data);
-        $data['informes_nuevos_dias_desde'] = $schedule['days_from'];
-        $data['informes_nuevos_dias_hasta'] = $schedule['days_to'];
-        $data['informes_nuevos_periodo'] = $schedule['period'];
         $data['informes_nuevos_dia'] = $schedule['day'];
         $data['informes_nuevos_hora'] = $schedule['time'];
         foreach (['trackers', 'prioridades', 'estados'] as $k) {
@@ -150,25 +144,11 @@ class MantencionConfiguracionService
             if (array_key_exists('informes_nuevos_habilitado', $_POST)) {
                 $cfg['informes_nuevos_habilitado'] = (string) $_POST['informes_nuevos_habilitado'] === '1';
             }
-            if (array_key_exists('informes_nuevos_dias', $_POST)) {
-                $cfg['informes_nuevos_dias'] = max(1, min(30, (int) $_POST['informes_nuevos_dias']));
-            }
-            if (array_key_exists('informes_nuevos_dias_desde', $_POST)
-                || array_key_exists('informes_nuevos_dias_hasta', $_POST)
-                || array_key_exists('informes_nuevos_periodo', $_POST)
-                || array_key_exists('informes_nuevos_dia', $_POST)
-                || array_key_exists('informes_nuevos_hora', $_POST)) {
-                $schedule = AutomaticReportSchedule::settings(array_merge($cfg, [
-                    'informes_nuevos_dias_desde' => $_POST['informes_nuevos_dias_desde'] ?? 2,
-                    'informes_nuevos_dias_hasta' => $_POST['informes_nuevos_dias_hasta'] ?? 365,
-                    'informes_nuevos_periodo' => $_POST['informes_nuevos_periodo'] ?? 'previous_week',
+            if (array_key_exists('informes_nuevos_dia', $_POST) || array_key_exists('informes_nuevos_hora', $_POST)) {
+                $schedule = AutomaticReportSchedule::settings([
                     'informes_nuevos_dia' => $_POST['informes_nuevos_dia'] ?? '1',
                     'informes_nuevos_hora' => $_POST['informes_nuevos_hora'] ?? '09:00',
-                ]));
-                $cfg['informes_nuevos_dias'] = $schedule['days_from'];
-                $cfg['informes_nuevos_dias_desde'] = $schedule['days_from'];
-                $cfg['informes_nuevos_dias_hasta'] = $schedule['days_to'];
-                $cfg['informes_nuevos_periodo'] = $schedule['period'];
+                ]);
                 $cfg['informes_nuevos_dia'] = $schedule['day'];
                 $cfg['informes_nuevos_hora'] = $schedule['time'];
             }

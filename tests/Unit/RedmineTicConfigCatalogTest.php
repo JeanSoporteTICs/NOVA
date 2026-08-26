@@ -53,8 +53,7 @@ class RedmineTicConfigCatalogTest extends TestCase
             'platform_url', 'categories_url', 'unidades_url', 'webhook_url', 'project_id',
             'project_name', 'tracker_id', 'priority_id', 'status_id', 'cf_solicitante',
             'cf_unidad', 'cf_unidad_solicitante', 'cf_hora_extra', 'retencion_horas',
-            'informes_nuevos_habilitado', 'informes_nuevos_dias', 'informes_nuevos_dias_desde',
-            'informes_nuevos_dias_hasta', 'informes_nuevos_periodo', 'informes_nuevos_dia', 'informes_nuevos_hora',
+            'informes_nuevos_habilitado', 'informes_nuevos_dia', 'informes_nuevos_hora',
             'maintenance_mode', 'maintenance_until', 'trackers', 'prioridades', 'estados',
         ] as $key) {
             $this->assertArrayHasKey($key, $config);

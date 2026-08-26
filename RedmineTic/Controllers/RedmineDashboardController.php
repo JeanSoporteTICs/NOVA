@@ -473,10 +473,6 @@ class RedmineDashboardController extends Controller
             'cf_unidad_solicitante',
             'cf_hora_extra',
             'retencion_horas',
-            'informes_nuevos_dias',
-            'informes_nuevos_dias_desde',
-            'informes_nuevos_dias_hasta',
-            'informes_nuevos_periodo',
             'informes_nuevos_dia',
             'informes_nuevos_hora',
             'maintenance_until',
@@ -487,17 +483,10 @@ class RedmineDashboardController extends Controller
         }
         if ($panel === 'informes') {
             $config['informes_nuevos_habilitado'] = $request->boolean('informes_nuevos_habilitado');
-            $schedule = AutomaticReportSchedule::settings(array_merge($config, [
-                'informes_nuevos_dias_desde' => $request->input('informes_nuevos_dias_desde', 2),
-                'informes_nuevos_dias_hasta' => $request->input('informes_nuevos_dias_hasta', 365),
-                'informes_nuevos_periodo' => $request->input('informes_nuevos_periodo', 'previous_week'),
+            $schedule = AutomaticReportSchedule::settings([
                 'informes_nuevos_dia' => $request->input('informes_nuevos_dia', '1'),
                 'informes_nuevos_hora' => $request->input('informes_nuevos_hora', '09:00'),
-            ]));
-            $config['informes_nuevos_dias'] = $schedule['days_from'];
-            $config['informes_nuevos_dias_desde'] = $schedule['days_from'];
-            $config['informes_nuevos_dias_hasta'] = $schedule['days_to'];
-            $config['informes_nuevos_periodo'] = $schedule['period'];
+            ]);
             $config['informes_nuevos_dia'] = $schedule['day'];
             $config['informes_nuevos_hora'] = $schedule['time'];
         }

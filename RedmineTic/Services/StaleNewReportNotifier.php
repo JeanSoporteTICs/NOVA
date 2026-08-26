@@ -43,8 +43,7 @@ final class StaleNewReportNotifier
             return $this->result('already_completed');
         }
 
-        $schedule = AutomaticReportSchedule::settings($config);
-        $window = AutomaticReportSchedule::reportWindow($config, now(AutomaticReportSchedule::TIMEZONE));
+        $window = AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE));
         $result = $this->result('completed');
         foreach ($redmine->users() as $user) {
             if (! $this->activeUser($user)) {
@@ -117,7 +116,6 @@ final class StaleNewReportNotifier
                         'user_id' => (string) ($user['id'] ?? $assigneeId),
                         'asignado_a' => (string) $assigneeId,
                         'cantidad' => count($newIds),
-                        'periodo' => $schedule['period'],
                         'periodo_desde' => $window['start']->toIso8601String(),
                         'periodo_hasta' => $window['end']->toIso8601String(),
                         'redmine_ids' => $newIds,
@@ -153,7 +151,7 @@ final class StaleNewReportNotifier
             .$greeting."\n"
             ."Tienes {$count} {$reportWord} {$openWord}.\n"
             ."Estado: Nueva\n"
-            ."Período informado: {$periodLabel}\n"
+            ."Semana informada: {$periodLabel}\n"
             .'Tickets: '.$this->ticketSummary($ids)."\n"
             .'Revisa tus tickets asignados en Redmine.';
     }
