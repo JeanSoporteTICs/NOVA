@@ -18,6 +18,7 @@ use Illuminate\View\View;
 use RedmineTic\Repositories\RedmineConfigRepository;
 use RedmineTic\Repositories\RedmineDataRepository;
 use RedmineTic\Services\QuickReportService;
+use RedmineTic\Services\StaleNewReportNotifier;
 
 class RedmineDashboardController extends Controller
 {
@@ -365,6 +366,22 @@ class RedmineDashboardController extends Controller
         $this->authorizePermission($request, $redmine, self::CONFIG_PANEL_PERMISSIONS[$panel] ?? 'cfg_resumen');
         if ($redmine->maintenanceModeEnabled() && ! $this->isMaintenanceSettingsRequest($request)) {
             return $this->maintenanceBlock($redmine);
+        }
+
+        if ($request->input('config_action') === 'send_reports_now') {
+            $result = app(StaleNewReportNotifier::class)->run(true);
+            $message = sprintf(
+                'Comprobación TIC finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s) y %d error(es).',
+                (int) ($result['sent'] ?? 0),
+                (int) ($result['empty'] ?? 0),
+                (int) ($result['skipped'] ?? 0),
+                (int) ($result['failed'] ?? 0)
+            );
+
+            return redirect()
+                ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'informes']), 303)
+                ->with('redmine_status', $message)
+                ->with('redmine_status_type', (int) ($result['failed'] ?? 0) > 0 ? 'danger' : 'success');
         }
 
         if ($request->input('config_action') === 'save_user_permissions') {

@@ -768,6 +768,9 @@
         </form>
 
         <div class="rm-feature-actions">
+            <button class="btn-nova btn-nova-info" type="submit" form="rm-config-form-informes" name="config_action" value="send_reports_now" data-app-confirm="¿Comprobar ahora y enviar los informes TIC pendientes?">
+                <i class="bi bi-send-check"></i>Comprobar y enviar
+            </button>
             <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-informes">
                 <i class="bi bi-save"></i>Guardar informes
             </button>

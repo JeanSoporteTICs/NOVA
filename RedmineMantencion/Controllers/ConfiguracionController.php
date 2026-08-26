@@ -7,6 +7,7 @@ use App\Modulos\RedmineMantencion\Services\MantencionCategoriasService;
 use App\Modulos\RedmineMantencion\Services\MantencionConfiguracionRolesService;
 use App\Modulos\RedmineMantencion\Services\MantencionConfiguracionService;
 use App\Modulos\RedmineMantencion\Services\MantencionNextcloudService;
+use App\Modulos\RedmineMantencion\Services\MantencionStaleNewReportNotifier;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -17,6 +18,7 @@ class ConfiguracionController extends Controller
         private readonly MantencionCategoriasService $categorias,
         private readonly MantencionConfiguracionRolesService $roles,
         private readonly MantencionNextcloudService $nextcloud,
+        private readonly MantencionStaleNewReportNotifier $reportsNotifier,
     ) {
     }
 
@@ -261,6 +263,24 @@ class ConfiguracionController extends Controller
                 if (function_exists('maintenance_mode_block_if_enabled')) {
                     maintenance_mode_block_if_enabled();
                 }
+            }
+            if ($action === 'send_reports_now' && auth_can('cfg_informes')) {
+                if (function_exists('csrf_validate')) {
+                    csrf_validate();
+                }
+                $result = $this->reportsNotifier->run(true);
+                session()->put('mantencion_config_flash', sprintf(
+                    'Comprobación Mantención finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s) y %d error(es).',
+                    (int) ($result['sent'] ?? 0),
+                    (int) ($result['empty'] ?? 0),
+                    (int) ($result['skipped'] ?? 0),
+                    (int) ($result['failed'] ?? 0)
+                ));
+
+                return redirect(route('redmine.mantencion.section', [
+                    'section' => 'configuracion',
+                    'panel' => 'informes',
+                ]), 303);
             }
             if ($action === 'load_role' && $canManageRoles) {
                 if (function_exists('csrf_validate')) {

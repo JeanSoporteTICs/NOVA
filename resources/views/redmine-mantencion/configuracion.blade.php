@@ -592,6 +592,7 @@
       </div>
 
       <div class="rm-feature-actions">
+        <button class="btn-nova btn-nova-info" type="submit" name="action" value="send_reports_now" data-app-confirm="¿Comprobar ahora y enviar los informes de Mantención pendientes?"><i class="bi bi-send-check"></i>Comprobar y enviar</button>
         <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar informes</button>
       </div>
     </form>

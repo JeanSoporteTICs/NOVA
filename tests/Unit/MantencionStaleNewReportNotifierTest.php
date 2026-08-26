@@ -34,6 +34,7 @@ final class MantencionStaleNewReportNotifierTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         $view = file_get_contents($root.'/resources/views/redmine-mantencion/configuracion.blade.php');
+        $controller = file_get_contents($root.'/RedmineMantencion/Controllers/ConfiguracionController.php');
         $permissions = file_get_contents($root.'/RedmineMantencion/views/Configuracion/_permissions_panels.php');
         $listener = file_get_contents($root.'/telegram/bin/listen.php');
         $schedule = file_get_contents($root.'/app/Console/Kernel.php');
@@ -41,6 +42,9 @@ final class MantencionStaleNewReportNotifierTest extends TestCase
         self::assertStringContainsString("'informes' => ['label' => 'Informes'", $view);
         self::assertStringContainsString('name="informes_nuevos_habilitado"', $view);
         self::assertStringContainsString('name="informes_nuevos_dias"', $view);
+        self::assertStringContainsString('value="send_reports_now"', $view);
+        self::assertStringContainsString("\$action === 'send_reports_now'", $controller);
+        self::assertStringContainsString('$this->reportsNotifier->run(true)', $controller);
         self::assertStringContainsString("'cfg_informes' => 'Informes automáticos'", $permissions);
         self::assertStringContainsString('telegram_run_mantencion_daily_reports', $listener);
         self::assertStringContainsString("redmine:mantencion-notify-stale-new')->dailyAt('09:00')", $schedule);
