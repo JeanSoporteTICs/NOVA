@@ -1497,6 +1497,7 @@ final class RedmineDataRepository
         return match ($section) {
             'dashboard' => array_merge($this->dashboardData($dashboardFilter, $user), ['users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units()]),
             'webhook' => ['config' => $this->configuration(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units()],
+            'reporte-rapido' => ['config' => $this->configuration(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units()],
             'horas-extra' => $this->hoursExtraData($filters, $user),
             'historico' => ['rows' => $this->history($user), 'config' => $this->configuration()],
             'usuarios' => ['users' => $this->users(), 'roles' => $this->roles()],

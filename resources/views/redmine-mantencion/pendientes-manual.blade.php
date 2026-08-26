@@ -136,9 +136,6 @@
               <?php $currentManualCategory = trim((string)($form['categoria'] ?? '')); ?>
               <select name="categoria" id="manual-categoria" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Seleccionar categoría">
                 <option value=""></option>
-                <?php if ($currentManualCategory !== '' && !in_array($currentManualCategory, $categoryOptions, true)): ?>
-                  <option value="<?= $h($currentManualCategory) ?>" selected><?= $h($currentManualCategory) ?></option>
-                <?php endif; ?>
                 <?php foreach ($categoryOptions as $categoryOption): ?>
                   <option value="<?= $h($categoryOption) ?>" <?= $currentManualCategory === $categoryOption ? 'selected' : '' ?>><?= $h($categoryOption) ?></option>
                 <?php endforeach; ?>

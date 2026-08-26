@@ -10,8 +10,10 @@ class MantencionNextcloudLote extends Model
     protected $table = 'redmine_mantencion_nextcloud_historial_lotes';
 
     protected $fillable = [
-        'modulo_id',
-        'legacy_id',
+        'numero_lote',
+        'solicitante_nombre',
+        'solicitante_rut',
+        'solicitante_correo',
         'created_at_cl',
         'expires_at',
     ];

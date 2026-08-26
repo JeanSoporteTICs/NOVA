@@ -40,9 +40,6 @@ class NextcloudUsuariosController extends Controller
         $previewUsers = is_array($preview['users'] ?? null) ? $preview['users'] : [];
         $previewRequester = is_array($preview['requester'] ?? null) ? $preview['requester'] : [];
         $previewRequesterName = trim((string)($previewRequester['solicitante_nombre'] ?? ''));
-        if ($previewRequesterName === '') {
-            $previewRequesterName = trim((string)($previewRequester['solicitante'] ?? ''));
-        }
         $requesterForm = [
             'solicitante_nombre' => (string) request()->input('solicitante_nombre', $previewRequesterName),
             'solicitante_rut' => (string) request()->input('solicitante_rut', $previewRequester['solicitante_rut'] ?? ''),

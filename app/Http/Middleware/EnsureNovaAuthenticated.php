@@ -18,7 +18,11 @@ class EnsureNovaAuthenticated
         $isSessionExtend = $request->routeIs('session.extend');
 
         if (!$user || !$this->sessionUserStillAllowed($user) || ($expired && !$isSessionExtend)) {
-            $request->session()->forget(['nova_user', 'nova_last_activity']);
+            $request->session()->forget([
+                'nova_user',
+                'nova_last_activity',
+                'redmine_tic.quick_report_notes',
+            ]);
 
             return redirect()->route('login')->withErrors([
                 'username' => 'Debes iniciar sesion en NOVA o contactar con el administrador.',

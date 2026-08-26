@@ -4,6 +4,7 @@ namespace RedmineTic\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
+use App\Modulos\Telegram\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,15 +12,18 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RedmineTic\Repositories\RedmineConfigRepository;
 use RedmineTic\Repositories\RedmineDataRepository;
+use RedmineTic\Services\QuickReportService;
 
 class RedmineDashboardController extends Controller
 {
     private const TIC_SECTIONS = [
         'dashboard' => 'Reportes',
         'webhook' => 'Reporte manual',
+        'reporte-rapido' => 'Reporte rapido',
         'horas-extra' => 'Horas extra',
         'historico' => 'Historico',
         'usuarios' => 'Usuarios',
@@ -41,6 +45,7 @@ class RedmineDashboardController extends Controller
     private const SECTION_PERMISSIONS = [
         'dashboard' => 'mensajes_acceso',
         'webhook' => 'simulador',
+        'reporte-rapido' => 'reporte_rapido',
         'horas-extra' => 'horas_extra',
         'historico' => 'historico',
         'usuarios' => 'usuarios',
@@ -659,6 +664,179 @@ class RedmineDashboardController extends Controller
             ->with('redmine_created_report_id', $report['id'] ?? '');
     }
 
+    public function quickReportAction(
+        Request $request,
+        RedmineDataRepository $redmine,
+        QuickReportService $quickReports,
+        TelegramService $telegram
+    ): RedirectResponse
+    {
+        $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'reporte_rapido');
+        if ($blocked = $this->maintenanceBlock($redmine)) {
+            return $blocked;
+        }
+
+        $route = route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'reporte-rapido']));
+        $action = (string) $request->input('quick_action', 'preview');
+
+        if ($action === 'preview') {
+            $validated = $request->validate([
+                'quick_input' => ['required', 'string', 'max:700'],
+                'quick_description' => ['nullable', 'string', 'max:4000'],
+                'asignado_a' => ['required', 'integer', 'min:1', 'max:4294967295'],
+            ]);
+            $this->storeQuickReportNotes($request, (string) ($validated['quick_description'] ?? ''));
+            $recipient = $quickReports->assignedRecipient($redmine->users(), (string) $validated['asignado_a']);
+            if ($recipient === null) {
+                return redirect($route)
+                    ->withInput()
+                    ->withErrors(['asignado_a' => 'Selecciona un responsable activo de Redmine TIC.']);
+            }
+            $preview = $quickReports->createDraft(
+                (string) $validated['quick_input'],
+                $redmine->categories(),
+                $redmine->units(),
+                (string) $validated['asignado_a']
+            );
+            if (!$preview['ok']) {
+                return redirect($route)
+                    ->withInput()
+                    ->withErrors(['quick_input' => $preview['error']]);
+            }
+
+            return redirect($route)
+                ->withInput([
+                    'quick_input' => $preview['input'],
+                    'quick_description' => (string) ($validated['quick_description'] ?? ''),
+                ])
+                ->with('redmine_quick_preview', $preview['draft']);
+        }
+
+        abort_unless($action === 'send', 422, 'Accion de reporte rapido no permitida.');
+        $activeUnits = $quickReports->catalogNames($redmine->units());
+        $payload = $request->validate([
+            'asunto' => ['required', 'string', 'max:220'],
+            'descripcion' => ['nullable', 'string', 'max:4000'],
+            'solicitante' => ['nullable', 'string', 'max:160'],
+            'unidad' => ['nullable', 'string', 'max:180'],
+            'unidad_solicitante' => ['required', 'string', 'max:180', Rule::in($activeUnits)],
+            'categoria' => ['nullable', 'string', 'max:180'],
+            'prioridad' => ['nullable', 'string', 'max:80'],
+            'tipo' => ['nullable', 'string', 'max:80'],
+            'asignado_a' => ['required', 'integer', 'min:1', 'max:4294967295'],
+            'fecha_inicio' => ['nullable', 'date'],
+            'fecha_fin' => ['nullable', 'date'],
+            'fecha' => ['nullable', 'date'],
+            'hora' => ['nullable', 'date_format:H:i'],
+            'chat_id_telegram' => ['nullable', 'string', 'max:120'],
+            'mensaje' => ['nullable', 'string', 'max:700'],
+            'hora_extra' => ['nullable', 'string', 'max:8'],
+            'tiempo_estimado' => ['nullable', 'string', 'max:40'],
+            'quick_input' => ['nullable', 'string', 'max:700'],
+        ], [
+            'unidad_solicitante.in' => 'La unidad solicitante seleccionada ya no existe en la lista vigente.',
+        ]);
+        $recipient = $quickReports->assignedRecipient($redmine->users(), (string) $payload['asignado_a']);
+        if ($recipient === null) {
+            return redirect($route)
+                ->withInput($payload + ['quick_preview' => '1'])
+                ->with('redmine_quick_preview', $payload)
+                ->withErrors(['asignado_a' => 'El responsable seleccionado ya no esta activo en Redmine TIC.']);
+        }
+
+        $payload['origen'] = 'manual_rapido';
+        $payload['chat_id_telegram'] = '';
+        $report = $redmine->createSimulatedReport($payload);
+        $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
+        $userId = is_array($user) ? (string) ($user['id'] ?? '') : '';
+        $redmine->recordActivity('reporte_rapido_creado', [
+            'user_id' => $userId,
+            'message_id' => (string) ($report['id'] ?? ''),
+            'asignado_a' => $recipient['id'],
+            'asunto' => (string) ($report['asunto'] ?? ''),
+        ]);
+        $sent = $redmine->sendReportsToRedmine([(string) ($report['id'] ?? '')], $userId !== '' ? $userId : null);
+        $redmineId = (string) ($sent['redmine_ids'][0] ?? '');
+        if ((int) ($sent['success'] ?? 0) !== 1 || $redmineId === '') {
+            $error = trim((string) ($sent['errors'][0] ?? 'Redmine no confirmo la creacion del ticket.'));
+
+            return redirect($route)
+                ->withInput($payload + ['quick_preview' => '1'])
+                ->with('redmine_quick_preview', $payload)
+                ->with('redmine_status', $error)
+                ->with('redmine_status_type', 'danger');
+        }
+
+        $issueUrl = $redmine->redmineIssueUrl($redmineId);
+        $telegramSent = false;
+        if ($recipient['chat_id'] !== '') {
+            try {
+                $telegramSent = $telegram->sendToChat(
+                    $recipient['chat_id'],
+                    $quickReports->notificationMessage($report, $redmineId, $issueUrl)
+                );
+            } catch (\Throwable) {
+                $telegramSent = false;
+            }
+        }
+        $redmine->recordActivity($telegramSent ? 'reporte_rapido_telegram_ok' : 'reporte_rapido_telegram_pendiente', [
+            'user_id' => $userId,
+            'message_id' => (string) ($report['id'] ?? ''),
+            'redmine_id' => $redmineId,
+            'asignado_a' => $recipient['id'],
+            'telegram_configurado' => $recipient['chat_id'] !== '',
+        ]);
+
+        $status = 'Reporte Redmine #' . $redmineId . ' creado correctamente.';
+        if ($telegramSent) {
+            $status .= ' Notificacion enviada a ' . $recipient['name'] . '.';
+        } elseif ($recipient['chat_id'] === '') {
+            $status .= ' El responsable no tiene Chat ID de Telegram configurado.';
+        } else {
+            $status .= ' No fue posible enviar la notificacion Telegram.';
+        }
+
+        return redirect($route)
+            ->with('redmine_status', $status)
+            ->with('redmine_status_type', $telegramSent ? 'success' : 'info')
+            ->with('redmine_quick_result', [
+                'redmine_id' => $redmineId,
+                'url' => $issueUrl,
+                'responsable' => $recipient['name'],
+                'telegram_sent' => $telegramSent,
+                'telegram_configured' => $recipient['chat_id'] !== '',
+            ]);
+    }
+
+    public function quickReportNotes(Request $request, RedmineDataRepository $redmine): JsonResponse
+    {
+        $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'reporte_rapido');
+
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:4000'],
+        ]);
+        $notes = (string) ($validated['notes'] ?? '');
+        $this->storeQuickReportNotes($request, $notes);
+
+        return response()->json([
+            'ok' => true,
+            'saved_at' => now('America/Santiago')->format('H:i'),
+        ]);
+    }
+
+    private function storeQuickReportNotes(Request $request, string $notes): void
+    {
+        if (trim($notes) === '') {
+            $request->session()->forget('redmine_tic.quick_report_notes');
+
+            return;
+        }
+
+        $request->session()->put('redmine_tic.quick_report_notes', $notes);
+    }
+
     /**
      * @param mixed $value
      * @return string[]
@@ -872,6 +1050,7 @@ class RedmineDashboardController extends Controller
             'estadisticas' => $request->boolean('perm_estadisticas'),
             'usuarios' => $request->boolean('perm_usuarios'),
             'simulador' => $request->boolean('perm_simulador'),
+            'reporte_rapido' => $request->boolean('perm_reporte_rapido'),
             'reportes_editar' => $request->boolean('perm_reportes_editar'),
             'reportes_eliminar' => $request->boolean('perm_reportes_eliminar'),
             'horas_extra_editar' => $request->boolean('perm_horas_extra_editar'),

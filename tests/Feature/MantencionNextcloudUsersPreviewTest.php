@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\EnsureNovaAuthenticated;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 final class MantencionNextcloudUsersPreviewTest extends TestCase
@@ -128,7 +131,7 @@ final class MantencionNextcloudUsersPreviewTest extends TestCase
         ]);
         self::assertSame('12345678-5', $valid['requester']['solicitante_rut'] ?? null);
         self::assertSame('solicitante@example.test', $valid['requester']['solicitante_correo'] ?? null);
-        self::assertSame('', $valid['requester']['solicitante'] ?? null);
+        self::assertArrayNotHasKey('solicitante', $valid['requester']);
 
         $optional = $service->nextcloud_requester_from_input([]);
         self::assertArrayNotHasKey('error', $optional);
@@ -146,6 +149,73 @@ final class MantencionNextcloudUsersPreviewTest extends TestCase
             'solicitante_correo' => 'solicitante@example.test',
         ]);
         self::assertSame('El RUT del solicitante no es válido.', $invalidRut['error'] ?? null);
+    }
+
+    public function test_requester_name_rut_and_email_are_persisted_and_loaded_with_the_history_batch(): void
+    {
+        $originalConnection = (string) config('database.default');
+        config()->set('database.default', 'sqlite');
+        config()->set('database.connections.sqlite.database', ':memory:');
+        DB::purge('sqlite');
+
+        try {
+            Schema::create('redmine_mantencion_nextcloud_historial_lotes', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('numero_lote')->nullable()->unique();
+                $table->string('solicitante_nombre', 200)->nullable();
+                $table->string('solicitante_rut', 20)->nullable();
+                $table->string('solicitante_correo', 190)->nullable();
+                $table->dateTime('created_at_cl');
+                $table->timestamps();
+            });
+            Schema::create('redmine_mantencion_nextcloud_historial_usuarios', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('lote_id');
+                $table->string('tipo', 20);
+                $table->string('userid')->nullable();
+                $table->string('display_name')->nullable();
+                $table->string('email')->nullable();
+                $table->string('grupo')->nullable();
+                $table->string('status')->nullable();
+                $table->text('message')->nullable();
+                $table->timestamps();
+            });
+
+            $service = app(\App\Modulos\RedmineMantencion\Services\MantencionNextcloudService::class);
+            $requester = [
+                'solicitante_nombre' => 'Persona Solicitante',
+                'solicitante_rut' => '12345678-5',
+                'solicitante_correo' => 'solicitante@example.test',
+            ];
+            $user = [
+                'userid' => '12345678',
+                'displayName' => 'Persona de Prueba',
+                'email' => 'usuario@example.test',
+                'group' => 'Grupo de Prueba',
+                'status' => 'created',
+                'message' => 'Creado correctamente.',
+            ];
+
+            $batch = $service->nextcloud_created_history_save_batch([$user], [], [], [$user], $requester);
+
+            self::assertNotNull($batch);
+            self::assertSame(1, $batch['numero_lote'] ?? null);
+            self::assertArrayNotHasKey('id', $batch);
+            $stored = DB::table('redmine_mantencion_nextcloud_historial_lotes')->first();
+            self::assertSame(1, $stored->numero_lote ?? null);
+            self::assertSame('Persona Solicitante', $stored->solicitante_nombre ?? null);
+            self::assertSame('12345678-5', $stored->solicitante_rut ?? null);
+            self::assertSame('solicitante@example.test', $stored->solicitante_correo ?? null);
+
+            $loaded = $service->nextcloud_created_history_load()[0] ?? [];
+            self::assertSame(1, $loaded['numero_lote'] ?? null);
+            self::assertSame('Persona Solicitante', $loaded['solicitante_nombre'] ?? null);
+            self::assertSame('12345678-5', $loaded['solicitante_rut'] ?? null);
+            self::assertSame('solicitante@example.test', $loaded['solicitante_correo'] ?? null);
+        } finally {
+            DB::purge('sqlite');
+            config()->set('database.default', $originalConnection);
+        }
     }
 
     public function test_requester_form_autoformats_rut_and_validates_rut_and_email_in_the_browser(): void
@@ -168,6 +238,10 @@ final class MantencionNextcloudUsersPreviewTest extends TestCase
         self::assertStringContainsString("requesterRut.setCustomValidity(valid ? ''", $view);
         self::assertStringContainsString("requesterEmail.setCustomValidity(valid ? ''", $view);
         self::assertStringContainsString("requesterEmail.value.trim().toLowerCase()", $view);
+        self::assertGreaterThanOrEqual(2, substr_count($view, '>Usuario</th>'));
+        self::assertGreaterThanOrEqual(2, substr_count($view, '>Nombre</th>'));
+        self::assertStringNotContainsString('<th>Nombre a desplegar</th>', $view);
+        self::assertStringContainsString('Solicitante de la importación procesada', $view);
     }
 
     public function test_nextcloud_creation_timeout_is_verified_before_marking_the_user_as_failed(): void
