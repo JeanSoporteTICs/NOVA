@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use RedmineTic\Repositories\RedmineCatalogRepository;
 use RedmineTic\Repositories\RedmineConfigRepository;
 use RedmineTic\Repositories\RedmineDataRepository;
@@ -23,7 +24,7 @@ class RedmineTicConfigCatalogTest extends TestCase
 
     private function facade(): RedmineDataRepository
     {
-        return (new RedmineDataRepository())->forProject('redmine_tic');
+        return (new RedmineDataRepository)->forProject('redmine_tic');
     }
 
     private function configRepo(): RedmineConfigRepository
@@ -52,6 +53,7 @@ class RedmineTicConfigCatalogTest extends TestCase
             'platform_url', 'categories_url', 'unidades_url', 'webhook_url', 'project_id',
             'project_name', 'tracker_id', 'priority_id', 'status_id', 'cf_solicitante',
             'cf_unidad', 'cf_unidad_solicitante', 'cf_hora_extra', 'retencion_horas',
+            'informes_nuevos_habilitado', 'informes_nuevos_dias',
             'maintenance_mode', 'maintenance_until', 'trackers', 'prioridades', 'estados',
         ] as $key) {
             $this->assertArrayHasKey($key, $config);
@@ -201,8 +203,8 @@ class RedmineTicConfigCatalogTest extends TestCase
         $facade->saveConfiguration(['platform_url' => 'https://example.test/one']);
         $facade->saveConfiguration(['platform_url' => 'https://example.test/two']);
 
-        $moduleId = \Illuminate\Support\Facades\DB::table('modulos_nova')->where('clave_modulo', 'redmine_tic')->value('id');
-        $rows = \Illuminate\Support\Facades\DB::table('configuraciones_modulo')
+        $moduleId = DB::table('modulos_nova')->where('clave_modulo', 'redmine_tic')->value('id');
+        $rows = DB::table('configuraciones_modulo')
             ->where('modulo_id', $moduleId)
             ->where('clave', 'platform_url')
             ->count();

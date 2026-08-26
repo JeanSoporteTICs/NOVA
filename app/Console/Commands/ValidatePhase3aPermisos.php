@@ -17,24 +17,27 @@ use RedmineTic\Repositories\RedmineDataRepository;
 class ValidatePhase3aPermisos extends Command
 {
     protected $signature = 'nova:validate-phase3a';
+
     protected $description = 'Validate Phase 3a: relational permission tables vs JSON source';
 
-    private const EXPECTED_KEYS = 30;
+    private const EXPECTED_KEYS = 32;
 
     private const SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
 
     private const ALL_KEYS = [
         'mensajes', 'mensajes_acceso', 'horas_extra', 'historico', 'historico_acciones',
         'historico_scope', 'configuracion', 'estadisticas', 'usuarios',
-        'categorias', 'unidades', 'simulador', 'actividad', 'reportes_editar',
+        'simulador', 'reporte_rapido', 'actividad', 'actividad_eliminar', 'actividad_todos', 'reportes_editar',
         'reportes_eliminar', 'horas_extra_editar', 'usuarios_editar',
         'usuarios_eliminar', 'cfg_resumen', 'cfg_conexion', 'cfg_proyecto', 'cfg_redmine',
-        'cfg_campos', 'cfg_retencion', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
+        'cfg_campos', 'cfg_retencion', 'cfg_informes', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
         'cfg_categorias', 'cfg_unidades', 'mis_integraciones',
     ];
 
     private int $passed = 0;
+
     private int $failed = 0;
+
     private array $issues = [];
 
     public function handle(): int
@@ -85,8 +88,9 @@ class ValidatePhase3aPermisos extends Command
     {
         $this->section('2. Catálogo de permisos');
 
-        if (!Schema::hasTable('redmine_tic_permisos_catalogo')) {
+        if (! Schema::hasTable('redmine_tic_permisos_catalogo')) {
             $this->warn('  (Saltado — tabla ausente)');
+
             return;
         }
 
@@ -94,7 +98,7 @@ class ValidatePhase3aPermisos extends Command
         if ($count === self::EXPECTED_KEYS) {
             $this->pass("Catálogo tiene exactamente {$count} filas");
         } else {
-            $this->checkFail("Catálogo tiene {$count} filas, se esperan " . self::EXPECTED_KEYS);
+            $this->checkFail("Catálogo tiene {$count} filas, se esperan ".self::EXPECTED_KEYS);
         }
 
         $dbKeys = DB::table('redmine_tic_permisos_catalogo')->pluck('clave')->toArray();
@@ -102,21 +106,21 @@ class ValidatePhase3aPermisos extends Command
         if (empty($missing)) {
             $this->pass('Todas las claves canónicas están en el catálogo');
         } else {
-            $this->checkFail('Claves faltantes en catálogo: ' . implode(', ', $missing));
+            $this->checkFail('Claves faltantes en catálogo: '.implode(', ', $missing));
         }
 
         // Verify scope key types
         $scopeErrors = [];
         foreach (self::SCOPE_KEYS as $sk) {
             $tipo = DB::table('redmine_tic_permisos_catalogo')->where('clave', $sk)->value('tipo');
-            if (!in_array($tipo, ['scope', 'scope_or_empty'], true)) {
+            if (! in_array($tipo, ['scope', 'scope_or_empty'], true)) {
                 $scopeErrors[] = "{$sk}={$tipo}";
             }
         }
         if (empty($scopeErrors)) {
             $this->pass('Tipos de claves scope correctos (scope / scope_or_empty)');
         } else {
-            $this->checkFail('Tipos incorrectos en catálogo: ' . implode(', ', $scopeErrors));
+            $this->checkFail('Tipos incorrectos en catálogo: '.implode(', ', $scopeErrors));
         }
     }
 
@@ -124,15 +128,16 @@ class ValidatePhase3aPermisos extends Command
     {
         $this->section('3. redmine_tic_permisos_usuario');
 
-        if (!Schema::hasTable('redmine_tic_permisos_usuario') ||
-            !Schema::hasTable('redmine_tic_perfiles_usuario')) {
+        if (! Schema::hasTable('redmine_tic_permisos_usuario') ||
+            ! Schema::hasTable('redmine_tic_perfiles_usuario')) {
             $this->warn('  (Saltado — tabla ausente)');
+
             return;
         }
 
         $totalPerfiles = DB::table('redmine_tic_perfiles_usuario')->count();
-        $totalRows     = DB::table('redmine_tic_permisos_usuario')->count();
-        $expectedMin   = $totalPerfiles * self::EXPECTED_KEYS;
+        $totalRows = DB::table('redmine_tic_permisos_usuario')->count();
+        $expectedMin = $totalPerfiles * self::EXPECTED_KEYS;
 
         $this->line("  Perfiles en DB: {$totalPerfiles}");
         $this->line("  Filas en permisos_usuario: {$totalRows}  (mínimo esperado: {$expectedMin})");
@@ -157,28 +162,28 @@ class ValidatePhase3aPermisos extends Command
         } else {
             $missing = $totalPerfiles - $perfilesInRelational;
             $this->checkFail("{$missing} perfiles sin ninguna fila en permisos_usuario");
-            $this->issues[] = "Ejecutar: php artisan migrate (backfill migration)";
+            $this->issues[] = 'Ejecutar: php artisan migrate (backfill migration)';
         }
 
-        $profilesWithFewer = array_filter($countsByPerfil, fn($c) => $c < self::EXPECTED_KEYS);
+        $profilesWithFewer = array_filter($countsByPerfil, fn ($c) => $c < self::EXPECTED_KEYS);
         if (empty($profilesWithFewer)) {
-            $this->pass('Todos los perfiles tienen exactamente ' . self::EXPECTED_KEYS . ' claves');
+            $this->pass('Todos los perfiles tienen exactamente '.self::EXPECTED_KEYS.' claves');
         } else {
             $detail = implode(', ', array_map(
-                fn($pid, $cnt) => "perfil_{$pid}={$cnt}",
+                fn ($pid, $cnt) => "perfil_{$pid}={$cnt}",
                 array_keys($profilesWithFewer),
                 $profilesWithFewer
             ));
-            $this->checkFail(count($profilesWithFewer) . ' perfil(es) con permisos incompletos: ' . $detail);
+            $this->checkFail(count($profilesWithFewer).' perfil(es) con permisos incompletos: '.$detail);
         }
 
         // Verify the distinct canonical keys actually stored.
-        $storedKeys   = DB::table('redmine_tic_permisos_usuario')->distinct()->pluck('clave')->toArray();
-        $missingKeys  = array_diff(self::ALL_KEYS, $storedKeys);
+        $storedKeys = DB::table('redmine_tic_permisos_usuario')->distinct()->pluck('clave')->toArray();
+        $missingKeys = array_diff(self::ALL_KEYS, $storedKeys);
         if (empty($missingKeys)) {
             $this->pass('Las claves canónicas aparecen al menos una vez en la tabla');
         } else {
-            $this->checkFail('Claves nunca vistas en permisos_usuario: ' . implode(', ', $missingKeys));
+            $this->checkFail('Claves nunca vistas en permisos_usuario: '.implode(', ', $missingKeys));
         }
     }
 
@@ -186,15 +191,17 @@ class ValidatePhase3aPermisos extends Command
     {
         $this->section('4. redmine_tic_permisos_rol');
 
-        if (!Schema::hasTable('redmine_tic_permisos_rol') ||
-            !Schema::hasTable('modulos_nova')) {
+        if (! Schema::hasTable('redmine_tic_permisos_rol') ||
+            ! Schema::hasTable('modulos_nova')) {
             $this->warn('  (Saltado — tabla ausente)');
+
             return;
         }
 
         $moduleId = (int) DB::table('modulos_nova')->where('clave_modulo', 'redmine_tic')->value('id');
         if ($moduleId <= 0) {
             $this->checkFail('No se encontró modulo_id para redmine_tic en modulos_nova');
+
             return;
         }
 
@@ -206,7 +213,7 @@ class ValidatePhase3aPermisos extends Command
             ->toArray();
 
         $totalRoles = count($roles);
-        $this->line("  Roles encontrados ({$totalRoles}): " . implode(', ', array_keys($roles)));
+        $this->line("  Roles encontrados ({$totalRoles}): ".implode(', ', array_keys($roles)));
 
         if ($totalRoles < 4) {
             $this->checkFail("Se esperan al menos 4 roles (root, administrador, gestor, usuario); hay {$totalRoles}");
@@ -214,16 +221,16 @@ class ValidatePhase3aPermisos extends Command
             $this->pass("{$totalRoles} roles en permisos_rol");
         }
 
-        $rolesWithFewer = array_filter($roles, fn($c) => $c < self::EXPECTED_KEYS);
+        $rolesWithFewer = array_filter($roles, fn ($c) => $c < self::EXPECTED_KEYS);
         if (empty($rolesWithFewer)) {
             $this->pass('Todos los roles tienen el catálogo completo');
         } else {
             $detail = implode(', ', array_map(
-                fn($r, $c) => "{$r}={$c}",
+                fn ($r, $c) => "{$r}={$c}",
                 array_keys($rolesWithFewer),
                 $rolesWithFewer
             ));
-            $this->checkFail('Roles con permisos incompletos: ' . $detail);
+            $this->checkFail('Roles con permisos incompletos: '.$detail);
         }
     }
 
@@ -231,9 +238,16 @@ class ValidatePhase3aPermisos extends Command
     {
         $this->section('5. Consistencia JSON ↔ Relacional (muestra)');
 
-        if (!Schema::hasTable('redmine_tic_permisos_usuario') ||
-            !Schema::hasTable('redmine_tic_perfiles_usuario')) {
+        if (! Schema::hasTable('redmine_tic_permisos_usuario') ||
+            ! Schema::hasTable('redmine_tic_perfiles_usuario')) {
             $this->warn('  (Saltado — tabla ausente)');
+
+            return;
+        }
+
+        if (! Schema::hasColumn('redmine_tic_perfiles_usuario', 'permisos')) {
+            $this->warn('  Saltado — la columna JSON permisos fue eliminada en Phase 3c');
+
             return;
         }
 
@@ -247,6 +261,7 @@ class ValidatePhase3aPermisos extends Command
 
         if ($profiles->isEmpty()) {
             $this->warn('  Sin perfiles con JSON no vacío para comparar');
+
             return;
         }
 
@@ -254,7 +269,7 @@ class ValidatePhase3aPermisos extends Command
 
         foreach ($profiles as $profile) {
             $jsonPerms = json_decode((string) $profile->permisos, true);
-            if (!is_array($jsonPerms)) {
+            if (! is_array($jsonPerms)) {
                 continue;
             }
 
@@ -264,11 +279,11 @@ class ValidatePhase3aPermisos extends Command
                 ->toArray();
 
             foreach ($jsonPerms as $clave => $jsonVal) {
-                if (!in_array($clave, self::ALL_KEYS, true)) {
+                if (! in_array($clave, self::ALL_KEYS, true)) {
                     continue;
                 }
                 $encodedJson = $this->encodeValue($clave, $jsonVal);
-                $relVal      = $relRows[$clave] ?? null;
+                $relVal = $relRows[$clave] ?? null;
 
                 if ($relVal === null) {
                     $mismatches++;
@@ -281,7 +296,7 @@ class ValidatePhase3aPermisos extends Command
         }
 
         if ($mismatches === 0) {
-            $this->pass('Muestra de ' . $profiles->count() . ' perfiles: valores JSON y relacionales coinciden');
+            $this->pass('Muestra de '.$profiles->count().' perfiles: valores JSON y relacionales coinciden');
         } else {
             $this->checkFail("{$mismatches} discrepancias encontradas en la muestra");
         }
@@ -291,14 +306,15 @@ class ValidatePhase3aPermisos extends Command
     {
         $this->section('6. Lectura desde repositorio (RedmineDataRepository)');
 
-        if (!Schema::hasTable('redmine_tic_permisos_usuario')) {
+        if (! Schema::hasTable('redmine_tic_permisos_usuario')) {
             $this->warn('  (Saltado — tabla ausente)');
+
             return;
         }
 
         try {
-            $repo = new RedmineDataRepository();
-            $ref  = new \ReflectionClass($repo);
+            $repo = new RedmineDataRepository;
+            $ref = new \ReflectionClass($repo);
 
             $method = $ref->getMethod('allPermissionsFromRelational');
             $method->setAccessible(true);
@@ -306,6 +322,7 @@ class ValidatePhase3aPermisos extends Command
 
             if ($result === null) {
                 $this->checkFail('allPermissionsFromRelational() devolvió null (tabla vacía o ausente)');
+
                 return;
             }
 
@@ -320,15 +337,15 @@ class ValidatePhase3aPermisos extends Command
             }
 
             // Verify at least one profile has all canonical keys.
-            $sample    = reset($result);
-            $keyCount  = is_array($sample) ? count($sample) : 0;
+            $sample = reset($result);
+            $keyCount = is_array($sample) ? count($sample) : 0;
             if ($keyCount === self::EXPECTED_KEYS) {
                 $this->pass("Perfil de muestra tiene exactamente {$keyCount} claves");
             } else {
-                $this->checkFail("Perfil de muestra tiene {$keyCount} claves (se esperan " . self::EXPECTED_KEYS . ')');
+                $this->checkFail("Perfil de muestra tiene {$keyCount} claves (se esperan ".self::EXPECTED_KEYS.')');
             }
         } catch (\Throwable $e) {
-            $this->checkFail('Error al invocar allPermissionsFromRelational: ' . $e->getMessage());
+            $this->checkFail('Error al invocar allPermissionsFromRelational: '.$e->getMessage());
         }
     }
 
@@ -336,16 +353,18 @@ class ValidatePhase3aPermisos extends Command
     {
         $this->section('7. Consistencia dual-write (rol JSON ↔ redmine_tic_permisos_rol)');
 
-        if (!Schema::hasTable('redmine_tic_permisos_rol') ||
-            !Schema::hasTable('configuraciones_modulo') ||
-            !Schema::hasTable('modulos_nova')) {
+        if (! Schema::hasTable('redmine_tic_permisos_rol') ||
+            ! Schema::hasTable('configuraciones_modulo') ||
+            ! Schema::hasTable('modulos_nova')) {
             $this->warn('  (Saltado — tabla ausente)');
+
             return;
         }
 
         $moduleId = (int) DB::table('modulos_nova')->where('clave_modulo', 'redmine_tic')->value('id');
         if ($moduleId <= 0) {
             $this->warn('  (Saltado — modulo_id no encontrado)');
+
             return;
         }
 
@@ -356,25 +375,27 @@ class ValidatePhase3aPermisos extends Command
 
         if ($rolesJson === null) {
             $this->warn('  Sin fila roles en configuraciones_modulo — JSON ya eliminado o nunca existió');
+
             return;
         }
 
         $jsonRoles = json_decode((string) $rolesJson, true);
-        if (!is_array($jsonRoles)) {
+        if (! is_array($jsonRoles)) {
             $this->checkFail('El JSON de roles no decodifica a array');
+
             return;
         }
 
         $mismatches = 0;
         foreach ($jsonRoles as $rolName => $jsonPerms) {
-            if (!is_array($jsonPerms)) {
+            if (! is_array($jsonPerms)) {
                 continue;
             }
             foreach ($jsonPerms as $clave => $jsonVal) {
-                if (!in_array($clave, self::ALL_KEYS, true)) {
+                if (! in_array($clave, self::ALL_KEYS, true)) {
                     continue;
                 }
-                $relVal    = DB::table('redmine_tic_permisos_rol')
+                $relVal = DB::table('redmine_tic_permisos_rol')
                     ->where('modulo_id', $moduleId)
                     ->where('rol', $rolName)
                     ->where('clave', $clave)
@@ -382,7 +403,7 @@ class ValidatePhase3aPermisos extends Command
                 $encodedJson = $this->encodeValue($clave, $jsonVal);
                 if ($relVal !== $encodedJson) {
                     $mismatches++;
-                    $this->issues[] = "Rol {$rolName}.{$clave}: JSON={$encodedJson} vs Rel=" . ($relVal ?? 'NULL');
+                    $this->issues[] = "Rol {$rolName}.{$clave}: JSON={$encodedJson} vs Rel=".($relVal ?? 'NULL');
                 }
             }
         }
@@ -404,8 +425,10 @@ class ValidatePhase3aPermisos extends Command
             if (is_string($value)) {
                 return $value;
             }
+
             return $value ? 'asignados' : '';
         }
+
         return $value ? 'si' : 'no';
     }
 
@@ -443,7 +466,7 @@ class ValidatePhase3aPermisos extends Command
             $this->line('');
             $this->line('  Problemas encontrados:');
             foreach ($this->issues as $i => $issue) {
-                $this->line('    ' . ($i + 1) . '. ' . $issue);
+                $this->line('    '.($i + 1).'. '.$issue);
             }
         }
 

@@ -19,7 +19,9 @@ use Illuminate\Support\Facades\Schema;
 class RedminePermissionRepository
 {
     private const SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
+
     private ?bool $userPermissionsTableAvailableCache = null;
+
     private ?bool $rolePermissionsTableAvailableCache = null;
 
     public function __construct(
@@ -83,7 +85,7 @@ class RedminePermissionRepository
      */
     public function rolesFromRelational(): array
     {
-        if (!$this->rolPermissionsTableAvailable()) {
+        if (! $this->rolPermissionsTableAvailable()) {
             return [];
         }
 
@@ -103,7 +105,7 @@ class RedminePermissionRepository
 
             $roles = [];
             foreach ($rows as $row) {
-                $rol   = (string) $row->rol;
+                $rol = (string) $row->rol;
                 $clave = (string) $row->clave;
                 $roles[$rol][$clave] = $this->decodeValue($clave, (string) $row->valor);
             }
@@ -117,11 +119,11 @@ class RedminePermissionRepository
     /**
      * Writes the full roles dict to the relational table (upsert per key + prune removed roles/keys).
      *
-     * @param array<string,array<string,mixed>> $roles
+     * @param  array<string,array<string,mixed>>  $roles
      */
     public function saveRolesToRelational(array $roles): void
     {
-        if (!$this->rolPermissionsTableAvailable()) {
+        if (! $this->rolPermissionsTableAvailable()) {
             return;
         }
 
@@ -132,7 +134,7 @@ class RedminePermissionRepository
 
         foreach ($roles as $rol => $permissions) {
             $rol = trim((string) $rol);
-            if ($rol === '' || !is_array($permissions)) {
+            if ($rol === '' || ! is_array($permissions)) {
                 continue;
             }
 
@@ -153,7 +155,7 @@ class RedminePermissionRepository
                 }
             }
 
-            if (!empty($savedClaves)) {
+            if (! empty($savedClaves)) {
                 try {
                     DB::table('redmine_tic_permisos_rol')
                         ->where('modulo_id', $moduleId)
@@ -166,7 +168,7 @@ class RedminePermissionRepository
         }
 
         $roleNames = array_values(array_filter(array_map('trim', array_keys($roles))));
-        if (!empty($roleNames)) {
+        if (! empty($roleNames)) {
             try {
                 DB::table('redmine_tic_permisos_rol')
                     ->where('modulo_id', $moduleId)
@@ -181,7 +183,7 @@ class RedminePermissionRepository
     public function saveRolePermissions(string $role, array $permissions): bool
     {
         $role = trim($role);
-        if ($role === '' || !$this->rolPermissionsTableAvailable()) {
+        if ($role === '' || ! $this->rolPermissionsTableAvailable()) {
             return false;
         }
 
@@ -223,7 +225,7 @@ class RedminePermissionRepository
                 ->delete();
 
             $persisted = $this->rolesFromRelational()[$role] ?? null;
-            if (!is_array($persisted)) {
+            if (! is_array($persisted)) {
                 return false;
             }
             ksort($persisted);
@@ -265,7 +267,7 @@ class RedminePermissionRepository
      */
     public function allPermissionsFromRelational(): ?array
     {
-        if (!$this->userPermissionsTableAvailable()) {
+        if (! $this->userPermissionsTableAvailable()) {
             return null;
         }
 
@@ -278,7 +280,7 @@ class RedminePermissionRepository
             $byPerfil = [];
             foreach ($rows as $row) {
                 $perfilId = (int) $row->perfil_id;
-                $clave    = (string) $row->clave;
+                $clave = (string) $row->clave;
                 $byPerfil[$perfilId][$clave] = $this->decodeValue($clave, (string) $row->valor);
             }
 
@@ -291,11 +293,11 @@ class RedminePermissionRepository
     /**
      * Writes one user's permissions to the relational table (upsert + prune stale keys).
      *
-     * @param array<string,mixed> $permissions
+     * @param  array<string,mixed>  $permissions
      */
     public function savePermissionsToRelational(int $perfilId, array $permissions): void
     {
-        if (!$this->userPermissionsTableAvailable() || $perfilId <= 0) {
+        if (! $this->userPermissionsTableAvailable() || $perfilId <= 0) {
             return;
         }
 
@@ -316,7 +318,7 @@ class RedminePermissionRepository
             }
         }
 
-        if (!empty($savedClaves)) {
+        if (! empty($savedClaves)) {
             try {
                 DB::table('redmine_tic_permisos_usuario')
                     ->where('perfil_id', $perfilId)
@@ -355,91 +357,94 @@ class RedminePermissionRepository
     public function defaultRoles(): array
     {
         $all = [
-            'mensajes'             => 'todos',
-            'mensajes_acceso'      => true,
-            'horas_extra'          => 'todos',
-            'historico'            => true,
-            'historico_acciones'   => true,
-            'historico_scope'      => 'todos',
-            'configuracion'        => true,
-            'estadisticas'         => true,
-            'usuarios'             => true,
-            'simulador'            => true,
-            'reporte_rapido'       => true,
-            'actividad'            => true,
-            'actividad_eliminar'   => true,
-            'actividad_todos'      => true,
-            'mis_integraciones'    => true,
-            'reportes_editar'      => true,
-            'reportes_eliminar'    => true,
-            'horas_extra_editar'   => true,
-            'usuarios_editar'      => true,
-            'usuarios_eliminar'    => true,
-            'cfg_resumen'          => true,
-            'cfg_conexion'         => true,
-            'cfg_proyecto'         => true,
-            'cfg_redmine'          => true,
-            'cfg_campos'           => true,
-            'cfg_retencion'        => true,
-            'cfg_mantencion'       => true,
-            'cfg_roles'            => true,
-            'cfg_usuarios'         => true,
-            'cfg_categorias'       => true,
-            'cfg_unidades'         => true,
+            'mensajes' => 'todos',
+            'mensajes_acceso' => true,
+            'horas_extra' => 'todos',
+            'historico' => true,
+            'historico_acciones' => true,
+            'historico_scope' => 'todos',
+            'configuracion' => true,
+            'estadisticas' => true,
+            'usuarios' => true,
+            'simulador' => true,
+            'reporte_rapido' => true,
+            'actividad' => true,
+            'actividad_eliminar' => true,
+            'actividad_todos' => true,
+            'mis_integraciones' => true,
+            'reportes_editar' => true,
+            'reportes_eliminar' => true,
+            'horas_extra_editar' => true,
+            'usuarios_editar' => true,
+            'usuarios_eliminar' => true,
+            'cfg_resumen' => true,
+            'cfg_conexion' => true,
+            'cfg_proyecto' => true,
+            'cfg_redmine' => true,
+            'cfg_campos' => true,
+            'cfg_retencion' => true,
+            'cfg_informes' => true,
+            'cfg_mantencion' => true,
+            'cfg_roles' => true,
+            'cfg_usuarios' => true,
+            'cfg_categorias' => true,
+            'cfg_unidades' => true,
         ];
 
         return [
-            'root'          => $all,
+            'root' => $all,
             'administrador' => $all,
-            'gestor'        => array_merge($all, [
-                'usuarios'             => false,
-                'usuarios_editar'      => false,
-                'usuarios_eliminar'    => false,
-                'configuracion'        => false,
-                'cfg_resumen'          => false,
-                'cfg_conexion'         => false,
-                'cfg_proyecto'         => false,
-                'cfg_redmine'          => false,
-                'cfg_campos'           => false,
-                'cfg_retencion'        => false,
-                'cfg_mantencion'       => false,
-                'cfg_roles'            => false,
-                'cfg_usuarios'         => false,
-                'cfg_categorias'       => false,
-                'cfg_unidades'         => false,
+            'gestor' => array_merge($all, [
+                'usuarios' => false,
+                'usuarios_editar' => false,
+                'usuarios_eliminar' => false,
+                'configuracion' => false,
+                'cfg_resumen' => false,
+                'cfg_conexion' => false,
+                'cfg_proyecto' => false,
+                'cfg_redmine' => false,
+                'cfg_campos' => false,
+                'cfg_retencion' => false,
+                'cfg_informes' => false,
+                'cfg_mantencion' => false,
+                'cfg_roles' => false,
+                'cfg_usuarios' => false,
+                'cfg_categorias' => false,
+                'cfg_unidades' => false,
             ]),
             'usuario' => [
-                'mensajes'             => 'asignados',
-                'mensajes_acceso'      => true,
-                'horas_extra'          => 'asignados',
-                'historico'            => true,
-                'historico_acciones'   => false,
-                'historico_scope'      => 'asignados',
-                'configuracion'        => false,
-                'estadisticas'         => true,
-                'usuarios'             => false,
-                'simulador'            => true,
-                'reporte_rapido'       => true,
-                'actividad'            => false,
-                'actividad_eliminar'   => false,
-                'actividad_todos'      => false,
-                'mis_integraciones'    => true,
-                'reportes_editar'      => false,
-                'reportes_eliminar'    => false,
-                'horas_extra_editar'   => false,
-                'usuarios_editar'      => false,
-                'usuarios_eliminar'    => false,
-                'cfg_resumen'          => false,
-                'cfg_conexion'         => false,
-                'cfg_proyecto'         => false,
-                'cfg_redmine'          => false,
-                'cfg_campos'           => false,
-                'cfg_retencion'        => false,
-                'cfg_mantencion'       => false,
-                'cfg_roles'            => false,
-                'cfg_usuarios'         => false,
-                'cfg_categorias'       => false,
-                'cfg_unidades'         => false,
+                'mensajes' => 'asignados',
+                'mensajes_acceso' => true,
+                'horas_extra' => 'asignados',
+                'historico' => true,
+                'historico_acciones' => false,
+                'historico_scope' => 'asignados',
+                'configuracion' => false,
+                'estadisticas' => true,
+                'usuarios' => false,
+                'simulador' => true,
+                'reporte_rapido' => true,
+                'actividad' => false,
+                'actividad_eliminar' => false,
+                'actividad_todos' => false,
+                'mis_integraciones' => true,
+                'reportes_editar' => false,
+                'reportes_eliminar' => false,
+                'horas_extra_editar' => false,
+                'usuarios_editar' => false,
+                'usuarios_eliminar' => false,
+                'cfg_resumen' => false,
+                'cfg_conexion' => false,
+                'cfg_proyecto' => false,
+                'cfg_redmine' => false,
+                'cfg_campos' => false,
+                'cfg_retencion' => false,
+                'cfg_informes' => false,
+                'cfg_mantencion' => false,
+                'cfg_roles' => false,
+                'cfg_usuarios' => false,
+                'cfg_categorias' => false,
+                'cfg_unidades' => false,
             ],
         ];
     }
@@ -453,16 +458,16 @@ class RedminePermissionRepository
             }
 
             DB::table('modulos_nova')->insert([
-                'clave_modulo'   => $this->projectKey,
-                'nombre'         => $this->projectName,
-                'descripcion'    => '',
-                'icono'          => '',
-                'tipo'           => 'native',
-                'ruta'           => $this->projectKey,
-                'entrada'        => 'laravel:redmine.native.dashboard',
-                'habilitado'     => 1,
-                'orden'          => 100,
-                'creado_at'      => now(),
+                'clave_modulo' => $this->projectKey,
+                'nombre' => $this->projectName,
+                'descripcion' => '',
+                'icono' => '',
+                'tipo' => 'native',
+                'ruta' => $this->projectKey,
+                'entrada' => 'laravel:redmine.native.dashboard',
+                'habilitado' => 1,
+                'orden' => 100,
+                'creado_at' => now(),
                 'actualizado_at' => now(),
             ]);
 
