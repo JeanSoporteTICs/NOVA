@@ -131,9 +131,11 @@ commit directamente en la terminal:
 ./scripts/git-publicar.sh
 ```
 
-El script exige estar en la rama `main`, ejecuta `git add -A`, valida el diff y
-muestra los archivos antes de pedir confirmación. El commit y el push atómico
-requieren confirmaciones separadas; cancelar no elimina cambios locales.
+El script cambia automáticamente a `main` cuando corresponde, actualiza las
+ramas solo mediante avance rápido, ejecuta `git add -A`, valida el diff y muestra
+los archivos antes de pedir confirmación. Después publica `main`, intenta
+fusionarla en `desarrollo` y vuelve a `main`. Si la fusión presenta conflictos,
+la cancela automáticamente para no dejar el repositorio en un estado incompleto.
 
 Telegram puede administrarse con:
 
