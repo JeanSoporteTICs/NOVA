@@ -2,12 +2,10 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
-use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository;
 use App\Modulos\Telegram\Services\TelegramService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 final class MantencionStaleNewReportNotifier
 {
@@ -18,12 +16,9 @@ final class MantencionStaleNewReportNotifier
     public function __construct(
         private readonly TelegramService $telegram,
         private readonly MantencionConfigRepository $config,
-        private readonly RedmineIssueStatusService $redmine,
-        private readonly UserIntegrationRepository $integrations,
-    ) {
-    }
+    ) {}
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,reason:string} */
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function runIfDue(): array
     {
         if ((int) now('America/Santiago')->format('G') < self::START_HOUR) {
@@ -33,7 +28,7 @@ final class MantencionStaleNewReportNotifier
         return $this->run(false);
     }
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,reason:string} */
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function run(bool $force = false): array
     {
         $config = $this->config->loadAll() ?? [];
@@ -59,14 +54,12 @@ final class MantencionStaleNewReportNotifier
         }
 
         $days = max(1, min(30, (int) ($config['informes_nuevos_dias'] ?? 2)));
-        $platformUrl = trim((string) ($config['platform_url'] ?? ''));
-        $projectId = trim((string) ($config['project_id'] ?? ''));
-        $statusId = $this->newStatusId($config);
 
         foreach ($users as $user) {
             $assigneeId = trim((string) ($user->redmine_id ?? ''));
             if (! preg_match('/^[1-9]\d*$/', $assigneeId)) {
                 $result['skipped']++;
+
                 continue;
             }
 
@@ -74,46 +67,38 @@ final class MantencionStaleNewReportNotifier
             $deliveryKey = 'nova.redmine_mantencion.informes.nueva.sent.'.$dayKey.'.'.$assigneeId;
             if (! $force && Cache::has($deliveryKey)) {
                 $result['skipped']++;
+
                 continue;
             }
 
             $chatId = trim((string) ($user->telegram_id_chat ?? ''));
-            $token = $this->integrations->redmineTokenForRedmineId($assigneeId);
-            if ($chatId === '' || $token === '') {
+            if ($chatId === '') {
                 $result['skipped']++;
+
                 continue;
             }
 
             $processingKey = $deliveryKey.'.processing';
             if (! $force && ! Cache::add($processingKey, true, now('America/Santiago')->addMinutes(10))) {
                 $result['skipped']++;
+
                 continue;
             }
 
             try {
-                $issues = $this->redmine->staleNewIssueIdsForAssignee(
-                    $platformUrl,
-                    $projectId,
-                    $assigneeId,
-                    $token,
-                    $statusId,
-                    $days,
-                );
-                if ($issues['error'] !== '') {
-                    $result['failed']++;
-                    continue;
-                }
-
-                $ids = $issues['ids'];
+                $result['unsynced'] += $this->unsyncedIssueCountForAssignee($assigneeId, $days);
+                $ids = $this->staleNewIssueIdsForAssignee($assigneeId, $days);
                 if ($ids === []) {
                     Cache::put($deliveryKey, true, now('America/Santiago')->addHours(26));
                     $result['empty']++;
+
                     continue;
                 }
 
                 $name = trim((string) (($user->nombre ?? '').' '.($user->apellido ?? '')));
                 if (! $this->telegram->sendToChat($chatId, $this->notificationMessage($name, count($ids), $days))) {
                     $result['failed']++;
+
                     continue;
                 }
 
@@ -176,23 +161,47 @@ final class MantencionStaleNewReportNotifier
             ->all();
     }
 
-    /** @param array<string,mixed> $config */
-    private function newStatusId(array $config): int
+    /** @return array<int,string> */
+    private function staleNewIssueIdsForAssignee(string $assigneeId, int $days): array
     {
-        foreach ((array) ($config['estados'] ?? []) as $option) {
-            if (! is_array($option)) {
-                continue;
-            }
-            $name = Str::lower(Str::ascii(trim((string) ($option['nombre'] ?? $option['name'] ?? ''))));
-            if ($name === 'nueva') {
-                return (int) ($option['id'] ?? 0);
-            }
+        $moduleId = DB::table('modulos_nova')->where('clave_modulo', self::MODULE_KEY)->value('id');
+        if ($moduleId === null || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
+            return [];
         }
 
-        return 1;
+        return DB::table('redmine_mantencion_reportes')
+            ->where('modulo_id', (int) $moduleId)
+            ->where('id_redmine_asignado', (int) $assigneeId)
+            ->where('estado_redmine', 'Nueva')
+            ->whereNotNull('numero_ticket_redmine')
+            ->where('creado_at', '<', now('UTC')->subDays(max(1, min(30, $days))))
+            ->orderBy('numero_ticket_redmine')
+            ->pluck('numero_ticket_redmine')
+            ->map(static fn ($id): string => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,reason:string} */
+    private function unsyncedIssueCountForAssignee(string $assigneeId, int $days): int
+    {
+        $moduleId = DB::table('modulos_nova')->where('clave_modulo', self::MODULE_KEY)->value('id');
+        if ($moduleId === null || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
+            return 0;
+        }
+
+        return DB::table('redmine_mantencion_reportes')
+            ->where('modulo_id', (int) $moduleId)
+            ->where('id_redmine_asignado', (int) $assigneeId)
+            ->whereNotNull('numero_ticket_redmine')
+            ->where(function ($query): void {
+                $query->whereNull('estado_redmine')->orWhere('estado_redmine', '');
+            })
+            ->where('creado_at', '<', now('UTC')->subDays(max(1, min(30, $days))))
+            ->count();
+    }
+
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     private function result(string $reason): array
     {
         return [
@@ -201,6 +210,7 @@ final class MantencionStaleNewReportNotifier
             'empty' => 0,
             'skipped' => 0,
             'failed' => 0,
+            'unsynced' => 0,
             'reason' => $reason,
         ];
     }

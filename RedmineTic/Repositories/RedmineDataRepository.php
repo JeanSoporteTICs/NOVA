@@ -4,7 +4,6 @@ namespace RedmineTic\Repositories;
 
 use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\Nova\Services\RedmineIdentityService;
-use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1134,54 +1133,31 @@ final class RedmineDataRepository
     public function staleNewIssuesForAssignee(string $assigneeId, int $days): array
     {
         $assigneeId = trim($assigneeId);
-        $config = $this->configuration();
-        $token = $this->userApiToken($assigneeId);
-        $projectId = trim((string) ($config['project_id'] ?? ''));
-        $issuesUrl = RedmineUrlSupport::redmineIssuesUrl((string) ($config['platform_url'] ?? ''));
-        $newStatusId = 0;
-
-        foreach ($this->issueStatusOptions() as $option) {
-            $name = Str::lower(Str::ascii(trim((string) ($option['name'] ?? ''))));
-            if ($name === 'nueva') {
-                $newStatusId = (int) ($option['id'] ?? 0);
-                break;
-            }
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
+            return ['ids' => [], 'error' => 'No fue posible consultar los reportes TIC almacenados.'];
         }
 
-        if ($assigneeId === '' || $token === '' || $projectId === '' || $issuesUrl === '' || $newStatusId <= 0) {
-            return ['ids' => [], 'error' => 'Falta API Key, proyecto, URL o estado Redmine Nueva.'];
+        $cutoff = now('UTC')->subDays(max(1, min(30, $days)));
+
+        return [
+            'ids' => $this->reportRepo()->staleNewIssueIdsForAssignee($moduleId, $assigneeId, $cutoff),
+            'error' => '',
+        ];
+    }
+
+    public function unsyncedIssueCountForAssignee(string $assigneeId, int $days): int
+    {
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return 0;
         }
 
-        $cutoff = now('America/Santiago')->subDays(max(1, min(30, $days)));
-        $issues = $this->fetchRedmineIssues($issuesUrl, $token, [
-            'project_id' => $projectId,
-            'assigned_to_id' => $assigneeId,
-            'status_id' => (string) $newStatusId,
-            'created_on' => '<='.$cutoff->format('Y-m-d'),
-        ]);
-        if (isset($issues['error'])) {
-            return ['ids' => [], 'error' => (string) $issues['error']];
-        }
-
-        $ids = [];
-        foreach ((array) ($issues['rows'] ?? []) as $issue) {
-            $createdOn = trim((string) ($issue['created_on'] ?? ''));
-            try {
-                $createdAt = $createdOn !== '' ? Carbon::parse($createdOn)->timezone('America/Santiago') : null;
-            } catch (\Throwable) {
-                $createdAt = null;
-            }
-            if ($createdAt === null || ! $createdAt->lt($cutoff)) {
-                continue;
-            }
-
-            $id = trim((string) ($issue['id'] ?? ''));
-            if (preg_match('/^\d+$/', $id)) {
-                $ids[$id] = true;
-            }
-        }
-
-        return ['ids' => array_keys($ids), 'error' => ''];
+        return $this->reportRepo()->unsyncedIssueCountForAssignee(
+            $moduleId,
+            $assigneeId,
+            now('UTC')->subDays(max(1, min(30, $days)))
+        );
     }
 
     /**
@@ -1204,6 +1180,70 @@ final class RedmineDataRepository
         }
 
         return $statuses;
+    }
+
+    /**
+     * @param  array<string,array{id?:int,name?:string,available?:bool}>  $statuses
+     */
+    public function persistIssueStatuses(array $statuses): int
+    {
+        $statusNames = [];
+        foreach ($statuses as $redmineId => $status) {
+            $statusName = trim((string) ($status['name'] ?? ''));
+            if (($status['available'] ?? false) && preg_match('/^[1-9]\d*$/', (string) $redmineId) && $statusName !== '') {
+                $statusNames[(string) $redmineId] = $statusName;
+            }
+        }
+
+        $updated = $this->reportRepo()->syncRedmineStatuses($statusNames);
+        if ($updated > 0) {
+            $this->activeReportsCache = null;
+            $this->archivedReportsCache = null;
+        }
+
+        return $updated;
+    }
+
+    /** @return array{requested:int,updated:int,error:string} */
+    public function synchronizeAllIssueStatuses(?string $userId = null): array
+    {
+        $config = $this->configuration();
+        $token = $this->userApiToken($userId);
+        $projectId = trim((string) ($config['project_id'] ?? ''));
+        $issuesUrl = RedmineUrlSupport::redmineIssuesUrl((string) ($config['platform_url'] ?? ''));
+        if ($token === '' || $projectId === '' || $issuesUrl === '') {
+            return ['requested' => 0, 'updated' => 0, 'error' => 'Falta API Key personal, proyecto o URL de Redmine.'];
+        }
+
+        $issues = $this->fetchRedmineIssues($issuesUrl, $token, [
+            'project_id' => $projectId,
+            'status_id' => '*',
+        ]);
+        if (isset($issues['error'])) {
+            return ['requested' => 0, 'updated' => 0, 'error' => (string) $issues['error']];
+        }
+
+        $statusNames = [];
+        foreach ((array) ($issues['rows'] ?? []) as $issue) {
+            $redmineId = trim((string) ($issue['id'] ?? ''));
+            $statusName = trim((string) data_get($issue, 'status.name', ''));
+            if (preg_match('/^[1-9]\d*$/', $redmineId) && $statusName !== '') {
+                $statusNames[$redmineId] = $statusName;
+            }
+        }
+
+        $updated = $this->reportRepo()->syncRedmineStatuses($statusNames);
+        if ($updated > 0) {
+            $this->activeReportsCache = null;
+            $this->archivedReportsCache = null;
+        }
+        $this->appendActivityLog('historico_estados_redmine_sincronizados', [
+            'user_id' => $userId ?? '',
+            'requested' => count($statusNames),
+            'updated' => $updated,
+        ]);
+
+        return ['requested' => count($statusNames), 'updated' => $updated, 'error' => ''];
     }
 
     /**
@@ -1885,6 +1925,16 @@ final class RedmineDataRepository
                 $decoded = json_decode($result['body'], true);
                 $report['estado'] = 'procesado';
                 $report['redmine_id'] = $decoded['issue']['id'] ?? $report['redmine_id'] ?? '';
+                $report['estado_redmine'] = trim((string) data_get($decoded, 'issue.status.name', ''));
+                if ($report['estado_redmine'] === '' && ! empty($report['redmine_id'])) {
+                    $remoteStatus = $this->issueStatus()->fetch(
+                        $this->redmineIssueUrl((string) $report['redmine_id']),
+                        $token
+                    );
+                    if ($remoteStatus['available']) {
+                        $report['estado_redmine'] = trim((string) $remoteStatus['name']);
+                    }
+                }
                 $report['procesado_ts'] = now('America/Santiago')->toAtomString();
                 $success++;
                 if (! empty($report['redmine_id'])) {
@@ -1953,7 +2003,7 @@ final class RedmineDataRepository
             return;
         }
 
-        $values = Arr::only($this->databaseReportPayload($moduleId, $report, false), ['estado', 'redmine_id', 'procesado_at']);
+        $values = Arr::only($this->databaseReportPayload($moduleId, $report, false), ['estado', 'redmine_id', 'estado_redmine', 'procesado_at']);
         $values['actualizado_at'] = now();
 
         $this->reportRepo()->updateActiveFields($moduleId, (string) ($report['id'] ?? ''), $values);

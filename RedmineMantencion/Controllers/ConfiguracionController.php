@@ -19,8 +19,7 @@ class ConfiguracionController extends Controller
         private readonly MantencionConfiguracionRolesService $roles,
         private readonly MantencionNextcloudService $nextcloud,
         private readonly MantencionStaleNewReportNotifier $reportsNotifier,
-    ) {
-    }
+    ) {}
 
     /**
      * Configuración. Migrado desde RedmineMantencion/views/Configuracion/configuracion.php.
@@ -33,7 +32,7 @@ class ConfiguracionController extends Controller
 
         $requestedPanel = strtolower(trim((string) ($_GET['panel'] ?? '')));
         $isNextcloudGroupsPanel = $requestedPanel === 'nextcloud';
-        if ($isNextcloudGroupsPanel ? !auth_can('integraciones_nextcloud') : (!auth_can('configuracion') && !auth_can('categorias'))) {
+        if ($isNextcloudGroupsPanel ? ! auth_can('integraciones_nextcloud') : (! auth_can('configuracion') && ! auth_can('categorias'))) {
             abort(403, $isNextcloudGroupsPanel ? 'No tienes permiso para administrar grupos de Nextcloud.' : 'No tienes permiso para ver Configuración.');
         }
         $requestedPanelPermission = [
@@ -42,7 +41,7 @@ class ConfiguracionController extends Controller
             'estados' => 'cfg_estados', 'categorias' => 'cfg_categorias', 'mantencion' => 'cfg_mantencion',
             'nextcloud' => 'integraciones_nextcloud', 'roles' => 'cfg_roles', 'usuarios' => 'cfg_usuarios',
         ];
-        if ($requestedPanel !== '' && (!isset($requestedPanelPermission[$requestedPanel]) || !auth_can($requestedPanelPermission[$requestedPanel]))) {
+        if ($requestedPanel !== '' && (! isset($requestedPanelPermission[$requestedPanel]) || ! auth_can($requestedPanelPermission[$requestedPanel]))) {
             abort(403, 'No tienes permiso para ver esta sección de Configuración.');
         }
 
@@ -69,11 +68,11 @@ class ConfiguracionController extends Controller
         $rolesData = auth_load_roles();
         $rolesData = is_array($rolesData) ? $rolesData : [];
         $usuariosData = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
-        if (!is_array($usuariosData)) {
+        if (! is_array($usuariosData)) {
             $usuariosData = [];
         }
         $usuariosSelectableData = array_values(array_filter($usuariosData, static function ($u): bool {
-            if (!is_array($u)) {
+            if (! is_array($u)) {
                 return false;
             }
             $estadoUsuario = strtolower(trim((string) ($u['estado'] ?? $u['estado_usuario'] ?? 'activo')));
@@ -88,30 +87,30 @@ class ConfiguracionController extends Controller
         }
 
         $ensureRolePermission = function (string $role, string $key, $value) use (&$rolesData): void {
-            if (!isset($rolesData[$role]) || !is_array($rolesData[$role])) {
+            if (! isset($rolesData[$role]) || ! is_array($rolesData[$role])) {
                 return;
             }
-            if (!array_key_exists($key, $rolesData[$role])) {
+            if (! array_key_exists($key, $rolesData[$role])) {
                 $rolesData[$role][$key] = $value;
             }
         };
         foreach (array_keys($rolesData) as $roleName) {
             $ensureRolePermission((string) $roleName, 'mis_integraciones', true);
             $ensureRolePermission((string) $roleName, 'integraciones_nextcloud', in_array((string) $roleName, ['root', 'gestor'], true));
-            $ensureRolePermission((string) $roleName, 'actividad_eliminar', !empty($rolesData[$roleName]['actividad']));
-            $ensureRolePermission((string) $roleName, 'actividad_todos', !empty($rolesData[$roleName]['actividad']));
-            $ensureRolePermission((string) $roleName, 'horas_extra_editar', !empty($rolesData[$roleName]['horas_extra']));
+            $ensureRolePermission((string) $roleName, 'actividad_eliminar', ! empty($rolesData[$roleName]['actividad']));
+            $ensureRolePermission((string) $roleName, 'actividad_todos', ! empty($rolesData[$roleName]['actividad']));
+            $ensureRolePermission((string) $roleName, 'horas_extra_editar', ! empty($rolesData[$roleName]['horas_extra']));
             foreach (['reportes_editar', 'reportes_eliminar', 'reportes_importar_core'] as $reportPermission) {
-                $ensureRolePermission((string) $roleName, $reportPermission, !empty($rolesData[$roleName]['mensajes_acceso']));
+                $ensureRolePermission((string) $roleName, $reportPermission, ! empty($rolesData[$roleName]['mensajes_acceso']));
             }
-            $legacyHistoryActions = !empty($rolesData[$roleName]['historico_acciones']);
+            $legacyHistoryActions = ! empty($rolesData[$roleName]['historico_acciones']);
             $ensureRolePermission((string) $roleName, 'historico_estado', $legacyHistoryActions);
             $ensureRolePermission((string) $roleName, 'historico_eliminar', $legacyHistoryActions);
             unset($rolesData[$roleName]['horas_extra_eliminar']);
             unset($rolesData[$roleName]['historico_acciones']);
-            $baseConfigAccess = !empty($rolesData[$roleName]['configuracion']);
+            $baseConfigAccess = ! empty($rolesData[$roleName]['configuracion']);
             foreach (['cfg_resumen', 'cfg_informes', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $configPermission) {
-                $ensureRolePermission((string) $roleName, $configPermission, $configPermission === 'cfg_categorias' ? !empty($rolesData[$roleName]['categorias']) : $baseConfigAccess);
+                $ensureRolePermission((string) $roleName, $configPermission, $configPermission === 'cfg_categorias' ? ! empty($rolesData[$roleName]['categorias']) : $baseConfigAccess);
             }
         }
         $categoriasData = [];
@@ -250,10 +249,10 @@ class ConfiguracionController extends Controller
         $canManageUsers = auth_can('cfg_usuarios');
         $baseRoles = ['administrador', 'usuario'];
 
-        if (!isset($rolesData[$selectedRole]) && $newRoleName === '') {
+        if (! isset($rolesData[$selectedRole]) && $newRoleName === '') {
             $selectedRole = (string) (array_key_first($rolesData) ?? 'usuario');
         }
-        if (($selectedUser === '' || !isset($usuariosIndex[$selectedUser])) && $usuariosIndex !== []) {
+        if (($selectedUser === '' || ! isset($usuariosIndex[$selectedUser])) && $usuariosIndex !== []) {
             $selectedUser = (string) array_key_first($usuariosIndex);
         }
 
@@ -270,11 +269,12 @@ class ConfiguracionController extends Controller
                 }
                 $result = $this->reportsNotifier->run(true);
                 session()->put('mantencion_config_flash', sprintf(
-                    'Comprobación Mantención finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s) y %d error(es).',
+                    'Comprobación Mantención finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
                     (int) ($result['sent'] ?? 0),
                     (int) ($result['empty'] ?? 0),
                     (int) ($result['skipped'] ?? 0),
-                    (int) ($result['failed'] ?? 0)
+                    (int) ($result['failed'] ?? 0),
+                    (int) ($result['unsynced'] ?? 0)
                 ));
 
                 return redirect(route('redmine.mantencion.section', [
@@ -296,7 +296,7 @@ class ConfiguracionController extends Controller
                 }
                 $roleToDelete = strtolower(trim((string) ($_POST['role_select'] ?? '')));
                 $assignedUsers = array_filter($usuariosData, static fn ($user): bool => is_array($user) && strtolower(trim((string) ($user['rol'] ?? ''))) === $roleToDelete);
-                if ($roleToDelete === '' || !isset($rolesData[$roleToDelete])) {
+                if ($roleToDelete === '' || ! isset($rolesData[$roleToDelete])) {
                     session()->put('mantencion_roles_flash', 'El rol seleccionado ya no existe.');
                     session()->put('mantencion_roles_flash_type', 'warning');
                 } elseif (in_array($roleToDelete, $baseRoles, true)) {
@@ -324,7 +324,7 @@ class ConfiguracionController extends Controller
                 }
                 $selectedRole = $newRoleName !== '' ? $newRoleName : trim($_POST['role_select'] ?? $selectedRole);
                 if ($selectedRole !== '' && preg_match('/^[a-z0-9_-]{2,40}$/', $selectedRole)) {
-                    if (!isset($rolesData[$selectedRole])) {
+                    if (! isset($rolesData[$selectedRole])) {
                         $rolesData[$selectedRole] = [];
                     }
                     $previousRoleConfig = $rolesData[$selectedRole];
@@ -447,7 +447,7 @@ class ConfiguracionController extends Controller
                         ? $usuariosIndex[$selectedUser]['permisos']
                         : ($rolesData[$currentUserRole] ?? []);
                     $newUserRole = strtolower(trim((string) ($_POST['u_role'] ?? '')));
-                    if ($newUserRole !== '' && !isset($rolesData[$newUserRole])) {
+                    if ($newUserRole !== '' && ! isset($rolesData[$newUserRole])) {
                         $newUserRole = '';
                     }
                     if ($newUserRole !== '') {
@@ -524,7 +524,7 @@ class ConfiguracionController extends Controller
                         $this->roles->saveUserRole($selectedUser, $newUserRole);
                     }
                     $this->roles->saveUserPermissions($selectedUser, $cfgUser);
-                    session()->put('mantencion_usuarios_flash', 'Permisos actualizados para el usuario ID ' . $selectedUser);
+                    session()->put('mantencion_usuarios_flash', 'Permisos actualizados para el usuario ID '.$selectedUser);
                     session()->put('mantencion_usuarios_flash_type', 'success');
                     $usersRedirectUrl = route('redmine.mantencion.section', [
                         'section' => 'configuracion',
@@ -544,10 +544,10 @@ class ConfiguracionController extends Controller
                 maintenance_mode_block_if_enabled();
             }
             $res = $this->categorias->syncFromApi();
-            $msg = isset($res['error']) ? $res['error'] : ('Categorías sincronizadas (' . ($res['ok'] ?? 0) . ' registros).');
+            $msg = isset($res['error']) ? $res['error'] : ('Categorías sincronizadas ('.($res['ok'] ?? 0).' registros).');
             $configRedirectUrl = function_exists('url') ? url('/redmine-mantencion/app/configuracion') : legacy_app_url('app/configuracion');
 
-            return redirect($configRedirectUrl . '?panel=categorias&synccat=' . urlencode($msg));
+            return redirect($configRedirectUrl.'?panel=categorias&synccat='.urlencode($msg));
         }
 
         return view('redmine-mantencion.configuracion', get_defined_vars());

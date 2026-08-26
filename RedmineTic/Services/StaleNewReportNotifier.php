@@ -17,7 +17,7 @@ final class StaleNewReportNotifier
         private readonly RedmineDataRepository $redmine,
     ) {}
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,reason:string} */
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function runIfDue(): array
     {
         $now = now('America/Santiago');
@@ -28,7 +28,7 @@ final class StaleNewReportNotifier
         return $this->run(false);
     }
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,reason:string} */
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function run(bool $force = false): array
     {
         $redmine = $this->redmine->forProject(self::PROJECT_KEY);
@@ -68,8 +68,7 @@ final class StaleNewReportNotifier
             }
 
             $chatId = trim((string) ($user['telegram_chat_id'] ?? ''));
-            $apiToken = trim((string) ($user['api'] ?? ''));
-            if ($chatId === '' || $apiToken === '') {
+            if ($chatId === '') {
                 $result['skipped']++;
 
                 continue;
@@ -82,6 +81,7 @@ final class StaleNewReportNotifier
                 continue;
             }
             try {
+                $result['unsynced'] += $redmine->unsyncedIssueCountForAssignee($assigneeId, $days);
                 $issues = $redmine->staleNewIssuesForAssignee($assigneeId, $days);
                 if ($issues['error'] !== '') {
                     $result['failed']++;
@@ -159,7 +159,7 @@ final class StaleNewReportNotifier
             && strtolower(trim((string) ($user['estado_nova'] ?? 'activo'))) === 'activo';
     }
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,reason:string} */
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     private function result(string $reason): array
     {
         return [
@@ -168,6 +168,7 @@ final class StaleNewReportNotifier
             'empty' => 0,
             'skipped' => 0,
             'failed' => 0,
+            'unsynced' => 0,
             'reason' => $reason,
         ];
     }
