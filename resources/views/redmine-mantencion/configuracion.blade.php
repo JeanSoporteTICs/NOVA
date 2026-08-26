@@ -22,6 +22,7 @@
       'conexion' => ['label' => 'Conexión', 'icon' => 'bi-plug'],
       'proyecto' => ['label' => 'Proyecto', 'icon' => 'bi-kanban'],
       'retencion' => ['label' => 'Retención', 'icon' => 'bi-stopwatch'],
+      'informes' => ['label' => 'Informes', 'icon' => 'bi-send-check'],
       'trackers' => ['label' => 'Trackers', 'icon' => 'bi-diagram-3'],
       'prioridades' => ['label' => 'Prioridades', 'icon' => 'bi-exclamation-triangle'],
       'estados' => ['label' => 'Estados', 'icon' => 'bi-kanban'],
@@ -32,7 +33,7 @@
     ];
     $configPanelPermissions = [
       'resumen' => 'cfg_resumen', 'conexion' => 'cfg_conexion', 'proyecto' => 'cfg_proyecto',
-      'retencion' => 'cfg_retencion', 'trackers' => 'cfg_trackers', 'prioridades' => 'cfg_prioridades',
+      'retencion' => 'cfg_retencion', 'informes' => 'cfg_informes', 'trackers' => 'cfg_trackers', 'prioridades' => 'cfg_prioridades',
       'estados' => 'cfg_estados', 'categorias' => 'cfg_categorias', 'mantencion' => 'cfg_mantencion',
       'nextcloud' => 'integraciones_nextcloud', 'roles' => 'cfg_roles', 'usuarios' => 'cfg_usuarios',
     ];
@@ -540,6 +541,62 @@
     </div>
   </div>
 </div>
+
+<!-- Informes automáticos -->
+<?php if ($activeConfigPanel === 'informes'): ?>
+  <?php
+    $reportsEnabled = filter_var($cfg['informes_nuevos_habilitado'] ?? true, FILTER_VALIDATE_BOOL);
+    $reportsDays = max(1, min(30, (int)($cfg['informes_nuevos_dias'] ?? 2)));
+  ?>
+  <section class="rm-config-feature-form">
+    <div class="rm-feature-head">
+      <span class="rm-feature-head-icon <?= $reportsEnabled ? 'is-green' : 'is-orange' ?>"><i class="bi bi-send-check"></i></span>
+      <div>
+        <small>Recordatorio Telegram</small>
+        <h2>Informes automáticos</h2>
+        <p>Avisa a cada responsable cuando mantiene tickets de Mantención con estado Redmine Nueva por más del plazo definido.</p>
+      </div>
+      <div class="rm-feature-meter <?= $reportsEnabled ? 'is-ok' : 'is-warning' ?>">
+        <strong><?= $reportsEnabled ? 'Activo' : 'Pausado' ?></strong>
+        <span>más de <?= $h($reportsDays) ?> días</span>
+      </div>
+    </div>
+
+    <form method="post" action="<?= $h($configPanelUrl('informes')) ?>" class="rm-config-drawer-form">
+      <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+      <label class="rm-config-field-card">
+        <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
+        <span class="rm-config-field-copy">
+          <strong>Enviar recordatorio diario</strong>
+          <small>El mensaje indica cuántos reportes asignados siguen en estado Nueva.</small>
+        </span>
+        <input type="hidden" name="informes_nuevos_habilitado" value="0">
+        <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" <?= $reportsEnabled ? 'checked' : '' ?>>
+      </label>
+
+      <label class="rm-config-field-card mt-3">
+        <span class="rm-config-field-icon"><i class="bi bi-calendar2-week"></i></span>
+        <span class="rm-config-field-copy">
+          <strong>Antigüedad mínima</strong>
+          <small>Solo considera tickets cuya creación supera este número de días.</small>
+        </span>
+        <div class="rm-number-field">
+          <input class="form-control" type="number" min="1" max="30" name="informes_nuevos_dias" value="<?= $h($reportsDays) ?>" required>
+          <span>días</span>
+        </div>
+      </label>
+
+      <div class="nova-integration-status is-info mt-3">
+        <i class="bi bi-clock"></i>
+        <span>La revisión automática se ejecuta diariamente desde las 09:00. Cada responsable recibe como máximo un mensaje por día y módulo.</span>
+      </div>
+
+      <div class="rm-feature-actions">
+        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar informes</button>
+      </div>
+    </form>
+  </section>
+<?php endif; ?>
 
 <?php $usersList = []; ?>
 <?php include base_path('RedmineMantencion/views/Configuracion/_permissions_panels.php'); ?>

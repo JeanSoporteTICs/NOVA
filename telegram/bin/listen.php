@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 use App\Modulos\Nova\Support\SecretValue;
+use App\Modulos\RedmineMantencion\Services\MantencionStaleNewReportNotifier;
 use App\Modulos\Telegram\Repositories\TelegramCommandCatalog;
 use App\Modulos\Telegram\Repositories\TelegramCommandSettingsRepository;
 use App\Modulos\Telegram\Services\TelegramTicModeService;
@@ -58,6 +59,7 @@ $offset = (int) ($state['offset'] ?? 0);
 do {
     telegram_listener_touch_heartbeat();
     telegram_run_tic_daily_reports();
+    telegram_run_mantencion_daily_reports();
     $outbox = telegram_process_outbox();
     if (((int) ($outbox['sent'] ?? 0)) > 0 || ((int) ($outbox['failed'] ?? 0)) > 0) {
         fwrite(STDOUT, sprintf(
@@ -142,6 +144,34 @@ function telegram_run_tic_daily_reports(): void
         }
     } catch (Throwable $e) {
         fwrite(STDERR, '['.date('Y-m-d H:i:s').'] Informe TIC: '.$e->getMessage().PHP_EOL);
+    }
+}
+
+function telegram_run_mantencion_daily_reports(): void
+{
+    static $lastCheck = 0;
+
+    $now = time();
+    if ($lastCheck > 0 && ($now - $lastCheck) < 300) {
+        return;
+    }
+    $lastCheck = $now;
+
+    try {
+        if (! function_exists('app') || ! class_exists(MantencionStaleNewReportNotifier::class)) {
+            return;
+        }
+        $result = app(MantencionStaleNewReportNotifier::class)->runIfDue();
+        if ((int) ($result['sent'] ?? 0) > 0 || (int) ($result['failed'] ?? 0) > 0) {
+            fwrite(STDOUT, sprintf(
+                '[%s] Informe Mantencion: enviados=%d errores=%d'.PHP_EOL,
+                date('Y-m-d H:i:s'),
+                (int) ($result['sent'] ?? 0),
+                (int) ($result['failed'] ?? 0)
+            ));
+        }
+    } catch (Throwable $e) {
+        fwrite(STDERR, '['.date('Y-m-d H:i:s').'] Informe Mantencion: '.$e->getMessage().PHP_EOL);
     }
 }
 

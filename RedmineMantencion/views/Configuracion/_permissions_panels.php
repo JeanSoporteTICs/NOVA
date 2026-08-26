@@ -29,6 +29,7 @@ $mantencionConfigPermissions = [
   'cfg_conexion' => 'Conexión',
   'cfg_proyecto' => 'Proyecto',
   'cfg_retencion' => 'Retención',
+  'cfg_informes' => 'Informes automáticos',
   'cfg_trackers' => 'Trackers',
   'cfg_prioridades' => 'Prioridades',
   'cfg_estados' => 'Estados',

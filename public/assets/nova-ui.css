@@ -5130,6 +5130,46 @@ nav.sb-navbar .container-fluid {
   color: var(--tic-config-navy);
 }
 
+.rm-config-shell .rm-config-drawer-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.rm-config-shell .rm-config-field-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  min-height: auto;
+  padding: 14px;
+  background: #fff;
+}
+
+.rm-config-shell .rm-config-field-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rm-config-shell .rm-config-field-copy small {
+  color: var(--nova-muted);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.rm-config-shell .rm-number-field {
+  display: grid;
+  grid-template-columns: minmax(100px, 160px) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.rm-config-shell .rm-number-field span {
+  color: var(--nova-muted);
+  font-weight: 900;
+}
+
 .rm-config-shell .rm-summary-kpi,
 .rm-config-shell .rm-config-field-card,
 .rm-config-shell .rm-option-card,

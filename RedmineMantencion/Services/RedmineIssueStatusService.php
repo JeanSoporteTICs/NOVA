@@ -2,6 +2,8 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use Carbon\Carbon;
+
 final class RedmineIssueStatusService
 {
     /** @var array<int,string> */
@@ -21,6 +23,68 @@ final class RedmineIssueStatusService
     public function statusName(int $statusId): ?string
     {
         return self::STATUS_OPTIONS[$statusId] ?? null;
+    }
+
+    /**
+     * @return array{ids:array<int,string>,error:string}
+     */
+    public function staleNewIssueIdsForAssignee(
+        string $platformUrl,
+        string $projectId,
+        string $assigneeId,
+        string $token,
+        int $statusId,
+        int $days
+    ): array {
+        $issuesUrl = $this->issuesApiUrl($platformUrl);
+        $projectId = trim($projectId);
+        $assigneeId = trim($assigneeId);
+        $token = trim($token);
+        if ($issuesUrl === '' || $projectId === '' || $assigneeId === '' || $token === '' || $statusId <= 0) {
+            return ['ids' => [], 'error' => 'Falta API Key, proyecto, URL o estado Redmine Nueva.'];
+        }
+
+        $cutoff = now('America/Santiago')->subDays(max(1, min(30, $days)));
+        $limit = 100;
+        $offset = 0;
+        $total = null;
+        $ids = [];
+
+        do {
+            $query = [
+                'project_id' => $projectId,
+                'assigned_to_id' => $assigneeId,
+                'status_id' => (string) $statusId,
+                'created_on' => '<='.$cutoff->format('Y-m-d'),
+                'limit' => (string) $limit,
+                'offset' => (string) $offset,
+            ];
+            $response = $this->request($issuesUrl.'?'.http_build_query($query), 'GET', $token, null, 20);
+            if (! $response['ok']) {
+                return ['ids' => [], 'error' => $response['error']];
+            }
+
+            $rows = (array) ($response['payload']['issues'] ?? []);
+            foreach ($rows as $issue) {
+                if (! is_array($issue) || $this->normalize((string) data_get($issue, 'status.name', '')) !== 'nueva') {
+                    continue;
+                }
+                try {
+                    $createdAt = Carbon::parse((string) ($issue['created_on'] ?? ''))->timezone('America/Santiago');
+                } catch (\Throwable) {
+                    continue;
+                }
+                $id = trim((string) ($issue['id'] ?? ''));
+                if ($createdAt->lt($cutoff) && preg_match('/^\d+$/', $id)) {
+                    $ids[$id] = true;
+                }
+            }
+
+            $total = (int) ($response['payload']['total_count'] ?? count($rows));
+            $offset += $limit;
+        } while ($offset < $total);
+
+        return ['ids' => array_keys($ids), 'error' => ''];
     }
 
     public function issueUrl(string $platformUrl, string $issueId): string
@@ -209,5 +273,22 @@ final class RedmineIssueStatusService
         $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
 
         return preg_replace('/[^a-z0-9]+/', ' ', $ascii !== false ? $ascii : $value) ?? '';
+    }
+
+    private function issuesApiUrl(string $platformUrl): string
+    {
+        $url = preg_replace('/\?.*$/', '', trim($platformUrl)) ?? '';
+        if ($url === '') {
+            return '';
+        }
+        $url = preg_replace('#/issues/\d+(?:\.json)?$#i', '/issues.json', $url) ?? $url;
+        if (preg_match('#/issues\.json$#i', $url)) {
+            return $url;
+        }
+        if (preg_match('#/issues$#i', $url)) {
+            return $url.'.json';
+        }
+
+        return rtrim($url, '/').'/issues.json';
     }
 }
