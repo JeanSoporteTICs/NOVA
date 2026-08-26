@@ -35,6 +35,20 @@ class RedmineIssueStatusServiceTest extends TestCase
         );
     }
 
+    public function test_builds_collection_api_url_outside_the_project_html_path(): void
+    {
+        $this->assertSame(
+            'https://coresalud.cl/gp/issues.json',
+            $this->service->issuesCollectionApiUrl(
+                'https://coresalud.cl/gp/projects/backlog-mantencion-ti/issues.json'
+            )
+        );
+        $this->assertSame(
+            'https://coresalud.cl/gp/issues.json',
+            $this->service->issuesCollectionApiUrl('https://coresalud.cl/gp/issues.json')
+        );
+    }
+
     public function test_rejects_invalid_issue_ids(): void
     {
         $this->assertSame('', $this->service->issueApiUrl('https://coresalud.cl/gp/issues.json', 'abc'));

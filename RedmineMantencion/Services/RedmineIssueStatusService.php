@@ -36,7 +36,7 @@ final class RedmineIssueStatusService
         int $statusId,
         int $days
     ): array {
-        $issuesUrl = $this->issuesApiUrl($platformUrl);
+        $issuesUrl = $this->issuesCollectionApiUrl($platformUrl);
         $projectId = trim($projectId);
         $assigneeId = trim($assigneeId);
         $token = trim($token);
@@ -85,6 +85,29 @@ final class RedmineIssueStatusService
         } while ($offset < $total);
 
         return ['ids' => array_keys($ids), 'error' => ''];
+    }
+
+    public function issuesCollectionApiUrl(string $platformUrl): string
+    {
+        $parts = parse_url(trim($platformUrl));
+        if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return '';
+        }
+
+        $path = rtrim((string) ($parts['path'] ?? ''), '/');
+        $prefix = $path;
+        foreach (['/projects/', '/issues'] as $marker) {
+            $position = strpos($path, $marker);
+            if ($position !== false) {
+                $prefix = substr($path, 0, $position);
+                break;
+            }
+        }
+
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+        $baseUrl = rtrim($parts['scheme'].'://'.$parts['host'].$port.$prefix, '/');
+
+        return $baseUrl !== '' ? $baseUrl.'/issues.json' : '';
     }
 
     public function issueUrl(string $platformUrl, string $issueId): string
@@ -275,20 +298,4 @@ final class RedmineIssueStatusService
         return preg_replace('/[^a-z0-9]+/', ' ', $ascii !== false ? $ascii : $value) ?? '';
     }
 
-    private function issuesApiUrl(string $platformUrl): string
-    {
-        $url = preg_replace('/\?.*$/', '', trim($platformUrl)) ?? '';
-        if ($url === '') {
-            return '';
-        }
-        $url = preg_replace('#/issues/\d+(?:\.json)?$#i', '/issues.json', $url) ?? $url;
-        if (preg_match('#/issues\.json$#i', $url)) {
-            return $url;
-        }
-        if (preg_match('#/issues$#i', $url)) {
-            return $url.'.json';
-        }
-
-        return rtrim($url, '/').'/issues.json';
-    }
 }
