@@ -54,6 +54,12 @@ class MantencionConfiguracionService
         if (!array_key_exists('core_last_error', $data)) {
             $data['core_last_error'] = '';
         }
+        if (!array_key_exists('informes_nuevos_habilitado', $data)) {
+            $data['informes_nuevos_habilitado'] = true;
+        }
+        if (!array_key_exists('informes_nuevos_dias', $data)) {
+            $data['informes_nuevos_dias'] = 2;
+        }
         foreach (['trackers', 'prioridades', 'estados'] as $k) {
             if (!isset($data[$k]) || !is_array($data[$k])) {
                 $data[$k] = [];
@@ -133,6 +139,12 @@ class MantencionConfiguracionService
             $cfg['hora_extra_tiempo_estimado'] = trim((string) ($_POST['hora_extra_tiempo_estimado'] ?? ($cfg['hora_extra_tiempo_estimado'] ?? '1')));
             $cfg['status_id'] = is_numeric($_POST['status_id'] ?? '') ? (int) $_POST['status_id'] : ($cfg['status_id'] ?? 1);
             $cfg['retencion_horas'] = max(1, (int) ($_POST['retencion_horas'] ?? ($cfg['retencion_horas'] ?? 24)));
+            if (array_key_exists('informes_nuevos_habilitado', $_POST)) {
+                $cfg['informes_nuevos_habilitado'] = (string) $_POST['informes_nuevos_habilitado'] === '1';
+            }
+            if (array_key_exists('informes_nuevos_dias', $_POST)) {
+                $cfg['informes_nuevos_dias'] = max(1, min(30, (int) $_POST['informes_nuevos_dias']));
+            }
             $cfg['session_timeout'] = max(60, (int) ($_POST['session_timeout'] ?? ($cfg['session_timeout'] ?? 300)));
             $this->saveConfig($cfg);
             session()->put('mantencion_config_flash', 'Configuración guardada');

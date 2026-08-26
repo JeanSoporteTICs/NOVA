@@ -1,6 +1,7 @@
 <?php
 
 use App\Modulos\Nova\Services\DatabaseSqlBackupService;
+use App\Modulos\RedmineMantencion\Services\MantencionStaleNewReportNotifier;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +60,20 @@ Artisan::command('redmine:notify-stale-new {--force : Ejecutar aunque el informe
 
     return (int) ($result['failed'] ?? 0) > 0 ? 1 : 0;
 })->purpose('Notify TIC assignees about Redmine issues still in Nueva after the configured number of days');
+
+Artisan::command('redmine:mantencion-notify-stale-new {--force : Ejecutar aunque el informe diario ya haya sido procesado}', function (MantencionStaleNewReportNotifier $notifier) {
+    $result = $notifier->run((bool) $this->option('force'));
+    $this->info(sprintf(
+        'Informe Mantencion | responsables=%d enviados=%d sin pendientes=%d omitidos=%d errores=%d',
+        (int) ($result['recipients'] ?? 0),
+        (int) ($result['sent'] ?? 0),
+        (int) ($result['empty'] ?? 0),
+        (int) ($result['skipped'] ?? 0),
+        (int) ($result['failed'] ?? 0)
+    ));
+
+    return (int) ($result['failed'] ?? 0) > 0 ? 1 : 0;
+})->purpose('Notify Mantencion assignees about Redmine issues still in Nueva after the configured number of days');
 
 Artisan::command('nova:import-legacy-tic-backup
     {path : Carpeta extraida del respaldo legacy TIC}

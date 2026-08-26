@@ -36,7 +36,7 @@ class ConfiguracionController extends Controller
         }
         $requestedPanelPermission = [
             'resumen' => 'cfg_resumen', 'conexion' => 'cfg_conexion', 'proyecto' => 'cfg_proyecto',
-            'retencion' => 'cfg_retencion', 'trackers' => 'cfg_trackers', 'prioridades' => 'cfg_prioridades',
+            'retencion' => 'cfg_retencion', 'informes' => 'cfg_informes', 'trackers' => 'cfg_trackers', 'prioridades' => 'cfg_prioridades',
             'estados' => 'cfg_estados', 'categorias' => 'cfg_categorias', 'mantencion' => 'cfg_mantencion',
             'nextcloud' => 'integraciones_nextcloud', 'roles' => 'cfg_roles', 'usuarios' => 'cfg_usuarios',
         ];
@@ -108,7 +108,7 @@ class ConfiguracionController extends Controller
             unset($rolesData[$roleName]['horas_extra_eliminar']);
             unset($rolesData[$roleName]['historico_acciones']);
             $baseConfigAccess = !empty($rolesData[$roleName]['configuracion']);
-            foreach (['cfg_resumen', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $configPermission) {
+            foreach (['cfg_resumen', 'cfg_informes', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $configPermission) {
                 $ensureRolePermission((string) $roleName, $configPermission, $configPermission === 'cfg_categorias' ? !empty($rolesData[$roleName]['categorias']) : $baseConfigAccess);
             }
         }
@@ -138,6 +138,7 @@ class ConfiguracionController extends Controller
                     'cfg_conexion' => true,
                     'cfg_proyecto' => true,
                     'cfg_retencion' => true,
+                    'cfg_informes' => true,
                     'cfg_trackers' => true,
                     'cfg_prioridades' => true,
                     'cfg_estados' => true,
@@ -165,6 +166,7 @@ class ConfiguracionController extends Controller
                     'cfg_conexion' => true,
                     'cfg_proyecto' => true,
                     'cfg_retencion' => true,
+                    'cfg_informes' => true,
                     'cfg_trackers' => true,
                     'cfg_prioridades' => true,
                     'cfg_estados' => true,
@@ -191,6 +193,7 @@ class ConfiguracionController extends Controller
                     'cfg_conexion' => true,
                     'cfg_proyecto' => true,
                     'cfg_retencion' => true,
+                    'cfg_informes' => true,
                     'cfg_trackers' => true,
                     'cfg_prioridades' => true,
                     'cfg_estados' => true,
@@ -218,6 +221,7 @@ class ConfiguracionController extends Controller
                     'cfg_conexion' => false,
                     'cfg_proyecto' => false,
                     'cfg_retencion' => false,
+                    'cfg_informes' => false,
                     'cfg_trackers' => false,
                     'cfg_prioridades' => false,
                     'cfg_estados' => false,
@@ -326,6 +330,7 @@ class ConfiguracionController extends Controller
                             'cfg_conexion' => true,
                             'cfg_proyecto' => true,
                             'cfg_retencion' => true,
+                            'cfg_informes' => true,
                             'cfg_trackers' => true,
                             'cfg_prioridades' => true,
                             'cfg_estados' => true,
@@ -364,6 +369,7 @@ class ConfiguracionController extends Controller
                             'cfg_conexion' => isset($_POST['perm_cfg_conexion']),
                             'cfg_proyecto' => isset($_POST['perm_cfg_proyecto']),
                             'cfg_retencion' => isset($_POST['perm_cfg_retencion']),
+                            'cfg_informes' => isset($_POST['perm_cfg_informes']),
                             'cfg_trackers' => isset($_POST['perm_cfg_trackers']),
                             'cfg_prioridades' => isset($_POST['perm_cfg_prioridades']),
                             'cfg_estados' => isset($_POST['perm_cfg_estados']),
@@ -462,6 +468,7 @@ class ConfiguracionController extends Controller
                         'cfg_conexion' => isset($_POST['u_perm_cfg_conexion']),
                         'cfg_proyecto' => isset($_POST['u_perm_cfg_proyecto']),
                         'cfg_retencion' => isset($_POST['u_perm_cfg_retencion']),
+                        'cfg_informes' => isset($_POST['u_perm_cfg_informes']),
                         'cfg_trackers' => isset($_POST['u_perm_cfg_trackers']),
                         'cfg_prioridades' => isset($_POST['u_perm_cfg_prioridades']),
                         'cfg_estados' => isset($_POST['u_perm_cfg_estados']),

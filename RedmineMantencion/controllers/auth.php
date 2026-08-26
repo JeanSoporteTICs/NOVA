@@ -434,7 +434,7 @@ function auth_apply_role_permission_defaults(array $roles): array {
         unset($cfg['horas_extra_eliminar']);
         unset($cfg['historico_acciones']);
         $configAccess = !empty($cfg['configuracion']);
-        foreach (['cfg_resumen', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $permission) {
+        foreach (['cfg_resumen', 'cfg_informes', 'cfg_categorias', 'cfg_mantencion', 'cfg_nextcloud'] as $permission) {
             if (!array_key_exists($permission, $cfg)) {
                 $cfg[$permission] = $permission === 'cfg_categorias' ? !empty($cfg['categorias']) : $configAccess;
             }
