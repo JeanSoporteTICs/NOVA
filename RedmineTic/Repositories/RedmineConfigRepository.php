@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\Schema;
 class RedmineConfigRepository
 {
     private ?array $cache = null;
+
     private ?bool $configTableAvailableCache = null;
+
     private ?bool $optionsTableAvailableCache = null;
 
     public function __construct(
@@ -28,9 +30,9 @@ class RedmineConfigRepository
             unset($databaseConfig['roles'], $databaseConfig['trackers'], $databaseConfig['prioridades'], $databaseConfig['estados']);
 
             if ($this->optionsTableAvailable()) {
-                $databaseConfig['trackers']    = $this->optionsFromDatabase('tracker');
+                $databaseConfig['trackers'] = $this->optionsFromDatabase('tracker');
                 $databaseConfig['prioridades'] = $this->optionsFromDatabase('prioridad');
-                $databaseConfig['estados']     = $this->optionsFromDatabase('estado');
+                $databaseConfig['estados'] = $this->optionsFromDatabase('estado');
             }
 
             $this->cache = array_merge($this->defaultConfiguration(), $databaseConfig);
@@ -58,19 +60,19 @@ class RedmineConfigRepository
 
     public function maintenanceModeEnabled(): bool
     {
-        return !empty($this->configuration()['maintenance_mode']);
+        return ! empty($this->configuration()['maintenance_mode']);
     }
 
     /**
      * Saves arbitrary key→value pairs to configuraciones_modulo.
      * Public so permission repo can dual-write roles here.
      *
-     * @param array<string,mixed> $config
-     * @param array<string,string> $types
+     * @param  array<string,mixed>  $config
+     * @param  array<string,string>  $types
      */
     public function saveToDatabase(array $config, array $types = []): void
     {
-        if (!$this->configTableAvailable()) {
+        if (! $this->configTableAvailable()) {
             return;
         }
 
@@ -85,7 +87,7 @@ class RedmineConfigRepository
                 continue;
             }
 
-            $type   = $types[$key] ?? $this->configType($value);
+            $type = $types[$key] ?? $this->configType($value);
             $stored = $type === 'json'
                 ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                 : (string) (is_bool($value) ? (int) $value : $value);
@@ -104,7 +106,7 @@ class RedmineConfigRepository
     /** @return array<string,mixed> */
     public function fromDatabase(): array
     {
-        if (!$this->configTableAvailable()) {
+        if (! $this->configTableAvailable()) {
             return [];
         }
 
@@ -121,7 +123,7 @@ class RedmineConfigRepository
                     $value = (string) ($row->valor ?? '');
                     if (($row->tipo ?? '') === 'json') {
                         $decoded = json_decode($value, true);
-                        $value   = is_array($decoded) ? $decoded : [];
+                        $value = is_array($decoded) ? $decoded : [];
                     } elseif (($row->tipo ?? '') === 'bool') {
                         $value = in_array(strtolower($value), ['1', 'true', 'si', 'sí', 'yes'], true);
                     } elseif (($row->tipo ?? '') === 'int') {
@@ -178,8 +180,8 @@ class RedmineConfigRepository
                     $id = (string) ($row->id_externo ?? '');
 
                     return [
-                        'id'      => is_numeric($id) ? (int) $id : $id,
-                        'nombre'  => (string) ($row->nombre ?? ''),
+                        'id' => is_numeric($id) ? (int) $id : $id,
+                        'nombre' => (string) ($row->nombre ?? ''),
                         'default' => (bool) $row->predeterminado,
                     ];
                 })
@@ -193,7 +195,7 @@ class RedmineConfigRepository
     /** @param array<int,array<string,mixed>> $items */
     public function saveOptionsToDatabase(string $tipo, array $items): void
     {
-        if (!$this->optionsTableAvailable()) {
+        if (! $this->optionsTableAvailable()) {
             return;
         }
 
@@ -205,11 +207,11 @@ class RedmineConfigRepository
         $savedExternalIds = [];
 
         foreach ($items as $orden => $item) {
-            if (!is_array($item)) {
+            if (! is_array($item)) {
                 continue;
             }
             $idExterno = isset($item['id']) ? (string) $item['id'] : null;
-            $nombre    = trim((string) ($item['nombre'] ?? $item['name'] ?? ''));
+            $nombre = trim((string) ($item['nombre'] ?? $item['name'] ?? ''));
             if ($nombre === '') {
                 continue;
             }
@@ -218,10 +220,10 @@ class RedmineConfigRepository
                 DB::table('modulo_opciones')->updateOrInsert(
                     ['modulo_id' => $moduleId, 'tipo' => $tipo, 'id_externo' => $idExterno],
                     [
-                        'nombre'         => $nombre,
-                        'predeterminado' => !empty($item['default']) ? 1 : 0,
-                        'activo'         => 1,
-                        'orden'          => (int) $orden + 1,
+                        'nombre' => $nombre,
+                        'predeterminado' => ! empty($item['default']) ? 1 : 0,
+                        'activo' => 1,
+                        'orden' => (int) $orden + 1,
                         'actualizado_at' => now(),
                     ]
                 );
@@ -247,7 +249,7 @@ class RedmineConfigRepository
 
     public function createOption(string $tipo, string $idExterno, string $nombre, bool $predeterminado = false): bool
     {
-        if (!$this->optionsTableAvailable() || trim($idExterno) === '' || trim($nombre) === '') {
+        if (! $this->optionsTableAvailable() || trim($idExterno) === '' || trim($nombre) === '') {
             return false;
         }
 
@@ -274,7 +276,7 @@ class RedmineConfigRepository
             );
             $this->cache = null;
 
-            return !$predeterminado || $this->setDefaultOption($tipo, $idExterno);
+            return ! $predeterminado || $this->setDefaultOption($tipo, $idExterno);
         } catch (\Throwable) {
             return false;
         }
@@ -282,7 +284,7 @@ class RedmineConfigRepository
 
     public function updateOption(string $tipo, string $idExterno, string $nombre, bool $predeterminado = false): bool
     {
-        if (!$this->optionsTableAvailable() || trim($idExterno) === '' || trim($nombre) === '') {
+        if (! $this->optionsTableAvailable() || trim($idExterno) === '' || trim($nombre) === '') {
             return false;
         }
 
@@ -307,7 +309,7 @@ class RedmineConfigRepository
             }
             $this->cache = null;
 
-            return !$predeterminado || $this->setDefaultOption($tipo, $idExterno);
+            return ! $predeterminado || $this->setDefaultOption($tipo, $idExterno);
         } catch (\Throwable) {
             return false;
         }
@@ -315,7 +317,7 @@ class RedmineConfigRepository
 
     public function deleteOption(string $tipo, string $idExterno): bool
     {
-        if (!$this->optionsTableAvailable() || trim($idExterno) === '') {
+        if (! $this->optionsTableAvailable() || trim($idExterno) === '') {
             return false;
         }
 
@@ -347,7 +349,7 @@ class RedmineConfigRepository
             'prioridad' => 'priority_id',
             'estado' => 'status_id',
         ][$tipo] ?? null;
-        if (!$this->optionsTableAvailable() || $configKey === null || trim($idExterno) === '') {
+        if (! $this->optionsTableAvailable() || $configKey === null || trim($idExterno) === '') {
             return false;
         }
 
@@ -362,7 +364,7 @@ class RedmineConfigRepository
                 ->where('tipo', $tipo)
                 ->where('id_externo', $idExterno)
                 ->exists();
-            if (!$exists) {
+            if (! $exists) {
                 return false;
             }
 
@@ -406,25 +408,27 @@ class RedmineConfigRepository
     private function defaultConfiguration(): array
     {
         return [
-            'platform_url'       => '',
-            'categories_url'     => '',
-            'unidades_url'       => '',
-            'webhook_url'        => '',
-            'project_id'         => '',
-            'project_name'       => 'Backlog Soporte TI',
-            'tracker_id'         => '',
-            'priority_id'        => '',
-            'status_id'          => '',
-            'cf_solicitante'     => '',
-            'cf_unidad'          => '',
+            'platform_url' => '',
+            'categories_url' => '',
+            'unidades_url' => '',
+            'webhook_url' => '',
+            'project_id' => '',
+            'project_name' => 'Backlog Soporte TI',
+            'tracker_id' => '',
+            'priority_id' => '',
+            'status_id' => '',
+            'cf_solicitante' => '',
+            'cf_unidad' => '',
             'cf_unidad_solicitante' => '',
-            'cf_hora_extra'      => '',
-            'retencion_horas'    => 24,
-            'maintenance_mode'   => false,
-            'maintenance_until'  => '',
-            'trackers'           => [],
-            'prioridades'        => [],
-            'estados'            => [],
+            'cf_hora_extra' => '',
+            'retencion_horas' => 24,
+            'informes_nuevos_habilitado' => true,
+            'informes_nuevos_dias' => 2,
+            'maintenance_mode' => false,
+            'maintenance_until' => '',
+            'trackers' => [],
+            'prioridades' => [],
+            'estados' => [],
         ];
     }
 
@@ -437,16 +441,16 @@ class RedmineConfigRepository
             }
 
             DB::table('modulos_nova')->insert([
-                'clave_modulo'   => $this->projectKey,
-                'nombre'         => $this->projectName,
-                'descripcion'    => '',
-                'icono'          => '',
-                'tipo'           => 'native',
-                'ruta'           => $this->projectKey,
-                'entrada'        => 'laravel:redmine.native.dashboard',
-                'habilitado'     => 1,
-                'orden'          => 100,
-                'creado_at'      => now(),
+                'clave_modulo' => $this->projectKey,
+                'nombre' => $this->projectName,
+                'descripcion' => '',
+                'icono' => '',
+                'tipo' => 'native',
+                'ruta' => $this->projectKey,
+                'entrada' => 'laravel:redmine.native.dashboard',
+                'habilitado' => 1,
+                'orden' => 100,
+                'creado_at' => now(),
                 'actualizado_at' => now(),
             ]);
 

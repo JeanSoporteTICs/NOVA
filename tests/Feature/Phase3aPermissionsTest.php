@@ -21,7 +21,7 @@ class Phase3aPermissionsTest extends TestCase
 {
     use DatabaseTransactions;
 
-    private const EXPECTED_KEY_COUNT = 31;
+    private const EXPECTED_KEY_COUNT = 32;
 
     private const ALL_KEYS = [
         'mensajes', 'mensajes_acceso', 'horas_extra', 'historico', 'historico_acciones',
@@ -30,7 +30,7 @@ class Phase3aPermissionsTest extends TestCase
         'actividad_todos', 'reportes_editar',
         'reportes_eliminar', 'horas_extra_editar', 'usuarios_editar',
         'usuarios_eliminar', 'cfg_resumen', 'cfg_conexion', 'cfg_proyecto', 'cfg_redmine',
-        'cfg_campos', 'cfg_retencion', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
+        'cfg_campos', 'cfg_retencion', 'cfg_informes', 'cfg_mantencion', 'cfg_roles', 'cfg_usuarios',
         'cfg_categorias', 'cfg_unidades', 'mis_integraciones',
     ];
 
@@ -68,7 +68,7 @@ class Phase3aPermissionsTest extends TestCase
         $this->assertEquals(
             self::EXPECTED_KEY_COUNT,
             $count,
-            "El catálogo debe tener exactamente " . self::EXPECTED_KEY_COUNT . " filas, tiene {$count}"
+            'El catálogo debe tener exactamente '.self::EXPECTED_KEY_COUNT." filas, tiene {$count}"
         );
     }
 
@@ -76,12 +76,12 @@ class Phase3aPermissionsTest extends TestCase
     {
         $this->skipIfTableMissing('redmine_tic_permisos_catalogo');
 
-        $dbKeys  = DB::table('redmine_tic_permisos_catalogo')->pluck('clave')->toArray();
+        $dbKeys = DB::table('redmine_tic_permisos_catalogo')->pluck('clave')->toArray();
         $missing = array_diff(self::ALL_KEYS, $dbKeys);
 
         $this->assertEmpty(
             $missing,
-            'Claves faltantes en catálogo: ' . implode(', ', $missing)
+            'Claves faltantes en catálogo: '.implode(', ', $missing)
         );
     }
 
@@ -154,12 +154,12 @@ class Phase3aPermissionsTest extends TestCase
             $this->markTestSkipped('Tabla permisos_usuario vacía');
         }
 
-        $bad = array_filter($countsByPerfil, fn($c) => $c < self::EXPECTED_KEY_COUNT);
+        $bad = array_filter($countsByPerfil, fn ($c) => $c < self::EXPECTED_KEY_COUNT);
 
         $this->assertEmpty(
             $bad,
-            count($bad) . ' perfil(es) tienen menos de ' . self::EXPECTED_KEY_COUNT . ' claves: ' .
-            implode(', ', array_map(fn($p, $c) => "perfil_{$p}={$c}", array_keys($bad), $bad))
+            count($bad).' perfil(es) tienen menos de '.self::EXPECTED_KEY_COUNT.' claves: '.
+            implode(', ', array_map(fn ($p, $c) => "perfil_{$p}={$c}", array_keys($bad), $bad))
         );
     }
 
@@ -177,7 +177,7 @@ class Phase3aPermissionsTest extends TestCase
 
         $this->assertEmpty(
             $missing,
-            'Claves canónicas nunca encontradas en permisos_usuario: ' . implode(', ', $missing)
+            'Claves canónicas nunca encontradas en permisos_usuario: '.implode(', ', $missing)
         );
     }
 
@@ -187,13 +187,13 @@ class Phase3aPermissionsTest extends TestCase
         $this->skipIfTableMissing('redmine_tic_perfiles_usuario');
 
         $totalPerfiles = DB::table('redmine_tic_perfiles_usuario')->count();
-        $totalRows     = DB::table('redmine_tic_permisos_usuario')->count();
-        $expectedMin   = $totalPerfiles * self::EXPECTED_KEY_COUNT;
+        $totalRows = DB::table('redmine_tic_permisos_usuario')->count();
+        $expectedMin = $totalPerfiles * self::EXPECTED_KEY_COUNT;
 
         $this->assertGreaterThanOrEqual(
             $expectedMin,
             $totalRows,
-            "Se esperan al menos {$expectedMin} filas ({$totalPerfiles} perfiles × " . self::EXPECTED_KEY_COUNT . "), hay {$totalRows}"
+            "Se esperan al menos {$expectedMin} filas ({$totalPerfiles} perfiles × ".self::EXPECTED_KEY_COUNT."), hay {$totalRows}"
         );
     }
 
@@ -244,12 +244,12 @@ class Phase3aPermissionsTest extends TestCase
             $this->markTestSkipped('No hay filas en permisos_rol');
         }
 
-        $bad = array_filter($countsByRol, fn($c) => $c < self::EXPECTED_KEY_COUNT);
+        $bad = array_filter($countsByRol, fn ($c) => $c < self::EXPECTED_KEY_COUNT);
 
         $this->assertEmpty(
             $bad,
-            'Roles con menos de ' . self::EXPECTED_KEY_COUNT . ' claves: ' .
-            implode(', ', array_map(fn($r, $c) => "{$r}={$c}", array_keys($bad), $bad))
+            'Roles con menos de '.self::EXPECTED_KEY_COUNT.' claves: '.
+            implode(', ', array_map(fn ($r, $c) => "{$r}={$c}", array_keys($bad), $bad))
         );
     }
 
@@ -264,7 +264,7 @@ class Phase3aPermissionsTest extends TestCase
 
         // Phase 3c drops the permisos column once relational tables are validated.
         // If the column is gone, there is no JSON source to compare — test is moot.
-        if (!Schema::hasColumn('redmine_tic_perfiles_usuario', 'permisos')) {
+        if (! Schema::hasColumn('redmine_tic_perfiles_usuario', 'permisos')) {
             $this->markTestSkipped('Columna permisos eliminada (Phase 3c aplicada) — comparación JSON↔Relacional ya no aplica');
         }
 
@@ -282,7 +282,7 @@ class Phase3aPermissionsTest extends TestCase
         $mismatches = [];
         foreach ($profiles as $profile) {
             $jsonPerms = json_decode((string) $profile->permisos, true);
-            if (!is_array($jsonPerms)) {
+            if (! is_array($jsonPerms)) {
                 continue;
             }
 
@@ -292,21 +292,21 @@ class Phase3aPermissionsTest extends TestCase
                 ->toArray();
 
             foreach ($jsonPerms as $clave => $jsonVal) {
-                if (!in_array($clave, self::ALL_KEYS, true)) {
+                if (! in_array($clave, self::ALL_KEYS, true)) {
                     continue;
                 }
                 $encodedJson = $this->encodeValue($clave, $jsonVal);
-                $relVal      = $relRows[$clave] ?? null;
+                $relVal = $relRows[$clave] ?? null;
 
                 if ($relVal !== $encodedJson) {
-                    $mismatches[] = "Perfil {$profile->id}.{$clave}: JSON={$encodedJson} Rel=" . ($relVal ?? 'NULL');
+                    $mismatches[] = "Perfil {$profile->id}.{$clave}: JSON={$encodedJson} Rel=".($relVal ?? 'NULL');
                 }
             }
         }
 
         $this->assertEmpty(
             $mismatches,
-            count($mismatches) . " discrepancias JSON↔Relacional:\n" . implode("\n", $mismatches)
+            count($mismatches)." discrepancias JSON↔Relacional:\n".implode("\n", $mismatches)
         );
     }
 
@@ -319,8 +319,8 @@ class Phase3aPermissionsTest extends TestCase
         $this->skipIfTableMissing('redmine_tic_permisos_usuario');
         $this->createPermissionFixture();
 
-        $repo   = new RedmineDataRepository();
-        $ref    = new \ReflectionClass($repo);
+        $repo = new RedmineDataRepository;
+        $ref = new \ReflectionClass($repo);
         $method = $ref->getMethod('allPermissionsFromRelational');
         $method->setAccessible(true);
 
@@ -345,8 +345,8 @@ class Phase3aPermissionsTest extends TestCase
             $this->markTestSkipped('No hay perfiles en la DB');
         }
 
-        $repo   = new RedmineDataRepository();
-        $ref    = new \ReflectionClass($repo);
+        $repo = new RedmineDataRepository;
+        $ref = new \ReflectionClass($repo);
         $method = $ref->getMethod('allPermissionsFromRelational');
         $method->setAccessible(true);
 
@@ -364,8 +364,8 @@ class Phase3aPermissionsTest extends TestCase
     {
         $this->skipIfTableMissing('redmine_tic_permisos_usuario');
 
-        $repo   = new RedmineDataRepository();
-        $ref    = new \ReflectionClass($repo);
+        $repo = new RedmineDataRepository;
+        $ref = new \ReflectionClass($repo);
         $method = $ref->getMethod('allPermissionsFromRelational');
         $method->setAccessible(true);
 
@@ -374,13 +374,13 @@ class Phase3aPermissionsTest extends TestCase
             $this->markTestSkipped('allPermissionsFromRelational() devolvió vacío');
         }
 
-        $sample   = reset($result);
+        $sample = reset($result);
         $keyCount = count($sample);
 
         $this->assertEquals(
             self::EXPECTED_KEY_COUNT,
             $keyCount,
-            "El perfil de muestra tiene {$keyCount} claves, se esperan " . self::EXPECTED_KEY_COUNT
+            "El perfil de muestra tiene {$keyCount} claves, se esperan ".self::EXPECTED_KEY_COUNT
         );
     }
 
@@ -390,7 +390,7 @@ class Phase3aPermissionsTest extends TestCase
         $this->skipIfTableMissing('redmine_tic_perfiles_usuario');
 
         $perfil = DB::table('redmine_tic_perfiles_usuario')->first();
-        if (!$perfil) {
+        if (! $perfil) {
             $this->markTestSkipped('No hay perfiles para el test de dual-write');
         }
 
@@ -409,8 +409,8 @@ class Phase3aPermissionsTest extends TestCase
             $perms[$sk] = 'asignados';
         }
 
-        $repo   = new RedmineDataRepository();
-        $ref    = new \ReflectionClass($repo);
+        $repo = new RedmineDataRepository;
+        $ref = new \ReflectionClass($repo);
         $method = $ref->getMethod('savePermissionsToRelational');
         $method->setAccessible(true);
         $method->invoke($repo, $perfilId, $perms);
@@ -438,11 +438,11 @@ class Phase3aPermissionsTest extends TestCase
     private function createPermissionFixture(): int
     {
         $redmineId = (string) random_int(90000000, 99999999);
-        $repo = (new RedmineDataRepository())->forProject('redmine_tic');
+        $repo = (new RedmineDataRepository)->forProject('redmine_tic');
         $result = $repo->saveUser([
             '_creating' => true,
             'id' => $redmineId,
-            'rut_sin_dv' => 'phase3a' . $redmineId,
+            'rut_sin_dv' => 'phase3a'.$redmineId,
             'nombre' => 'Phase3a',
             'apellido' => Str::random(8),
             'rol' => 'usuario',
@@ -457,7 +457,7 @@ class Phase3aPermissionsTest extends TestCase
 
     private function skipIfTableMissing(string $table): void
     {
-        if (!Schema::hasTable($table)) {
+        if (! Schema::hasTable($table)) {
             $this->markTestSkipped("Tabla `{$table}` no existe en la BD");
         }
     }
@@ -468,8 +468,10 @@ class Phase3aPermissionsTest extends TestCase
             if (is_string($value)) {
                 return $value;
             }
+
             return $value ? 'asignados' : '';
         }
+
         return $value ? 'si' : 'no';
     }
 }

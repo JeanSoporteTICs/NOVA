@@ -7,6 +7,7 @@
         'redmine' => ['label' => 'Redmine', 'icon' => 'bi-list-check'],
         'campos' => ['label' => 'Campos', 'icon' => 'bi-ui-checks-grid'],
         'retencion' => ['label' => 'Retencion', 'icon' => 'bi-stopwatch'],
+        'informes' => ['label' => 'Informes', 'icon' => 'bi-send-check'],
         'mantencion' => ['label' => 'Mantencion', 'icon' => 'bi-tools'],
         'roles' => ['label' => 'Roles y Permisos', 'icon' => 'bi-shield-check'],
         'usuarios-permisos' => ['label' => 'Usuarios y permisos', 'icon' => 'bi-person-lock'],
@@ -52,6 +53,7 @@
         'cfg_redmine' => 'Redmine',
         'cfg_campos' => 'Campos personalizados',
         'cfg_retencion' => 'Retencion',
+        'cfg_informes' => 'Informes automáticos',
         'cfg_mantencion' => 'Mantencion',
         'cfg_roles' => 'Roles y Permisos',
         'cfg_usuarios' => 'Usuarios y permisos',
@@ -714,6 +716,63 @@
             </button>
         </div>
     </div>
+@endif
+
+@if ($activePanel === 'informes')
+    @php
+        $reportsEnabled = filter_var(data_get($config, 'informes_nuevos_habilitado', true), FILTER_VALIDATE_BOOL);
+        $reportsDays = max(1, (int) data_get($config, 'informes_nuevos_dias', 2));
+    @endphp
+    <section class="card nova-card rm-panel rm-config-feature-form">
+        <div class="rm-feature-head">
+            <span class="rm-feature-head-icon {{ $reportsEnabled ? 'is-green' : 'is-orange' }}"><i class="bi bi-send-check"></i></span>
+            <div>
+                <small>Recordatorio Telegram</small>
+                <h2>Informes automáticos</h2>
+                <p>Avisa a cada responsable cuando mantiene tickets con estado Redmine Nueva por más del plazo definido.</p>
+            </div>
+            <div class="rm-feature-meter {{ $reportsEnabled ? 'is-ok' : 'is-warning' }}">
+                <strong>{{ $reportsEnabled ? 'Activo' : 'Pausado' }}</strong>
+                <span>más de {{ $reportsDays }} días</span>
+            </div>
+        </div>
+
+        <form id="rm-config-form-informes" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'informes']) }}">
+            @csrf
+            <label class="rm-config-field-card">
+                <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
+                <span class="rm-config-field-copy">
+                    <strong>Enviar recordatorio diario</strong>
+                    <small>El mensaje indica cuántos reportes asignados siguen en estado Nueva.</small>
+                </span>
+                <input type="hidden" name="informes_nuevos_habilitado" value="0">
+                <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" @checked($reportsEnabled)>
+            </label>
+
+            <label class="rm-config-field-card mt-3">
+                <span class="rm-config-field-icon"><i class="bi bi-calendar2-week"></i></span>
+                <span class="rm-config-field-copy">
+                    <strong>Antigüedad mínima</strong>
+                    <small>Solo considera tickets cuya creación supera este número de días.</small>
+                </span>
+                <div class="rm-number-field">
+                    <input class="form-control" type="number" min="1" max="30" name="informes_nuevos_dias" value="{{ $reportsDays }}" required>
+                    <span>días</span>
+                </div>
+            </label>
+
+            <div class="nova-integration-status is-info mt-3">
+                <i class="bi bi-clock"></i>
+                <span>La revisión automática se ejecuta diariamente desde las 09:00. Cada responsable recibe como máximo un mensaje por día.</span>
+            </div>
+        </form>
+
+        <div class="rm-feature-actions">
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-informes">
+                <i class="bi bi-save"></i>Guardar informes
+            </button>
+        </div>
+    </section>
 @endif
 
 @if ($activePanel === 'mantencion')

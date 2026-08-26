@@ -1,11 +1,15 @@
 <?php
 
+use App\Modulos\Nova\Services\DatabaseSqlBackupService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use App\Modulos\Nova\Services\DatabaseSqlBackupService;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use RedmineTic\Repositories\RedmineDataRepository;
 use RedmineTic\Services\LegacyTicBackupImportService;
+use RedmineTic\Services\StaleNewReportNotifier;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,7 +30,7 @@ Artisan::command('telegram:migrate-token-env', function () {
     require_once base_path('telegram/lib/telegram.php');
 
     $result = telegram_migrate_legacy_token_to_env();
-    if (!($result['ok'] ?? false)) {
+    if (! ($result['ok'] ?? false)) {
         $this->error((string) ($result['message'] ?? 'No se pudo migrar el token Telegram.'));
 
         return 1;
@@ -39,8 +43,22 @@ Artisan::command('telegram:migrate-token-env', function () {
 
 Artisan::command('redmine:archive-processed', function (RedmineDataRepository $redmine) {
     $archived = $redmine->archiveExpiredProcessedReports();
-    $this->info($archived . ' reporte(s) procesado(s) archivado(s) por retencion.');
+    $this->info($archived.' reporte(s) procesado(s) archivado(s) por retencion.');
 })->purpose('Archive processed Redmine reports after configured retention hours');
+
+Artisan::command('redmine:notify-stale-new {--force : Ejecutar aunque el informe diario ya haya sido procesado}', function (StaleNewReportNotifier $notifier) {
+    $result = $notifier->run((bool) $this->option('force'));
+    $this->info(sprintf(
+        'Informe TIC | responsables=%d enviados=%d sin pendientes=%d omitidos=%d errores=%d',
+        (int) ($result['recipients'] ?? 0),
+        (int) ($result['sent'] ?? 0),
+        (int) ($result['empty'] ?? 0),
+        (int) ($result['skipped'] ?? 0),
+        (int) ($result['failed'] ?? 0)
+    ));
+
+    return (int) ($result['failed'] ?? 0) > 0 ? 1 : 0;
+})->purpose('Notify TIC assignees about Redmine issues still in Nueva after the configured number of days');
 
 Artisan::command('nova:import-legacy-tic-backup
     {path : Carpeta extraida del respaldo legacy TIC}
@@ -49,45 +67,48 @@ Artisan::command('nova:import-legacy-tic-backup
     {--expect-reports= : Cantidad exacta de reportes esperada}
     {--expect-hour-links= : Cantidad exacta de asociaciones de horas extra esperada}
     {--confirm= : Debe ser IMPORTAR-LEGACY-TIC al ejecutar}', function (
-        LegacyTicBackupImportService $importer,
-        DatabaseSqlBackupService $backups
-    ) {
+    LegacyTicBackupImportService $importer,
+    DatabaseSqlBackupService $backups
+) {
     $path = (string) $this->argument('path');
-    if (!str_starts_with($path, DIRECTORY_SEPARATOR) && preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) !== 1) {
+    if (! str_starts_with($path, DIRECTORY_SEPARATOR) && preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) !== 1) {
         $path = base_path($path);
     }
     $assignees = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('assignees')))));
     $summary = $importer->analyze($path, $assignees);
     $this->line(json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-    if (!$this->option('apply')) {
+    if (! $this->option('apply')) {
         $this->info('Simulacion completada. No se modifico la base de datos.');
+
         return 0;
     }
     if ((string) $this->option('confirm') !== 'IMPORTAR-LEGACY-TIC') {
         $this->error('Falta --confirm=IMPORTAR-LEGACY-TIC.');
+
         return 1;
     }
     $expectedReports = filter_var($this->option('expect-reports'), FILTER_VALIDATE_INT);
     $expectedHourLinks = filter_var($this->option('expect-hour-links'), FILTER_VALIDATE_INT);
     if ($expectedReports === false || $expectedHourLinks === false) {
         $this->error('Para ejecutar debes indicar --expect-reports y --expect-hour-links.');
+
         return 1;
     }
     if ((int) $summary['selected_reports'] !== $expectedReports || (int) $summary['selected_hour_links'] !== $expectedHourLinks) {
         $this->error('Los conteos del respaldo no coinciden con los valores esperados. No se importo nada.');
+
         return 1;
     }
 
     $backupPath = $backups->create('before-legacy-tic-import');
-    $this->info('Respaldo SQL creado: ' . $backupPath);
+    $this->info('Respaldo SQL creado: '.$backupPath);
     $result = $importer->import($path, $assignees);
     $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     $this->info('Importacion legacy TIC completada.');
 
     return 0;
 })->purpose('Analyze or import selected reports from a legacy Redmine TIC JSON backup');
-
 
 Artisan::command('nova:consolidate-users', function () {
     $normalizeStatus = static function (string $status): string {
@@ -111,13 +132,14 @@ Artisan::command('nova:consolidate-users', function () {
             return [mb_substr($name !== '' ? $name : 'Redmine', 0, 120), 'Usuario'];
         }
         $lastLen = count($parts) >= 4 ? 2 : 1;
+
         return [
             mb_substr(implode(' ', array_slice($parts, 0, -$lastLen)), 0, 120),
             mb_substr(implode(' ', array_slice($parts, -$lastLen)), 0, 160),
         ];
     };
     $uniqueUsername = static function (string $username, ?int $currentId = null): string {
-        $username = trim($username) !== '' ? trim($username) : (string) \Illuminate\Support\Str::uuid();
+        $username = trim($username) !== '' ? trim($username) : (string) Str::uuid();
         $candidate = $username;
         $suffix = 2;
         while (true) {
@@ -125,10 +147,10 @@ Artisan::command('nova:consolidate-users', function () {
             if ($currentId !== null) {
                 $query->where('id', '<>', $currentId);
             }
-            if (!$query->exists()) {
+            if (! $query->exists()) {
                 return $candidate;
             }
-            $candidate = $username . '-' . $suffix;
+            $candidate = $username.'-'.$suffix;
             $suffix++;
         }
     };
@@ -146,10 +168,10 @@ Artisan::command('nova:consolidate-users', function () {
         if ($redmineId !== '') {
             $existing = DB::table('usuarios_nova')->where('redmine_id', $redmineId)->first();
         }
-        if (!$existing && $rut !== '') {
+        if (! $existing && $rut !== '') {
             $existing = DB::table('usuarios_nova')->where('rut', $rut)->first();
         }
-        if (!$existing && $username !== '') {
+        if (! $existing && $username !== '') {
             $existing = DB::table('usuarios_nova')->where('usuario', $username)->first();
         }
         if ($existing && trim((string) ($source['nombre'] ?? $source['name'] ?? '')) === '') {
@@ -177,16 +199,18 @@ Artisan::command('nova:consolidate-users', function () {
         try {
             if ($existing) {
                 DB::table('usuarios_nova')->where('id', $existing->id)->update($values);
+
                 return (int) $existing->id;
             }
 
-            $values['uuid'] = (string) \Illuminate\Support\Str::uuid();
-            $values['password'] = (string) ($source['password'] ?? '') ?: \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40));
+            $values['uuid'] = (string) Str::uuid();
+            $values['password'] = (string) ($source['password'] ?? '') ?: Hash::make(Str::random(40));
             $values['creado_at'] = now();
 
             return (int) DB::table('usuarios_nova')->insertGetId($values);
-        } catch (\Throwable $e) {
-            $this->warn('No se pudo consolidar usuario ' . ($redmineId ?: $username) . ' desde ' . $origin . ': ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->warn('No se pudo consolidar usuario '.($redmineId ?: $username).' desde '.$origin.': '.$e->getMessage());
+
             return null;
         }
     };
@@ -202,7 +226,7 @@ Artisan::command('nova:consolidate-users', function () {
         if ($secret !== '') {
             try {
                 $values['valor_secreto'] = encrypt($secret);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $values['valor_secreto'] = $secret;
             }
         }
@@ -225,13 +249,14 @@ Artisan::command('nova:consolidate-users', function () {
         );
     };
 
-    if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')) {
+    if (! Schema::hasTable('usuarios_nova')) {
         $this->error('No existe usuarios_nova.');
+
         return 1;
     }
 
     $tic = 0;
-    if (\Illuminate\Support\Facades\Schema::hasTable('redmine_tic_perfiles_usuario')) {
+    if (Schema::hasTable('redmine_tic_perfiles_usuario')) {
         foreach (DB::table('redmine_tic_perfiles_usuario')
             ->join('usuarios_nova', 'usuarios_nova.id', '=', 'redmine_tic_perfiles_usuario.usuario_id')
             ->select([
@@ -252,8 +277,8 @@ Artisan::command('nova:consolidate-users', function () {
 
     $mantencion = 0;
 
-    $this->info('Usuarios TIC consolidados: ' . $tic);
-    $this->info('Usuarios Mantencion consolidados: ' . $mantencion);
+    $this->info('Usuarios TIC consolidados: '.$tic);
+    $this->info('Usuarios Mantencion consolidados: '.$mantencion);
     $this->info('Identidad central: usuarios_nova. Secretos/API: integraciones_usuario.');
 
     return 0;
@@ -272,6 +297,7 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
             return $value;
         }
         $fixed = @iconv('Windows-1252', 'UTF-8//IGNORE', $value);
+
         return is_string($fixed) && trim($fixed) !== '' ? $fixed : $value;
     };
     $cleanSpaces = static fn (string $value): string => preg_replace('/\s+/', ' ', trim($fixMojibake($value))) ?? '';
@@ -283,6 +309,7 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
         }
         $value = strtolower($value);
         $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
+
         return trim((string) $value);
     };
     $stripPhrase = static function (string $name, string $lastName) use ($cleanSpaces, $textKey): string {
@@ -299,6 +326,7 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
             }
             $name = implode(' ', array_slice($tokens, 0, -$lastLen));
         }
+
         return $cleanSpaces($name);
     };
     $detectRepeatedSuffix = static function (string $fullName) use ($cleanSpaces, $textKey): array {
@@ -318,8 +346,10 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
             while (count($nameTokens) > $len && $textKey(implode(' ', array_slice($nameTokens, -$len))) === $textKey(implode(' ', $suffix))) {
                 $nameTokens = array_slice($nameTokens, 0, -$len);
             }
+
             return [$cleanSpaces(implode(' ', $nameTokens)), $cleanSpaces(implode(' ', $suffix))];
         }
+
         return [$fullName, ''];
     };
     $splitFullName = static function (string $fullName) use ($cleanSpaces, $detectRepeatedSuffix): array {
@@ -333,6 +363,7 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
             return [$fullName, ''];
         }
         $lastLen = count($tokens) >= 3 ? 2 : 1;
+
         return [
             $cleanSpaces(implode(' ', array_slice($tokens, 0, -$lastLen))),
             $cleanSpaces(implode(' ', array_slice($tokens, -$lastLen))),
@@ -343,6 +374,7 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
         while (count($tokens) > 1 && preg_match('/Ã|Â/u', (string) end($tokens)) === 1) {
             array_pop($tokens);
         }
+
         return $cleanSpaces(implode(' ', $tokens));
     };
     $repairPerson = static function (string $name, string $lastName = '') use ($cleanSpaces, $stripPhrase, $splitFullName, $dropMojibakeTail, $detectRepeatedSuffix): array {
@@ -362,9 +394,11 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
             if ($cleanName === '') {
                 [$cleanName] = $splitFullName($name);
             }
+
             return [mb_substr($cleanName !== '' ? $cleanName : $name, 0, 120), mb_substr($lastName, 0, 160)];
         }
         [$cleanName, $cleanLastName] = $splitFullName($name);
+
         return [mb_substr($cleanName, 0, 120), mb_substr($cleanLastName, 0, 160)];
     };
 
@@ -396,6 +430,6 @@ Artisan::command('redmine:mantencion-repair-user-names', function () {
 
     $mantUpdated = 0;
 
-    $this->info('usuarios_nova reparados: ' . $novaUpdated);
-    $this->info('usuarios Mantencion reparados: ' . $mantUpdated);
+    $this->info('usuarios_nova reparados: '.$novaUpdated);
+    $this->info('usuarios Mantencion reparados: '.$mantUpdated);
 })->purpose('Repair duplicated first/last names after Redmine Mantencion migration');

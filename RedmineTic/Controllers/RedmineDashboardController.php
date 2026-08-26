@@ -5,6 +5,7 @@ namespace RedmineTic\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
 use App\Modulos\Telegram\Services\TelegramService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,7 @@ class RedmineDashboardController extends Controller
         'redmine' => 'cfg_redmine',
         'campos' => 'cfg_campos',
         'retencion' => 'cfg_retencion',
+        'informes' => 'cfg_informes',
         'mantencion' => 'cfg_mantencion',
         'roles' => 'cfg_roles',
         'usuarios-permisos' => 'cfg_usuarios',
@@ -72,14 +74,14 @@ class RedmineDashboardController extends Controller
     {
         $this->middleware(function (Request $request, $next) {
             $projectKey = $this->projectKey($request);
-            $projectName = (string) data_get(config('modules.' . $projectKey, []), 'name', 'Redmine');
+            $projectName = (string) data_get(config('modules.'.$projectKey, []), 'name', 'Redmine');
             URL::defaults(['redmineProject' => $projectKey]);
 
             $user = $request->session()->get('nova_user', []);
             $access = app(ProjectAccessGuard::class);
 
             $projectUser = is_array($user) ? $access->projectUser($projectKey, $user) : null;
-            if (!is_array($projectUser)) {
+            if (! is_array($projectUser)) {
                 return redirect()->route('home')->with('access_error', $access->deniedMessage($projectName));
             }
 
@@ -99,7 +101,7 @@ class RedmineDashboardController extends Controller
         $this->prepare($request, $redmine);
         $permissions = $this->effectivePermissions($request, $redmine);
 
-        if (!$this->can($permissions, self::SECTION_PERMISSIONS['dashboard'])) {
+        if (! $this->can($permissions, self::SECTION_PERMISSIONS['dashboard'])) {
             foreach ($this->sectionsFor($redmine->projectKey()) as $section => $label) {
                 if ($section !== 'dashboard'
                     && $this->can($permissions, self::SECTION_PERMISSIONS[$section] ?? '')) {
@@ -147,7 +149,7 @@ class RedmineDashboardController extends Controller
         if ($section === 'actividad') {
             $sectionData['activityData'] = $redmine->activityData(
                 $request->query(),
-                is_array($user) ? (string)($user['id'] ?? '') : '',
+                is_array($user) ? (string) ($user['id'] ?? '') : '',
                 $this->can($permissions, 'actividad_todos')
             );
         }
@@ -193,7 +195,7 @@ class RedmineDashboardController extends Controller
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $user = is_array($user) ? $user : [];
         $updatePayload = $request->all();
-        if (!$this->can($this->effectivePermissions($request, $redmine), 'horas_extra_editar')) {
+        if (! $this->can($this->effectivePermissions($request, $redmine), 'horas_extra_editar')) {
             unset($updatePayload['hora_extra'], $updatePayload['tiempo_estimado']);
         }
 
@@ -204,17 +206,17 @@ class RedmineDashboardController extends Controller
 
         $message = match ($action) {
             'update' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->updateReport($updatePayload) ? 'Solicitud actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
-            'delete' => $redmine->deleteReport($redmine->canAccessActiveReport((string) $request->input('id'), $user) ? (string) $request->input('id') : '') . ' solicitud(es) eliminada(s).',
-            'delete_selected' => $redmine->deleteReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) eliminada(s).',
-            'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' solicitud(es) archivada(s).',
+            'delete' => $redmine->deleteReport($redmine->canAccessActiveReport((string) $request->input('id'), $user) ? (string) $request->input('id') : '').' solicitud(es) eliminada(s).',
+            'delete_selected' => $redmine->deleteReports($redmine->filterAccessibleActiveReportIds($ids, $user)).' solicitud(es) eliminada(s).',
+            'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user)).' solicitud(es) archivada(s).',
             'process_selected' => $this->sendReports($request, $redmine, $redmine->filterAccessibleActiveReportIds($ids, $user)),
-            'reset_errors' => $redmine->resetErrors($redmine->filterAccessibleActiveReportIds($ids, $user)) . ' error(es) marcados como pendientes.',
+            'reset_errors' => $redmine->resetErrors($redmine->filterAccessibleActiveReportIds($ids, $user)).' error(es) marcados como pendientes.',
             'toggle_hours_extra' => ($toggleHoursExtraSuccess = $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->toggleHoursExtra((string) $request->input('id'), $request->boolean('hora_extra'))) ? 'Hora extra actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
             default => 'Accion no reconocida.',
         };
 
         if ($action !== 'process_selected' && $action !== '') {
-            $redmine->recordActivity('reporte_' . $action, [
+            $redmine->recordActivity('reporte_'.$action, [
                 'user_id' => (string) ($user['id'] ?? ''),
                 'message_id' => (string) $request->input('id', implode(',', $ids)),
                 'result' => str_contains($message, 'No se') ? 'error' : 'success',
@@ -243,7 +245,7 @@ class RedmineDashboardController extends Controller
             $result = $redmine->previewUsersFromRedmine(is_array($user) ? ($user['id'] ?? null) : null);
             $message = $result['ok']
                 ? 'Selecciona los usuarios que quieres importar desde Redmine.'
-                : 'No se pudo consultar Redmine: ' . $result['error'];
+                : 'No se pudo consultar Redmine: '.$result['error'];
 
             return back()
                 ->with('redmine_status', $message)
@@ -261,8 +263,8 @@ class RedmineDashboardController extends Controller
                 'error' => $result['error'],
             ]);
             $message = $result['ok']
-                ? $result['created'] . ' usuario(s) creado(s), ' . $result['updated'] . ' actualizado(s) desde Redmine.'
-                : 'No se pudo sincronizar con Redmine: ' . $result['error'];
+                ? $result['created'].' usuario(s) creado(s), '.$result['updated'].' actualizado(s) desde Redmine.'
+                : 'No se pudo sincronizar con Redmine: '.$result['error'];
 
             return back()
                 ->with('redmine_status', $message)
@@ -281,7 +283,7 @@ class RedmineDashboardController extends Controller
         } elseif ($action === 'toggle_status') {
             $result = $redmine->toggleUserStatus((string) $request->input('id'));
             $message = $result['ok']
-                ? 'Estado cambiado a ' . $result['nuevo_estado'] . '.'
+                ? 'Estado cambiado a '.$result['nuevo_estado'].'.'
                 : 'No se encontro el usuario.';
         } elseif ($action === 'save') {
             $result = $redmine->saveUser($request->all());
@@ -310,7 +312,7 @@ class RedmineDashboardController extends Controller
                 'error' => $result['error'],
             ]);
             $message = $result['ok']
-                ? ($result['changed'] ? 'Categorias sincronizadas desde Redmine: cambios aplicados (' . $result['count'] . ' registro(s)).' : 'Categorias sincronizadas desde Redmine: sin cambios, todo estaba actualizado (' . $result['count'] . ' registro(s)).')
+                ? ($result['changed'] ? 'Categorias sincronizadas desde Redmine: cambios aplicados ('.$result['count'].' registro(s)).' : 'Categorias sincronizadas desde Redmine: sin cambios, todo estaba actualizado ('.$result['count'].' registro(s)).')
                 : $result['error'];
             $statusType = $result['ok'] ? ($result['changed'] ? 'success' : 'info') : 'danger';
         } else {
@@ -341,7 +343,7 @@ class RedmineDashboardController extends Controller
                 'error' => $result['error'],
             ]);
             $message = $result['ok']
-                ? ($result['changed'] ? 'Unidades sincronizadas desde Redmine: cambios aplicados (' . $result['count'] . ' registro(s)).' : 'Unidades sincronizadas desde Redmine: sin cambios, todo estaba actualizado (' . $result['count'] . ' registro(s)).')
+                ? ($result['changed'] ? 'Unidades sincronizadas desde Redmine: cambios aplicados ('.$result['count'].' registro(s)).' : 'Unidades sincronizadas desde Redmine: sin cambios, todo estaba actualizado ('.$result['count'].' registro(s)).')
                 : $result['error'];
             $statusType = $result['ok'] ? ($result['changed'] ? 'success' : 'info') : 'danger';
         } else {
@@ -361,7 +363,7 @@ class RedmineDashboardController extends Controller
         $this->authorizePermission($request, $redmine, 'configuracion');
         $panel = strtolower(trim((string) $request->query('panel', 'resumen')));
         $this->authorizePermission($request, $redmine, self::CONFIG_PANEL_PERMISSIONS[$panel] ?? 'cfg_resumen');
-        if ($redmine->maintenanceModeEnabled() && !$this->isMaintenanceSettingsRequest($request)) {
+        if ($redmine->maintenanceModeEnabled() && ! $this->isMaintenanceSettingsRequest($request)) {
             return $this->maintenanceBlock($redmine);
         }
 
@@ -452,22 +454,27 @@ class RedmineDashboardController extends Controller
             'cf_unidad_solicitante',
             'cf_hora_extra',
             'retencion_horas',
+            'informes_nuevos_dias',
             'maintenance_until',
         ] as $field) {
             if ($request->has($field)) {
                 $config[$field] = $request->input($field);
             }
         }
+        if ($panel === 'informes') {
+            $config['informes_nuevos_habilitado'] = $request->boolean('informes_nuevos_habilitado');
+            $config['informes_nuevos_dias'] = max(1, min(30, (int) $request->input('informes_nuevos_dias', 2)));
+        }
         if ($request->has('maintenance_mode')) {
             $maintenanceMode = $request->boolean('maintenance_mode');
             $config['maintenance_mode'] = $maintenanceMode;
-            if (!$maintenanceMode) {
+            if (! $maintenanceMode) {
                 $config['maintenance_until'] = '';
             } else {
                 $maintenanceUntil = trim((string) $request->input('maintenance_until', ''));
                 if ($maintenanceUntil !== '') {
                     try {
-                        $until = \Carbon\Carbon::parse($maintenanceUntil, 'America/Santiago');
+                        $until = Carbon::parse($maintenanceUntil, 'America/Santiago');
                     } catch (\Throwable) {
                         return back()
                             ->withInput()
@@ -506,10 +513,11 @@ class RedmineDashboardController extends Controller
 
         $redmine->saveConfiguration($config);
         if ($request->has('maintenance_mode')) {
-            $this->syncModuleMaintenanceState($redmine->projectKey(), !empty($config['maintenance_mode']));
+            $this->syncModuleMaintenanceState($redmine->projectKey(), ! empty($config['maintenance_mode']));
         }
 
         $response = back()->with('redmine_status', 'Configuracion guardada.');
+
         return $response;
     }
 
@@ -550,7 +558,7 @@ class RedmineDashboardController extends Controller
 
         $deleted = $redmine->deleteArchivedReport((string) $request->input('id'));
 
-        return back()->with('redmine_status', $deleted . ' registro(s) historico(s) eliminado(s).');
+        return back()->with('redmine_status', $deleted.' registro(s) historico(s) eliminado(s).');
     }
 
     public function historyStatuses(Request $request, RedmineDataRepository $redmine): JsonResponse
@@ -610,7 +618,7 @@ class RedmineDashboardController extends Controller
             'count' => $deleted,
         ]);
 
-        return back()->with('redmine_status', $deleted . ' evento(s) propios eliminados de la bitácora.');
+        return back()->with('redmine_status', $deleted.' evento(s) propios eliminados de la bitácora.');
     }
 
     public function webhookAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
@@ -669,8 +677,7 @@ class RedmineDashboardController extends Controller
         RedmineDataRepository $redmine,
         QuickReportService $quickReports,
         TelegramService $telegram
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $this->prepare($request, $redmine);
         $this->authorizePermission($request, $redmine, 'reporte_rapido');
         if ($blocked = $this->maintenanceBlock($redmine)) {
@@ -699,7 +706,7 @@ class RedmineDashboardController extends Controller
                 $redmine->units(),
                 (string) $validated['asignado_a']
             );
-            if (!$preview['ok']) {
+            if (! $preview['ok']) {
                 return redirect($route)
                     ->withInput()
                     ->withErrors(['quick_input' => $preview['error']]);
@@ -788,9 +795,9 @@ class RedmineDashboardController extends Controller
             'telegram_configurado' => $recipient['chat_id'] !== '',
         ]);
 
-        $status = 'Reporte Redmine #' . $redmineId . ' creado correctamente.';
+        $status = 'Reporte Redmine #'.$redmineId.' creado correctamente.';
         if ($telegramSent) {
-            $status .= ' Notificacion enviada a ' . $recipient['name'] . '.';
+            $status .= ' Notificacion enviada a '.$recipient['name'].'.';
         } elseif ($recipient['chat_id'] === '') {
             $status .= ' El responsable no tiene Chat ID de Telegram configurado.';
         } else {
@@ -838,7 +845,7 @@ class RedmineDashboardController extends Controller
     }
 
     /**
-     * @param mixed $value
+     * @param  mixed  $value
      * @return string[]
      */
     private function ids($value): array
@@ -863,7 +870,7 @@ class RedmineDashboardController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $parameters
+     * @param  array<string,mixed>  $parameters
      * @return array<string,mixed>
      */
     private function routeParameters(RedmineDataRepository $redmine, array $parameters = []): array
@@ -901,7 +908,7 @@ class RedmineDashboardController extends Controller
         // It must take precedence over stale or inherited per-action values
         // from the TIC profile; otherwise the UI is visible to an admin but
         // the POST action is rejected with 403.
-        if (!empty($permissions['all'])) {
+        if (! empty($permissions['all'])) {
             return true;
         }
 
@@ -913,10 +920,12 @@ class RedmineDashboardController extends Controller
         ];
         if (in_array($permission, $explicitPermissions, true) && array_key_exists($permission, $permissions)) {
             $value = $permissions[$permission];
+
             return $value === true || $value === 1 || $value === '1' || $value === 'si';
         }
 
         $value = $permissions[$permission] ?? false;
+
         return $value === true || $value === 1 || $value === '1' || $value === 'todos' || $value === 'asignados';
     }
 
@@ -927,7 +936,7 @@ class RedmineDashboardController extends Controller
 
     private function maintenanceBlock(RedmineDataRepository $redmine): ?RedirectResponse
     {
-        if (!$redmine->maintenanceModeEnabled()) {
+        if (! $redmine->maintenanceModeEnabled()) {
             return null;
         }
 
@@ -944,7 +953,7 @@ class RedmineDashboardController extends Controller
     private function syncModuleMaintenanceState(string $projectKey, bool $enabled): void
     {
         try {
-            if (!Schema::hasTable('modulos_nova') || !Schema::hasColumn('modulos_nova', 'en_mantencion')) {
+            if (! Schema::hasTable('modulos_nova') || ! Schema::hasColumn('modulos_nova', 'en_mantencion')) {
                 return;
             }
 
@@ -957,7 +966,7 @@ class RedmineDashboardController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     private function defaultOptionDeleteMessage(Request $request, array $config): ?string
     {
@@ -983,10 +992,10 @@ class RedmineDashboardController extends Controller
 
         $rows = array_values(array_filter((array) ($config[$type] ?? []), 'is_array'));
         $rowIsDefault = collect($rows)->contains(static function (array $row) use ($id): bool {
-            return (string) ($row['id'] ?? '') === $id && !empty($row['default']);
+            return (string) ($row['id'] ?? '') === $id && ! empty($row['default']);
         });
 
-        if ((string) ($config[$configKey] ?? '') !== $id && !$rowIsDefault) {
+        if ((string) ($config[$configKey] ?? '') !== $id && ! $rowIsDefault) {
             return null;
         }
 
@@ -996,7 +1005,7 @@ class RedmineDashboardController extends Controller
             'estados' => 'estados',
         ][$type];
 
-        return 'No se puede eliminar esta opcion porque esta definida como predeterminada. Selecciona otro valor predeterminado para ' . $label . ' antes de eliminarla.';
+        return 'No se puede eliminar esta opcion porque esta definida como predeterminada. Selecciona otro valor predeterminado para '.$label.' antes de eliminarla.';
     }
 
     private function applyRedmineOptionAction(Request $request, RedmineConfigRepository $configRepository): bool
@@ -1009,7 +1018,7 @@ class RedmineDashboardController extends Controller
             'estados' => 'estado',
         ][$type] ?? null;
 
-        if ($databaseType === null || !in_array($action, ['create', 'update', 'delete', 'set_default'], true)) {
+        if ($databaseType === null || ! in_array($action, ['create', 'update', 'delete', 'set_default'], true)) {
             return false;
         }
 
@@ -1062,6 +1071,7 @@ class RedmineDashboardController extends Controller
             'cfg_redmine' => $request->boolean('perm_cfg_redmine'),
             'cfg_campos' => $request->boolean('perm_cfg_campos'),
             'cfg_retencion' => $request->boolean('perm_cfg_retencion'),
+            'cfg_informes' => $request->boolean('perm_cfg_informes'),
             'cfg_mantencion' => $request->boolean('perm_cfg_mantencion'),
             'cfg_roles' => $request->boolean('perm_cfg_roles'),
             'cfg_usuarios' => $request->boolean('perm_cfg_usuarios'),
@@ -1075,8 +1085,8 @@ class RedmineDashboardController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $permissions
-     * @param array<string,mixed> $currentPermissions
+     * @param  array<string,mixed>  $permissions
+     * @param  array<string,mixed>  $currentPermissions
      * @return array<string,mixed>
      */
     private function preserveRestrictedScopes(array $permissions, array $currentPermissions, string $novaRole): array
@@ -1098,17 +1108,17 @@ class RedmineDashboardController extends Controller
     }
 
     /**
-     * @param string[] $ids
+     * @param  string[]  $ids
      */
     private function sendReports(Request $request, RedmineDataRepository $redmine, array $ids): string
     {
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
         $result = $redmine->sendReportsToRedmine($ids, is_array($user) ? ($user['id'] ?? null) : null);
         $parts = [
-            $result['success'] . ' ticket(s) enviados de ' . $result['attempts'] . ' intento(s).',
+            $result['success'].' ticket(s) enviados de '.$result['attempts'].' intento(s).',
         ];
         if ($result['redmine_ids']) {
-            $parts[] = 'Redmine ID(s): ' . implode(', ', $result['redmine_ids']) . '.';
+            $parts[] = 'Redmine ID(s): '.implode(', ', $result['redmine_ids']).'.';
         }
         if ($result['errors']) {
             $parts[] = implode(' ', array_slice($result['errors'], 0, 3));

@@ -2,12 +2,12 @@
 
 namespace RedmineTic\Repositories;
 
-use App\Modulos\Nova\Models\NovaUser;
+use App\Modulos\Nova\Repositories\UserIntegrationRepository;
 use App\Modulos\Nova\Services\RedmineIdentityService;
+use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RedmineTic\Services\RedmineIssueSenderService;
@@ -23,27 +23,43 @@ final class RedmineDataRepository
 {
     /** Permission keys that carry a string scope value instead of a boolean. */
     private const PERMISSION_SCOPE_KEYS = ['mensajes', 'historico_scope', 'horas_extra'];
+
     /** Roles required as the minimum permission templates for the TIC module. */
     private const BASE_ROLES = ['administrador', 'usuario'];
 
     private string $projectKey = 'redmine_tic';
+
     private ?array $assignedUserNames = null;
+
     private ?array $activeReportsCache = null;
+
     private ?array $archivedReportsCache = null;
+
     private ?bool $reportsTableAvailableCache = null;
 
-    private ?RedmineActivityRepository    $activityRepoInst    = null;
-    private ?RedmineConfigRepository      $configRepoInst      = null;
-    private ?RedmineCatalogRepository     $catalogRepoInst     = null;
-    private ?RedmineHoursExtraRepository  $hoursExtraRepoInst  = null;
-    private ?RedminePermissionRepository  $permissionRepoInst  = null;
-    private ?RedmineReportRepository      $reportRepoInst      = null;
-    private ?RedmineUserRepository        $userRepoInst        = null;
-    private ?RedmineIssueSenderService    $issueSenderInst     = null;
-    private ?RedmineIssueStatusService    $issueStatusInst     = null;
-    private ?RedmineStatisticsRepository  $statisticsRepoInst  = null;
-    private ?RedmineMembershipSyncService $membershipSyncInst  = null;
-    private ?RedmineIdentityService       $redmineIdentityInst = null;
+    private ?RedmineActivityRepository $activityRepoInst = null;
+
+    private ?RedmineConfigRepository $configRepoInst = null;
+
+    private ?RedmineCatalogRepository $catalogRepoInst = null;
+
+    private ?RedmineHoursExtraRepository $hoursExtraRepoInst = null;
+
+    private ?RedminePermissionRepository $permissionRepoInst = null;
+
+    private ?RedmineReportRepository $reportRepoInst = null;
+
+    private ?RedmineUserRepository $userRepoInst = null;
+
+    private ?RedmineIssueSenderService $issueSenderInst = null;
+
+    private ?RedmineIssueStatusService $issueStatusInst = null;
+
+    private ?RedmineStatisticsRepository $statisticsRepoInst = null;
+
+    private ?RedmineMembershipSyncService $membershipSyncInst = null;
+
+    private ?RedmineIdentityService $redmineIdentityInst = null;
 
     public function forProject(string $projectKey): self
     {
@@ -52,11 +68,11 @@ final class RedmineDataRepository
             $this->activeReportsCache = null;
             $this->archivedReportsCache = null;
             $this->assignedUserNames = null;
-            $this->activityRepoInst    = null;
-            $this->configRepoInst      = null;
-            $this->catalogRepoInst     = null;
-            $this->hoursExtraRepoInst  = null;
-            $this->permissionRepoInst  = null;
+            $this->activityRepoInst = null;
+            $this->configRepoInst = null;
+            $this->catalogRepoInst = null;
+            $this->hoursExtraRepoInst = null;
+            $this->permissionRepoInst = null;
         }
 
         return $this;
@@ -69,12 +85,12 @@ final class RedmineDataRepository
 
     public function projectName(): string
     {
-        return (string) data_get(config('modules.' . $this->projectKey, []), 'name', 'Redmine');
+        return (string) data_get(config('modules.'.$this->projectKey, []), 'name', 'Redmine');
     }
 
     public function basePath(): string
     {
-        return (string) data_get(config('modules.' . $this->projectKey, []), 'path', base_path($this->projectKey));
+        return (string) data_get(config('modules.'.$this->projectKey, []), 'path', base_path($this->projectKey));
     }
 
     // ---- focused-class factory methods ----
@@ -96,7 +112,7 @@ final class RedmineDataRepository
 
     private function hoursExtraRepo(): RedmineHoursExtraRepository
     {
-        return $this->hoursExtraRepoInst ??= new RedmineHoursExtraRepository();
+        return $this->hoursExtraRepoInst ??= new RedmineHoursExtraRepository;
     }
 
     private function permissionRepo(): RedminePermissionRepository
@@ -116,12 +132,12 @@ final class RedmineDataRepository
 
     private function issueSender(): RedmineIssueSenderService
     {
-        return $this->issueSenderInst ??= new RedmineIssueSenderService();
+        return $this->issueSenderInst ??= new RedmineIssueSenderService;
     }
 
     private function issueStatus(): RedmineIssueStatusService
     {
-        return $this->issueStatusInst ??= new RedmineIssueStatusService();
+        return $this->issueStatusInst ??= new RedmineIssueStatusService;
     }
 
     private function statisticsRepo(): RedmineStatisticsRepository
@@ -131,7 +147,7 @@ final class RedmineDataRepository
 
     private function membershipSync(): RedmineMembershipSyncService
     {
-        return $this->membershipSyncInst ??= new RedmineMembershipSyncService();
+        return $this->membershipSyncInst ??= new RedmineMembershipSyncService;
     }
 
     private function redmineIdentity(): RedmineIdentityService
@@ -163,7 +179,6 @@ final class RedmineDataRepository
         return $this->archivedReportsCache;
     }
 
-
     /**
      * @return array<string,mixed>
      */
@@ -173,7 +188,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     public function saveConfiguration(array $config): void
     {
@@ -202,7 +217,7 @@ final class RedmineDataRepository
             'archived_total' => count($archived),
             'project_name' => (string) ($config['project_name'] ?? 'Redmine'),
             'maintenance' => [
-                'enabled' => !empty($config['maintenance_mode']),
+                'enabled' => ! empty($config['maintenance_mode']),
                 'until' => trim((string) ($config['maintenance_until'] ?? '')),
                 'until_text' => DateSupport::formatUntil(trim((string) ($config['maintenance_until'] ?? ''))),
             ],
@@ -211,7 +226,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $reports
+     * @param  array<int,array<string,mixed>>  $reports
      * @return array<string,int>
      */
     private function dashboardSummaryForReports(array $reports): array
@@ -255,7 +270,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      */
     public function canAccessActiveReport(string $id, array $user): bool
     {
@@ -274,8 +289,8 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,string> $ids
-     * @param array<string,mixed> $user
+     * @param  array<int,string>  $ids
+     * @param  array<string,mixed>  $user
      * @return array<int,string>
      */
     public function filterAccessibleActiveReportIds(array $ids, array $user): array
@@ -343,7 +358,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $permissions
+     * @param  array<string,mixed>  $permissions
      */
     public function saveUserPermissions(string $id, string $role, array $permissions): bool
     {
@@ -356,7 +371,7 @@ final class RedmineDataRepository
     public function previewUsersFromRedmine(?string $userId = null): array
     {
         $remote = $this->fetchRedmineMemberships($userId);
-        if (!$remote['ok']) {
+        if (! $remote['ok']) {
             return ['ok' => false, 'items' => [], 'error' => $remote['error']];
         }
 
@@ -371,7 +386,7 @@ final class RedmineDataRepository
 
         $items = [];
         foreach ($remote['memberships'] as $membership) {
-            if (!is_array($membership) || !is_array($membership['user'] ?? null)) {
+            if (! is_array($membership) || ! is_array($membership['user'] ?? null)) {
                 continue;
             }
             $redmineUser = $membership['user'];
@@ -412,21 +427,21 @@ final class RedmineDataRepository
         }
 
         usort($items, static fn (array $a, array $b): int => strcasecmp(
-            trim((string) ($a['nombre'] ?? '') . ' ' . (string) ($a['apellido'] ?? '')),
-            trim((string) ($b['nombre'] ?? '') . ' ' . (string) ($b['apellido'] ?? ''))
+            trim((string) ($a['nombre'] ?? '').' '.(string) ($a['apellido'] ?? '')),
+            trim((string) ($b['nombre'] ?? '').' '.(string) ($b['apellido'] ?? ''))
         ));
 
         return ['ok' => true, 'items' => $items, 'error' => ''];
     }
 
     /**
-     * @param string[]|null $selectedIds
+     * @param  string[]|null  $selectedIds
      * @return array{ok:bool,created:int,updated:int,error:string}
      */
     public function syncUsersFromRedmine(?string $userId = null, ?array $selectedIds = null): array
     {
         $remote = $this->fetchRedmineMemberships($userId);
-        if (!$remote['ok']) {
+        if (! $remote['ok']) {
             return ['ok' => false, 'created' => 0, 'updated' => 0, 'error' => $remote['error']];
         }
 
@@ -459,7 +474,7 @@ final class RedmineDataRepository
         $created = 0;
         $updated = 0;
         foreach ($memberships as $membership) {
-            if (!is_array($membership) || !is_array($membership['user'] ?? null)) {
+            if (! is_array($membership) || ! is_array($membership['user'] ?? null)) {
                 continue;
             }
             $redmineUser = $membership['user'];
@@ -467,7 +482,7 @@ final class RedmineDataRepository
             if ($id === '') {
                 continue;
             }
-            if ($selected !== null && !isset($selected[$id])) {
+            if ($selected !== null && ! isset($selected[$id])) {
                 continue;
             }
 
@@ -504,6 +519,7 @@ final class RedmineDataRepository
                 }
                 $byId[$id] = $index;
                 $updated++;
+
                 continue;
             }
 
@@ -575,7 +591,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $permissions
+     * @param  array<string,mixed>  $permissions
      */
     public function saveRolePermissions(string $role, array $permissions): bool
     {
@@ -605,7 +621,7 @@ final class RedmineDataRepository
         }
 
         $roles = $this->roles();
-        if (!array_key_exists($role, $roles)) {
+        if (! array_key_exists($role, $roles)) {
             return ['ok' => false, 'error' => 'Rol no encontrado.'];
         }
 
@@ -656,7 +672,7 @@ final class RedmineDataRepository
             return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => $response['error']];
         }
         if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
-            return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => 'HTTP ' . $response['http_code'] . ' al consultar categorias.'];
+            return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => 'HTTP '.$response['http_code'].' al consultar categorias.'];
         }
 
         $data = json_decode($response['body'], true);
@@ -667,7 +683,7 @@ final class RedmineDataRepository
 
         $rows = [];
         foreach ($items as $item) {
-            if (!is_array($item)) {
+            if (! is_array($item)) {
                 continue;
             }
             $id = trim((string) ($item['id'] ?? ''));
@@ -728,7 +744,7 @@ final class RedmineDataRepository
             return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => $response['error']];
         }
         if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
-            return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => 'HTTP ' . $response['http_code'] . ' al consultar unidades.'];
+            return ['ok' => false, 'count' => 0, 'changed' => false, 'error' => 'HTTP '.$response['http_code'].' al consultar unidades.'];
         }
 
         $data = json_decode($response['body'], true);
@@ -766,8 +782,8 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $filters
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $filters
+     * @param  array<string,mixed>  $user
      * @return array{rows:array<int,array<string,mixed>>,hoursMeta:array<string,mixed>}
      */
     public function hoursExtraData(array $filters = [], array $user = []): array
@@ -803,7 +819,7 @@ final class RedmineDataRepository
         $selectedYear = DateSupport::selectedYear($filters['anio'] ?? null, $hasExplicitFilters);
         $visible = array_values(array_filter($groups, function (array $group) use ($selectedMonth, $selectedYear): bool {
             $date = DateSupport::parseFlexibleDate((string) ($group['fecha'] ?? ''));
-            if (!$date) {
+            if (! $date) {
                 return true;
             }
 
@@ -833,8 +849,8 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $groups
-     * @param array<string,mixed> $user
+     * @param  array<int,array<string,mixed>>  $groups
+     * @param  array<string,mixed>  $user
      * @return array<string,array<string,mixed>>
      */
     private function emachOvertimeSuggestionsForGroups(array $groups, array $user): array
@@ -857,7 +873,7 @@ final class RedmineDataRepository
             return [];
         }
 
-        if (!$this->emachCredentialsConfigured($user)) {
+        if (! $this->emachCredentialsConfigured($user)) {
             return array_map(static function (array $suggestion): array {
                 $suggestion['status'] = 'Configura tus credenciales EMACH antes de calcular.';
 
@@ -894,32 +910,36 @@ final class RedmineDataRepository
 
         foreach (array_keys($suggestions) as $dateKey) {
             $date = DateSupport::parseFlexibleDate($dateKey);
-            if (!$date) {
+            if (! $date) {
                 continue;
             }
 
             $weekday = (int) $date->format('N');
             $configured = $schedule[$weekday] ?? null;
-            if (!$configured || empty($configured['activo'])) {
+            if (! $configured || empty($configured['activo'])) {
                 $suggestions[$dateKey]['status'] = 'Ese día no tiene jornada activa en tu horario EMACH.';
+
                 continue;
             }
 
             $scheduledExit = DateSupport::minutesFromClock((string) ($configured['salida'] ?? ''));
             if ($scheduledExit === null) {
                 $suggestions[$dateKey]['status'] = 'Tu horario EMACH no tiene hora de salida para ese día.';
+
                 continue;
             }
 
             $actualExit = $marks[$dateKey]['exit'] ?? null;
             if ($actualExit === null) {
                 $suggestions[$dateKey]['status'] = 'No encontré una marcación de salida EMACH para esa fecha.';
+
                 continue;
             }
 
             $extraMinutes = $actualExit - $scheduledExit;
             if ($extraMinutes <= 0) {
                 $suggestions[$dateKey]['status'] = 'La salida EMACH no supera tu horario de salida.';
+
                 continue;
             }
 
@@ -938,9 +958,9 @@ final class RedmineDataRepository
     private function emachCredentialsConfigured(array $user): bool
     {
         try {
-            $credentials = app(\App\Modulos\Nova\Repositories\UserIntegrationRepository::class)->emachForSession($user);
+            $credentials = app(UserIntegrationRepository::class)->emachForSession($user);
 
-            return !empty($credentials['stored']);
+            return ! empty($credentials['stored']);
         } catch (\Throwable) {
             return false;
         }
@@ -948,7 +968,7 @@ final class RedmineDataRepository
 
     private function emachCentralUserId(array $user): ?int
     {
-        if (!Schema::hasTable('usuarios_nova')) {
+        if (! Schema::hasTable('usuarios_nova')) {
             return null;
         }
 
@@ -982,7 +1002,7 @@ final class RedmineDataRepository
      */
     private function emachScheduleForUser(int $userId): array
     {
-        if ($userId <= 0 || !Schema::hasTable('emach_horarios_usuario')) {
+        if ($userId <= 0 || ! Schema::hasTable('emach_horarios_usuario')) {
             return [];
         }
 
@@ -1011,7 +1031,7 @@ final class RedmineDataRepository
      */
     private function emachExitMarksFromSession(): array
     {
-        if (!request()->hasSession()) {
+        if (! request()->hasSession()) {
             return [];
         }
 
@@ -1020,7 +1040,7 @@ final class RedmineDataRepository
         $marks = [];
 
         foreach ($rows as $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
 
@@ -1041,7 +1061,6 @@ final class RedmineDataRepository
         return $marks;
     }
 
-
     public function saveHoursGroup(string $sourceFile, array $payload): bool
     {
         return $this->hoursExtraRepo()->saveGroup($sourceFile, $payload);
@@ -1059,7 +1078,7 @@ final class RedmineDataRepository
     {
         $rows = [];
         foreach ($this->archivedReports() as $index => $report) {
-            $key = ArraySupport::historyRowKey($report, 'archived-' . $index);
+            $key = ArraySupport::historyRowKey($report, 'archived-'.$index);
             $report['_history_type'] = 'Archivado';
             $report['_history_can_delete'] = true;
             $report['_history_sort_date'] = DateSupport::normalizeDateKey((string) ($report['fecha_inicio'] ?? $report['fecha'] ?? ''));
@@ -1068,13 +1087,14 @@ final class RedmineDataRepository
 
         foreach ($this->deduplicateHoursGroups($this->hoursExtra()) as $group) {
             foreach ((array) ($group['reports'] ?? []) as $index => $report) {
-                if (!is_array($report)) {
+                if (! is_array($report)) {
                     continue;
                 }
-                $key = ArraySupport::historyRowKey($report, 'hours-' . ($group['fecha'] ?? '') . '-' . $index);
+                $key = ArraySupport::historyRowKey($report, 'hours-'.($group['fecha'] ?? '').'-'.$index);
                 if (isset($rows[$key])) {
                     $rows[$key]['_history_type'] = 'Hora extra';
                     $rows[$key]['_history_is_hours_extra'] = true;
+
                     continue;
                 }
                 $report['_history_type'] = 'Hora extra';
@@ -1109,7 +1129,63 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,string> $redmineIds
+     * @return array{ids:string[],error:string}
+     */
+    public function staleNewIssuesForAssignee(string $assigneeId, int $days): array
+    {
+        $assigneeId = trim($assigneeId);
+        $config = $this->configuration();
+        $token = $this->userApiToken($assigneeId);
+        $projectId = trim((string) ($config['project_id'] ?? ''));
+        $issuesUrl = RedmineUrlSupport::redmineIssuesUrl((string) ($config['platform_url'] ?? ''));
+        $newStatusId = 0;
+
+        foreach ($this->issueStatusOptions() as $option) {
+            $name = Str::lower(Str::ascii(trim((string) ($option['name'] ?? ''))));
+            if ($name === 'nueva') {
+                $newStatusId = (int) ($option['id'] ?? 0);
+                break;
+            }
+        }
+
+        if ($assigneeId === '' || $token === '' || $projectId === '' || $issuesUrl === '' || $newStatusId <= 0) {
+            return ['ids' => [], 'error' => 'Falta API Key, proyecto, URL o estado Redmine Nueva.'];
+        }
+
+        $cutoff = now('America/Santiago')->subDays(max(1, min(30, $days)));
+        $issues = $this->fetchRedmineIssues($issuesUrl, $token, [
+            'project_id' => $projectId,
+            'assigned_to_id' => $assigneeId,
+            'status_id' => (string) $newStatusId,
+            'created_on' => '<='.$cutoff->format('Y-m-d'),
+        ]);
+        if (isset($issues['error'])) {
+            return ['ids' => [], 'error' => (string) $issues['error']];
+        }
+
+        $ids = [];
+        foreach ((array) ($issues['rows'] ?? []) as $issue) {
+            $createdOn = trim((string) ($issue['created_on'] ?? ''));
+            try {
+                $createdAt = $createdOn !== '' ? Carbon::parse($createdOn)->timezone('America/Santiago') : null;
+            } catch (\Throwable) {
+                $createdAt = null;
+            }
+            if ($createdAt === null || ! $createdAt->lt($cutoff)) {
+                continue;
+            }
+
+            $id = trim((string) ($issue['id'] ?? ''));
+            if (preg_match('/^\d+$/', $id)) {
+                $ids[$id] = true;
+            }
+        }
+
+        return ['ids' => array_keys($ids), 'error' => ''];
+    }
+
+    /**
+     * @param  array<int,string>  $redmineIds
      * @return array<string,array{id:int,name:string,closed:bool,available:bool,message:string}>
      */
     public function issueStatuses(array $redmineIds, ?string $userId = null): array
@@ -1282,17 +1358,17 @@ final class RedmineDataRepository
 
         foreach ($this->activity() as $line) {
             $entry = json_decode((string) $line, true);
-            if (!is_array($entry)) {
+            if (! is_array($entry)) {
                 continue;
             }
 
             $event = trim((string) ($entry['event'] ?? ''));
-            if (!in_array($event, ['envio_redmine_error', 'envio_redmine_http'], true)) {
+            if (! in_array($event, ['envio_redmine_error', 'envio_redmine_http'], true)) {
                 continue;
             }
 
             $context = $entry['context'] ?? [];
-            if (!is_array($context)) {
+            if (! is_array($context)) {
                 continue;
             }
 
@@ -1311,7 +1387,7 @@ final class RedmineDataRepository
         }
 
         return array_map(
-            static fn (array $entries): string => implode(PHP_EOL . PHP_EOL . '---' . PHP_EOL . PHP_EOL, array_slice($entries, 0, 8)),
+            static fn (array $entries): string => implode(PHP_EOL.PHP_EOL.'---'.PHP_EOL.PHP_EOL, array_slice($entries, 0, 8)),
             $logs
         );
     }
@@ -1322,7 +1398,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     public function recordActivity(string $event, array $context = []): void
     {
@@ -1359,7 +1435,7 @@ final class RedmineDataRepository
         [$from, $to] = DateSupport::statisticsDateRange($filters);
         $fetchRequested = filter_var($filters['fetch'] ?? false, FILTER_VALIDATE_BOOL);
         $maintenanceActive = $this->maintenanceModeEnabled();
-        $shouldFetch = $fetchRequested && !$maintenanceActive;
+        $shouldFetch = $fetchRequested && ! $maintenanceActive;
         $empty = $stats->emptyStatistics([
             'desde' => $from?->format('d-m-Y') ?? '',
             'hasta' => $to?->format('d-m-Y') ?? '',
@@ -1387,7 +1463,7 @@ final class RedmineDataRepository
             ]);
         }
 
-        if (!$shouldFetch) {
+        if (! $shouldFetch) {
             $cached = $stats->apiStatisticsCache();
             if ($cached !== []) {
                 $rawRows = (array) ($cached['raw_rows'] ?? []);
@@ -1426,20 +1502,22 @@ final class RedmineDataRepository
                 'desde' => $from?->format('d-m-Y') ?? '',
                 'hasta' => $to?->format('d-m-Y') ?? '',
             ]);
+
             return $empty;
         }
-        if (!$from || !$to) {
+        if (! $from || ! $to) {
             $empty['error'] = 'Selecciona un rango de fechas para consultar Redmine.';
             $this->appendActivityLog('redmine_api_sincronizacion_error', [
                 'error' => $empty['error'],
             ]);
+
             return $empty;
         }
 
         $query = [
             'project_id' => $projectId,
             'status_id' => $stats->statusQueryValue($statusSelection),
-            $dateField => '><' . $from->format('Y-m-d') . '|' . $to->format('Y-m-d'),
+            $dateField => '><'.$from->format('Y-m-d').'|'.$to->format('Y-m-d'),
         ];
         if ($trackerSelection !== 'all') {
             $query['tracker_id'] = $trackerSelection;
@@ -1459,6 +1537,7 @@ final class RedmineDataRepository
                 'tracker_scope' => $trackerSelection,
                 'priority_scope' => $prioritySelection,
             ]);
+
             return $empty;
         }
 
@@ -1508,7 +1587,6 @@ final class RedmineDataRepository
         };
     }
 
-
     public function updateReport(array $payload): bool
     {
         $id = trim((string) ($payload['id'] ?? ''));
@@ -1554,7 +1632,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param string[] $ids
+     * @param  string[]  $ids
      */
     public function deleteReports(array $ids): int
     {
@@ -1580,7 +1658,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param string[] $ids
+     * @param  string[]  $ids
      */
     public function archiveReports(array $ids): int
     {
@@ -1610,7 +1688,7 @@ final class RedmineDataRepository
 
     public function archiveExpiredProcessedReports(): int
     {
-        $cacheKey = 'nova.redmine.archive_check.' . $this->projectKey;
+        $cacheKey = 'nova.redmine.archive_check.'.$this->projectKey;
         if (Cache::has($cacheKey)) {
             return 0;
         }
@@ -1652,11 +1730,11 @@ final class RedmineDataRepository
         $report['hora_extra'] = $enabled ? 'SI' : 'NO';
         $report['tiempo_estimado'] = $enabled ? '1' : '';
 
-        if (!$this->updateActiveReportHoursExtraInDatabase($id, $enabled)) {
+        if (! $this->updateActiveReportHoursExtraInDatabase($id, $enabled)) {
             return false;
         }
 
-        if (!$enabled) {
+        if (! $enabled) {
             $this->removeHoursExtraRecord($id);
         }
 
@@ -1668,7 +1746,7 @@ final class RedmineDataRepository
      * Redmine con éxito). Reportes 'pendiente' o 'error' no ingresan a
      * horas_extra_grupo_reportes todavía.
      *
-     * @param array<string,mixed> $report
+     * @param  array<string,mixed>  $report
      */
     private function isReportProcesado(array $report): bool
     {
@@ -1676,7 +1754,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param string[] $ids
+     * @param  string[]  $ids
      */
     public function resetErrors(array $ids): int
     {
@@ -1716,7 +1794,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param string[] $ids
+     * @param  string[]  $ids
      * @return array{attempts:int,success:int,errors:array<int,string>,redmine_ids:array<int,string>}
      */
     public function sendReportsToRedmine(array $ids, ?string $userId = null): array
@@ -1762,10 +1840,10 @@ final class RedmineDataRepository
                         $report['unidad_solicitante_catalogo_id'] ?? null
                     ) ?? $this->catalogRepo()->activeExternalValue('unidad', $selectedUnit);
                     if ($externalUnitValue === null) {
-                        $message = 'La unidad solicitante "' . $selectedUnit . '" no está disponible en el catálogo activo de NOVA. Edita el reporte y selecciona una unidad vigente.';
+                        $message = 'La unidad solicitante "'.$selectedUnit.'" no está disponible en el catálogo activo de NOVA. Edita el reporte y selecciona una unidad vigente.';
                         $report['estado'] = 'error';
                         $report['procesado_ts'] = now('America/Santiago')->toAtomString();
-                        $errors[] = 'No se pudo enviar ' . ($report['id'] ?? 'sin-id') . ': ' . $message;
+                        $errors[] = 'No se pudo enviar '.($report['id'] ?? 'sin-id').': '.$message;
                         $this->appendSendLog([
                             'ts' => now('America/Santiago')->toAtomString(),
                             'message_id' => $report['id'] ?? '',
@@ -1784,6 +1862,7 @@ final class RedmineDataRepository
                             'unidad' => $report['unidad'] ?? '',
                         ]);
                         $this->persistSentReport($moduleId, $report);
+
                         continue;
                     }
 
@@ -1808,7 +1887,7 @@ final class RedmineDataRepository
                 $report['redmine_id'] = $decoded['issue']['id'] ?? $report['redmine_id'] ?? '';
                 $report['procesado_ts'] = now('America/Santiago')->toAtomString();
                 $success++;
-                if (!empty($report['redmine_id'])) {
+                if (! empty($report['redmine_id'])) {
                     $redmineIds[] = (string) $report['redmine_id'];
                 }
                 $this->appendActivityLog('envio_redmine_ok', [
@@ -1822,13 +1901,14 @@ final class RedmineDataRepository
                     'unidad_solicitante' => $report['unidad_solicitante'] ?? '',
                 ]);
                 $this->persistSentReport($moduleId, $report);
+
                 continue;
             }
 
             $report['estado'] = 'error';
             $report['procesado_ts'] = now('America/Santiago')->toAtomString();
             $failureMessage = $this->issueSender()->failureMessage($result);
-            $errors[] = 'No se pudo enviar ' . ($report['id'] ?? 'sin-id') . ': ' . $failureMessage;
+            $errors[] = 'No se pudo enviar '.($report['id'] ?? 'sin-id').': '.$failureMessage;
             $this->appendActivityLog('envio_redmine_error', [
                 'message_id' => $report['id'] ?? '',
                 'user_id' => $userId ?? '',
@@ -1865,7 +1945,7 @@ final class RedmineDataRepository
      * attempts it — updates only estado/redmine_id/procesado_at for that
      * single row instead of rewriting the whole active set.
      *
-     * @param array<string,mixed> $report
+     * @param  array<string,mixed>  $report
      */
     private function persistSentReport(?int $moduleId, array $report): void
     {
@@ -1919,7 +1999,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $telegramUser
+     * @param  array<string,mixed>  $telegramUser
      * @return array{ok:bool,error:string,report:array<string,mixed>,maintenance:bool}
      */
     public function createTelegramReport(string $text, array $telegramUser = []): array
@@ -1932,9 +2012,10 @@ final class RedmineDataRepository
         if ($this->maintenanceModeEnabled()) {
             $maintenance = $this->dashboardSummary()['maintenance'];
             $until = trim((string) ($maintenance['until_text'] ?? ''));
+
             return [
                 'ok' => false,
-                'error' => 'Redmine TIC esta en mantencion. Termino: ' . ($until !== '' ? $until : 'sin fecha definida') . '.',
+                'error' => 'Redmine TIC esta en mantencion. Termino: '.($until !== '' ? $until : 'sin fecha definida').'.',
                 'report' => [],
                 'maintenance' => true,
             ];
@@ -1955,7 +2036,7 @@ final class RedmineDataRepository
         )));
 
         $category = CatalogMatchSupport::inferCatalogMatch($problem, $categories)
-            ?: CatalogMatchSupport::inferCatalogMatch($problem . ' ' . $unitText, $categories)
+            ?: CatalogMatchSupport::inferCatalogMatch($problem.' '.$unitText, $categories)
             ?: 'Equipos';
         $requestUnit = CatalogMatchSupport::inferCatalogMatch($unitText, $units) ?: 'HBV';
         $unit = $unitText !== '' ? $unitText : $requestUnit;
@@ -1979,7 +2060,7 @@ final class RedmineDataRepository
             'unidad' => $unit,
             'unidad_solicitante' => $requestUnit,
             'solicitante' => $requester,
-            'asunto' => $problem !== '' && $unit !== '' ? $problem . ' / ' . $unit : $problem,
+            'asunto' => $problem !== '' && $unit !== '' ? $problem.' / '.$unit : $problem,
             'asignado_a' => $assignee['id'],
             'origen' => 'telegram',
             'created_at' => $now->toAtomString(),
@@ -2016,13 +2097,12 @@ final class RedmineDataRepository
         $this->hoursExtraRepo()->remove($id);
     }
 
-
     /**
      * @return array<int,array<string,mixed>>
      */
     private function hoursExtraFromDatabase(): array
     {
-        if (!$this->hoursExtraTableAvailable() || !$this->reportsTableAvailable() || !$this->hoursExtraPivotTableAvailable()) {
+        if (! $this->hoursExtraTableAvailable() || ! $this->reportsTableAvailable() || ! $this->hoursExtraPivotTableAvailable()) {
             return [];
         }
 
@@ -2041,18 +2121,18 @@ final class RedmineDataRepository
             )));
 
             return [
-                'fecha'       => DateSupport::databaseDate($grupo['fecha']),
+                'fecha' => DateSupport::databaseDate($grupo['fecha']),
                 'hora_inicio' => DateSupport::databaseTime($grupo['hora_inicio']),
-                'hora_fin'    => DateSupport::databaseTime($grupo['hora_fin']),
-                'reports'     => $reportRows,
+                'hora_fin' => DateSupport::databaseTime($grupo['hora_fin']),
+                'reports' => $reportRows,
                 '_source_file' => DateSupport::databaseDate($grupo['fecha']),
             ];
         }, $grupos);
     }
 
     /**
-     * @param array<int,array<string,mixed>> $current
-     * @param array<int,array<string,string>> $incoming
+     * @param  array<int,array<string,mixed>>  $current
+     * @param  array<int,array<string,string>>  $incoming
      */
     private function catalogRowsChanged(array $current, array $incoming): bool
     {
@@ -2060,7 +2140,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $report
+     * @param  array<string,mixed>  $report
      * @return array<string,mixed>
      */
     private function saveNewReport(array $report, bool $archived): array
@@ -2110,7 +2190,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $fields
+     * @param  array<string,mixed>  $fields
      * @return array<string,mixed>|null
      */
     private function updateActiveReportInDatabase(string $id, array $fields): ?array
@@ -2158,7 +2238,7 @@ final class RedmineDataRepository
         $values = Arr::only($this->databaseReportPayload($moduleId, $report, false), $columns);
         $values['actualizado_at'] = now();
 
-        if (!$this->reportRepo()->updateActiveFields($moduleId, $id, $values)) {
+        if (! $this->reportRepo()->updateActiveFields($moduleId, $id, $values)) {
             return null;
         }
 
@@ -2199,7 +2279,7 @@ final class RedmineDataRepository
      */
     private function activeReportsFromDatabase(): array
     {
-        if (!$this->reportsTableAvailable()) {
+        if (! $this->reportsTableAvailable()) {
             return [];
         }
 
@@ -2244,7 +2324,7 @@ final class RedmineDataRepository
         if ($this->assignedUserNames === null) {
             $this->assignedUserNames = [];
             foreach ($this->users() as $user) {
-                $name = trim((string) (($user['nombre'] ?? $user['name'] ?? '') . ' ' . ($user['apellido'] ?? '')));
+                $name = trim((string) (($user['nombre'] ?? $user['name'] ?? '').' '.($user['apellido'] ?? '')));
                 if ($name === '') {
                     $name = trim((string) ($user['username'] ?? $user['usuario'] ?? ''));
                 }
@@ -2259,7 +2339,7 @@ final class RedmineDataRepository
                     $user['rut_sin_dv'] ?? '',
                 ] as $identity) {
                     $identity = trim((string) $identity);
-                    if ($identity !== '' && !isset($this->assignedUserNames[$identity])) {
+                    if ($identity !== '' && ! isset($this->assignedUserNames[$identity])) {
                         $this->assignedUserNames[$identity] = $name;
                     }
                 }
@@ -2270,7 +2350,6 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param object $row
      * @return array<string,mixed>
      */
     private function databaseReportToArray(object $row): array
@@ -2296,15 +2375,15 @@ final class RedmineDataRepository
 
             DB::table('modulos_nova')->insert([
                 'clave_modulo' => $this->projectKey,
-                'nombre'       => $this->projectName(),
-                'descripcion'  => '',
-                'icono'        => '',
-                'tipo'         => 'native',
-                'ruta'         => $this->projectKey,
-                'entrada'      => 'laravel:redmine.native.dashboard',
-                'habilitado'   => 1,
-                'orden'        => 100,
-                'creado_at'    => now(),
+                'nombre' => $this->projectName(),
+                'descripcion' => '',
+                'icono' => '',
+                'tipo' => 'native',
+                'ruta' => $this->projectKey,
+                'entrada' => 'laravel:redmine.native.dashboard',
+                'habilitado' => 1,
+                'orden' => 100,
+                'creado_at' => now(),
                 'actualizado_at' => now(),
             ]);
 
@@ -2331,7 +2410,7 @@ final class RedmineDataRepository
      */
     private function archivedReportsFromDatabase(): array
     {
-        if (!$this->reportsTableAvailable()) {
+        if (! $this->reportsTableAvailable()) {
             return [];
         }
 
@@ -2355,7 +2434,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $rows
+     * @param  array<int,array<string,mixed>>  $rows
      */
     private function saveCatalogRowsToDatabase(string $type, array $rows, bool $deactivateMissing = true): void
     {
@@ -2366,8 +2445,8 @@ final class RedmineDataRepository
      * @return array<string,mixed>
      */
     /**
-     * @param array<string,mixed> $config
-     * @param array<string,string> $types
+     * @param  array<string,mixed>  $config
+     * @param  array<string,string>  $types
      */
     private function saveModuleConfigurationToDatabase(array $config, array $types = []): void
     {
@@ -2463,14 +2542,14 @@ final class RedmineDataRepository
      */
     private function getRedmineJson(string $url, string $token): array
     {
-        if (!function_exists('curl_init')) {
+        if (! function_exists('curl_init')) {
             return ['http_code' => 0, 'body' => '', 'error' => 'Extension cURL no disponible'];
         }
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Accept: application/json', 'X-Redmine-API-Key: ' . $token],
+            CURLOPT_HTTPHEADER => ['Accept: application/json', 'X-Redmine-API-Key: '.$token],
             CURLOPT_TIMEOUT => 20,
         ]);
         $body = curl_exec($ch);
@@ -2482,13 +2561,13 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $telegramUser
+     * @param  array<string,mixed>  $telegramUser
      * @return array{id:string,name:string}
      */
     private function telegramProjectAssignee(array $telegramUser, string $chatId): array
     {
-        $project = is_array(data_get($telegramUser, 'projects.' . $this->projectKey))
-            ? data_get($telegramUser, 'projects.' . $this->projectKey)
+        $project = is_array(data_get($telegramUser, 'projects.'.$this->projectKey))
+            ? data_get($telegramUser, 'projects.'.$this->projectKey)
             : [];
         $projectId = trim((string) ($project['id'] ?? ''));
         if ($projectId !== '') {
@@ -2525,7 +2604,7 @@ final class RedmineDataRepository
 
     private function userApiToken(?string $userId): string
     {
-        if (!$userId) {
+        if (! $userId) {
             return '';
         }
         foreach ($this->users() as $user) {
@@ -2538,7 +2617,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,string> $params
+     * @param  array<string,string>  $params
      * @return array{rows:array<int,array<string,mixed>>}|array{error:string}
      */
     private function fetchRedmineIssues(string $issuesUrl, string $token, array $params): array
@@ -2553,17 +2632,17 @@ final class RedmineDataRepository
                 'limit' => (string) $limit,
                 'offset' => (string) $offset,
             ]);
-            $url = $issuesUrl . '?' . http_build_query($query);
+            $url = $issuesUrl.'?'.http_build_query($query);
             $response = $this->getRedmineJson($url, $token);
             if ($response['error'] !== '') {
                 return ['error' => $response['error']];
             }
             if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
-                return ['error' => 'HTTP ' . $response['http_code'] . ' - ' . $response['body']];
+                return ['error' => 'HTTP '.$response['http_code'].' - '.$response['body']];
             }
 
             $payload = json_decode($response['body'], true);
-            if (!is_array($payload)) {
+            if (! is_array($payload)) {
                 return ['error' => 'Respuesta Redmine invalida.'];
             }
 
@@ -2580,7 +2659,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $entry
+     * @param  array<string,mixed>  $entry
      */
     private function appendSendLog(array $entry): void
     {
@@ -2588,33 +2667,33 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $entry
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $entry
+     * @param  array<string,mixed>  $context
      */
     private function formatErrorLogEntry(array $entry, array $context): string
     {
         $lines = [
-            '[' . trim((string) ($entry['ts'] ?? 'sin fecha')) . '] ' . trim((string) ($entry['event'] ?? 'envio_redmine_error')),
+            '['.trim((string) ($entry['ts'] ?? 'sin fecha')).'] '.trim((string) ($entry['event'] ?? 'envio_redmine_error')),
         ];
 
         if (array_key_exists('http_code', $context)) {
-            $lines[] = 'HTTP: ' . (string) $context['http_code'];
+            $lines[] = 'HTTP: '.(string) $context['http_code'];
         }
 
         $error = trim((string) ($context['error'] ?? ''));
         if ($error !== '') {
-            $lines[] = 'Error: ' . TextSupport::truncateLogValue($error);
+            $lines[] = 'Error: '.TextSupport::truncateLogValue($error);
         }
 
         $body = trim((string) ($context['body'] ?? ''));
         if ($body !== '') {
-            $lines[] = 'Body: ' . TextSupport::truncateLogValue($body);
+            $lines[] = 'Body: '.TextSupport::truncateLogValue($body);
         }
 
         if (isset($context['payload'])) {
             $payload = json_encode($context['payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if (is_string($payload) && $payload !== '') {
-                $lines[] = 'Payload: ' . TextSupport::truncateLogValue($payload, 1200);
+                $lines[] = 'Payload: '.TextSupport::truncateLogValue($payload, 1200);
             }
         }
 
@@ -2622,16 +2701,15 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     private function appendActivityLog(string $event, array $context = []): void
     {
         $this->activityRepo()->append($event, $context);
     }
 
-
     /**
-     * @param array<int,array<string,mixed>> $groups
+     * @param  array<int,array<string,mixed>>  $groups
      * @return array<int,array<string,mixed>>
      */
     private function deduplicateHoursGroups(array $groups): array
@@ -2644,14 +2722,14 @@ final class RedmineDataRepository
             }
             $groupDate = DateSupport::normalizeDateKey((string) ($group['fecha'] ?? ''));
             foreach ($reports as $report) {
-                if (!is_array($report)) {
+                if (! is_array($report)) {
                     continue;
                 }
                 $date = DateSupport::normalizeDateKey((string) ($report['fecha_inicio'] ?? $report['fecha'] ?? $groupDate));
                 if ($date === '') {
                     continue;
                 }
-                if (!isset($out[$date])) {
+                if (! isset($out[$date])) {
                     $out[$date] = [
                         'fecha' => $date,
                         'hora_inicio' => (string) ($group['hora_inicio'] ?? ''),
@@ -2666,13 +2744,14 @@ final class RedmineDataRepository
                     $out[$date]['hora_fin'] = (string) ($group['hora_fin'] ?? $out[$date]['hora_fin']);
                     $out[$date]['_source_file'] = (string) ($group['_source_file'] ?? $out[$date]['_source_file']);
                 }
-                $key = (string) ($report['id'] ?? (($report['chat_id_telegram'] ?? $report['numero'] ?? '') . '|' . ($report['hora'] ?? '') . '|' . ($report['asunto'] ?? '')));
+                $key = (string) ($report['id'] ?? (($report['chat_id_telegram'] ?? $report['numero'] ?? '').'|'.($report['hora'] ?? '').'|'.($report['asunto'] ?? '')));
                 if ($key === '') {
                     continue;
                 }
-                if (!isset($out[$date]['reports'][$key])) {
+                if (! isset($out[$date]['reports'][$key])) {
                     $out[$date]['reports'][$key] = $report;
                     $out[$date]['_order'][] = $key;
+
                     continue;
                 }
                 $out[$date]['reports'][$key] = array_merge($out[$date]['reports'][$key], array_filter($report, static fn ($value): bool => $value !== null && $value !== ''));
@@ -2689,7 +2768,7 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $reports
+     * @param  array<int,array<string,mixed>>  $reports
      * @return array<int,array<string,mixed>>
      */
     private function filterReportsByDashboardStatus(array $reports, string $filter): array
@@ -2713,8 +2792,8 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<int,array<string,mixed>> $reports
-     * @param array<string,mixed> $user
+     * @param  array<int,array<string,mixed>>  $reports
+     * @param  array<string,mixed>  $user
      * @return array<int,array<string,mixed>>
      */
     private function filterReportsByUserScope(array $reports, array $user, string $scopeKey): array
@@ -2729,9 +2808,9 @@ final class RedmineDataRepository
         }
 
         $candidateNames = array_values(array_unique(array_filter([
-            trim((string) (($user['name'] ?? '') . ' ' . ($user['apellido'] ?? ''))),
+            trim((string) (($user['name'] ?? '').' '.($user['apellido'] ?? ''))),
             trim((string) data_get($user, 'legacy.nombre', '')),
-            trim((string) ((data_get($user, 'legacy.nombre', '') ?: '') . ' ' . (data_get($user, 'legacy.apellido', '') ?: ''))),
+            trim((string) ((data_get($user, 'legacy.nombre', '') ?: '').' '.(data_get($user, 'legacy.apellido', '') ?: ''))),
         ])));
 
         return array_values(array_filter($reports, function (array $report) use ($userId, $candidateNames, $scopeKey): bool {
@@ -2758,13 +2837,13 @@ final class RedmineDataRepository
     }
 
     /**
-     * @param array<string,mixed> $user
+     * @param  array<string,mixed>  $user
      */
     private function scopeForUser(array $user, string $scopeKey): string
     {
         $role = trim((string) ($user['role'] ?? data_get($user, 'legacy.rol', 'usuario')));
         $permissions = is_array(data_get($user, 'legacy.permisos')) ? data_get($user, 'legacy.permisos') : [];
-        if (!empty($permissions['all'])) {
+        if (! empty($permissions['all'])) {
             return 'todos';
         }
         if (array_key_exists($scopeKey, $permissions)) {
@@ -2776,7 +2855,7 @@ final class RedmineDataRepository
 
         $roles = $this->roles();
         $roleConfig = is_array($roles[$role] ?? null) ? $roles[$role] : [];
-        if (!empty($roleConfig['all'])) {
+        if (! empty($roleConfig['all'])) {
             return 'todos';
         }
 
