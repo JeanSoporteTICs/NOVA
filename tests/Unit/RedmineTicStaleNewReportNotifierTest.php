@@ -7,7 +7,7 @@ use Tests\TestCase;
 
 final class RedmineTicStaleNewReportNotifierTest extends TestCase
 {
-    public function test_database_query_filters_new_issues_by_assignee_and_age(): void
+    public function test_database_query_filters_new_issues_by_assignee_and_previous_week(): void
     {
         $root = dirname(__DIR__, 2);
         $repository = file_get_contents($root.'/RedmineTic/Repositories/RedmineReportRepository.php');
@@ -17,18 +17,20 @@ final class RedmineTicStaleNewReportNotifierTest extends TestCase
         $this->assertStringContainsString('function staleNewIssueIdsForAssignee(', $repository);
         $this->assertStringContainsString("->where('asignado_a', (int) \$assigneeId)", $repository);
         $this->assertStringContainsString("->where('estado_redmine', 'Nueva')", $repository);
-        $this->assertStringContainsString("->where('creado_at', '<', \$cutoff)", $repository);
+        $this->assertStringContainsString("->where('creado_at', '>=', \$start)", $repository);
+        $this->assertStringContainsString("->where('creado_at', '<', \$end)", $repository);
         $this->assertStringNotContainsString("\$user['api']", $notifier);
     }
 
-    public function test_notification_reports_the_count_and_threshold(): void
+    public function test_notification_lists_open_tickets_and_week(): void
     {
-        $message = app(StaleNewReportNotifier::class)->notificationMessage('Ana Pérez', 3, 2);
+        $message = app(StaleNewReportNotifier::class)->notificationMessage('Ana Pérez', ['101', '102', '103'], '17/08/2026 al 23/08/2026');
 
         $this->assertStringContainsString('Hola Ana Pérez.', $message);
-        $this->assertStringContainsString('Tienes 3 reportes sin finalizar.', $message);
-        $this->assertStringContainsString('Estado Redmine: Nueva', $message);
-        $this->assertStringContainsString('más de 2 días', $message);
+        $this->assertStringContainsString('Tienes 3 reportes abiertos.', $message);
+        $this->assertStringContainsString('Estado: Nueva', $message);
+        $this->assertStringContainsString('Semana informada: 17/08/2026 al 23/08/2026', $message);
+        $this->assertStringContainsString('Tickets: #101, #102, #103', $message);
     }
 
     public function test_configuration_and_telegram_listener_expose_the_daily_report(): void
@@ -43,7 +45,9 @@ final class RedmineTicStaleNewReportNotifierTest extends TestCase
 
         $this->assertStringContainsString("'informes' => ['label' => 'Informes'", $view);
         $this->assertStringContainsString('name="informes_nuevos_habilitado"', $view);
-        $this->assertStringContainsString('name="informes_nuevos_dias"', $view);
+        $this->assertStringContainsString('name="informes_nuevos_dia"', $view);
+        $this->assertStringContainsString('name="informes_nuevos_hora"', $view);
+        $this->assertStringNotContainsString('name="informes_nuevos_dias"', $view);
         $this->assertStringContainsString('value="send_reports_now"', $view);
         $this->assertStringContainsString("input('config_action') === 'send_reports_now'", $controller);
         $this->assertStringContainsString('app(StaleNewReportNotifier::class)->run(true)', $controller);
@@ -51,6 +55,6 @@ final class RedmineTicStaleNewReportNotifierTest extends TestCase
         $this->assertStringContainsString('$redmine->persistIssueStatuses($statuses)', $controller);
         $this->assertStringContainsString("\$report['estado_redmine'] = trim((string) data_get(\$decoded, 'issue.status.name', ''))", $repository);
         $this->assertStringContainsString('telegram_run_tic_daily_reports', $listener);
-        $this->assertStringContainsString("redmine:notify-stale-new')->dailyAt('09:00')", $schedule);
+        $this->assertStringContainsString("redmine:notify-stale-new')->everyFiveMinutes()", $schedule);
     }
 }

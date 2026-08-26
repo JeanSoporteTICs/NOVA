@@ -3,14 +3,13 @@
 namespace RedmineTic\Services;
 
 use App\Modulos\Telegram\Services\TelegramService;
+use App\Support\Reports\AutomaticReportSchedule;
 use Illuminate\Support\Facades\Cache;
 use RedmineTic\Repositories\RedmineDataRepository;
 
 final class StaleNewReportNotifier
 {
     private const PROJECT_KEY = 'redmine_tic';
-
-    private const START_HOUR = 9;
 
     public function __construct(
         private readonly TelegramService $telegram,
@@ -20,9 +19,9 @@ final class StaleNewReportNotifier
     /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function runIfDue(): array
     {
-        $now = now('America/Santiago');
-        if ((int) $now->format('G') < self::START_HOUR) {
-            return $this->result('before_start_time');
+        $config = $this->redmine->forProject(self::PROJECT_KEY)->configuration();
+        if (! AutomaticReportSchedule::isDue($config, now(AutomaticReportSchedule::TIMEZONE))) {
+            return $this->result('not_scheduled_now');
         }
 
         return $this->run(false);
@@ -38,13 +37,13 @@ final class StaleNewReportNotifier
             return $this->result('disabled');
         }
 
-        $dayKey = now('America/Santiago')->format('Y-m-d');
+        $dayKey = now(AutomaticReportSchedule::TIMEZONE)->format('Y-m-d');
         $completedKey = 'nova.redmine_tic.informes.nueva.completed.'.$dayKey;
         if (! $force && Cache::has($completedKey)) {
             return $this->result('already_completed');
         }
 
-        $days = max(1, min(30, (int) ($config['informes_nuevos_dias'] ?? 2)));
+        $window = AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE));
         $result = $this->result('completed');
         foreach ($redmine->users() as $user) {
             if (! $this->activeUser($user)) {
@@ -75,14 +74,14 @@ final class StaleNewReportNotifier
             }
 
             $processingKey = $deliveryKey.'.processing';
-            if (! $force && ! Cache::add($processingKey, true, now('America/Santiago')->addMinutes(10))) {
+            if (! $force && ! Cache::add($processingKey, true, now(AutomaticReportSchedule::TIMEZONE)->addMinutes(10))) {
                 $result['skipped']++;
 
                 continue;
             }
             try {
-                $result['unsynced'] += $redmine->unsyncedIssueCountForAssignee($assigneeId, $days);
-                $issues = $redmine->staleNewIssuesForAssignee($assigneeId, $days);
+                $result['unsynced'] += $redmine->unsyncedIssueCountForAssignee($assigneeId, $window['start'], $window['end']);
+                $issues = $redmine->staleNewIssuesForAssignee($assigneeId, $window['start'], $window['end']);
                 if ($issues['error'] !== '') {
                     $result['failed']++;
 
@@ -91,7 +90,7 @@ final class StaleNewReportNotifier
 
                 $newIds = $issues['ids'];
                 if ($newIds === []) {
-                    Cache::put($deliveryKey, true, now('America/Santiago')->addHours(26));
+                    Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
                     $result['empty']++;
 
                     continue;
@@ -99,7 +98,7 @@ final class StaleNewReportNotifier
 
                 $name = trim((string) (($user['nombre'] ?? '').' '.($user['apellido'] ?? '')));
                 try {
-                    $sent = $this->telegram->sendToChat($chatId, $this->notificationMessage($name, count($newIds), $days));
+                    $sent = $this->telegram->sendToChat($chatId, $this->notificationMessage($name, $newIds, $window['label']));
                 } catch (\Throwable) {
                     $sent = false;
                 }
@@ -110,14 +109,15 @@ final class StaleNewReportNotifier
                     continue;
                 }
 
-                Cache::put($deliveryKey, true, now('America/Santiago')->addHours(26));
+                Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
                 $result['sent']++;
                 try {
                     $redmine->recordActivity('informe_nuevos_telegram_ok', [
                         'user_id' => (string) ($user['id'] ?? $assigneeId),
                         'asignado_a' => (string) $assigneeId,
                         'cantidad' => count($newIds),
-                        'dias' => $days,
+                        'periodo_desde' => $window['start']->toIso8601String(),
+                        'periodo_hasta' => $window['end']->toIso8601String(),
                         'redmine_ids' => $newIds,
                     ]);
                 } catch (\Throwable) {
@@ -133,23 +133,37 @@ final class StaleNewReportNotifier
         }
 
         if ($result['failed'] === 0) {
-            Cache::put($completedKey, true, now('America/Santiago')->addHours(26));
+            Cache::put($completedKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
         }
 
         return $result;
     }
 
-    public function notificationMessage(string $name, int $count, int $days): string
+    /** @param array<int,string> $ids */
+    public function notificationMessage(string $name, array $ids, string $periodLabel): string
     {
+        $count = count($ids);
         $greeting = trim($name) !== '' ? 'Hola '.trim($name).'.' : 'Hola.';
         $reportWord = $count === 1 ? 'reporte' : 'reportes';
+        $openWord = $count === 1 ? 'abierto' : 'abiertos';
 
         return "📋 [NOVA] INFORME TIC\n"
             .$greeting."\n"
-            ."Tienes {$count} {$reportWord} sin finalizar.\n"
-            ."Estado Redmine: Nueva\n"
-            ."Antigüedad: más de {$days} días.\n"
+            ."Tienes {$count} {$reportWord} {$openWord}.\n"
+            ."Estado: Nueva\n"
+            ."Semana informada: {$periodLabel}\n"
+            .'Tickets: '.$this->ticketSummary($ids)."\n"
             .'Revisa tus tickets asignados en Redmine.';
+    }
+
+    /** @param array<int,string> $ids */
+    private function ticketSummary(array $ids): string
+    {
+        $visible = array_slice($ids, 0, 20);
+        $summary = implode(', ', array_map(static fn (string $id): string => '#'.$id, $visible));
+        $remaining = count($ids) - count($visible);
+
+        return $summary.($remaining > 0 ? ' y '.$remaining.' más' : '');
     }
 
     /** @param array<string,mixed> $user */

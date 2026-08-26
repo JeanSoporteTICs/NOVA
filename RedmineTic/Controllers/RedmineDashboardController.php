@@ -5,6 +5,7 @@ namespace RedmineTic\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
 use App\Modulos\Telegram\Services\TelegramService;
+use App\Support\Reports\AutomaticReportSchedule;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -472,7 +473,8 @@ class RedmineDashboardController extends Controller
             'cf_unidad_solicitante',
             'cf_hora_extra',
             'retencion_horas',
-            'informes_nuevos_dias',
+            'informes_nuevos_dia',
+            'informes_nuevos_hora',
             'maintenance_until',
         ] as $field) {
             if ($request->has($field)) {
@@ -481,7 +483,12 @@ class RedmineDashboardController extends Controller
         }
         if ($panel === 'informes') {
             $config['informes_nuevos_habilitado'] = $request->boolean('informes_nuevos_habilitado');
-            $config['informes_nuevos_dias'] = max(1, min(30, (int) $request->input('informes_nuevos_dias', 2)));
+            $schedule = AutomaticReportSchedule::settings([
+                'informes_nuevos_dia' => $request->input('informes_nuevos_dia', '1'),
+                'informes_nuevos_hora' => $request->input('informes_nuevos_hora', '09:00'),
+            ]);
+            $config['informes_nuevos_dia'] = $schedule['day'];
+            $config['informes_nuevos_hora'] = $schedule['time'];
         }
         if ($request->has('maintenance_mode')) {
             $maintenanceMode = $request->boolean('maintenance_mode');

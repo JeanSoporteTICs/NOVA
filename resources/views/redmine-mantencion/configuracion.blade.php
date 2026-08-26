@@ -546,7 +546,10 @@
 <?php if ($activeConfigPanel === 'informes'): ?>
   <?php
     $reportsEnabled = filter_var($cfg['informes_nuevos_habilitado'] ?? true, FILTER_VALIDATE_BOOL);
-    $reportsDays = max(1, min(30, (int)($cfg['informes_nuevos_dias'] ?? 2)));
+    $reportSchedule = \App\Support\Reports\AutomaticReportSchedule::settings($cfg);
+    $reportsDay = $reportSchedule['day'];
+    $reportsTime = $reportSchedule['time'];
+    $reportDayLabels = ['1' => 'Lunes', '2' => 'Martes', '3' => 'Miércoles', '4' => 'Jueves', '5' => 'Viernes', '6' => 'Sábado', '7' => 'Domingo'];
   ?>
   <section class="rm-config-feature-form">
     <div class="rm-feature-head">
@@ -554,11 +557,11 @@
       <div>
         <small>Recordatorio Telegram</small>
         <h2>Informes automáticos</h2>
-        <p>Avisa a cada responsable cuando mantiene tickets de Mantención con estado Redmine Nueva por más del plazo definido.</p>
+        <p>Informa los tickets de Mantención creados durante la semana anterior que todavía permanecen abiertos en estado Nueva.</p>
       </div>
       <div class="rm-feature-meter <?= $reportsEnabled ? 'is-ok' : 'is-warning' ?>">
         <strong><?= $reportsEnabled ? 'Activo' : 'Pausado' ?></strong>
-        <span>más de <?= $h($reportsDays) ?> días</span>
+        <span>Semana anterior</span>
       </div>
     </div>
 
@@ -567,28 +570,38 @@
       <label class="rm-config-field-card">
         <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
         <span class="rm-config-field-copy">
-          <strong>Enviar recordatorio diario</strong>
-          <small>El mensaje indica cuántos reportes asignados siguen en estado Nueva.</small>
+          <strong>Enviar informe semanal</strong>
+          <small>El mensaje enumera los tickets asignados que continúan en estado Nueva.</small>
         </span>
         <input type="hidden" name="informes_nuevos_habilitado" value="0">
         <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" <?= $reportsEnabled ? 'checked' : '' ?>>
       </label>
 
-      <label class="rm-config-field-card mt-3">
-        <span class="rm-config-field-icon"><i class="bi bi-calendar2-week"></i></span>
+      <div class="rm-config-field-card mt-3">
+        <span class="rm-config-field-icon"><i class="bi bi-calendar-week"></i></span>
         <span class="rm-config-field-copy">
-          <strong>Antigüedad mínima</strong>
-          <small>Solo considera tickets cuya creación supera este número de días.</small>
+          <strong>Día y hora de envío</strong>
+          <small>El período informado siempre será el lunes a domingo de la semana anterior.</small>
         </span>
-        <div class="rm-number-field">
-          <input class="form-control" type="number" min="1" max="30" name="informes_nuevos_dias" value="<?= $h($reportsDays) ?>" required>
-          <span>días</span>
+        <div class="row g-2 align-items-center">
+          <div class="col-sm-7">
+            <label class="form-label small" for="mant-reports-send-day">Día</label>
+            <select id="mant-reports-send-day" class="form-select" name="informes_nuevos_dia" required>
+              <?php foreach ($reportDayLabels as $value => $label): ?>
+                <option value="<?= $h($value) ?>" <?= $reportsDay === $value ? 'selected' : '' ?>><?= $h($label) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-sm-5">
+            <label class="form-label small" for="mant-reports-send-time">Hora</label>
+            <input id="mant-reports-send-time" class="form-control" type="time" name="informes_nuevos_hora" value="<?= $h($reportsTime) ?>" required>
+          </div>
         </div>
-      </label>
+      </div>
 
       <div class="nova-integration-status is-info mt-3">
-        <i class="bi bi-clock"></i>
-        <span>La revisión automática se ejecuta diariamente desde las 09:00. Cada responsable recibe como máximo un mensaje por día y módulo.</span>
+        <i class="bi bi-calendar-check"></i>
+        <span>Programado para <?= $h($reportDayLabels[$reportsDay] ?? 'Lunes') ?> a las <?= $h($reportsTime) ?>. Cada responsable recibe como máximo un informe semanal por módulo.</span>
       </div>
 
       <div class="rm-feature-actions">

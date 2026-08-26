@@ -4,14 +4,13 @@ namespace App\Modulos\RedmineMantencion\Services;
 
 use App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository;
 use App\Modulos\Telegram\Services\TelegramService;
+use App\Support\Reports\AutomaticReportSchedule;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 final class MantencionStaleNewReportNotifier
 {
     private const MODULE_KEY = 'redmine-mantencion';
-
-    private const START_HOUR = 9;
 
     public function __construct(
         private readonly TelegramService $telegram,
@@ -21,8 +20,9 @@ final class MantencionStaleNewReportNotifier
     /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function runIfDue(): array
     {
-        if ((int) now('America/Santiago')->format('G') < self::START_HOUR) {
-            return $this->result('before_start_time');
+        $config = $this->config->loadAll() ?? [];
+        if (! AutomaticReportSchedule::isDue($config, now(AutomaticReportSchedule::TIMEZONE))) {
+            return $this->result('not_scheduled_now');
         }
 
         return $this->run(false);
@@ -37,7 +37,7 @@ final class MantencionStaleNewReportNotifier
             return $this->result('disabled');
         }
 
-        $dayKey = now('America/Santiago')->format('Y-m-d');
+        $dayKey = now(AutomaticReportSchedule::TIMEZONE)->format('Y-m-d');
         $completedKey = 'nova.redmine_mantencion.informes.nueva.completed.'.$dayKey;
         if (! $force && Cache::has($completedKey)) {
             return $this->result('already_completed');
@@ -53,7 +53,7 @@ final class MantencionStaleNewReportNotifier
             return $result;
         }
 
-        $days = max(1, min(30, (int) ($config['informes_nuevos_dias'] ?? 2)));
+        $window = AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE));
 
         foreach ($users as $user) {
             $assigneeId = trim((string) ($user->redmine_id ?? ''));
@@ -79,30 +79,30 @@ final class MantencionStaleNewReportNotifier
             }
 
             $processingKey = $deliveryKey.'.processing';
-            if (! $force && ! Cache::add($processingKey, true, now('America/Santiago')->addMinutes(10))) {
+            if (! $force && ! Cache::add($processingKey, true, now(AutomaticReportSchedule::TIMEZONE)->addMinutes(10))) {
                 $result['skipped']++;
 
                 continue;
             }
 
             try {
-                $result['unsynced'] += $this->unsyncedIssueCountForAssignee($assigneeId, $days);
-                $ids = $this->staleNewIssueIdsForAssignee($assigneeId, $days);
+                $result['unsynced'] += $this->unsyncedIssueCountForAssignee($assigneeId, $window['start'], $window['end']);
+                $ids = $this->staleNewIssueIdsForAssignee($assigneeId, $window['start'], $window['end']);
                 if ($ids === []) {
-                    Cache::put($deliveryKey, true, now('America/Santiago')->addHours(26));
+                    Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
                     $result['empty']++;
 
                     continue;
                 }
 
                 $name = trim((string) (($user->nombre ?? '').' '.($user->apellido ?? '')));
-                if (! $this->telegram->sendToChat($chatId, $this->notificationMessage($name, count($ids), $days))) {
+                if (! $this->telegram->sendToChat($chatId, $this->notificationMessage($name, $ids, $window['label']))) {
                     $result['failed']++;
 
                     continue;
                 }
 
-                Cache::put($deliveryKey, true, now('America/Santiago')->addHours(26));
+                Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
                 $result['sent']++;
             } catch (\Throwable) {
                 $result['failed']++;
@@ -114,23 +114,37 @@ final class MantencionStaleNewReportNotifier
         }
 
         if ($result['failed'] === 0) {
-            Cache::put($completedKey, true, now('America/Santiago')->addHours(26));
+            Cache::put($completedKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
         }
 
         return $result;
     }
 
-    public function notificationMessage(string $name, int $count, int $days): string
+    /** @param array<int,string> $ids */
+    public function notificationMessage(string $name, array $ids, string $periodLabel): string
     {
+        $count = count($ids);
         $greeting = trim($name) !== '' ? 'Hola '.trim($name).'.' : 'Hola.';
         $reportWord = $count === 1 ? 'reporte' : 'reportes';
+        $openWord = $count === 1 ? 'abierto' : 'abiertos';
 
         return "🔧 [NOVA] INFORME MANTENCIÓN\n"
             .$greeting."\n"
-            ."Tienes {$count} {$reportWord} sin finalizar.\n"
-            ."Estado Redmine: Nueva\n"
-            ."Antigüedad: más de {$days} días.\n"
+            ."Tienes {$count} {$reportWord} {$openWord}.\n"
+            ."Estado: Nueva\n"
+            ."Semana informada: {$periodLabel}\n"
+            .'Tickets: '.$this->ticketSummary($ids)."\n"
             .'Revisa tus tickets asignados en Redmine.';
+    }
+
+    /** @param array<int,string> $ids */
+    private function ticketSummary(array $ids): string
+    {
+        $visible = array_slice($ids, 0, 20);
+        $summary = implode(', ', array_map(static fn (string $id): string => '#'.$id, $visible));
+        $remaining = count($ids) - count($visible);
+
+        return $summary.($remaining > 0 ? ' y '.$remaining.' más' : '');
     }
 
     /** @return array<int,object> */
@@ -162,7 +176,7 @@ final class MantencionStaleNewReportNotifier
     }
 
     /** @return array<int,string> */
-    private function staleNewIssueIdsForAssignee(string $assigneeId, int $days): array
+    private function staleNewIssueIdsForAssignee(string $assigneeId, \DateTimeInterface $start, \DateTimeInterface $end): array
     {
         $moduleId = DB::table('modulos_nova')->where('clave_modulo', self::MODULE_KEY)->value('id');
         if ($moduleId === null || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
@@ -174,7 +188,8 @@ final class MantencionStaleNewReportNotifier
             ->where('id_redmine_asignado', (int) $assigneeId)
             ->where('estado_redmine', 'Nueva')
             ->whereNotNull('numero_ticket_redmine')
-            ->where('creado_at', '<', now('UTC')->subDays(max(1, min(30, $days))))
+            ->where('creado_at', '>=', $start)
+            ->where('creado_at', '<', $end)
             ->orderBy('numero_ticket_redmine')
             ->pluck('numero_ticket_redmine')
             ->map(static fn ($id): string => (string) $id)
@@ -183,7 +198,7 @@ final class MantencionStaleNewReportNotifier
             ->all();
     }
 
-    private function unsyncedIssueCountForAssignee(string $assigneeId, int $days): int
+    private function unsyncedIssueCountForAssignee(string $assigneeId, \DateTimeInterface $start, \DateTimeInterface $end): int
     {
         $moduleId = DB::table('modulos_nova')->where('clave_modulo', self::MODULE_KEY)->value('id');
         if ($moduleId === null || ! preg_match('/^[1-9]\d*$/', $assigneeId)) {
@@ -197,7 +212,8 @@ final class MantencionStaleNewReportNotifier
             ->where(function ($query): void {
                 $query->whereNull('estado_redmine')->orWhere('estado_redmine', '');
             })
-            ->where('creado_at', '<', now('UTC')->subDays(max(1, min(30, $days))))
+            ->where('creado_at', '>=', $start)
+            ->where('creado_at', '<', $end)
             ->count();
     }
 

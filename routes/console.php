@@ -47,8 +47,9 @@ Artisan::command('redmine:archive-processed', function (RedmineDataRepository $r
     $this->info($archived.' reporte(s) procesado(s) archivado(s) por retencion.');
 })->purpose('Archive processed Redmine reports after configured retention hours');
 
-Artisan::command('redmine:notify-stale-new {--force : Ejecutar aunque el informe diario ya haya sido procesado}', function (StaleNewReportNotifier $notifier) {
-    $result = $notifier->run((bool) $this->option('force'));
+Artisan::command('redmine:notify-stale-new {--force : Ejecutar aunque el informe semanal ya haya sido procesado}', function (StaleNewReportNotifier $notifier) {
+    $force = (bool) $this->option('force');
+    $result = $force ? $notifier->run(true) : $notifier->runIfDue();
     $this->info(sprintf(
         'Informe TIC | responsables=%d enviados=%d sin pendientes=%d omitidos=%d errores=%d',
         (int) ($result['recipients'] ?? 0),
@@ -59,10 +60,11 @@ Artisan::command('redmine:notify-stale-new {--force : Ejecutar aunque el informe
     ));
 
     return (int) ($result['failed'] ?? 0) > 0 ? 1 : 0;
-})->purpose('Notify TIC assignees about Redmine issues still in Nueva after the configured number of days');
+})->purpose('Notify TIC assignees about Redmine issues from the previous week that remain in Nueva');
 
-Artisan::command('redmine:mantencion-notify-stale-new {--force : Ejecutar aunque el informe diario ya haya sido procesado}', function (MantencionStaleNewReportNotifier $notifier) {
-    $result = $notifier->run((bool) $this->option('force'));
+Artisan::command('redmine:mantencion-notify-stale-new {--force : Ejecutar aunque el informe semanal ya haya sido procesado}', function (MantencionStaleNewReportNotifier $notifier) {
+    $force = (bool) $this->option('force');
+    $result = $force ? $notifier->run(true) : $notifier->runIfDue();
     $this->info(sprintf(
         'Informe Mantencion | responsables=%d enviados=%d sin pendientes=%d omitidos=%d errores=%d',
         (int) ($result['recipients'] ?? 0),
@@ -73,7 +75,7 @@ Artisan::command('redmine:mantencion-notify-stale-new {--force : Ejecutar aunque
     ));
 
     return (int) ($result['failed'] ?? 0) > 0 ? 1 : 0;
-})->purpose('Notify Mantencion assignees about Redmine issues still in Nueva after the configured number of days');
+})->purpose('Notify Mantencion assignees about Redmine issues from the previous week that remain in Nueva');
 
 Artisan::command('nova:import-legacy-tic-backup
     {path : Carpeta extraida del respaldo legacy TIC}

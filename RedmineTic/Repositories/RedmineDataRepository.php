@@ -1130,7 +1130,7 @@ final class RedmineDataRepository
     /**
      * @return array{ids:string[],error:string}
      */
-    public function staleNewIssuesForAssignee(string $assigneeId, int $days): array
+    public function staleNewIssuesForAssignee(string $assigneeId, \DateTimeInterface $start, \DateTimeInterface $end): array
     {
         $assigneeId = trim($assigneeId);
         $moduleId = $this->databaseModuleId();
@@ -1138,15 +1138,13 @@ final class RedmineDataRepository
             return ['ids' => [], 'error' => 'No fue posible consultar los reportes TIC almacenados.'];
         }
 
-        $cutoff = now('UTC')->subDays(max(1, min(30, $days)));
-
         return [
-            'ids' => $this->reportRepo()->staleNewIssueIdsForAssignee($moduleId, $assigneeId, $cutoff),
+            'ids' => $this->reportRepo()->staleNewIssueIdsForAssignee($moduleId, $assigneeId, $start, $end),
             'error' => '',
         ];
     }
 
-    public function unsyncedIssueCountForAssignee(string $assigneeId, int $days): int
+    public function unsyncedIssueCountForAssignee(string $assigneeId, \DateTimeInterface $start, \DateTimeInterface $end): int
     {
         $moduleId = $this->databaseModuleId();
         if ($moduleId === null) {
@@ -1156,7 +1154,8 @@ final class RedmineDataRepository
         return $this->reportRepo()->unsyncedIssueCountForAssignee(
             $moduleId,
             $assigneeId,
-            now('UTC')->subDays(max(1, min(30, $days)))
+            $start,
+            $end
         );
     }
 
