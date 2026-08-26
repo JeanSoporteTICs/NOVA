@@ -267,7 +267,7 @@ class ConfiguracionController extends Controller
                 if (function_exists('csrf_validate')) {
                     csrf_validate();
                 }
-                $result = $this->reportsNotifier->run(true);
+                $result = $this->reportsNotifier->runManual();
                 session()->put('mantencion_config_flash', sprintf(
                     'Comprobación Mantención finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
                     (int) ($result['sent'] ?? 0),

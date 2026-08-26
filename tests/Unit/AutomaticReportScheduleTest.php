@@ -33,4 +33,14 @@ final class AutomaticReportScheduleTest extends TestCase
         self::assertSame('2026-08-17', $window['start']->setTimezone($timezone)->format('Y-m-d'));
         self::assertSame('2026-08-24', $window['end']->setTimezone($timezone)->format('Y-m-d'));
     }
+
+    public function test_last_seven_days_preserves_the_current_time(): void
+    {
+        $timezone = new DateTimeZone(AutomaticReportSchedule::TIMEZONE);
+        $window = AutomaticReportSchedule::lastSevenDays(new DateTimeImmutable('2026-08-26 14:30:45', $timezone));
+
+        self::assertSame('19/08/2026 14:30 al 26/08/2026 14:30', $window['label']);
+        self::assertSame('2026-08-19 14:30:45', $window['start']->setTimezone($timezone)->format('Y-m-d H:i:s'));
+        self::assertSame('2026-08-26 14:30:45', $window['end']->setTimezone($timezone)->format('Y-m-d H:i:s'));
+    }
 }

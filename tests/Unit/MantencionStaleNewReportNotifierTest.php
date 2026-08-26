@@ -28,7 +28,7 @@ final class MantencionStaleNewReportNotifierTest extends TestCase
         self::assertStringContainsString('Hola Ana Pérez.', $message);
         self::assertStringContainsString('Tienes 4 reportes abiertos.', $message);
         self::assertStringContainsString('Estado: Nueva', $message);
-        self::assertStringContainsString('Semana informada: 17/08/2026 al 23/08/2026', $message);
+        self::assertStringContainsString('Período informado: 17/08/2026 al 23/08/2026', $message);
         self::assertStringContainsString('Tickets: #201, #202, #203, #204', $message);
     }
 
@@ -37,6 +37,7 @@ final class MantencionStaleNewReportNotifierTest extends TestCase
         $root = dirname(__DIR__, 2);
         $view = file_get_contents($root.'/resources/views/redmine-mantencion/configuracion.blade.php');
         $controller = file_get_contents($root.'/RedmineMantencion/Controllers/ConfiguracionController.php');
+        $service = file_get_contents($root.'/RedmineMantencion/Services/MantencionStaleNewReportNotifier.php');
         $permissions = file_get_contents($root.'/RedmineMantencion/views/Configuracion/_permissions_panels.php');
         $listener = file_get_contents($root.'/telegram/bin/listen.php');
         $schedule = file_get_contents($root.'/app/Console/Kernel.php');
@@ -47,8 +48,10 @@ final class MantencionStaleNewReportNotifierTest extends TestCase
         self::assertStringContainsString('name="informes_nuevos_hora"', $view);
         self::assertStringNotContainsString('name="informes_nuevos_dias"', $view);
         self::assertStringContainsString('value="send_reports_now"', $view);
+        self::assertStringContainsString('últimos 7 días', $view);
         self::assertStringContainsString("\$action === 'send_reports_now'", $controller);
-        self::assertStringContainsString('$this->reportsNotifier->run(true)', $controller);
+        self::assertStringContainsString('$this->reportsNotifier->runManual()', $controller);
+        self::assertStringContainsString('AutomaticReportSchedule::lastSevenDays(', $service);
         self::assertStringContainsString("'cfg_informes' => 'Informes automáticos'", $permissions);
         self::assertStringContainsString('telegram_run_mantencion_daily_reports', $listener);
         self::assertStringContainsString("redmine:mantencion-notify-stale-new')->everyFiveMinutes()", $schedule);

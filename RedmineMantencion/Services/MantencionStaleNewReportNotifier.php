@@ -5,6 +5,7 @@ namespace App\Modulos\RedmineMantencion\Services;
 use App\Modulos\RedmineMantencion\Repositories\MantencionConfigRepository;
 use App\Modulos\Telegram\Services\TelegramService;
 use App\Support\Reports\AutomaticReportSchedule;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -31,6 +32,29 @@ final class MantencionStaleNewReportNotifier
     /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function run(bool $force = false): array
     {
+        return $this->execute(
+            $force,
+            AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE)),
+            true
+        );
+    }
+
+    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
+    public function runManual(): array
+    {
+        return $this->execute(
+            true,
+            AutomaticReportSchedule::lastSevenDays(now(AutomaticReportSchedule::TIMEZONE)),
+            false
+        );
+    }
+
+    /**
+     * @param  array{start:CarbonImmutable,end:CarbonImmutable,label:string}  $window
+     * @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string}
+     */
+    private function execute(bool $force, array $window, bool $recordAutomaticDelivery): array
+    {
         $config = $this->config->loadAll() ?? [];
         $enabled = filter_var($config['informes_nuevos_habilitado'] ?? true, FILTER_VALIDATE_BOOL);
         if (! $enabled && ! $force) {
@@ -52,8 +76,6 @@ final class MantencionStaleNewReportNotifier
 
             return $result;
         }
-
-        $window = AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE));
 
         foreach ($users as $user) {
             $assigneeId = trim((string) ($user->redmine_id ?? ''));
@@ -89,7 +111,9 @@ final class MantencionStaleNewReportNotifier
                 $result['unsynced'] += $this->unsyncedIssueCountForAssignee($assigneeId, $window['start'], $window['end']);
                 $ids = $this->staleNewIssueIdsForAssignee($assigneeId, $window['start'], $window['end']);
                 if ($ids === []) {
-                    Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                    if ($recordAutomaticDelivery) {
+                        Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                    }
                     $result['empty']++;
 
                     continue;
@@ -102,7 +126,9 @@ final class MantencionStaleNewReportNotifier
                     continue;
                 }
 
-                Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                if ($recordAutomaticDelivery) {
+                    Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                }
                 $result['sent']++;
             } catch (\Throwable) {
                 $result['failed']++;
@@ -113,7 +139,7 @@ final class MantencionStaleNewReportNotifier
             }
         }
 
-        if ($result['failed'] === 0) {
+        if ($recordAutomaticDelivery && $result['failed'] === 0) {
             Cache::put($completedKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
         }
 
@@ -132,7 +158,7 @@ final class MantencionStaleNewReportNotifier
             .$greeting."\n"
             ."Tienes {$count} {$reportWord} {$openWord}.\n"
             ."Estado: Nueva\n"
-            ."Semana informada: {$periodLabel}\n"
+            ."Período informado: {$periodLabel}\n"
             .'Tickets: '.$this->ticketSummary($ids)."\n"
             .'Revisa tus tickets asignados en Redmine.';
     }

@@ -52,4 +52,17 @@ final class AutomaticReportSchedule
             'label' => $weekStart->format('d/m/Y').' al '.$weekEnd->subDay()->format('d/m/Y'),
         ];
     }
+
+    /** @return array{start:CarbonImmutable,end:CarbonImmutable,label:string} */
+    public static function lastSevenDays(DateTimeInterface $now): array
+    {
+        $end = CarbonImmutable::instance($now)->setTimezone(self::TIMEZONE);
+        $start = $end->subDays(7);
+
+        return [
+            'start' => $start->utc(),
+            'end' => $end->utc(),
+            'label' => $start->format('d/m/Y H:i').' al '.$end->format('d/m/Y H:i'),
+        ];
+    }
 }

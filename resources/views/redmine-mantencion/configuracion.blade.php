@@ -601,11 +601,11 @@
 
       <div class="nova-integration-status is-info mt-3">
         <i class="bi bi-calendar-check"></i>
-        <span>Programado para <?= $h($reportDayLabels[$reportsDay] ?? 'Lunes') ?> a las <?= $h($reportsTime) ?>. Cada responsable recibe como máximo un informe semanal por módulo.</span>
+        <span>Programado para <?= $h($reportDayLabels[$reportsDay] ?? 'Lunes') ?> a las <?= $h($reportsTime) ?>. Cada responsable recibe como máximo un informe semanal programado por módulo. El envío manual considera los 7 días exactos anteriores a la fecha y hora de ejecución.</span>
       </div>
 
       <div class="rm-feature-actions">
-        <button class="btn-nova btn-nova-info" type="submit" name="action" value="send_reports_now" data-app-confirm="¿Comprobar ahora y enviar los informes de Mantención pendientes?"><i class="bi bi-send-check"></i>Comprobar y enviar</button>
+        <button class="btn-nova btn-nova-info" type="submit" name="action" value="send_reports_now" data-app-confirm="¿Comprobar ahora y enviar los informes de Mantención abiertos de los últimos 7 días?"><i class="bi bi-send-check"></i>Comprobar y enviar</button>
         <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar informes</button>
       </div>
     </form>
