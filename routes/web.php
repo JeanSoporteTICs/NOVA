@@ -151,6 +151,8 @@ Route::post('/redmine_tic/app/historico', [RedmineDashboardController::class, 'h
 Route::post('/redmine_tic/app/horas-extra', [RedmineDashboardController::class, 'hoursAction'])->name('redmine.native.hours.action');
 Route::post('/redmine_tic/app/actividad', [RedmineDashboardController::class, 'activityAction'])->name('redmine.native.activity.action');
 Route::post('/redmine_tic/app/webhook', [RedmineDashboardController::class, 'webhookAction'])->name('redmine.native.webhook.action');
+Route::post('/redmine_tic/app/reporte-rapido', [RedmineDashboardController::class, 'quickReportAction'])->name('redmine.native.quick-report.action');
+Route::post('/redmine_tic/app/reporte-rapido/notas', [RedmineDashboardController::class, 'quickReportNotes'])->name('redmine.native.quick-report.notes');
 Route::get('/redmine_tic', fn () => redirect()->route('redmine.native.dashboard'))->name('redmine.dashboard');
 Route::match(['GET', 'POST'], '/redmine_tic/{path}', fn () => redirect()->route('redmine.native.dashboard'))
     ->where('path', '^(?!(?:app|nativo)(?:/|$)).*')

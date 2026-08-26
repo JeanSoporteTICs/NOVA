@@ -6,7 +6,7 @@ require_once __DIR__ . '/maintenance.php';
 $GLOBALS['DATA_FILE'] = 'unidades';
 
 function ensure_uni_file($path) {
-    // Legacy no-op: unidades.json is deprecated and no longer used at runtime.
+   s
 }
 function load_unidades($path) {
     $repo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;

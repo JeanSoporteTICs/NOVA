@@ -305,6 +305,23 @@ class MantencionPendientesService
         ];
     }
 
+    public function applyNextcloudHistoryPrefill(array $form, array $categories, array $prefill): array
+    {
+        if (($prefill['source'] ?? '') !== 'nextcloud_history') {
+            return $form;
+        }
+
+        foreach (['asunto', 'descripcion', 'solicitante'] as $field) {
+            $value = trim((string)($prefill[$field] ?? ''));
+            if ($value !== '') {
+                $form[$field] = $value;
+            }
+        }
+        $form['categoria'] = $this->normalizeCategoryName($prefill['categoria'] ?? 'Nextcloud', $categories);
+
+        return $form;
+    }
+
     /**
      * @param array<string,mixed> $input
      * @param array<string,mixed> $cfg
@@ -394,6 +411,12 @@ class MantencionPendientesService
         $users = $this->users();
         $categorias = $this->categoryOptions();
         $form = $this->defaultForm($cfg, $users);
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $prefill = session()->pull('mantencion_manual_pending_prefill', []);
+            if (is_array($prefill)) {
+                $form = $this->applyNextcloudHistoryPrefill($form, $categorias, $prefill);
+            }
+        }
         $flash = $this->consumeFlash();
         if ($_SERVER['REQUEST_METHOD'] === 'GET' && (string) ($_GET['created'] ?? '') === '1') {
             $flash = 'Pendiente manual creado correctamente.';

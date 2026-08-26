@@ -123,4 +123,12 @@
       submitter.classList.add('is-submitting');
     }
   });
+
+  const resetSubmittingButtons = () => {
+    document.querySelectorAll('button.is-submitting, input.is-submitting').forEach((button) => {
+      button.classList.remove('is-submitting');
+      button.removeAttribute('aria-busy');
+    });
+  };
+  window.addEventListener('pageshow', resetSubmittingButtons);
 })();

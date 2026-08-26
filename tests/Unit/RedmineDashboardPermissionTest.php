@@ -89,6 +89,23 @@ class RedmineDashboardPermissionTest extends TestCase
         }
     }
 
+    public function test_quick_report_has_an_independent_permission(): void
+    {
+        $payload = $this->permissionPayload(Request::create('/', 'POST', [
+            'perm_simulador' => '1',
+        ]));
+
+        $this->assertTrue($payload['simulador']);
+        $this->assertFalse($payload['reporte_rapido']);
+
+        $payload = $this->permissionPayload(Request::create('/', 'POST', [
+            'perm_reporte_rapido' => '1',
+        ]));
+
+        $this->assertFalse($payload['simulador']);
+        $this->assertTrue($payload['reporte_rapido']);
+    }
+
     /**
      * @param array<string,mixed> $permissions
      */

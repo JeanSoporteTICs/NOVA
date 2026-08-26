@@ -21,12 +21,12 @@ class Phase3aPermissionsTest extends TestCase
 {
     use DatabaseTransactions;
 
-    private const EXPECTED_KEY_COUNT = 30;
+    private const EXPECTED_KEY_COUNT = 31;
 
     private const ALL_KEYS = [
         'mensajes', 'mensajes_acceso', 'horas_extra', 'historico', 'historico_acciones',
         'historico_scope', 'configuracion', 'estadisticas', 'usuarios',
-        'simulador', 'actividad', 'actividad_eliminar',
+        'simulador', 'reporte_rapido', 'actividad', 'actividad_eliminar',
         'actividad_todos', 'reportes_editar',
         'reportes_eliminar', 'horas_extra_editar', 'usuarios_editar',
         'usuarios_eliminar', 'cfg_resumen', 'cfg_conexion', 'cfg_proyecto', 'cfg_redmine',

@@ -215,9 +215,8 @@ class MantencionNextcloudService
                     ->orderBy('id')
                     ->get();
                 $entry = [
-                    'id' => (string)$batch->legacy_id,
+                    'numero_lote' => (int)($batch->numero_lote ?? 0),
                     'created_at' => (new DateTimeImmutable((string)$batch->created_at_cl))->format(DateTimeInterface::ATOM),
-                    'solicitante' => (string)($batch->solicitante ?? ''),
                     'solicitante_nombre' => (string)($batch->solicitante_nombre ?? ''),
                     'solicitante_rut' => (string)($batch->solicitante_rut ?? ''),
                     'solicitante_correo' => (string)($batch->solicitante_correo ?? ''),
@@ -255,14 +254,12 @@ class MantencionNextcloudService
     public function nextcloud_created_history_save_batch(array $createdUsers, array $existingUsers = [], array $failedUsers = [], array $resultUsers = [], array $requester = []): ?array {
         if (!$createdUsers && !$existingUsers && !$failedUsers && !$resultUsers) return null;
         $batch = [
-            'id' => bin2hex(random_bytes(6)),
             'created_at' => (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('c'),
             'users' => array_values($createdUsers),
             'created_users' => array_values($createdUsers),
             'existing_users' => array_values($existingUsers),
             'failed_users' => array_values($failedUsers),
             'result_users' => array_values($resultUsers),
-            'solicitante' => (string)($requester['solicitante'] ?? ''),
             'solicitante_nombre' => (string)($requester['solicitante_nombre'] ?? ''),
             'solicitante_rut' => (string)($requester['solicitante_rut'] ?? ''),
             'solicitante_correo' => (string)($requester['solicitante_correo'] ?? ''),
@@ -271,12 +268,16 @@ class MantencionNextcloudService
             return null;
         }
         try {
-            $moduleId = $this->nextcloud_history_module_id();
-            \Illuminate\Support\Facades\DB::transaction(static function () use ($batch, $moduleId): void {
+            $batchNumber = null;
+            \Illuminate\Support\Facades\DB::transaction(static function () use ($batch, &$batchNumber): void {
+                $latestBatch = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')
+                    ->whereNotNull('numero_lote')
+                    ->orderByDesc('numero_lote')
+                    ->lockForUpdate()
+                    ->first(['numero_lote']);
+                $batchNumber = ((int)($latestBatch->numero_lote ?? 0)) + 1;
                 $batchId = \Illuminate\Support\Facades\DB::table('redmine_mantencion_nextcloud_historial_lotes')->insertGetId([
-                    'modulo_id' => $moduleId,
-                    'legacy_id' => $batch['id'],
-                    'solicitante' => $batch['solicitante'],
+                    'numero_lote' => $batchNumber,
                     'solicitante_nombre' => $batch['solicitante_nombre'],
                     'solicitante_rut' => $batch['solicitante_rut'],
                     'solicitante_correo' => $batch['solicitante_correo'],
@@ -304,10 +305,78 @@ class MantencionNextcloudService
                     }
                 }
             });
+            $batch['numero_lote'] = $batchNumber;
         } catch (Throwable) {
             return null;
         }
         return $batch;
+    }
+
+    public function nextcloud_manual_report_draft(int $batchNumber): ?array {
+        if ($batchNumber <= 0) {
+            return null;
+        }
+        foreach ($this->nextcloud_created_history_load() as $batch) {
+            if ((int)($batch['numero_lote'] ?? 0) === $batchNumber) {
+                return $this->nextcloud_manual_report_draft_from_batch($batch);
+            }
+        }
+
+        return null;
+    }
+
+    public function nextcloud_manual_report_draft_from_batch(array $batch): array {
+        $requesterName = trim((string)($batch['solicitante_nombre'] ?? ''));
+        $batchNumber = (int)($batch['numero_lote'] ?? 0);
+        $users = is_array($batch['result_users'] ?? null) ? $batch['result_users'] : [];
+        if ($users === []) {
+            foreach (['created_users', 'existing_users', 'failed_users', 'users'] as $collection) {
+                if (is_array($batch[$collection] ?? null) && $batch[$collection] !== []) {
+                    $users = $batch[$collection];
+                    break;
+                }
+            }
+        }
+
+        $description = ['Detalle de creación de usuarios Nextcloud'];
+        if ($batchNumber > 0) {
+            $description[] = 'Lote: '.$batchNumber;
+        }
+        $createdAt = strtotime((string)($batch['created_at'] ?? ''));
+        if ($createdAt !== false) {
+            $description[] = 'Fecha: '.date('d-m-Y H:i', $createdAt);
+        }
+        if ($requesterName !== '') {
+            $description[] = 'Solicitante: '.$requesterName;
+        }
+        $description[] = '';
+        foreach ($users as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+            $status = match ((string)($user['status'] ?? '')) {
+                'created' => 'Creado',
+                'existing' => 'Ya existe',
+                default => 'No creado',
+            };
+            $parts = array_filter([
+                'Usuario: '.trim((string)($user['userid'] ?? '')),
+                trim((string)($user['displayName'] ?? '')) !== '' ? 'Nombre: '.trim((string)$user['displayName']) : '',
+                trim((string)($user['email'] ?? '')) !== '' ? 'Correo: '.trim((string)$user['email']) : '',
+                trim((string)($user['group'] ?? '')) !== '' ? 'Grupo: '.trim((string)$user['group']) : '',
+                'Estado: '.$status,
+                trim((string)($user['message'] ?? '')) !== '' ? 'Detalle: '.trim((string)$user['message']) : '',
+            ], static fn(string $part): bool => $part !== '');
+            $description[] = '- '.implode(' | ', $parts);
+        }
+
+        return [
+            'source' => 'nextcloud_history',
+            'asunto' => 'Creación de usuario Nextcloud',
+            'descripcion' => trim(implode("\n", $description)),
+            'solicitante' => $requesterName,
+            'categoria' => 'Nextcloud',
+        ];
     }
 
     public function nextcloud_fetch_groups(string $search = ''): array {
@@ -742,17 +811,6 @@ class MantencionNextcloudService
         return preg_replace('/[^a-z0-9_]+/', '', $value) ?? '';
     }
 
-    public function nextcloud_history_module_id(): ?int {
-        try {
-            $id = \Illuminate\Support\Facades\DB::table('modulos_nova')
-                ->where('clave_modulo', 'redmine-mantencion')
-                ->value('id');
-            return $id !== null ? (int)$id : null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
     public function nextcloud_history_table_ready(): bool {
         return class_exists(\Illuminate\Support\Facades\Schema::class)
             && \Illuminate\Support\Facades\Schema::hasTable('redmine_mantencion_nextcloud_historial_lotes')
@@ -876,7 +934,7 @@ class MantencionNextcloudService
                 . ' | creados ' . $created
                 . ' | existentes ' . $exists
                 . ' | fallidos ' . count($failedUsers)
-                . (($batch && !empty($batch['id'])) ? ' | lote ' . (string)$batch['id'] : '')
+                . (($batch && !empty($batch['numero_lote'])) ? ' | lote ' . (string)$batch['numero_lote'] : '')
         );
         return [
             'ok' => true,
@@ -889,6 +947,7 @@ class MantencionNextcloudService
             'result_users' => $resultUsers,
             'failed' => $failed,
             'total' => count($users),
+            'requester' => $requester,
         ];
     }
 
@@ -1135,12 +1194,7 @@ class MantencionNextcloudService
             return function_exists('mb_substr') ? mb_substr($clean, 0, $length) : substr($clean, 0, $length);
         };
         $requesterName = $limit($input['solicitante_nombre'] ?? '', 200);
-        if ($requesterName === '') {
-            $requesterName = $limit($input['solicitante'] ?? '', 200);
-        }
         $requester = [
-            // Se conserva la clave legacy para leer vistas previas e historiales antiguos.
-            'solicitante' => '',
             'solicitante_nombre' => $requesterName,
             'solicitante_rut' => $limit($input['solicitante_rut'] ?? '', 20),
             'solicitante_correo' => strtolower($limit($input['solicitante_correo'] ?? '', 190)),

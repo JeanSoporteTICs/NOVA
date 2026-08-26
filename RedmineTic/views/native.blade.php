@@ -9,6 +9,7 @@
     $sectionIcons = [
         'dashboard' => config('navigation-icons.reportes'),
         'webhook' => config('navigation-icons.reporte_manual'),
+        'reporte-rapido' => 'bi-lightning-charge',
         'horas-extra' => config('navigation-icons.horas_extra'),
         'historico' => config('navigation-icons.historico'),
         'usuarios' => config('navigation-icons.usuarios'),
@@ -29,7 +30,7 @@
     <script src="{{ asset('assets/nova-sidebar-preload.js') }}?v={{ $novaSidebarPreloadVersion }}" data-nova-sidebar-key="redmine_tic"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    @if (in_array($section, ['dashboard', 'webhook'], true))
+    @if (in_array($section, ['dashboard', 'webhook'], true) || $section === 'reporte-rapido')
         <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
     @endif
 @php $nativeCssVersion = @filemtime(public_path('assets/redmine-tic-native.css')) ?: '1'; @endphp
@@ -121,6 +122,8 @@
                     @include('redmine_tic::native-sections.stats')
                 @elseif ($section === 'actividad')
                     @include('redmine_tic::native-sections.activity')
+                @elseif ($section === 'reporte-rapido')
+                    @include('redmine_tic::native-sections.quick-report')
                 @else
                     @include('redmine_tic::native-sections.webhook')
                 @endif
@@ -151,7 +154,7 @@
     </div>
 
     <div class="modal fade rm-confirm-modal" id="rmConfirmModal" tabindex="-1" aria-labelledby="rmConfirmModalTitle" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <div class="d-flex align-items-center gap-3">
@@ -165,6 +168,7 @@
                 </div>
                 <div class="modal-body">
                     <p class="rm-confirm-message" data-confirm-message>Confirma esta accion.</p>
+                    <div class="rm-confirm-preview" data-confirm-preview hidden></div>
                 </div>
                 <div class="modal-footer rm-confirm-actions">
                     <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="modal" data-confirm-cancel>
@@ -186,7 +190,7 @@
         </button>
     @endif
 
-    @if (in_array($section, ['dashboard', 'webhook'], true))
+    @if (in_array($section, ['dashboard', 'webhook'], true) || $section === 'reporte-rapido')
         <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     @endif
@@ -248,6 +252,7 @@
 
         const confirmModal = document.getElementById('rmConfirmModal');
         const confirmMessage = confirmModal?.querySelector('[data-confirm-message]');
+        const confirmPreview = confirmModal?.querySelector('[data-confirm-preview]');
         const confirmAccept = confirmModal?.querySelector('[data-confirm-accept]');
         const confirmAcceptLabel = confirmModal?.querySelector('[data-confirm-accept-label]');
         const confirmTitle = confirmModal?.querySelector('#rmConfirmModalTitle');
@@ -256,9 +261,29 @@
         let pendingConfirmSubmitter = null;
         let pendingConfirmCallback = null;
 
+        const renderConfirmPreview = (selector = '') => {
+            if (!confirmPreview) return;
+            confirmPreview.replaceChildren();
+            confirmPreview.hidden = true;
+            confirmModal?.classList.remove('has-preview');
+            if (!selector) return;
+
+            const source = document.querySelector(selector);
+            if (!source) return;
+            const preview = source.cloneNode(true);
+            preview.removeAttribute('id');
+            preview.removeAttribute('hidden');
+            preview.setAttribute('aria-live', 'off');
+            preview.classList.add('is-confirm-preview');
+            confirmPreview.appendChild(preview);
+            confirmPreview.hidden = false;
+            confirmModal?.classList.add('has-preview');
+        };
+
         const showConfirmModal = (message, options = {}) => {
             if (confirmMessage) confirmMessage.textContent = message;
             if (confirmTitle) confirmTitle.textContent = options.title || 'Confirmar accion';
+            renderConfirmPreview(options.preview || '');
             if (confirmAccept) {
                 confirmAccept.hidden = options.accept === false;
                 confirmAccept.disabled = options.accept === false;
@@ -329,6 +354,7 @@
                 accept: true,
                 acceptText: submitter?.dataset.appConfirmText || form.dataset.appConfirmText || 'Aceptar',
                 tone: submitter?.dataset.appConfirmTone || form.dataset.appConfirmTone || 'danger',
+                preview: submitter?.dataset.appConfirmPreview || form.dataset.appConfirmPreview || '',
             });
             if (confirmModal && window.bootstrap?.Modal) return;
 
@@ -371,6 +397,7 @@
             pendingConfirmForm = null;
             pendingConfirmSubmitter = null;
             pendingConfirmCallback = null;
+            renderConfirmPreview();
             document.body.classList.remove('rm-confirm-open');
             document.querySelectorAll('.offcanvas.show').forEach((drawer) => {
                 drawer.style.zIndex = drawer.dataset.previousZIndex || '';

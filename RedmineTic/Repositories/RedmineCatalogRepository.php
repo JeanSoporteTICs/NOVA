@@ -73,7 +73,10 @@ class RedmineCatalogRepository
             return $this->idsByTypeValue[$key];
         }
 
-        return $this->createLookupRow($type, $value);
+        // Los valores de reportes son datos operacionales, no nuevas opciones
+        // de catalogo. Las altas deben pasar explicitamente por saveUnit(),
+        // saveCategory() o por la sincronizacion de Redmine.
+        return null;
     }
 
     public function nameById(mixed $id): string
@@ -352,43 +355,6 @@ class RedmineCatalogRepository
     private function normalizeLookupValue(string $value): string
     {
         return Str::lower(Str::ascii(trim($value)));
-    }
-
-    private function createLookupRow(string $type, string $value): ?int
-    {
-        $moduleId = $this->moduleId();
-        $value    = trim($value);
-        if ($moduleId === null || $value === '') {
-            return null;
-        }
-
-        try {
-            DB::table('catalogos_modulo')->updateOrInsert(
-                ['modulo_id' => $moduleId, 'tipo' => $type, 'clave_externa' => $value],
-                [
-                    'nombre'         => $value,
-                    'predeterminado' => 0,
-                    'activo'         => 1,
-                    'actualizado_at' => now(),
-                ]
-            );
-
-            $id = DB::table('catalogos_modulo')
-                ->where('modulo_id', $moduleId)
-                ->where('tipo', $type)
-                ->where('clave_externa', $value)
-                ->value('id');
-        } catch (\Throwable) {
-            return null;
-        }
-
-        $this->idsByTypeValue = null;
-        $this->namesById      = null;
-        $this->externalValuesByTypeValue = null;
-        $this->activeExternalValuesById = null;
-        $this->loadLookup();
-
-        return $id !== null ? (int) $id : null;
     }
 
     private function moduleId(): ?int

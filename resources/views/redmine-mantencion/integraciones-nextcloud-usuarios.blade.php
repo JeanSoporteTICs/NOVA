@@ -129,7 +129,7 @@
                     <div class="nextcloud-requester-summary-icon"><i class="bi bi-person-check" aria-hidden="true"></i></div>
                     <div>
                       <span>Solicitante</span>
-                      <strong><?= $h(($previewRequester['solicitante_nombre'] ?? '') !== '' ? $previewRequester['solicitante_nombre'] : ($previewRequester['solicitante'] ?? '')) ?></strong>
+                      <strong><?= $h($previewRequester['solicitante_nombre'] ?? '') ?></strong>
                     </div>
                     <div>
                       <span>RUT</span>
@@ -186,7 +186,7 @@
                       <tr>
                         <th scope="col" class="nextcloud-col-select"><input type="checkbox" class="form-check-input" id="nextcloud-check-all" aria-label="Seleccionar todos"></th>
                         <th scope="col" class="nextcloud-col-user">Usuario</th>
-                        <th scope="col" class="nextcloud-col-name">Nombre a desplegar</th>
+                        <th scope="col" class="nextcloud-col-name">Nombre</th>
                         <th scope="col" class="nextcloud-col-email">Correo</th>
                         <th scope="col" class="nextcloud-col-group">Grupo</th>
                         <th scope="col" class="nextcloud-col-quota">Cuota</th>
@@ -259,6 +259,13 @@
         <?php $failedUsers = is_array($lastImport['failed_users'] ?? null) ? $lastImport['failed_users'] : []; ?>
         <?php
           $resultUsers = is_array($lastImport['result_users'] ?? null) ? $lastImport['result_users'] : [];
+          $lastImportRequester = is_array($lastImport['requester'] ?? null)
+              ? $lastImport['requester']
+              : (is_array($lastImport['created_batch'] ?? null) ? $lastImport['created_batch'] : []);
+          $lastImportRequesterName = trim((string)($lastImportRequester['solicitante_nombre'] ?? ''));
+          $hasLastImportRequester = $lastImportRequesterName !== ''
+              || trim((string)($lastImportRequester['solicitante_rut'] ?? '')) !== ''
+              || trim((string)($lastImportRequester['solicitante_correo'] ?? '')) !== '';
           if (!$resultUsers) {
               foreach ($createdUsers as $item) {
                   $item['status'] = 'created';
@@ -302,20 +309,37 @@
                   </div>
                   <div>
                     <h5 class="mb-0">Resultado de importación</h5>
-                    <div class="text-muted small">Todos los usuarios enviados, indicando si fue creado o no se creó porque ya existía. Disponible en historial por 24 horas.</div>
+                    <div class="text-muted small">Todos los usuarios enviados, indicando si fueron creados, ya existían o presentaron un error. También quedan disponibles en el historial.</div>
                   </div>
                 </div>
                 <button type="button" class="btn btn-outline-primary" data-copy-table="#nextcloud-result-table">
                   <i class="bi bi-clipboard"></i> Copiar tabla
                 </button>
               </div>
+              <?php if ($hasLastImportRequester): ?>
+                <section class="nextcloud-requester-summary mb-3" aria-label="Solicitante de la importación procesada">
+                  <div class="nextcloud-requester-summary-icon"><i class="bi bi-person-check" aria-hidden="true"></i></div>
+                  <div>
+                    <span>Nombre del solicitante</span>
+                    <strong><?= $h($lastImportRequesterName !== '' ? $lastImportRequesterName : 'No informado') ?></strong>
+                  </div>
+                  <div>
+                    <span>RUT</span>
+                    <strong><?= $h(($lastImportRequester['solicitante_rut'] ?? '') !== '' ? $lastImportRequester['solicitante_rut'] : 'No informado') ?></strong>
+                  </div>
+                  <div>
+                    <span>Correo</span>
+                    <strong><?= $h(($lastImportRequester['solicitante_correo'] ?? '') !== '' ? $lastImportRequester['solicitante_correo'] : 'No informado') ?></strong>
+                  </div>
+                </section>
+              <?php endif; ?>
               <div class="table-responsive border rounded-4 overflow-hidden">
                 <table class="table table-sm mb-0 align-middle" id="nextcloud-result-table">
                   <thead class="table-light">
                     <tr>
                       <th>Estado</th>
-                      <th>Nombre de usuario</th>
-                      <th>Nombre a desplegar</th>
+                      <th>Usuario</th>
+                      <th>Nombre</th>
                       <th>Correo</th>
                       <th>Grupo</th>
                       <th>Contraseña</th>

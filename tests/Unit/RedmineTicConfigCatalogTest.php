@@ -186,6 +186,15 @@ class RedmineTicConfigCatalogTest extends TestCase
         $this->assertNull($repo->activeExternalValueById('unidad', $catalogId));
     }
 
+    public function test_report_lookup_does_not_create_unknown_catalog_values(): void
+    {
+        $repo = $this->catalogRepo();
+        $before = count($repo->units());
+
+        $this->assertNull($repo->idForValue('unidad', 'Unidad inexistente desde reporte'));
+        $this->assertCount($before, $repo->units());
+    }
+
     public function test_saving_configuration_twice_does_not_duplicate_rows(): void
     {
         $facade = $this->facade();

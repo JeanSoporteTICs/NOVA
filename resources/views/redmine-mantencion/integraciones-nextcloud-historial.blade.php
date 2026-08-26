@@ -65,8 +65,10 @@
 
     <?php
       $historyRows = [];
-      foreach ($batches as $batch) {
-        $safeBatchId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($batch['id'] ?? uniqid()));
+      foreach ($batches as $batchIndex => $batch) {
+        $batchNumber = (int)($batch['numero_lote'] ?? 0);
+        if ($batchNumber <= 0) $batchNumber = max(1, count($batches) - (int)$batchIndex);
+        $safeBatchId = 'lote-' . $batchNumber;
         $tableId = 'nextcloud-history-' . $safeBatchId;
         $modalId = 'nextcloud-history-modal-' . $safeBatchId;
         $createdUsers = (array)(($batch['created_users'] ?? null) ?: ($batch['users'] ?? []));
@@ -110,9 +112,8 @@
         $failedCount = max(0, count($batchUsers) - $createdCount - $existingCount);
         $batchGroups = [];
         $searchParts = [
-            (string)($batch['id'] ?? ''),
+            (string)$batchNumber,
             (string)($batch['created_at'] ?? ''),
-            (string)($batch['solicitante'] ?? ''),
             (string)($batch['solicitante_nombre'] ?? ''),
             (string)($batch['solicitante_rut'] ?? ''),
             (string)($batch['solicitante_correo'] ?? ''),
@@ -134,6 +135,7 @@
         $createdTimestamp = strtotime((string)($batch['created_at'] ?? ''));
         $historyRows[] = [
             'batch' => $batch,
+            'number' => $batchNumber,
             'users' => $batchUsers,
             'table_id' => $tableId,
             'modal_id' => $modalId,
@@ -173,14 +175,13 @@
                 <?php
                   $batch = $row['batch'];
                   $requesterName = trim((string)($batch['solicitante_nombre'] ?? ''));
-                  if ($requesterName === '') $requesterName = trim((string)($batch['solicitante'] ?? ''));
                   $statusClass = $row['failed_count'] > 0 ? 'is-danger' : ($row['existing_count'] > 0 ? 'is-warning' : 'is-success');
                   $statusLabel = $row['failed_count'] > 0 ? 'Con errores' : ($row['existing_count'] > 0 ? 'Completado con existentes' : 'Completado');
                 ?>
                 <tr data-history-batch data-history-search="<?= $h($row['search']) ?>" data-history-groups="<?= $h(implode('|', $row['groups'])) ?>">
                   <td class="nextcloud-history-date" data-label="Fecha / lote">
                     <span><i class="bi bi-calendar3" aria-hidden="true"></i><?= $h($row['date']) ?></span>
-                    <small class="nextcloud-history-id">#<?= $h($batch['id'] ?? '') ?></small>
+                    <small class="nextcloud-history-id"><?= (int)$row['number'] ?></small>
                   </td>
                   <td data-label="Solicitante / contacto">
                     <div class="nextcloud-history-requester">
@@ -215,9 +216,22 @@
                     </div>
                   </td>
                   <td class="text-end" data-label="Acción">
-                    <button type="button" class="btn-nova btn-nova-primary nextcloud-history-open" data-bs-toggle="modal" data-bs-target="#<?= $h($row['modal_id']) ?>" aria-label="Ver detalle del lote <?= $h($batch['id'] ?? '') ?>" title="Ver detalle">
-                      <i class="bi bi-table" aria-hidden="true"></i>
-                    </button>
+                    <div class="nextcloud-history-actions">
+                      <?php if ($canCreateManualReport): ?>
+                        <form method="post" action="<?= $h($nextcloudHistoryActionUrl) ?>" class="m-0" data-app-no-loading>
+                          <input type="hidden" name="_token" value="<?= $h($csrf) ?>">
+                          <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                          <input type="hidden" name="action" value="create_manual_report">
+                          <input type="hidden" name="numero_lote" value="<?= (int)$row['number'] ?>">
+                          <button type="submit" class="btn-nova btn-nova-success btn-nova-icon-only nextcloud-history-manual" aria-label="Crear reporte manual para el lote <?= (int)$row['number'] ?>" title="Crear reporte manual">
+                            <i class="bi bi-file-earmark-plus" aria-hidden="true"></i>
+                          </button>
+                        </form>
+                      <?php endif; ?>
+                      <button type="button" class="btn-nova btn-nova-primary nextcloud-history-open" data-bs-toggle="modal" data-bs-target="#<?= $h($row['modal_id']) ?>" aria-label="Ver detalle del lote <?= (int)$row['number'] ?>" title="Ver detalle">
+                        <i class="bi bi-table" aria-hidden="true"></i>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               <?php endforeach; ?>
@@ -230,7 +244,6 @@
         <?php
           $batch = $row['batch'];
           $requesterName = trim((string)($batch['solicitante_nombre'] ?? ''));
-          if ($requesterName === '') $requesterName = trim((string)($batch['solicitante'] ?? ''));
         ?>
         <div class="modal fade nextcloud-history-modal" id="<?= $h($row['modal_id']) ?>" tabindex="-1" aria-labelledby="<?= $h($row['modal_id']) ?>-title" aria-hidden="true">
           <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -238,7 +251,7 @@
               <div class="modal-header">
                 <div>
                   <p class="nextcloud-history-modal-kicker">Detalle de importación</p>
-                  <h2 class="modal-title" id="<?= $h($row['modal_id']) ?>-title">Lote #<?= $h($batch['id'] ?? '') ?></h2>
+                  <h2 class="modal-title" id="<?= $h($row['modal_id']) ?>-title">Lote <?= (int)$row['number'] ?></h2>
                   <span><?= $h($row['date']) ?> · <?= count($row['users']) ?> usuario<?= count($row['users']) === 1 ? '' : 's' ?></span>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -312,6 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
   search?.addEventListener('input', applyFilters);
   group?.addEventListener('change', applyFilters);
   applyFilters();
+
 });
 </script>
 </body>
