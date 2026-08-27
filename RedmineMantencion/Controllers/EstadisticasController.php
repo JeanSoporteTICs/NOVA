@@ -49,15 +49,18 @@ class EstadisticasController extends Controller
 
             return $dt ? $dt->format('d-m-Y') : $dateStr;
         };
-        $desdeVal = $_POST['desde'] ?? $_GET['desde'] ?? '';
-        $hastaVal = $_POST['hasta'] ?? $_GET['hasta'] ?? '';
+        $filtrosAplicados = is_array($stats['filtros_aplicados'] ?? null) ? $stats['filtros_aplicados'] : [];
+        $desdeVal = $_POST['desde'] ?? $_GET['desde'] ?? ($filtrosAplicados['desde'] ?? '');
+        $hastaVal = $_POST['hasta'] ?? $_GET['hasta'] ?? ($filtrosAplicados['hasta'] ?? '');
         $desdeVal = $this->estadisticas->normalizeDate($desdeVal);
         $hastaVal = $this->estadisticas->normalizeDate($hastaVal);
         if ($desdeVal !== '' && $hastaVal !== '' && $desdeVal > $hastaVal) {
             [$desdeVal, $hastaVal] = [$hastaVal, $desdeVal];
         }
         $periodoLabel = 'Todos';
-        if ($desdeVal && $hastaVal) {
+        if ($desdeVal && $hastaVal && $desdeVal === $hastaVal) {
+            $periodoLabel = $fmtDMY($desdeVal);
+        } elseif ($desdeVal && $hastaVal) {
             $periodoLabel = $fmtDMY($desdeVal) . ' a ' . $fmtDMY($hastaVal);
         } elseif ($desdeVal || $hastaVal) {
             $periodoLabel = $fmtDMY($desdeVal ?: $hastaVal);

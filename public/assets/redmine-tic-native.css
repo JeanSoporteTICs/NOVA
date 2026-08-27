@@ -88,11 +88,6 @@
         .rm-line-chart circle { fill: #fff; stroke: #2563eb; stroke-width: 2; }
         .rm-line-chart-large { min-height: 360px; }
         .rm-chart-axis { display: flex; justify-content: space-between; color: var(--nova-muted); font-size: .76rem; font-weight: 800; }
-        .rm-date-detail-list { display: grid; gap: 9px; }
-        .rm-date-detail-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 56px; gap: 10px; align-items: center; }
-        .rm-date-detail-row span, .rm-date-detail-row strong { color: #334155; font-size: .84rem; font-weight: 900; }
-        .rm-date-detail-row div { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-        .rm-date-detail-row i { display: block; height: 100%; border-radius: inherit; background: #2563eb; }
         .rm-donut-wrap { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 16px; align-items: center; }
         .rm-api-summary-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
         .rm-api-summary-grid > .nova-card { height: 100%; }
@@ -166,7 +161,7 @@
         .rm-category-area { fill: var(--chart-color); opacity: .16; }
         .rm-category-line { fill: none; stroke: var(--chart-color); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
         .rm-category-chart circle { fill: #fff; stroke: var(--chart-color); stroke-width: 1.3; }
-        .rm-category-point { cursor: help; }
+        .rm-category-point { cursor: crosshair; }
         .rm-category-point-hit { fill: transparent; stroke: none; pointer-events: all; }
         .rm-category-point:hover circle:not(.rm-category-point-hit) { fill: var(--chart-color); stroke-width: 1.8; }
         .rm-category-chart text { fill: #4b5563; font-size: 11px; font-weight: 800; text-anchor: middle; }

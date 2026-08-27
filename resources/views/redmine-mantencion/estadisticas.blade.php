@@ -19,19 +19,83 @@
     $heroExtras = '<span class="badge bg-white bg-opacity-25 text-white border border-white">Rango: ' . $h($periodoLabel) . '</span>'
       . '<span class="badge bg-white bg-opacity-25 text-white border border-white">Actualizado: ' . $h($actualizadoTxt) . '</span>';
     include base_path('RedmineMantencion/views/partials/hero.php');
+
+    $porFechaGrafico = $stats['por_fecha'] ?? [];
+    ksort($porFechaGrafico);
+    $maximoDiario = max(1, $porFechaGrafico ? (int)max($porFechaGrafico) : 0);
+    $cantidadFechas = count($porFechaGrafico);
+    $pasoVistaFecha = 552 / max(1, $cantidadFechas);
+    $anchoBarraVista = max(1.5, $pasoVistaFecha * 0.68);
+    $anchoLienzoFecha = max(1200, ($cantidadFechas * 34) + 128);
+    $pasoModalFecha = ($anchoLienzoFecha - 128) / max(1, $cantidadFechas);
+    $anchoBarraModal = max(12, min(24, $pasoModalFecha * 0.66));
+    $saltoEtiquetaFecha = max(1, (int)ceil(max(1, $cantidadFechas) / 60));
+    $barrasVistaFecha = [];
+    $barrasModalFecha = [];
+    $indiceFecha = 0;
+    foreach ($porFechaGrafico as $fechaGrafico => $cantidadGrafico) {
+      $altoVista = max(2, ((int)$cantidadGrafico / $maximoDiario) * 136);
+      $altoModal = max(3, ((int)$cantidadGrafico / $maximoDiario) * 312);
+      $barrasVistaFecha[] = [
+        'fecha' => (string)$fechaGrafico,
+        'cantidad' => (int)$cantidadGrafico,
+        'x' => round(24 + ($pasoVistaFecha * $indiceFecha) + (($pasoVistaFecha - $anchoBarraVista) / 2), 2),
+        'ancho' => round($anchoBarraVista, 2),
+        'y' => round(176 - $altoVista, 2),
+        'alto' => round($altoVista, 2),
+        'slot_x' => round(24 + ($pasoVistaFecha * $indiceFecha), 2),
+        'slot_ancho' => round($pasoVistaFecha, 2),
+      ];
+      $barrasModalFecha[] = [
+        'fecha' => (string)$fechaGrafico,
+        'cantidad' => (int)$cantidadGrafico,
+        'x' => round(64 + ($pasoModalFecha * $indiceFecha) + (($pasoModalFecha - $anchoBarraModal) / 2), 2),
+        'ancho' => round($anchoBarraModal, 2),
+        'y' => round(352 - $altoModal, 2),
+        'alto' => round($altoModal, 2),
+        'slot_x' => round(64 + ($pasoModalFecha * $indiceFecha), 2),
+        'slot_ancho' => round($pasoModalFecha, 2),
+      ];
+      $indiceFecha++;
+    }
+    $formatearFechaGrafico = static function (string $fecha): string {
+      try {
+        return $fecha !== '' ? (new \DateTimeImmutable($fecha))->format('d-m-Y') : '';
+      } catch (\Throwable) {
+        return $fecha;
+      }
+    };
   ?>
 
-  <div class="row g-3 mb-4">
-    <div class="col-lg-8 col-md-6">
-      <div class="card p-3 chart-card" id="card-fechas" role="button" data-bs-toggle="modal" data-bs-target="#modalChartFechas">
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <i class="bi bi-graph-up text-primary"></i><span class="fw-semibold">Reportes por fecha</span>
+  <div class="row g-3 mb-4 mantencion-stats-chart-grid">
+    <div class="col-12 col-xl-8">
+      <div class="card p-3 chart-card mantencion-date-chart-card" id="card-fechas" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#modalChartFechas" aria-label="Ver detalle de reportes por fecha">
+        <div class="rm-stats-panel-head">
+          <div><h3><i class="bi bi-bar-chart-fill"></i> Reportes por fecha</h3><p>Volumen diario</p></div>
+          <span><?= $h($cantidadFechas) ?> fechas</span>
         </div>
-        <div id="no-data-fechas" class="text-muted small d-none">Sin datos en el rango seleccionado.</div>
-        <canvas id="chart-fechas" height="140"></canvas>
+        <?php if ($barrasVistaFecha): ?>
+          <svg class="rm-date-histogram" viewBox="0 0 600 210" role="img" aria-label="Histograma de reportes por fecha" preserveAspectRatio="none">
+            <?php for ($i = 0; $i <= 4; $i++): ?>
+              <line class="rm-date-bar-grid" x1="24" y1="<?= 40 + ($i * 34) ?>" x2="576" y2="<?= 40 + ($i * 34) ?>" />
+            <?php endfor; ?>
+            <?php foreach ($barrasVistaFecha as $barra): ?>
+              <g class="rm-date-bar-point" tabindex="0" role="img" data-rm-chart-point data-chart-label="<?= $h($formatearFechaGrafico($barra['fecha'])) ?>" data-chart-value="<?= $h(number_format($barra['cantidad'], 0, ',', '.')) ?>" aria-label="<?= $h($formatearFechaGrafico($barra['fecha'])) ?>: <?= $h(number_format($barra['cantidad'], 0, ',', '.')) ?> reporte(s)">
+                <rect class="rm-date-bar-hit" x="<?= $barra['slot_x'] ?>" y="40" width="<?= $barra['slot_ancho'] ?>" height="136" />
+                <rect class="rm-date-bar" x="<?= $barra['x'] ?>" y="<?= $barra['y'] ?>" width="<?= $barra['ancho'] ?>" height="<?= $barra['alto'] ?>" rx="1.5" />
+              </g>
+            <?php endforeach; ?>
+          </svg>
+          <div class="rm-chart-axis">
+            <span><?= $h($formatearFechaGrafico((string)array_key_first($porFechaGrafico))) ?></span>
+            <span><?= $h($formatearFechaGrafico((string)array_key_last($porFechaGrafico))) ?></span>
+          </div>
+        <?php else: ?>
+          <div class="nova-empty-state">Sin datos por fecha.</div>
+        <?php endif; ?>
       </div>
     </div>
-    <div class="col-lg-4 col-md-6">
+    <div class="col-12 col-xl-4">
       <div class="card p-3 chart-card" id="card-usuarios" role="button" data-bs-toggle="modal" data-bs-target="#modalChartUsuarios">
         <div class="d-flex align-items-center gap-2 mb-2">
           <i class="bi bi-pie-chart text-success"></i><span class="fw-semibold">Reportes por usuario</span>
@@ -268,72 +332,47 @@
     </div>
   </div>
   <!-- Modal grafico fechas -->
-  <div class="modal fade" id="modalChartFechas" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+  <div class="modal fade rm-stats-chart-modal mantencion-date-chart-modal" id="modalChartFechas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable rm-stats-chart-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Reportes por fecha (detalle)</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <div>
+            <h2 class="modal-title fs-5"><i class="bi bi-bar-chart-fill"></i> Reportes por fecha</h2>
+            <div class="text-muted fw-semibold"><?= $h($cantidadFechas) ?> fecha(s) con datos</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
-          <div class="mb-3">
-            <canvas id="chart-fechas-modal" height="300" style="max-height:360px; width:100%;"></canvas>
-          </div>
-          <div class="mt-2">
-            <?php
-              $porFecha = $stats['por_fecha'] ?? [];
-              ksort($porFecha);
-              $years = [];
-              $mesNombres = [
-                '01' => 'enero', '02' => 'febrero', '03' => 'marzo', '04' => 'abril',
-                '05' => 'mayo', '06' => 'junio', '07' => 'julio', '08' => 'agosto',
-                '09' => 'septiembre', '10' => 'octubre', '11' => 'noviembre', '12' => 'diciembre'
-              ];
-              foreach ($porFecha as $f => $c) {
-                $parts = explode('-', $f);
-                $y = $parts[0] ?? 'sin_anio';
-                $m = $parts[1] ?? '';
-                $ym = $y . '-' . $m;
-                $years[$y][$ym][$f] = $c;
-              }
-              $yearIdx = 0;
-            ?>
-            <ul class="list-group list-group-flush">
-              <?php foreach ($years as $y => $meses): $yearIdx++; $yId = 'y-'.$yearIdx; ?>
-                <li class="list-group-item">
-                  <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#<?= $yId ?>" role="button" aria-expanded="false" aria-controls="<?= $yId ?>">
-                    <strong><?= $h($y) ?></strong>
-                    <span class="badge bg-primary"><?= array_sum(array_map('array_sum', $meses)) ?></span>
-                  </div>
-                  <div class="collapse mt-2" id="<?= $yId ?>">
-                    <ul class="list-group list-group-flush">
-                      <?php $mIdx = 0; foreach ($meses as $ym => $dias): $mIdx++; $mId = $yId.'-m-'.$mIdx;
-                        $mesNum = explode('-', $ym)[1] ?? '';
-                        $mesLabel = $mesNombres[$mesNum] ?? $ym;
-                      ?>
-                        <li class="list-group-item">
-                          <div class="d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#<?= $mId ?>" role="button" aria-expanded="false" aria-controls="<?= $mId ?>">
-                            <span><?= $h($mesLabel) ?></span>
-                            <span class="badge bg-secondary"><?= array_sum($dias) ?></span>
-                          </div>
-                          <div class="collapse mt-2" id="<?= $mId ?>">
-                            <ul class="list-group list-group-flush">
-                              <?php foreach ($dias as $f => $c): ?>
-                                <li class="list-group-item d-flex justify-content-between">
-                                  <span><?= $h($f) ?></span><span class="badge bg-primary"><?= $h($c) ?></span>
-                                </li>
-                              <?php endforeach; ?>
-                            </ul>
-                          </div>
-                        </li>
-                      <?php endforeach; ?>
-                    </ul>
-                  </div>
-                </li>
-              <?php endforeach; ?>
-              <?php if (empty($years)): ?><li class="list-group-item text-muted">Sin datos</li><?php endif; ?>
-            </ul>
-          </div>
+          <?php if ($barrasModalFecha): ?>
+            <div class="rm-date-chart-scroll">
+              <section class="rm-modal-date-chart-panel" style="--date-chart-width: <?= $anchoLienzoFecha ?>px;">
+                <svg class="rm-date-bar-chart" viewBox="0 0 <?= $anchoLienzoFecha ?> 450" role="img" aria-label="Histograma completo de reportes por fecha" preserveAspectRatio="none">
+                  <?php for ($i = 0; $i <= 4; $i++):
+                    $gridY = 40 + ($i * 78);
+                    $valorEje = max(0, round($maximoDiario - (($maximoDiario / 4) * $i)));
+                  ?>
+                    <line class="rm-date-bar-grid" x1="64" y1="<?= $gridY ?>" x2="<?= $anchoLienzoFecha - 24 ?>" y2="<?= $gridY ?>" />
+                    <text class="rm-date-bar-y-label" x="48" y="<?= $gridY + 4 ?>"><?= $h($valorEje) ?></text>
+                  <?php endfor; ?>
+                  <?php foreach ($barrasModalFecha as $indiceBarra => $barra): ?>
+                    <g class="rm-date-bar-point" tabindex="0" role="img" data-rm-chart-point data-chart-label="<?= $h($formatearFechaGrafico($barra['fecha'])) ?>" data-chart-value="<?= $h(number_format($barra['cantidad'], 0, ',', '.')) ?>" aria-label="<?= $h($formatearFechaGrafico($barra['fecha'])) ?>: <?= $h(number_format($barra['cantidad'], 0, ',', '.')) ?> reporte(s)">
+                      <rect class="rm-date-bar-hit" x="<?= $barra['slot_x'] ?>" y="40" width="<?= $barra['slot_ancho'] ?>" height="312" />
+                      <rect class="rm-date-bar" x="<?= $barra['x'] ?>" y="<?= $barra['y'] ?>" width="<?= $barra['ancho'] ?>" height="<?= $barra['alto'] ?>" rx="3" />
+                    </g>
+                    <?php if ($indiceBarra % $saltoEtiquetaFecha === 0): ?>
+                      <text class="rm-date-bar-x-label" x="<?= $barra['x'] + ($barra['ancho'] / 2) ?>" y="386" transform="rotate(-42 <?= $barra['x'] + ($barra['ancho'] / 2) ?> 386)"><?= $h($formatearFechaGrafico($barra['fecha'])) ?></text>
+                    <?php endif; ?>
+                  <?php endforeach; ?>
+                </svg>
+              </section>
+            </div>
+          <?php else: ?>
+            <div class="nova-empty-state">Sin datos por fecha.</div>
+          <?php endif; ?>
+        </div>
+        <div class="modal-footer rm-chart-modal-footer">
+          <span>Incluye todas las fechas con reportes dentro del rango seleccionado.</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
         </div>
       </div>
     </div>
@@ -492,6 +531,76 @@ function applyInitialMonthSelection() {
 document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
 </script>
 <script>
+(() => {
+  const tooltip = document.createElement('div');
+  tooltip.className = 'rm-chart-point-tooltip';
+  tooltip.hidden = true;
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.innerHTML = '<strong></strong><span></span>';
+  document.body.appendChild(tooltip);
+
+  const positionTooltip = (x, y) => {
+    const gap = 14;
+    const edge = 12;
+    const left = Math.min(Math.max(edge, x + gap), window.innerWidth - tooltip.offsetWidth - edge);
+    const candidateTop = y - tooltip.offsetHeight - gap;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${Math.max(edge, candidateTop < edge ? y + gap : candidateTop)}px`;
+  };
+  const showTooltip = (point, x, y) => {
+    tooltip.querySelector('strong').textContent = point.dataset.chartLabel || 'Sin fecha';
+    tooltip.querySelector('span').textContent = `${point.dataset.chartValue || '0'} reporte(s)`;
+    tooltip.hidden = false;
+    positionTooltip(x, y);
+  };
+  const hideTooltip = () => { tooltip.hidden = true; };
+
+  document.addEventListener('pointerover', (event) => {
+    const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+    if (point) showTooltip(point, event.clientX, event.clientY);
+  });
+  document.addEventListener('pointermove', (event) => {
+    const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+    if (point && !tooltip.hidden) positionTooltip(event.clientX, event.clientY);
+  });
+  document.addEventListener('pointerout', (event) => {
+    const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+    const nextPoint = event.relatedTarget instanceof Element ? event.relatedTarget.closest('[data-rm-chart-point]') : null;
+    if (point && point !== nextPoint) hideTooltip();
+  });
+  document.addEventListener('focusin', (event) => {
+    const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+    if (!point) return;
+    const bounds = point.getBoundingClientRect();
+    showTooltip(point, bounds.left + (bounds.width / 2), bounds.top);
+  });
+  document.addEventListener('focusout', (event) => {
+    if (event.target instanceof Element && event.target.closest('[data-rm-chart-point]')) hideTooltip();
+  });
+  document.addEventListener('keydown', (event) => {
+    const card = event.target instanceof Element ? event.target.closest('.mantencion-date-chart-card') : null;
+    if (!card || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    card.click();
+  });
+})();
+
+const mantencionUserChartColors = Object.freeze([
+  '#2563eb',
+  '#e11d48',
+  '#059669',
+  '#d97706',
+  '#7c3aed',
+  '#0891b2',
+  '#db2777',
+  '#65a30d',
+  '#ea580c',
+  '#4f46e5',
+  '#0f766e',
+  '#9333ea'
+]);
+</script>
+<script>
   // Carga diferida de Chart.js si no está presente
   function loadChartLibrary(callback) {
     if (typeof Chart !== 'undefined') {
@@ -514,10 +623,7 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
 </script>
 <script>
   loadChartLibrary(function(){
-    let chartFechasMain = null;
     let chartUsuariosMain = null;
-    const dataPorFecha = <?= json_encode($stats['por_fecha'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
-    const dataPorFechaMes = <?= json_encode($stats['por_fecha_mes'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const dataPorUsuario = <?= json_encode($stats['por_usuario'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const userNameMap = <?= json_encode($userNameMap ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const ensureCanvasHeight = (canvas, px = 320, containerPx = 360) => {
@@ -527,83 +633,6 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
       canvas.style.maxHeight = `${containerPx}px`;
       if (canvas.parentElement) canvas.parentElement.style.height = `${containerPx}px`;
     };
-    const buildSeries = (data) => {
-      const entries = Object.entries(data ?? {}).map(([k,v]) => [k, Number(v ?? 0)]);
-      entries.sort((a,b)=> (a[0] > b[0] ? 1 : -1));
-      const months = new Map();
-      entries.forEach(([dateStr, val]) => {
-        const m = dateStr.slice(0,7); // yyyy-mm
-        months.set(m, (months.get(m) ?? 0) + val);
-      });
-      if (months.size > 6) {
-        const mLabels = Array.from(months.keys()).sort();
-        const mValues = mLabels.map(m => months.get(m) ?? 0);
-        return { labels: mLabels, values: mValues };
-      }
-      return {
-        labels: entries.map(e => e[0]),
-        values: entries.map(e => e[1])
-      };
-    };
-    const { labels, values } = buildSeries(dataPorFecha);
-
-    const ctx = document.getElementById('chart-fechas');
-    if (ctx) {
-      const emptyMsg = document.getElementById('no-data-fechas');
-      if (!labels.length) {
-        if (emptyMsg) emptyMsg.classList.remove('d-none');
-        ctx.classList.add('d-none');
-      } else {
-        if (emptyMsg) emptyMsg.classList.add('d-none');
-        ctx.classList.remove('d-none');
-        const chartLabels = labels.length ? labels : ['Sin datos'];
-        const chartValues = labels.length ? values : [0];
-        ensureCanvasHeight(ctx, 320, 360);
-        if (chartFechasMain) {
-          chartFechasMain.destroy();
-        }
-        chartFechasMain = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: chartLabels,
-            datasets: [{
-              label: 'Reportes',
-              data: chartValues,
-              borderColor: '#4e73df',
-              backgroundColor: "transparent",
-              borderWidth: 2.5,
-              tension: 0.35,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              pointHitRadius: 10,
-              fill: false
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'nearest', intersect: false, axis: 'x' },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  title: (ctx) => (ctx[0]?.label ?? ''),
-                  label: (ctx) => `Reportes: ${ctx.parsed.y ?? 0}`
-                }
-              }
-            },
-            scales: {
-              x: { ticks: { autoSkip: true, maxTicksLimit: 10 } },
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'Cantidad' },
-                ticks: { precision: 0, stepSize: 1 }
-              }
-            }
-          }
-        });
-      }
-    }
     const ctxUsers = document.getElementById('chart-usuarios');
     if (ctxUsers) {
       const emptyMsgU = document.getElementById('no-data-usuarios');
@@ -618,8 +647,7 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
         if (emptyMsgU) emptyMsgU.classList.add('d-none');
         ctxUsers.classList.remove('d-none');
       }
-      const colors = ['#4e73df','#5a8dee','#6fa3ff','#8cb5ff','#aec9ff','#c7d9ff','#dee8ff'];
-      const borders = colors.map(c => c);
+      const colors = mantencionUserChartColors;
       ensureCanvasHeight(ctxUsers, 280, 320);
       if (chartUsuariosMain) {
         chartUsuariosMain.destroy();
@@ -631,16 +659,22 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
           datasets: [{
             data: userValues,
             backgroundColor: userLabels.map((_,i)=> colors[i % colors.length]),
-            borderColor: userLabels.map((_,i)=> borders[i % borders.length]),
+            borderColor: '#ffffff',
+            hoverBorderColor: '#ffffff',
             hoverOffset: 6,
-            borderWidth: 2
+            borderWidth: 3
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           cutout: '65%',
-          plugins: { legend: { position: 'bottom' } }
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { usePointStyle: true, pointStyle: 'circle', padding: 14 }
+            }
+          }
         }
       });
     }
@@ -648,7 +682,6 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
 </script>
 <script>
   loadChartLibrary(function() {
-    const dataPorFecha = <?= json_encode($stats['por_fecha'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const dataPorUsuario = <?= json_encode($stats['por_usuario'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const userNameMap = <?= json_encode($userNameMap ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const ensureCanvasHeight = (canvas, px = 360, containerPx = 380) => {
@@ -658,61 +691,7 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
       canvas.style.maxHeight = `${containerPx}px`;
       if (canvas.parentElement) canvas.parentElement.style.height = `${containerPx}px`;
     };
-    let chartFechasModal = null;
     let chartUsuariosModal = null;
-    const buildSeries = (data) => {
-      const entries = Object.entries(data ?? {}).map(([k,v]) => [k, Number(v ?? 0)]);
-      entries.sort((a,b)=> (a[0] > b[0] ? 1 : -1));
-      const months = new Map();
-      entries.forEach(([dateStr, val]) => {
-        const m = dateStr.slice(0,7); // yyyy-mm
-        months.set(m, (months.get(m) ?? 0) + val);
-      });
-      if (months.size > 6) {
-        const mLabels = Array.from(months.keys()).sort();
-        const mValues = mLabels.map(m => months.get(m) ?? 0);
-        return { labels: mLabels, values: mValues };
-      }
-      return {
-        labels: entries.map(e => e[0]),
-        values: entries.map(e => e[1])
-      };
-    };
-
-    function renderFechasModal() {
-      const canvas = document.getElementById('chart-fechas-modal');
-      if (!canvas) return;
-      ensureCanvasHeight(canvas, 360, 400);
-      const { labels, values } = buildSeries(dataPorFecha);
-      if (chartFechasModal) {
-        chartFechasModal.destroy();
-        chartFechasModal = null;
-      }
-      if (!labels.length) return;
-      chartFechasModal = new Chart(canvas, {
-        type: 'line',
-        data: { labels, datasets: [{ data: values, borderColor: '#4e73df', backgroundColor: 'transparent', borderWidth: 2.5, tension: 0.35, pointRadius: 4, pointHoverRadius: 6, pointHitRadius: 10, fill: false }]},
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'nearest', intersect: false, axis: 'x' },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                title: (ctx) => (ctx[0]?.label ?? ''),
-                label: (ctx) => `Reportes: ${ctx.parsed.y ?? 0}`
-              }
-            }
-          },
-          scales: {
-            x: { ticks: { autoSkip: true, maxTicksLimit: 12 } },
-            y: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 } }
-          }
-        }
-      });
-    }
-
     function renderUsuariosModal() {
       const canvas = document.getElementById('chart-usuarios-modal');
       if (!canvas) return;
@@ -725,8 +704,7 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
         chartUsuariosModal = null;
       }
       if (!labels.length) return;
-      const colors = ['#4e73df','#5a8dee','#6fa3ff','#8cb5ff','#aec9ff','#c7d9ff','#dee8ff'];
-      const borders = colors.map(c => c);
+      const colors = mantencionUserChartColors;
       chartUsuariosModal = new Chart(canvas, {
         type: 'doughnut',
         data: {
@@ -734,24 +712,26 @@ document.addEventListener('DOMContentLoaded', applyInitialMonthSelection);
           datasets: [{
             data: values,
             backgroundColor: labels.map((_,i)=> colors[i % colors.length]),
-            borderColor: labels.map((_,i)=> borders[i % borders.length]),
+            borderColor: '#ffffff',
+            hoverBorderColor: '#ffffff',
             hoverOffset: 6,
-            borderWidth: 2
+            borderWidth: 3
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           cutout: '65%',
-          plugins: { legend: { position: 'bottom' } }
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { usePointStyle: true, pointStyle: 'circle', padding: 14 }
+            }
+          }
         }
       });
     }
 
-    const modalFechas = document.getElementById('modalChartFechas');
-    if (modalFechas) {
-      modalFechas.addEventListener('shown.bs.modal', renderFechasModal);
-    }
     const modalUsuarios = document.getElementById('modalChartUsuarios');
     if (modalUsuarios) {
       modalUsuarios.addEventListener('shown.bs.modal', renderUsuariosModal);

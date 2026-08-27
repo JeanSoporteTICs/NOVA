@@ -224,21 +224,17 @@ class MantencionEstadisticasService
     /**
      * @return array<string,mixed>
      */
-    public function handle()
+    public function resolveFilters(array $post, array $get, ?DateTimeImmutable $now = null): array
     {
-        if (!empty($_POST)) {
-            csrf_validate();
-        }
-
         $filters = [
             'desde' => '',
             'hasta' => '',
-            'categoria' => $_POST['categoria'] ?? $_GET['categoria'] ?? '',
-            'unidad' => $_POST['unidad'] ?? $_GET['unidad'] ?? '',
-            'usuario' => $_POST['usuario'] ?? $_GET['usuario'] ?? '',
+            'categoria' => $post['categoria'] ?? $get['categoria'] ?? '',
+            'unidad' => $post['unidad'] ?? $get['unidad'] ?? '',
+            'usuario' => $post['usuario'] ?? $get['usuario'] ?? '',
         ];
 
-        $periodo = $_POST['periodo'] ?? $_GET['periodo'] ?? '';
+        $periodo = $post['periodo'] ?? $get['periodo'] ?? '';
         if ($periodo) {
             $periodo = trim($periodo);
             if (preg_match('/^(\d{4})-(\d{2})$/', $periodo, $m)) {
@@ -254,8 +250,8 @@ class MantencionEstadisticasService
             }
         }
 
-        $desde = $this->normalizeDate($_POST['desde'] ?? $_GET['desde'] ?? '');
-        $hasta = $this->normalizeDate($_POST['hasta'] ?? $_GET['hasta'] ?? '');
+        $desde = $this->normalizeDate($post['desde'] ?? $get['desde'] ?? '');
+        $hasta = $this->normalizeDate($post['hasta'] ?? $get['hasta'] ?? '');
         if ($desde) {
             $filters['desde'] = $desde;
         }
@@ -266,6 +262,30 @@ class MantencionEstadisticasService
             [$filters['desde'], $filters['hasta']] = [$filters['hasta'], $filters['desde']];
         }
 
+        $hasExplicitDate = array_key_exists('desde', $post)
+            || array_key_exists('hasta', $post)
+            || array_key_exists('desde', $get)
+            || array_key_exists('hasta', $get);
+        if (!$hasExplicitDate && trim((string) $periodo) === '') {
+            $today = ($now ?? new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('Y-m-d');
+            $filters['desde'] = $today;
+            $filters['hasta'] = $today;
+        }
+
+        return $filters;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function handle()
+    {
+        if (!empty($_POST)) {
+            csrf_validate();
+        }
+
+        $filters = $this->resolveFilters($_POST, $_GET);
+
         $messages = [];
         $messages = array_merge($messages, $this->loadReportMessages(base_path('RedmineMantencion/data/reportes')));
         $messages = array_merge($messages, $this->loadLiveMessages(''));
@@ -273,6 +293,9 @@ class MantencionEstadisticasService
 
         $filtered = $this->filterMessages($messages, $filters);
 
-        return $this->computeStats($filtered);
+        $stats = $this->computeStats($filtered);
+        $stats['filtros_aplicados'] = $filters;
+
+        return $stats;
     }
 }

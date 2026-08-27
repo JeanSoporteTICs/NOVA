@@ -15066,6 +15066,270 @@ nav.sb-navbar > .container-fluid,
   }
 }
 
+/* Redmine TIC statistics: stable chart dialogs without SVG distortion. */
+.rm-stats-chart-modal {
+  padding: 0 !important;
+}
+
+.rm-stats-chart-modal .rm-stats-chart-dialog {
+  width: 100vw;
+  max-width: none !important;
+  height: 100dvh;
+  max-height: none;
+  margin: 0 !important;
+}
+
+.rm-stats-chart-modal .modal-content {
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0 !important;
+}
+
+.rm-stats-chart-modal .modal-header,
+.rm-stats-chart-modal .modal-footer {
+  flex: 0 0 auto;
+}
+
+.rm-stats-chart-modal .modal-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.rm-stats-chart-modal .rm-stats-full-modal {
+  display: block;
+  min-height: 0;
+  padding: 1rem;
+  overflow: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.rm-stats-chart-modal .rm-modal-chart-panel {
+  width: max(100%, var(--chart-canvas-width, 1200px));
+  min-width: var(--chart-canvas-width, 1200px);
+  min-height: var(--chart-canvas-height, 680px);
+}
+
+.rm-stats-chart-modal .rm-category-chart-modal {
+  width: var(--chart-canvas-width, 1200px);
+  max-width: none;
+  height: var(--chart-canvas-height, 680px);
+  min-height: var(--chart-canvas-height, 680px);
+}
+
+.rm-rank-bar {
+  fill: var(--chart-color, #2563eb);
+  opacity: 0.84;
+  transition: filter 0.14s ease, opacity 0.14s ease;
+}
+
+.rm-rank-bar-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.rm-rank-bar-point {
+  cursor: crosshair;
+}
+
+.rm-rank-bar-point:hover .rm-rank-bar,
+.rm-rank-bar-point:focus-visible .rm-rank-bar {
+  filter: brightness(0.86) saturate(1.12);
+  opacity: 1;
+}
+
+.rm-rank-bar-point:focus-visible {
+  outline: none;
+}
+
+.rm-rank-chart-scroll {
+  width: 100%;
+  max-height: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  padding-bottom: 0.55rem;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.rm-rank-chart-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.rm-rank-chart-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.rm-rank-chart-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid #e8eef5;
+  border-radius: 999px;
+  background: #7896b4;
+}
+
+.rm-rank-chart-scroll::-webkit-scrollbar-thumb:hover {
+  background: #50769c;
+}
+
+.rm-date-histogram {
+  display: block;
+  width: 100%;
+  min-height: 260px;
+}
+
+.rm-date-bar-grid {
+  stroke: #dce6f0;
+  stroke-width: 1;
+}
+
+.rm-date-bar {
+  fill: #2563eb;
+  opacity: 0.82;
+  transition: fill 0.14s ease, opacity 0.14s ease;
+}
+
+.rm-date-bar-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.rm-date-bar-point {
+  cursor: crosshair;
+}
+
+.rm-date-bar-point:hover .rm-date-bar,
+.rm-date-bar-point:focus-visible .rm-date-bar {
+  fill: #0891b2;
+  opacity: 1;
+}
+
+.rm-date-bar-point:focus-visible {
+  outline: none;
+}
+
+.rm-date-chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.55rem;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.rm-modal-date-chart-panel {
+  width: max(100%, var(--date-chart-width, 1200px));
+  min-width: var(--date-chart-width, 1200px);
+  min-height: 450px;
+}
+
+.rm-date-bar-chart {
+  display: block;
+  width: var(--date-chart-width, 1200px);
+  max-width: none;
+  height: 450px;
+}
+
+.rm-date-bar-y-label,
+.rm-date-bar-x-label {
+  fill: #52677e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rm-date-bar-y-label {
+  text-anchor: end;
+}
+
+.rm-date-bar-x-label {
+  text-anchor: end;
+}
+
+.rm-date-chart-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.rm-date-chart-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.rm-date-chart-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid #e8eef5;
+  border-radius: 999px;
+  background: #7896b4;
+}
+
+.rm-date-chart-scroll::-webkit-scrollbar-thumb:hover {
+  background: #50769c;
+}
+
+.rm-stats-chart-modal .rm-stats-full-modal::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.rm-stats-chart-modal .rm-stats-full-modal::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.rm-stats-chart-modal .rm-stats-full-modal::-webkit-scrollbar-thumb {
+  border: 3px solid #e8eef5;
+  border-radius: 999px;
+  background: #7896b4;
+}
+
+.rm-stats-chart-modal .rm-stats-full-modal::-webkit-scrollbar-thumb:hover {
+  background: #50769c;
+}
+
+.rm-chart-point-tooltip {
+  position: fixed;
+  z-index: calc(var(--nova-modal-z, 1050) + 120);
+  display: grid;
+  max-width: min(300px, calc(100vw - 24px));
+  gap: 0.18rem;
+  padding: 0.58rem 0.72rem;
+  pointer-events: none;
+  border: 1px solid rgba(148, 180, 211, 0.42);
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(16, 32, 51, 0.96);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.25);
+  font-size: 0.74rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  backdrop-filter: blur(8px);
+}
+
+.rm-chart-point-tooltip[hidden] {
+  display: none !important;
+}
+
+.rm-chart-point-tooltip strong {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.rm-chart-point-tooltip span {
+  color: #bfdbfe;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.rm-category-point:focus-visible {
+  outline: none;
+}
+
+.rm-category-point:focus-visible circle:not(.rm-category-point-hit) {
+  fill: var(--chart-color);
+  stroke-width: 2.4;
+}
+
 @media (max-width: 767.98px) {
   .monitor-check-dialog {
     padding: 19px;
@@ -15484,4 +15748,5 @@ nav.sb-navbar > .container-fluid,
     width: 100%;
     flex-basis: auto;
   }
+
 }

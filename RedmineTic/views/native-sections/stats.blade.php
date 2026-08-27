@@ -3,13 +3,39 @@
     $byDate = $stats['by_date'] ?? [];
     $byMonth = $stats['by_month'] ?? [];
     $maxDaily = max(1, (int) ($stats['max_daily'] ?? 0));
-    $linePoints = [];
+    $datePreviewBars = [];
+    $dateModalBars = [];
+    $dateRowsCount = count($byDate);
+    $previewStep = 552 / max(1, $dateRowsCount);
+    $previewBarWidth = max(1.5, $previewStep * 0.68);
+    $dateModalCanvasWidth = max(1200, ($dateRowsCount * 34) + 128);
+    $dateModalStep = ($dateModalCanvasWidth - 128) / max(1, $dateRowsCount);
+    $dateModalBarWidth = max(12, min(24, $dateModalStep * 0.66));
+    $dateModalLabelStep = max(1, (int) ceil(max(1, $dateRowsCount) / 60));
     $dateIndex = 0;
-    $dateCount = max(1, count($byDate) - 1);
     foreach ($byDate as $date => $count) {
-        $x = 24 + (($dateIndex / $dateCount) * 552);
-        $y = 176 - (((int) $count / $maxDaily) * 136);
-        $linePoints[] = round($x, 1) . ',' . round($y, 1);
+        $previewHeight = max(2, ((int) $count / $maxDaily) * 136);
+        $modalHeight = max(3, ((int) $count / $maxDaily) * 312);
+        $datePreviewBars[] = [
+            'date' => (string) $date,
+            'count' => (int) $count,
+            'x' => round(24 + ($previewStep * $dateIndex) + (($previewStep - $previewBarWidth) / 2), 2),
+            'width' => round($previewBarWidth, 2),
+            'y' => round(176 - $previewHeight, 2),
+            'height' => round($previewHeight, 2),
+            'slot_x' => round(24 + ($previewStep * $dateIndex), 2),
+            'slot_width' => round($previewStep, 2),
+        ];
+        $dateModalBars[] = [
+            'date' => (string) $date,
+            'count' => (int) $count,
+            'x' => round(64 + ($dateModalStep * $dateIndex) + (($dateModalStep - $dateModalBarWidth) / 2), 2),
+            'width' => round($dateModalBarWidth, 2),
+            'y' => round(352 - $modalHeight, 2),
+            'height' => round($modalHeight, 2),
+            'slot_x' => round(64 + ($dateModalStep * $dateIndex), 2),
+            'slot_width' => round($dateModalStep, 2),
+        ];
         $dateIndex++;
     }
     $userRows = $stats['by_assignee'] ?? [];
@@ -70,7 +96,6 @@
     $categoryRows = $rankRowsWithRecords($stats['by_category'] ?? []);
     $categoryOptionRows = $rankRowsWithRecords($stats['category_options'] ?? $categoryRows);
     $unitRows = $rankRowsWithRecords($stats['by_unit'] ?? []);
-    $topCategories = array_slice($categoryRows, 0, 10, true);
     $selectedCategories = array_values(array_filter(array_map('strval', (array) ($filters['category_scope'] ?? [])), static fn (string $value): bool => trim($value) !== ''));
     $categoryFilterActive = filter_var($filters['category_filter'] ?? false, FILTER_VALIDATE_BOOL);
     $hasCategorySelection = $categoryFilterActive;
@@ -101,7 +126,6 @@
     $rankSections = [
         'by_category' => ['label' => 'Categorias', 'icon' => 'bi-tags', 'color' => '#5b7cfa'],
         'by_unit' => ['label' => 'Unidades solicitantes', 'icon' => 'bi-building', 'color' => '#06b6d4'],
-        'by_assignee' => ['label' => 'Asignados', 'icon' => 'bi-person-check', 'color' => '#2563eb'],
     ];
     $chartSort = in_array((string) request('chart_sort', 'alpha'), ['alpha', 'total_desc', 'total_asc'], true)
         ? (string) request('chart_sort', 'alpha')
@@ -118,52 +142,29 @@
 
         return array_slice($rows, 0, 10, true);
     };
-    $chartPoints = static function (array $rows, float $startX = 42, float $plotWidth = 620, float $baseY = 204, float $height = 154): array {
+    $chartBars = static function (array $rows, float $startX, float $plotWidth, float $baseY, float $height, float $maxBarWidth): array {
         $count = count($rows);
         $max = max(1, $rows ? max($rows) : 0);
-        $points = [];
-        $step = $count > 1 ? $plotWidth / ($count - 1) : 0;
+        $bars = [];
+        $step = $plotWidth / max(1, $count);
+        $barWidth = max(10, min($maxBarWidth, $step * 0.58));
         $index = 0;
         foreach ($rows as $value) {
-            $x = $startX + ($step * $index);
-            $y = $baseY - (((int) $value / $max) * $height);
-            $points[] = ['x' => round($x, 1), 'y' => round($y, 1), 'value' => (int) $value];
+            $barHeight = max(3, ((int) $value / $max) * $height);
+            $slotX = $startX + ($step * $index);
+            $bars[] = [
+                'x' => round($slotX + (($step - $barWidth) / 2), 2),
+                'width' => round($barWidth, 2),
+                'y' => round($baseY - $barHeight, 2),
+                'height' => round($barHeight, 2),
+                'slot_x' => round($slotX, 2),
+                'slot_width' => round($step, 2),
+                'value' => (int) $value,
+            ];
             $index++;
         }
 
-        return $points;
-    };
-    $smoothChartPaths = static function (array $points, float $baseY, float $topY = 0): array {
-        if ($points === []) {
-            return ['line' => '', 'area' => ''];
-        }
-        if (count($points) === 1) {
-            $point = $points[0];
-            $line = 'M ' . $point['x'] . ' ' . $point['y'];
-            $area = 'M ' . $point['x'] . ' ' . $baseY . ' L ' . $point['x'] . ' ' . $point['y'] . ' L ' . $point['x'] . ' ' . $baseY . ' Z';
-
-            return ['line' => $line, 'area' => $area];
-        }
-
-        $line = 'M ' . $points[0]['x'] . ' ' . $points[0]['y'];
-        $last = count($points) - 1;
-        for ($i = 0; $i < $last; $i++) {
-            $p0 = $points[max(0, $i - 1)];
-            $p1 = $points[$i];
-            $p2 = $points[$i + 1];
-            $p3 = $points[min($last, $i + 2)];
-            $cp1x = round($p1['x'] + (($p2['x'] - $p0['x']) / 6), 1);
-            $cp1y = round(min($baseY, max($topY, $p1['y'] + (($p2['y'] - $p0['y']) / 6))), 1);
-            $cp2x = round($p2['x'] - (($p3['x'] - $p1['x']) / 6), 1);
-            $cp2y = round(min($baseY, max($topY, $p2['y'] - (($p3['y'] - $p1['y']) / 6))), 1);
-            $line .= ' C ' . $cp1x . ' ' . $cp1y . ', ' . $cp2x . ' ' . $cp2y . ', ' . $p2['x'] . ' ' . $p2['y'];
-        }
-
-        $first = $points[0];
-        $end = $points[$last];
-        $area = 'M ' . $first['x'] . ' ' . $baseY . ' ' . preg_replace('/^M /', 'L ', $line) . ' L ' . $end['x'] . ' ' . $baseY . ' Z';
-
-        return ['line' => $line, 'area' => $area];
+        return $bars;
     };
 @endphp
 
@@ -198,18 +199,19 @@
         <section class="rm-stats-charts">
             <article class="nova-card rm-stats-panel rm-line-panel rm-stats-rank-card" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#stats-date-modal" aria-label="Ver detalle de reportes por fecha">
                 <div class="rm-stats-panel-head">
-                    <div><h3>Reportes por fecha</h3><p>Evolucion diaria</p></div>
-                    <span>{{ count($byDate) }} puntos</span>
+                    <div><h3>Reportes por fecha</h3><p>Volumen diario</p></div>
+                    <span>{{ count($byDate) }} fechas</span>
                 </div>
-                @if ($linePoints)
-                    <svg class="rm-line-chart" viewBox="0 0 600 210" role="img" aria-label="Grafico de reportes por fecha">
+                @if ($datePreviewBars)
+                    <svg class="rm-date-histogram" viewBox="0 0 600 210" role="img" aria-label="Histograma de reportes por fecha">
                         @for ($i = 0; $i <= 4; $i++)
-                            <line x1="24" y1="{{ 40 + ($i * 34) }}" x2="576" y2="{{ 40 + ($i * 34) }}" />
+                            <line class="rm-date-bar-grid" x1="24" y1="{{ 40 + ($i * 34) }}" x2="576" y2="{{ 40 + ($i * 34) }}" />
                         @endfor
-                        <polyline points="{{ implode(' ', $linePoints) }}" />
-                        @foreach ($linePoints as $point)
-                            @php [$cx, $cy] = explode(',', $point); @endphp
-                            <circle cx="{{ $cx }}" cy="{{ $cy }}" r="3" />
+                        @foreach ($datePreviewBars as $bar)
+                            <g class="rm-date-bar-point" tabindex="0" role="img" data-rm-chart-point data-chart-label="{{ $formatStatsDate($bar['date']) }}" data-chart-value="{{ number_format($bar['count'], 0, ',', '.') }}" aria-label="{{ $formatStatsDate($bar['date']) }}: {{ number_format($bar['count'], 0, ',', '.') }} ticket(s)">
+                                <rect class="rm-date-bar-hit" x="{{ $bar['slot_x'] }}" y="40" width="{{ $bar['slot_width'] }}" height="136" />
+                                <rect class="rm-date-bar" x="{{ $bar['x'] }}" y="{{ $bar['y'] }}" width="{{ $bar['width'] }}" height="{{ $bar['height'] }}" rx="1.5" />
+                            </g>
                         @endforeach
                     </svg>
                     <div class="rm-chart-axis">
@@ -277,7 +279,7 @@
         <section class="nova-card rm-interactive-charts-head">
             <div>
                 <h3>Graficos interactivos</h3>
-                <p>Top 10 categorias, unidades y asignados. Haz clic en cada grafico para ver todos los valores.</p>
+                <p>Categorias y unidades del rango. Haz clic en cada grafico para ver todos los valores.</p>
             </div>
             <form method="get" action="{{ $redmineRoute('redmine.native.section', $section ?? 'estadisticas') }}" class="rm-chart-controls">
                 @foreach ($filters as $filterKey => $filterValue)
@@ -311,19 +313,17 @@
                 $previewRows = $chartRows($rows, $chartSort);
                 $max = max(1, $rows ? max($rows) : 0);
                 $modalId = 'stats-modal-' . $key;
-                $points = $chartPoints($previewRows, 54, 612, 204, 154);
-                $paths = $smoothChartPaths($points, 204, 50);
+                $bars = $chartBars($previewRows, 54, 612, 204, 154, 34);
             @endphp
             <article class="rm-interactive-chart rm-stats-rank-card" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}" aria-label="Ver detalle de {{ $meta['label'] }}" style="--chart-color: {{ $meta['color'] }};">
                 <div class="rm-interactive-chart-title">
                     <div>
                         <h3>{{ $meta['label'] }}</h3>
-                        <p>Top 10 en el rango</p>
                     </div>
                     <span>Click para ver todas</span>
                 </div>
                 @if ($previewRows)
-                    <svg class="rm-category-chart" viewBox="0 0 704 238" role="img" aria-label="Grafico de {{ $meta['label'] }}">
+                    <svg class="rm-category-chart rm-rank-bar-chart" viewBox="0 0 704 238" role="img" aria-label="Histograma de {{ $meta['label'] }}">
                         @for ($i = 0; $i <= 4; $i++)
                             @php
                                 $gridY = 50 + ($i * 38.5);
@@ -332,23 +332,15 @@
                             <line class="rm-category-grid-y" x1="54" y1="{{ $gridY }}" x2="666" y2="{{ $gridY }}" />
                             <text class="rm-category-y-label" x="42" y="{{ $gridY + 4 }}">{{ $axisValue }}</text>
                         @endfor
-                        @foreach ($points as $point)
-                            <line class="rm-category-grid-x" x1="{{ $point['x'] }}" y1="50" x2="{{ $point['x'] }}" y2="204" />
-                        @endforeach
-                        @if ($paths['area'] !== '')
-                            <path class="rm-category-area" d="{{ $paths['area'] }}" />
-                            <path class="rm-category-line" d="{{ $paths['line'] }}" />
-                        @endif
                         @foreach ($previewRows as $name => $count)
-                            @php $point = $points[$loop->index] ?? null; @endphp
-                            @if ($point)
-                                <g class="rm-category-point">
-                                    <title>{{ $name }}: {{ number_format((int) $count, 0, ',', '.') }} ticket(s)</title>
-                                    <circle class="rm-category-point-hit" cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="5" />
-                                    <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="1.35" />
+                            @php $bar = $bars[$loop->index] ?? null; @endphp
+                            @if ($bar)
+                                <g class="rm-rank-bar-point" tabindex="0" role="img" data-rm-chart-point data-chart-label="{{ $name }}" data-chart-value="{{ number_format((int) $count, 0, ',', '.') }}" aria-label="{{ $name }}: {{ number_format((int) $count, 0, ',', '.') }} ticket(s)">
+                                    <rect class="rm-rank-bar-hit" x="{{ $bar['slot_x'] }}" y="50" width="{{ $bar['slot_width'] }}" height="154" />
+                                    <rect class="rm-rank-bar" x="{{ $bar['x'] }}" y="{{ $bar['y'] }}" width="{{ $bar['width'] }}" height="{{ $bar['height'] }}" rx="3" />
                                 </g>
                                 @if ($showChartTotals)
-                                    <text x="{{ $point['x'] }}" y="{{ max(16, $point['y'] - 10) }}">{{ $point['value'] }}</text>
+                                    <text x="{{ $bar['x'] + ($bar['width'] / 2) }}" y="{{ max(16, $bar['y'] - 8) }}">{{ $bar['value'] }}</text>
                                 @endif
                             @endif
                         @endforeach
@@ -419,35 +411,6 @@
     </div>
     @endforeach
 
-    <div class="modal fade" id="stats-top-categories-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <div>
-                        <h2 class="modal-title fs-5">Top 10 categorias</h2>
-                        <div class="text-muted fw-semibold">Mayor numero de tickets en el rango</div>
-                    </div>
-                    <button type="button" class="btn-close" data-nova-modal-close data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <table class="rm-api-top-table">
-                        <thead><tr><th>#</th><th>Categoria</th><th>Total</th></tr></thead>
-                        <tbody>
-                            @forelse ($topCategories as $name => $count)
-                                <tr><td>{{ $loop->iteration }}</td><td>{{ $name }}</td><td>{{ number_format((int) $count, 0, ',', '.') }}</td></tr>
-                            @empty
-                                <tr><td colspan="3">Sin datos.</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-nova-modal-close data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     @foreach ($rankSections as $key => $meta)
     @php
         $rows = $rankRowsWithRecords($stats[$key] ?? []);
@@ -460,12 +423,21 @@
         }
         $max = max(1, $rows ? max($rows) : 0);
         $modalId = 'stats-modal-' . $key;
-        $modalPoints = $chartPoints($rows, 64, 1112, 352, 312);
-        $modalPaths = $smoothChartPaths($modalPoints, 352, 40);
-        $modalLabelStep = max(1, (int) ceil(max(1, count($rows)) / 70));
+        $modalCanvasWidth = max(1200, (count($rows) * 84) + 128);
+        $modalLongestLabel = 0;
+        foreach (array_keys($rows) as $rowName) {
+            $modalLongestLabel = max($modalLongestLabel, \Illuminate\Support\Str::length((string) $rowName));
+        }
+        $modalLabelDepth = max(100, (int) ceil($modalLongestLabel * 4.2));
+        $modalCanvasHeight = max(680, 392 + $modalLabelDepth);
+        $modalPlotBottom = $modalCanvasHeight - $modalLabelDepth - 28;
+        $modalPlotHeight = $modalPlotBottom - 40;
+        $modalLabelY = $modalPlotBottom + 26;
+        $modalPlotWidth = $modalCanvasWidth - 128;
+        $modalBars = $chartBars($rows, 64, $modalPlotWidth, $modalPlotBottom, $modalPlotHeight, 38);
     @endphp
-    <div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
+    <div class="modal fade rm-stats-chart-modal" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable rm-stats-chart-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
@@ -475,43 +447,37 @@
                 </div>
                 <div class="modal-body rm-stats-full-modal">
                     @if ($rows)
-                        <section class="rm-modal-chart-panel" style="--chart-color: {{ $meta['color'] }};">
-                            <svg class="rm-category-chart rm-category-chart-modal" viewBox="0 0 1200 450" role="img" aria-label="Grafico completo de {{ $meta['label'] }}" preserveAspectRatio="none">
+                        <div class="rm-rank-chart-scroll">
+                        <section class="rm-modal-chart-panel" style="--chart-color: {{ $meta['color'] }}; --chart-canvas-width: {{ $modalCanvasWidth }}px; --chart-canvas-height: {{ $modalCanvasHeight }}px;">
+                            <svg class="rm-category-chart rm-category-chart-modal rm-rank-bar-chart" viewBox="0 0 {{ $modalCanvasWidth }} {{ $modalCanvasHeight }}" role="img" aria-label="Histograma completo de {{ $meta['label'] }}" preserveAspectRatio="xMidYMid meet">
                                 @for ($i = 0; $i <= 4; $i++)
                                     @php
-                                        $gridY = 40 + ($i * 78);
+                                        $gridY = 40 + ($i * ($modalPlotHeight / 4));
                                         $axisValue = max(0, round($max - (($max / 4) * $i)));
                                     @endphp
-                                    <line class="rm-category-grid-y" x1="64" y1="{{ $gridY }}" x2="1176" y2="{{ $gridY }}" />
+                                    <line class="rm-category-grid-y" x1="64" y1="{{ $gridY }}" x2="{{ $modalCanvasWidth - 24 }}" y2="{{ $gridY }}" />
                                     <text class="rm-category-y-label" x="48" y="{{ $gridY + 4 }}">{{ $axisValue }}</text>
                                 @endfor
-                                @foreach ($modalPoints as $point)
-                                    <line class="rm-category-grid-x" x1="{{ $point['x'] }}" y1="40" x2="{{ $point['x'] }}" y2="352" />
-                                @endforeach
-                                @if ($modalPaths['area'] !== '')
-                                    <path class="rm-category-area" d="{{ $modalPaths['area'] }}" />
-                                    <path class="rm-category-line" d="{{ $modalPaths['line'] }}" />
-                                @endif
                                 @foreach ($rows as $name => $count)
-                                    @php $point = $modalPoints[$loop->index] ?? null; @endphp
-                                    @if ($point)
-                                        <g class="rm-category-point">
-                                            <title>{{ $name }}: {{ number_format((int) $count, 0, ',', '.') }} ticket(s)</title>
-                                            <circle class="rm-category-point-hit" cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="5" />
-                                            <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="1.35" />
+                                    @php $bar = $modalBars[$loop->index] ?? null; @endphp
+                                    @if ($bar)
+                                        <g class="rm-rank-bar-point" tabindex="0" role="img" data-rm-chart-point data-chart-label="{{ $name }}" data-chart-value="{{ number_format((int) $count, 0, ',', '.') }}" aria-label="{{ $name }}: {{ number_format((int) $count, 0, ',', '.') }} ticket(s)">
+                                            <rect class="rm-rank-bar-hit" x="{{ $bar['slot_x'] }}" y="40" width="{{ $bar['slot_width'] }}" height="{{ $modalPlotHeight }}" />
+                                            <rect class="rm-rank-bar" x="{{ $bar['x'] }}" y="{{ $bar['y'] }}" width="{{ $bar['width'] }}" height="{{ $bar['height'] }}" rx="4" />
                                         </g>
                                     @endif
                                 @endforeach
                                 @foreach ($rows as $name => $count)
-                                    @php $point = $modalPoints[$loop->index] ?? null; @endphp
-                                    @if ($point && $loop->index % $modalLabelStep === 0)
-                                        <text class="rm-category-x-label" x="{{ $point['x'] }}" y="396" transform="rotate(-24 {{ $point['x'] }} 396)">
-                                            <title>{{ $name }}</title>{{ \Illuminate\Support\Str::limit($name, 22) }}
+                                    @php $bar = $modalBars[$loop->index] ?? null; @endphp
+                                    @if ($bar)
+                                        <text class="rm-category-x-label" x="{{ $bar['x'] + ($bar['width'] / 2) }}" y="{{ $modalLabelY }}" transform="rotate(-42 {{ $bar['x'] + ($bar['width'] / 2) }} {{ $modalLabelY }})">
+                                            <title>{{ $name }}</title>{{ $name }}
                                         </text>
                                     @endif
                                 @endforeach
                             </svg>
                         </section>
+                        </div>
                     @endif
                 </div>
                 <div class="modal-footer rm-chart-modal-footer">
@@ -523,40 +489,40 @@
     </div>
     @endforeach
 
-    <div class="modal fade" id="stats-date-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
+    <div class="modal fade rm-stats-chart-modal" id="stats-date-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable rm-stats-chart-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h2 class="modal-title fs-5"><i class="bi bi-graph-up"></i> Reportes por fecha</h2>
+                    <h2 class="modal-title fs-5"><i class="bi bi-bar-chart-fill"></i> Reportes por fecha</h2>
                     <div class="text-muted fw-semibold">{{ count($byDate) }} fecha(s) con datos</div>
                 </div>
                 <button type="button" class="btn-close" data-nova-modal-close data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                @if ($linePoints)
-                    <svg class="rm-line-chart rm-line-chart-large" viewBox="0 0 600 210" role="img" aria-label="Grafico ampliado de reportes por fecha">
-                        @for ($i = 0; $i <= 4; $i++)
-                            <line x1="24" y1="{{ 40 + ($i * 34) }}" x2="576" y2="{{ 40 + ($i * 34) }}" />
-                        @endfor
-                        <polyline points="{{ implode(' ', $linePoints) }}" />
-                        @foreach ($linePoints as $point)
-                            @php [$cx, $cy] = explode(',', $point); @endphp
-                            <circle cx="{{ $cx }}" cy="{{ $cy }}" r="3" />
-                        @endforeach
-                    </svg>
-                    <div class="rm-chart-axis mb-3">
-                        <span>{{ array_key_first($byDate) }}</span>
-                        <span>{{ array_key_last($byDate) }}</span>
-                    </div>
-                    <div class="rm-date-detail-list">
-                        @foreach ($byDate as $date => $count)
-                            <div class="rm-date-detail-row">
-                                <span>{{ $formatStatsDate($date) }}</span>
-                                <div><i style="width: {{ max(3, round(((int) $count / $maxDaily) * 100)) }}%"></i></div>
-                                <strong>{{ $count }}</strong>
-                            </div>
-                        @endforeach
+                @if ($dateModalBars)
+                    <div class="rm-date-chart-scroll">
+                        <section class="rm-modal-date-chart-panel" style="--date-chart-width: {{ $dateModalCanvasWidth }}px;">
+                            <svg class="rm-date-bar-chart" viewBox="0 0 {{ $dateModalCanvasWidth }} 450" role="img" aria-label="Histograma completo de reportes por fecha" preserveAspectRatio="xMidYMid meet">
+                                @for ($i = 0; $i <= 4; $i++)
+                                    @php
+                                        $gridY = 40 + ($i * 78);
+                                        $axisValue = max(0, round($maxDaily - (($maxDaily / 4) * $i)));
+                                    @endphp
+                                    <line class="rm-date-bar-grid" x1="64" y1="{{ $gridY }}" x2="{{ $dateModalCanvasWidth - 24 }}" y2="{{ $gridY }}" />
+                                    <text class="rm-date-bar-y-label" x="48" y="{{ $gridY + 4 }}">{{ $axisValue }}</text>
+                                @endfor
+                                @foreach ($dateModalBars as $bar)
+                                    <g class="rm-date-bar-point" tabindex="0" role="img" data-rm-chart-point data-chart-label="{{ $formatStatsDate($bar['date']) }}" data-chart-value="{{ number_format($bar['count'], 0, ',', '.') }}" aria-label="{{ $formatStatsDate($bar['date']) }}: {{ number_format($bar['count'], 0, ',', '.') }} ticket(s)">
+                                        <rect class="rm-date-bar-hit" x="{{ $bar['slot_x'] }}" y="40" width="{{ $bar['slot_width'] }}" height="312" />
+                                        <rect class="rm-date-bar" x="{{ $bar['x'] }}" y="{{ $bar['y'] }}" width="{{ $bar['width'] }}" height="{{ $bar['height'] }}" rx="3" />
+                                    </g>
+                                    @if ($loop->index % $dateModalLabelStep === 0)
+                                        <text class="rm-date-bar-x-label" x="{{ $bar['x'] + ($bar['width'] / 2) }}" y="386" transform="rotate(-42 {{ $bar['x'] + ($bar['width'] / 2) }} 386)">{{ $formatStatsDate($bar['date']) }}</text>
+                                    @endif
+                                @endforeach
+                            </svg>
+                        </section>
                     </div>
                 @else
                     <div class="nova-empty-state">Sin datos por fecha.</div>
@@ -571,6 +537,52 @@
     let pendingMonthStart = null;
     const getStatsForm = () => document.querySelector('[data-stats-filter-form]');
     const getStatsContent = () => document.querySelector('[data-stats-content]');
+    const chartPointTooltip = document.createElement('div');
+    chartPointTooltip.className = 'rm-chart-point-tooltip';
+    chartPointTooltip.hidden = true;
+    chartPointTooltip.setAttribute('role', 'tooltip');
+    chartPointTooltip.innerHTML = '<strong></strong><span></span>';
+    document.body.appendChild(chartPointTooltip);
+    const positionChartTooltip = (x, y) => {
+        const gap = 14;
+        const edge = 12;
+        const width = chartPointTooltip.offsetWidth;
+        const height = chartPointTooltip.offsetHeight;
+        const left = Math.min(Math.max(edge, x + gap), window.innerWidth - width - edge);
+        const top = y - height - gap < edge ? y + gap : y - height - gap;
+        chartPointTooltip.style.left = `${left}px`;
+        chartPointTooltip.style.top = `${Math.max(edge, top)}px`;
+    };
+    const showChartPointTooltip = (point, x, y) => {
+        chartPointTooltip.querySelector('strong').textContent = point.dataset.chartLabel || 'Sin nombre';
+        chartPointTooltip.querySelector('span').textContent = `${point.dataset.chartValue || '0'} ticket(s)`;
+        chartPointTooltip.hidden = false;
+        positionChartTooltip(x, y);
+    };
+    const hideChartPointTooltip = () => { chartPointTooltip.hidden = true; };
+    document.addEventListener('pointerover', (event) => {
+        const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+        if (!point) return;
+        showChartPointTooltip(point, event.clientX, event.clientY);
+    });
+    document.addEventListener('pointermove', (event) => {
+        const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+        if (point && !chartPointTooltip.hidden) positionChartTooltip(event.clientX, event.clientY);
+    });
+    document.addEventListener('pointerout', (event) => {
+        const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+        const nextPoint = event.relatedTarget instanceof Element ? event.relatedTarget.closest('[data-rm-chart-point]') : null;
+        if (point && point !== nextPoint) hideChartPointTooltip();
+    });
+    document.addEventListener('focusin', (event) => {
+        const point = event.target instanceof Element ? event.target.closest('[data-rm-chart-point]') : null;
+        if (!point) return;
+        const bounds = point.getBoundingClientRect();
+        showChartPointTooltip(point, bounds.left + (bounds.width / 2), bounds.top);
+    });
+    document.addEventListener('focusout', (event) => {
+        if (event.target instanceof Element && event.target.closest('[data-rm-chart-point]')) hideChartPointTooltip();
+    });
     const refreshListModal = (modal) => {
         const table = modal.querySelector('[data-rm-list-table]');
         if (!table) return;
@@ -641,6 +653,10 @@
             if (!response.ok || !nextContent) {
                 throw new Error('No se pudo actualizar estadisticas.');
             }
+            document.querySelectorAll('body > .modal[id^="stats-"]').forEach((modal) => {
+                window.bootstrap?.Modal.getInstance(modal)?.dispose();
+                modal.remove();
+            });
             content.innerHTML = nextContent.innerHTML;
             window.history.pushState({}, '', url);
             pendingMonthStart = null;

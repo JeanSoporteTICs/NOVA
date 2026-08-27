@@ -78,9 +78,134 @@
     height: 320px !important;
     width: 100% !important;
   }
+
+  .mantencion-date-chart-card {
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .mantencion-stats-chart-grid > [class*="col-"] {
+    min-width: 0;
+  }
+
+  .mantencion-date-chart-card:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.28);
+    outline-offset: 2px;
+  }
+
+  .mantencion-date-chart-card .rm-stats-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .mantencion-date-chart-card .rm-stats-panel-head h3 {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #0f172a;
+    font-size: 0.98rem;
+    font-weight: 900;
+  }
+
+  .mantencion-date-chart-card .rm-stats-panel-head p {
+    margin: 3px 0 0;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .mantencion-date-chart-card .rm-stats-panel-head > span {
+    padding: 5px 9px;
+    border-radius: 999px;
+    color: #2563eb;
+    background: #eef6ff;
+    font-size: 0.76rem;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .mantencion-date-chart-card .rm-date-histogram {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .mantencion-date-chart-card .rm-chart-axis {
+    display: flex;
+    justify-content: space-between;
+    color: #64748b;
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .mantencion-date-chart-modal .modal-body {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mantencion-date-chart-modal .rm-date-chart-scroll {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .mantencion-date-chart-modal .rm-modal-date-chart-panel {
+    width: max(100%, var(--date-chart-width, 1200px));
+    min-width: var(--date-chart-width, 1200px);
+    height: 100%;
+    min-height: 360px;
+  }
+
+  .mantencion-date-chart-modal .rm-date-bar-chart {
+    width: max(100%, var(--date-chart-width, 1200px));
+    min-width: var(--date-chart-width, 1200px);
+    height: 100%;
+    min-height: 360px;
+  }
+
+  @media (max-width: 1199.98px) {
+    .mantencion-date-chart-card,
+    #card-usuarios.chart-card {
+      height: 340px;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .mantencion-date-chart-card,
+    #card-usuarios.chart-card {
+      height: 300px;
+    }
+
+    .mantencion-date-chart-card .rm-stats-panel-head {
+      flex-wrap: wrap;
+    }
+
+    .mantencion-date-chart-modal .modal-header,
+    .mantencion-date-chart-modal .modal-footer {
+      padding-inline: 0.75rem;
+    }
+
+    .mantencion-date-chart-modal .modal-body {
+      padding-inline: 0.5rem;
+    }
+  }
 /* Ajustes de graficos en modal */
-#chart-usuarios-modal,
-#chart-fechas-modal {
+#chart-usuarios-modal {
   width: 100% !important;
   height: 360px !important;
   }
