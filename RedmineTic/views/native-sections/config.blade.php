@@ -724,71 +724,74 @@
         $reportSchedule = \App\Support\Reports\AutomaticReportSchedule::settings($config);
         $reportsDay = $reportSchedule['day'];
         $reportsTime = $reportSchedule['time'];
+        $nextReportRun = \App\Support\Reports\AutomaticReportSchedule::nextRun($config, now(\App\Support\Reports\AutomaticReportSchedule::TIMEZONE));
         $reportDayLabels = ['1' => 'Lunes', '2' => 'Martes', '3' => 'Miércoles', '4' => 'Jueves', '5' => 'Viernes', '6' => 'Sábado', '7' => 'Domingo'];
     @endphp
-    <section class="card nova-card rm-panel rm-config-feature-form">
+    <section class="card nova-card rm-panel rm-config-feature-form nova-report-overview">
         <div class="rm-feature-head">
-            <span class="rm-feature-head-icon {{ $reportsEnabled ? 'is-green' : 'is-orange' }}"><i class="bi bi-send-check"></i></span>
+            <span class="rm-feature-head-icon {{ $reportsEnabled ? 'is-green' : 'is-orange' }}"><i class="bi bi-people"></i></span>
             <div>
-                <small>Recordatorio Telegram</small>
-                <h2>Informes automáticos</h2>
-                <p>Informa los tickets creados durante la semana anterior que todavía permanecen abiertos en estado Nueva.</p>
+                <small>Informes Telegram</small>
+                <h2>Usuarios de informes</h2>
             </div>
-            <div class="rm-feature-meter {{ $reportsEnabled ? 'is-ok' : 'is-warning' }}">
-                <strong>{{ $reportsEnabled ? 'Activo' : 'Pausado' }}</strong>
-                <span>Semana anterior</span>
-            </div>
-        </div>
-
-        <form id="rm-config-form-informes" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'informes']) }}">
-            @csrf
-            <label class="rm-config-field-card">
-                <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
-                <span class="rm-config-field-copy">
-                    <strong>Enviar informe semanal</strong>
-                    <small>El mensaje enumera los tickets asignados que continúan en estado Nueva.</small>
-                </span>
-                <input type="hidden" name="informes_nuevos_habilitado" value="0">
-                <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" @checked($reportsEnabled)>
-            </label>
-
-            <div class="rm-config-field-card mt-3">
-                <span class="rm-config-field-icon"><i class="bi bi-calendar-week"></i></span>
-                <span class="rm-config-field-copy">
-                    <strong>Día y hora de envío</strong>
-                    <small>El período informado siempre será el lunes a domingo de la semana anterior.</small>
-                </span>
-                <div class="row g-2 align-items-center">
-                    <div class="col-sm-7">
-                        <label class="form-label small" for="reports-send-day">Día</label>
-                        <select id="reports-send-day" class="form-select" name="informes_nuevos_dia" required>
-                            @foreach ($reportDayLabels as $value => $label)
-                                <option value="{{ $value }}" @selected($reportsDay === $value)>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-sm-5">
-                        <label class="form-label small" for="reports-send-time">Hora</label>
-                        <input id="reports-send-time" class="form-control" type="time" name="informes_nuevos_hora" value="{{ $reportsTime }}" required>
-                    </div>
+            <div class="nova-report-head-actions">
+                <button class="btn-nova btn-nova-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-report-schedule-drawer-tic" aria-controls="rm-report-schedule-drawer-tic">
+                    <i class="bi bi-sliders"></i>Configurar envío
+                </button>
+                <div class="rm-feature-meter {{ $reportsEnabled ? 'is-ok' : 'is-warning' }}">
+                    <strong>{{ $reportsEnabled ? 'Activo' : 'Pausado' }}</strong>
+                    <span>{{ $reportsEnabled ? 'Próximo · '.$nextReportRun->format('d/m H:i') : 'Sin envío programado' }}</span>
                 </div>
             </div>
+        </div>
 
-            <div class="nova-integration-status is-info mt-3">
-                <i class="bi bi-calendar-check"></i>
-                <span>Programado para {{ $reportDayLabels[$reportsDay] ?? 'Lunes' }} a las {{ $reportsTime }}. Cada responsable recibe como máximo un informe semanal.</span>
+        <form id="rm-report-users-form-tic" class="nova-report-users-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'informes']) }}">
+            @csrf
+            @include('reports._recipient-panel', ['reportRecipients' => $reportRecipients ?? [], 'reportModuleName' => 'TIC'])
+
+            <div class="rm-feature-actions nova-report-main-actions">
+                <button class="btn-nova btn-nova-info" type="submit" name="config_action" value="send_reports_now" data-app-confirm="¿Comprobar y enviar los informes TIC de los últimos 7 días exactos?">
+                <i class="bi bi-send-check"></i>Comprobar y enviar
+                </button>
             </div>
         </form>
-
-        <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-info" type="submit" form="rm-config-form-informes" name="config_action" value="send_reports_now" data-app-confirm="¿Comprobar ahora y enviar los informes TIC pendientes?">
-                <i class="bi bi-send-check"></i>Comprobar y enviar
-            </button>
-            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-informes">
-                <i class="bi bi-save"></i>Guardar informes
-            </button>
-        </div>
     </section>
+
+    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-report-schedule-drawer-tic" aria-labelledby="rm-report-schedule-drawer-tic-title">
+        <div class="offcanvas-header">
+            <div class="integration-drawer-title">
+                <span class="integration-icon"><i class="bi bi-calendar-week"></i></span>
+                <div><small>Informes TIC</small><h2 class="offcanvas-title" id="rm-report-schedule-drawer-tic-title">Configurar envío</h2></div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rm-report-schedule-form-tic" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'informes']) }}" data-report-schedule-form>
+                @csrf
+                <input type="hidden" name="report_schedule_configured" value="1">
+                <label class="rm-config-field-card">
+                    <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
+                    <span class="rm-config-field-copy"><strong>Mensajes automáticos</strong></span>
+                    <span>
+                        <input type="hidden" name="informes_nuevos_habilitado" value="0">
+                        <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" data-report-schedule-enabled @checked($reportsEnabled)>
+                    </span>
+                </label>
+                <div class="rm-config-field-card nova-report-schedule-fields">
+                    <span class="rm-config-field-icon"><i class="bi bi-clock"></i></span>
+                    <div class="row g-2">
+                        <div class="col-sm-7"><label class="form-label" for="reports-send-day">Día</label><select id="reports-send-day" class="form-select" name="informes_nuevos_dia" data-report-schedule-day required>@foreach ($reportDayLabels as $value => $label)<option value="{{ $value }}" @selected($reportsDay === $value)>{{ $label }}</option>@endforeach</select></div>
+                        <div class="col-sm-5"><label class="form-label" for="reports-send-time">Hora</label><input id="reports-send-time" class="form-control" type="time" name="informes_nuevos_hora" value="{{ $reportsTime }}" data-report-schedule-time required></div>
+                    </div>
+                </div>
+                <div class="nova-report-next-run" data-report-next-run></div>
+            </form>
+        </div>
+        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg"></i>Cerrar</button>
+            <button class="btn-nova btn-nova-primary" type="submit" form="rm-report-schedule-form-tic"><i class="bi bi-save"></i>Guardar configuración</button>
+        </div>
+    </div>
 @endif
 
 @if ($activePanel === 'mantencion')

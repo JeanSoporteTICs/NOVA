@@ -3,7 +3,10 @@
 namespace RedmineTic\Services;
 
 use App\Modulos\Telegram\Services\TelegramService;
+use App\Repositories\Reports\AutomaticReportRecipientRepository;
 use App\Support\Reports\AutomaticReportSchedule;
+use App\Support\Reports\ManagementReportFormatter;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use RedmineTic\Repositories\RedmineDataRepository;
 
@@ -14,6 +17,7 @@ final class StaleNewReportNotifier
     public function __construct(
         private readonly TelegramService $telegram,
         private readonly RedmineDataRepository $redmine,
+        private readonly AutomaticReportRecipientRepository $recipients,
     ) {}
 
     /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
@@ -30,6 +34,29 @@ final class StaleNewReportNotifier
     /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
     public function run(bool $force = false): array
     {
+        return $this->execute(
+            $force,
+            AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE)),
+            true
+        );
+    }
+
+    /** @return array<string,int|string> */
+    public function runManual(): array
+    {
+        return $this->execute(
+            true,
+            AutomaticReportSchedule::lastSevenDays(now(AutomaticReportSchedule::TIMEZONE)),
+            false
+        );
+    }
+
+    /**
+     * @param  array{start:CarbonImmutable,end:CarbonImmutable,label:string}  $window
+     * @return array<string,int|string>
+     */
+    private function execute(bool $force, array $window, bool $recordAutomaticDelivery): array
+    {
         $redmine = $this->redmine->forProject(self::PROJECT_KEY);
         $config = $redmine->configuration();
         $enabled = filter_var($config['informes_nuevos_habilitado'] ?? true, FILTER_VALIDATE_BOOL);
@@ -43,8 +70,10 @@ final class StaleNewReportNotifier
             return $this->result('already_completed');
         }
 
-        $window = AutomaticReportSchedule::previousWeek(now(AutomaticReportSchedule::TIMEZONE));
         $result = $this->result('completed');
+        $selectedRecipientIds = $this->recipients->recipientUserIds(self::PROJECT_KEY);
+        $managementRecipients = $this->recipients->managers(self::PROJECT_KEY);
+        $openByUser = [];
         foreach ($redmine->users() as $user) {
             if (! $this->activeUser($user)) {
                 $result['skipped']++;
@@ -58,26 +87,29 @@ final class StaleNewReportNotifier
 
                 continue;
             }
-            $result['recipients']++;
-            $deliveryKey = 'nova.redmine_tic.informes.nueva.sent.'.$dayKey.'.'.$assigneeId;
-            if (! $force && Cache::has($deliveryKey)) {
-                $result['skipped']++;
 
+            $novaUserId = (int) ($user['_nova_user_db_id'] ?? 0);
+            $receivesIndividual = $selectedRecipientIds === null || in_array($novaUserId, $selectedRecipientIds, true);
+            if (! $receivesIndividual && $managementRecipients === []) {
                 continue;
             }
-
-            $chatId = trim((string) ($user['telegram_chat_id'] ?? ''));
-            if ($chatId === '') {
+            if ($receivesIndividual) {
+                $result['recipients']++;
+            }
+            $deliveryKey = 'nova.redmine_tic.informes.nueva.sent.'.$dayKey.'.'.$assigneeId;
+            $skipIndividual = $receivesIndividual && $recordAutomaticDelivery && ! $force && Cache::has($deliveryKey);
+            if ($skipIndividual) {
                 $result['skipped']++;
-
-                continue;
             }
 
             $processingKey = $deliveryKey.'.processing';
-            if (! $force && ! Cache::add($processingKey, true, now(AutomaticReportSchedule::TIMEZONE)->addMinutes(10))) {
+            $processingLocked = false;
+            if ($receivesIndividual && ! $skipIndividual && $recordAutomaticDelivery && ! $force) {
+                $processingLocked = Cache::add($processingKey, true, now(AutomaticReportSchedule::TIMEZONE)->addMinutes(10));
+            }
+            if ($receivesIndividual && ! $skipIndividual && $recordAutomaticDelivery && ! $force && ! $processingLocked) {
                 $result['skipped']++;
-
-                continue;
+                $skipIndividual = true;
             }
             try {
                 $result['unsynced'] += $redmine->unsyncedIssueCountForAssignee($assigneeId, $window['start'], $window['end']);
@@ -90,13 +122,27 @@ final class StaleNewReportNotifier
 
                 $newIds = $issues['ids'];
                 if ($newIds === []) {
-                    Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
-                    $result['empty']++;
+                    if ($receivesIndividual && ! $skipIndividual && $recordAutomaticDelivery) {
+                        Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                    }
+                    if ($receivesIndividual && ! $skipIndividual) {
+                        $result['empty']++;
+                    }
 
                     continue;
                 }
 
                 $name = trim((string) (($user['nombre'] ?? '').' '.($user['apellido'] ?? '')));
+                $openByUser[] = ['name' => $name !== '' ? $name : 'Responsable '.$assigneeId, 'ids' => $newIds];
+                if (! $receivesIndividual || $skipIndividual) {
+                    continue;
+                }
+                $chatId = trim((string) ($user['telegram_chat_id'] ?? ''));
+                if ($chatId === '') {
+                    $result['skipped']++;
+
+                    continue;
+                }
                 try {
                     $sent = $this->telegram->sendToChat($chatId, $this->notificationMessage($name, $newIds, $window['label']));
                 } catch (\Throwable) {
@@ -109,7 +155,9 @@ final class StaleNewReportNotifier
                     continue;
                 }
 
-                Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                if ($recordAutomaticDelivery) {
+                    Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+                }
                 $result['sent']++;
                 try {
                     $redmine->recordActivity('informe_nuevos_telegram_ok', [
@@ -126,13 +174,15 @@ final class StaleNewReportNotifier
             } catch (\Throwable) {
                 $result['failed']++;
             } finally {
-                if (! $force) {
+                if ($processingLocked) {
                     Cache::forget($processingKey);
                 }
             }
         }
 
-        if ($result['failed'] === 0) {
+        $this->sendManagementReports($managementRecipients, $openByUser, $window['label'], $dayKey, $force, $recordAutomaticDelivery, $result);
+
+        if ($recordAutomaticDelivery && $result['failed'] === 0) {
             Cache::put($completedKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
         }
 
@@ -173,7 +223,50 @@ final class StaleNewReportNotifier
             && strtolower(trim((string) ($user['estado_nova'] ?? 'activo'))) === 'activo';
     }
 
-    /** @return array{recipients:int,sent:int,empty:int,skipped:int,failed:int,unsynced:int,reason:string} */
+    /**
+     * @param  array<int,array{id:int,name:string,chat_id:string}>  $managers
+     * @param  array<int,array{name:string,ids:array<int,string>}>  $openByUser
+     * @param  array<string,int|string>  $result
+     */
+    private function sendManagementReports(array $managers, array $openByUser, string $periodLabel, string $dayKey, bool $force, bool $recordAutomaticDelivery, array &$result): void
+    {
+        if ($openByUser === []) {
+            return;
+        }
+
+        foreach ($managers as $manager) {
+            $result['managers']++;
+            $deliveryKey = 'nova.redmine_tic.informes.jefatura.sent.'.$dayKey.'.'.$manager['id'];
+            if ($recordAutomaticDelivery && ! $force && Cache::has($deliveryKey)) {
+                $result['skipped']++;
+
+                continue;
+            }
+
+            try {
+                $sent = $this->telegram->sendToChat(
+                    $manager['chat_id'],
+                    ManagementReportFormatter::message('TIC', '📊', $manager['name'], $openByUser, $periodLabel)
+                );
+            } catch (\Throwable) {
+                $sent = false;
+            }
+
+            if (! $sent) {
+                $result['manager_failed']++;
+                $result['failed']++;
+
+                continue;
+            }
+
+            if ($recordAutomaticDelivery) {
+                Cache::put($deliveryKey, true, now(AutomaticReportSchedule::TIMEZONE)->addHours(26));
+            }
+            $result['manager_sent']++;
+        }
+    }
+
+    /** @return array<string,int|string> */
     private function result(string $reason): array
     {
         return [
@@ -183,6 +276,9 @@ final class StaleNewReportNotifier
             'skipped' => 0,
             'failed' => 0,
             'unsynced' => 0,
+            'managers' => 0,
+            'manager_sent' => 0,
+            'manager_failed' => 0,
             'reason' => $reason,
         ];
     }

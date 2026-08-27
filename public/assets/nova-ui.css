@@ -647,6 +647,558 @@
   }
 }
 
+/* Automatic reports — user administration */
+.nova-report-overview .rm-feature-head {
+  min-height: 76px;
+}
+
+.nova-report-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+.nova-report-head-actions .btn-nova {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.nova-report-users-form {
+  display: grid;
+  gap: 0;
+}
+
+.nova-report-overview .nova-report-recipients {
+  margin-top: 0;
+}
+
+.nova-report-main-actions {
+  margin-top: 1rem;
+}
+
+.nova-report-schedule-fields {
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: start !important;
+}
+
+.nova-report-recipients {
+  position: relative;
+  margin-top: 1.25rem;
+  overflow: hidden;
+  border: 1px solid #cfdeee;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(16, 32, 51, 0.07);
+}
+
+.nova-report-recipients::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  content: "";
+  background: linear-gradient(180deg, #2563eb, #0f766e 62%, #f59e0b);
+}
+
+.nova-report-recipients-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.1rem 1.15rem 1rem 1.3rem;
+  border-bottom: 1px solid #e4edf6;
+  background: linear-gradient(110deg, #f8fbff 0%, #fff 70%);
+}
+
+.nova-report-recipients-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.82rem;
+  min-width: 0;
+}
+
+.nova-report-recipients-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 13px;
+  color: #fff;
+  font-size: 1.05rem;
+  background: #1f4f7e;
+  box-shadow: 0 7px 16px rgba(31, 79, 126, 0.2);
+}
+
+.nova-report-recipients-title small {
+  display: block;
+  margin-bottom: 0.08rem;
+  color: #2563eb;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nova-report-recipients-title h3 {
+  margin: 0;
+  color: #102033;
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.nova-report-recipient-stats {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid #dbe7f5;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.nova-report-recipient-stats > div {
+  min-width: 76px;
+  padding: 0.48rem 0.62rem;
+  text-align: center;
+}
+
+.nova-report-recipient-stats > div + div {
+  border-left: 1px solid #e4edf6;
+}
+
+.nova-report-recipient-stats strong,
+.nova-report-recipient-stats span {
+  display: block;
+}
+
+.nova-report-recipient-stats strong {
+  color: #1f4f7e;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.nova-report-recipient-stats span {
+  margin-top: 0.2rem;
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.nova-report-recipient-stats .is-warning strong {
+  color: #b45309;
+}
+
+.nova-report-recipient-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.82rem 1rem 0.72rem 1.3rem;
+}
+
+.nova-report-recipient-search {
+  position: relative;
+  width: min(390px, 100%);
+}
+
+.nova-report-recipient-search > i {
+  position: absolute;
+  top: 50%;
+  left: 0.82rem;
+  z-index: 1;
+  color: #71839a;
+  transform: translateY(-50%);
+}
+
+.nova-report-recipient-search .form-control {
+  min-height: 40px;
+  padding-left: 2.35rem;
+  border-color: #d6e2ef;
+  border-radius: 11px;
+  font-size: 0.82rem;
+}
+
+.nova-report-filter-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.nova-report-filter-tabs button {
+  min-height: 34px;
+  padding: 0.34rem 0.68rem;
+  border: 1px solid #d5e2ef;
+  border-radius: 999px;
+  color: #52677e;
+  background: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.nova-report-filter-tabs button:hover {
+  border-color: #94b8dc;
+  color: #1f4f7e;
+}
+
+.nova-report-filter-tabs button.is-active {
+  border-color: #1f4f7e;
+  color: #fff;
+  background: #1f4f7e;
+}
+
+.nova-report-filter-tabs button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+}
+
+.nova-report-recipient-table {
+  margin: 0 1rem 0.9rem 1.3rem;
+  overflow: hidden;
+  border: 1px solid #dce7f2;
+  border-radius: 13px;
+}
+
+.nova-report-recipient-row {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.55fr) minmax(120px, 0.7fr) minmax(185px, 1fr) minmax(175px, 0.95fr);
+  align-items: center;
+  min-height: 64px;
+  border-bottom: 1px solid #e7eef6;
+  background: #fff;
+}
+
+.nova-report-recipient-row:last-child {
+  border-bottom: 0;
+}
+
+.nova-report-recipient-row:not(.is-header):hover {
+  background: #f8fbff;
+}
+
+.nova-report-recipient-row.has-configuration-warning {
+  box-shadow: inset 4px 0 #f59e0b;
+}
+
+.nova-report-recipient-row.has-configuration-warning:not(.is-header) {
+  background: #fffdf7;
+}
+
+.nova-report-recipient-row > * {
+  min-width: 0;
+  padding: 0.62rem 0.72rem;
+}
+
+.nova-report-recipient-row.is-header {
+  min-height: 36px;
+  color: #45617f;
+  background: #eaf3fc;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.nova-report-user {
+  display: flex;
+  align-items: center;
+  gap: 0.68rem;
+}
+
+.nova-report-user-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid #c7dcf1;
+  border-radius: 11px;
+  color: #1f4f7e;
+  background: #eaf3fc;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.nova-report-user strong,
+.nova-report-user small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nova-report-user strong {
+  color: #172b43;
+  font-size: 0.82rem;
+}
+
+.nova-report-user small {
+  margin-top: 0.14rem;
+  color: #6b7d91;
+  font-size: 0.68rem;
+}
+
+.nova-report-role-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.58rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.nova-report-role-toggle > span strong,
+.nova-report-role-toggle > span small {
+  display: block;
+}
+
+.nova-report-role-toggle > span strong {
+  color: #243b53;
+  font-size: 0.74rem;
+}
+
+.nova-report-role-toggle > span small {
+  margin-top: 0.08rem;
+  color: #71839a;
+  font-size: 0.64rem;
+}
+
+.nova-report-role-toggle.is-manager > span strong {
+  color: #0f766e;
+}
+
+.nova-report-role-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.nova-report-role-toggle:focus-within {
+  border-radius: 8px;
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
+.nova-report-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem 1rem 1.3rem;
+  color: #52677e;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.nova-report-page-size,
+.nova-report-page-navigation {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.nova-report-page-size .form-select {
+  width: 74px;
+  min-height: 38px;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  border-color: #d6e2ef;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.nova-report-page-navigation > span {
+  min-width: 74px;
+  text-align: right;
+}
+
+.nova-report-page-navigation > strong {
+  min-width: 88px;
+  color: #243b53;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.nova-report-page-navigation .btn-nova {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+}
+
+.nova-report-page-navigation .btn-nova:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.nova-report-dirty-bar {
+  position: sticky;
+  bottom: 0.8rem;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 1rem 1rem 1.3rem;
+  padding: 0.72rem 0.82rem;
+  border: 1px solid #b8d1ea;
+  border-radius: 13px;
+  color: #173b61;
+  background: rgba(239, 247, 255, 0.97);
+  box-shadow: 0 12px 30px rgba(16, 32, 51, 0.16);
+  backdrop-filter: blur(10px);
+}
+
+.nova-report-dirty-bar[hidden] {
+  display: none !important;
+}
+
+.nova-report-dirty-bar > span,
+.nova-report-dirty-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.nova-report-dirty-bar > span i {
+  color: #2563eb;
+}
+
+.nova-report-next-run {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid #cfe0f1;
+  border-radius: 12px;
+  color: #365775;
+  background: #f5f9fd;
+  font-size: 0.78rem;
+}
+
+.nova-report-next-run i {
+  color: #2563eb;
+  font-size: 1rem;
+}
+
+[data-report-schedule-form].is-paused .nova-report-schedule-fields {
+  opacity: 0.55;
+}
+
+@media (max-width: 991.98px) {
+  .nova-report-head-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .nova-report-recipients-head,
+  .nova-report-recipient-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .nova-report-recipient-stats {
+    align-self: flex-start;
+  }
+
+  .nova-report-recipient-table {
+    overflow-x: auto;
+  }
+
+  .nova-report-recipient-row {
+    min-width: 820px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .nova-report-recipients-head {
+    padding-left: 1rem;
+  }
+
+  .nova-report-recipient-toolbar {
+    padding-left: 1rem;
+  }
+
+  .nova-report-recipient-stats {
+    width: 100%;
+  }
+
+  .nova-report-recipient-stats > div {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .nova-report-recipient-table {
+    overflow: visible;
+    border: 0;
+    margin-left: 1rem;
+  }
+
+  .nova-report-recipient-row.is-header {
+    display: none;
+  }
+
+  .nova-report-recipient-row:not(.is-header) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    margin-bottom: 0.65rem;
+    overflow: hidden;
+    border: 1px solid #dce7f2;
+    border-radius: 13px;
+    box-shadow: 0 5px 14px rgba(16, 32, 51, 0.05);
+  }
+
+  .nova-report-recipient-row:not(.is-header) > * {
+    padding: 0.7rem;
+  }
+
+  .nova-report-recipient-row .nova-report-user {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid #e7eef6;
+  }
+
+  .nova-report-recipient-row [data-label]::before {
+    display: block;
+    margin-bottom: 0.38rem;
+    color: #71839a;
+    content: attr(data-label);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .nova-report-role-toggle {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nova-report-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-left: 1rem;
+  }
+
+  .nova-report-page-navigation {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .nova-report-dirty-bar {
+    align-items: stretch;
+    flex-direction: column;
+    margin-left: 1rem;
+  }
+
+  .nova-report-dirty-bar > div .btn-nova {
+    flex: 1 1 0;
+  }
+
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tic-quick-report * { scroll-behavior: auto !important; }
 }

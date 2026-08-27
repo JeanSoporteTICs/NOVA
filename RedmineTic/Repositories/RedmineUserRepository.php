@@ -70,6 +70,7 @@ class RedmineUserRepository
 
             $users[] = [
                 'id'                    => $projectId,
+                '_nova_user_db_id'      => (int) ($nova->id ?? 0),
                 'redmine_id'            => $redmineId,
                 'rut_sin_dv'            => trim((string) ($nova->usuario ?? '')),
                 'nombre'                => trim((string) ($nova->nombre ?? '')),

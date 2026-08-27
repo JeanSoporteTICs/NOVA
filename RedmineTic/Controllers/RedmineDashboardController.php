@@ -5,6 +5,7 @@ namespace RedmineTic\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modulos\Nova\Services\ProjectAccessGuard;
 use App\Modulos\Telegram\Services\TelegramService;
+use App\Repositories\Reports\AutomaticReportRecipientRepository;
 use App\Support\Reports\AutomaticReportSchedule;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -148,6 +149,10 @@ class RedmineDashboardController extends Controller
         $config = $redmine->configuration();
 
         $sectionData = $redmine->nativeSectionData($section, $dashboardFilter, $request->query(), is_array($user) ? $user : []);
+        if ($section === 'configuracion') {
+            $sectionData['reportRecipients'] = app(AutomaticReportRecipientRepository::class)
+                ->panelData($redmine->projectKey());
+        }
         if ($section === 'actividad') {
             $sectionData['activityData'] = $redmine->activityData(
                 $request->query(),
@@ -370,10 +375,12 @@ class RedmineDashboardController extends Controller
         }
 
         if ($request->input('config_action') === 'send_reports_now') {
-            $result = app(StaleNewReportNotifier::class)->run(true);
+            $this->saveReportRecipients($request, $redmine->projectKey());
+            $result = app(StaleNewReportNotifier::class)->runManual();
             $message = sprintf(
-                'Comprobación TIC finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
+                'Comprobación TIC finalizada: %d informe(s) individual(es) y %d resumen(es) de jefatura enviados; %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
                 (int) ($result['sent'] ?? 0),
+                (int) ($result['manager_sent'] ?? 0),
                 (int) ($result['empty'] ?? 0),
                 (int) ($result['skipped'] ?? 0),
                 (int) ($result['failed'] ?? 0),
@@ -482,13 +489,16 @@ class RedmineDashboardController extends Controller
             }
         }
         if ($panel === 'informes') {
-            $config['informes_nuevos_habilitado'] = $request->boolean('informes_nuevos_habilitado');
-            $schedule = AutomaticReportSchedule::settings([
-                'informes_nuevos_dia' => $request->input('informes_nuevos_dia', '1'),
-                'informes_nuevos_hora' => $request->input('informes_nuevos_hora', '09:00'),
-            ]);
-            $config['informes_nuevos_dia'] = $schedule['day'];
-            $config['informes_nuevos_hora'] = $schedule['time'];
+            $this->saveReportRecipients($request, $redmine->projectKey());
+            if ($request->has('report_schedule_configured')) {
+                $config['informes_nuevos_habilitado'] = $request->boolean('informes_nuevos_habilitado');
+                $schedule = AutomaticReportSchedule::settings([
+                    'informes_nuevos_dia' => $request->input('informes_nuevos_dia', $config['informes_nuevos_dia'] ?? '1'),
+                    'informes_nuevos_hora' => $request->input('informes_nuevos_hora', $config['informes_nuevos_hora'] ?? '09:00'),
+                ]);
+                $config['informes_nuevos_dia'] = $schedule['day'];
+                $config['informes_nuevos_hora'] = $schedule['time'];
+            }
         }
         if ($request->has('maintenance_mode')) {
             $maintenanceMode = $request->boolean('maintenance_mode');
@@ -544,6 +554,19 @@ class RedmineDashboardController extends Controller
         $response = back()->with('redmine_status', 'Configuracion guardada.');
 
         return $response;
+    }
+
+    private function saveReportRecipients(Request $request, string $moduleKey): void
+    {
+        if (! $request->has('report_recipients_configured')) {
+            return;
+        }
+
+        app(AutomaticReportRecipientRepository::class)->sync(
+            $moduleKey,
+            (array) $request->input('report_recipients', []),
+            (array) $request->input('report_managers', [])
+        );
     }
 
     public function historyAction(Request $request, RedmineDataRepository $redmine): RedirectResponse

@@ -2,10 +2,16 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use App\Repositories\Reports\AutomaticReportRecipientRepository;
+use App\Support\Http\ApplicationPath;
 use App\Support\Reports\AutomaticReportSchedule;
 
 class MantencionConfiguracionService
 {
+    public function __construct(
+        private readonly AutomaticReportRecipientRepository $reportRecipients,
+    ) {}
+
     public function loadConfig()
     {
         $repo = config_mantencion_repository();
@@ -117,7 +123,7 @@ class MantencionConfiguracionService
                 }
                 session()->put('mantencion_config_flash', 'Configuración guardada');
 
-                return redirect($_SERVER['REQUEST_URI'] ?? '/redmine-mantencion/app/configuracion');
+                return redirect()->away($this->currentConfigurationUrl(), 303);
             }
 
             $cfg['platform_url'] = trim($_POST['platform_url'] ?? $cfg['platform_url'] ?? '');
@@ -153,10 +159,17 @@ class MantencionConfiguracionService
                 $cfg['informes_nuevos_hora'] = $schedule['time'];
             }
             $cfg['session_timeout'] = max(60, (int) ($_POST['session_timeout'] ?? ($cfg['session_timeout'] ?? 300)));
+            if (array_key_exists('report_recipients_configured', $_POST)) {
+                $this->reportRecipients->sync(
+                    'redmine-mantencion',
+                    (array) ($_POST['report_recipients'] ?? []),
+                    (array) ($_POST['report_managers'] ?? [])
+                );
+            }
             $this->saveConfig($cfg);
             session()->put('mantencion_config_flash', 'Configuración guardada');
 
-            return redirect($_SERVER['REQUEST_URI'] ?? '/redmine-mantencion/app/configuracion');
+            return redirect()->away($this->currentConfigurationUrl(), 303);
         }
         $opts = [
             'trackers' => $cfg['trackers'] ?? [],
@@ -165,5 +178,16 @@ class MantencionConfiguracionService
         ];
 
         return [$cfg, $flash, $opts];
+    }
+
+    private function currentConfigurationUrl(): string
+    {
+        $request = request();
+
+        return ApplicationPath::make(
+            (string) $request->getBaseUrl(),
+            '/redmine-mantencion/app/configuracion',
+            $request->query()
+        );
     }
 }

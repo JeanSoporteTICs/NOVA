@@ -51,9 +51,8 @@
       http_response_code(403);
       exit('No tienes permiso para ver esta sección de Configuración.');
     }
-    $configBaseUrl = function_exists('url')
-      ? url('/redmine-mantencion/app/configuracion')
-      : legacy_app_url('app/configuracion');
+    $requestBaseUrl = function_exists('request') ? (string) request()->getBaseUrl() : '';
+    $configBaseUrl = \App\Support\Http\ApplicationPath::make($requestBaseUrl, '/redmine-mantencion/app/configuracion');
     $configPanelUrl = fn($panel) => $configBaseUrl . '?panel=' . rawurlencode((string)$panel);
     include base_path('RedmineMantencion/views/partials/hero.php'); ?>
 <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
@@ -549,67 +548,80 @@
     $reportSchedule = \App\Support\Reports\AutomaticReportSchedule::settings($cfg);
     $reportsDay = $reportSchedule['day'];
     $reportsTime = $reportSchedule['time'];
+    $nextReportRun = \App\Support\Reports\AutomaticReportSchedule::nextRun($cfg, now(\App\Support\Reports\AutomaticReportSchedule::TIMEZONE));
     $reportDayLabels = ['1' => 'Lunes', '2' => 'Martes', '3' => 'Miércoles', '4' => 'Jueves', '5' => 'Viernes', '6' => 'Sábado', '7' => 'Domingo'];
   ?>
-  <section class="rm-config-feature-form">
+  <section class="rm-config-feature-form nova-report-overview">
     <div class="rm-feature-head">
-      <span class="rm-feature-head-icon <?= $reportsEnabled ? 'is-green' : 'is-orange' ?>"><i class="bi bi-send-check"></i></span>
+      <span class="rm-feature-head-icon <?= $reportsEnabled ? 'is-green' : 'is-orange' ?>"><i class="bi bi-people"></i></span>
       <div>
-        <small>Recordatorio Telegram</small>
-        <h2>Informes automáticos</h2>
-        <p>Informa los tickets de Mantención creados durante la semana anterior que todavía permanecen abiertos en estado Nueva.</p>
+        <small>Informes Telegram</small>
+        <h2>Usuarios de informes</h2>
       </div>
-      <div class="rm-feature-meter <?= $reportsEnabled ? 'is-ok' : 'is-warning' ?>">
-        <strong><?= $reportsEnabled ? 'Activo' : 'Pausado' ?></strong>
-        <span>Semana anterior</span>
+      <div class="nova-report-head-actions">
+        <button class="btn-nova btn-nova-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-report-schedule-drawer-mantencion" aria-controls="rm-report-schedule-drawer-mantencion"><i class="bi bi-sliders"></i>Configurar envío</button>
+        <div class="rm-feature-meter <?= $reportsEnabled ? 'is-ok' : 'is-warning' ?>">
+          <strong><?= $reportsEnabled ? 'Activo' : 'Pausado' ?></strong>
+          <span><?= $reportsEnabled ? 'Próximo · '.$h($nextReportRun->format('d/m H:i')) : 'Sin envío programado' ?></span>
+        </div>
       </div>
     </div>
 
-    <form method="post" action="<?= $h($configPanelUrl('informes')) ?>" class="rm-config-drawer-form">
+    <form id="rm-report-users-form-mantencion" method="post" action="<?= $h($configPanelUrl('informes')) ?>" class="nova-report-users-form">
       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-      <label class="rm-config-field-card">
-        <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
-        <span class="rm-config-field-copy">
-          <strong>Enviar informe semanal</strong>
-          <small>El mensaje enumera los tickets asignados que continúan en estado Nueva.</small>
-        </span>
-        <input type="hidden" name="informes_nuevos_habilitado" value="0">
-        <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" <?= $reportsEnabled ? 'checked' : '' ?>>
-      </label>
+      @include('reports._recipient-panel', ['reportRecipients' => $reportRecipients ?? [], 'reportModuleName' => 'Mantención'])
 
-      <div class="rm-config-field-card mt-3">
-        <span class="rm-config-field-icon"><i class="bi bi-calendar-week"></i></span>
-        <span class="rm-config-field-copy">
-          <strong>Día y hora de envío</strong>
-          <small>El período informado siempre será el lunes a domingo de la semana anterior.</small>
-        </span>
-        <div class="row g-2 align-items-center">
-          <div class="col-sm-7">
-            <label class="form-label small" for="mant-reports-send-day">Día</label>
-            <select id="mant-reports-send-day" class="form-select" name="informes_nuevos_dia" required>
-              <?php foreach ($reportDayLabels as $value => $label): ?>
-                <option value="<?= $h($value) ?>" <?= $reportsDay === $value ? 'selected' : '' ?>><?= $h($label) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="col-sm-5">
-            <label class="form-label small" for="mant-reports-send-time">Hora</label>
-            <input id="mant-reports-send-time" class="form-control" type="time" name="informes_nuevos_hora" value="<?= $h($reportsTime) ?>" required>
-          </div>
-        </div>
-      </div>
-
-      <div class="nova-integration-status is-info mt-3">
-        <i class="bi bi-calendar-check"></i>
-        <span>Programado para <?= $h($reportDayLabels[$reportsDay] ?? 'Lunes') ?> a las <?= $h($reportsTime) ?>. Cada responsable recibe como máximo un informe semanal programado por módulo. El envío manual considera los 7 días exactos anteriores a la fecha y hora de ejecución.</span>
-      </div>
-
-      <div class="rm-feature-actions">
+      <div class="rm-feature-actions nova-report-main-actions">
         <button class="btn-nova btn-nova-info" type="submit" name="action" value="send_reports_now" data-app-confirm="¿Comprobar ahora y enviar los informes de Mantención abiertos de los últimos 7 días?"><i class="bi bi-send-check"></i>Comprobar y enviar</button>
-        <button class="btn-nova btn-nova-primary" type="submit"><i class="bi bi-save"></i>Guardar informes</button>
       </div>
     </form>
   </section>
+
+  <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-report-schedule-drawer-mantencion" aria-labelledby="rm-report-schedule-drawer-mantencion-title">
+    <div class="offcanvas-header">
+      <div class="integration-drawer-title">
+        <span class="integration-icon"><i class="bi bi-calendar-week"></i></span>
+        <div><small>Informes Mantención</small><h2 class="offcanvas-title" id="rm-report-schedule-drawer-mantencion-title">Configurar envío</h2></div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body">
+      <form id="rm-report-schedule-form-mantencion" class="rm-config-drawer-form" method="post" action="<?= $h($configPanelUrl('informes')) ?>" data-report-schedule-form>
+        <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+        <input type="hidden" name="report_schedule_configured" value="1">
+        <label class="rm-config-field-card">
+          <span class="rm-config-field-icon"><i class="bi bi-telegram"></i></span>
+          <span class="rm-config-field-copy"><strong>Mensajes automáticos</strong></span>
+          <span>
+            <input type="hidden" name="informes_nuevos_habilitado" value="0">
+            <input class="rm-switch" type="checkbox" name="informes_nuevos_habilitado" value="1" data-report-schedule-enabled <?= $reportsEnabled ? 'checked' : '' ?>>
+          </span>
+        </label>
+        <div class="rm-config-field-card nova-report-schedule-fields">
+          <span class="rm-config-field-icon"><i class="bi bi-clock"></i></span>
+          <div class="row g-2">
+            <div class="col-sm-7">
+              <label class="form-label" for="mant-reports-send-day">Día</label>
+              <select id="mant-reports-send-day" class="form-select" name="informes_nuevos_dia" data-report-schedule-day required>
+                <?php foreach ($reportDayLabels as $value => $label): ?>
+                  <option value="<?= $h($value) ?>" <?= $reportsDay === $value ? 'selected' : '' ?>><?= $h($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-sm-5">
+              <label class="form-label" for="mant-reports-send-time">Hora</label>
+              <input id="mant-reports-send-time" class="form-control" type="time" name="informes_nuevos_hora" value="<?= $h($reportsTime) ?>" data-report-schedule-time required>
+            </div>
+          </div>
+        </div>
+        <div class="nova-report-next-run" data-report-next-run></div>
+      </form>
+    </div>
+    <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+      <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg"></i>Cerrar</button>
+      <button class="btn-nova btn-nova-primary" type="submit" form="rm-report-schedule-form-mantencion"><i class="bi bi-save"></i>Guardar configuración</button>
+    </div>
+  </div>
 <?php endif; ?>
 
 <?php $usersList = []; ?>

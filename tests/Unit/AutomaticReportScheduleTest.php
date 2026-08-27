@@ -43,4 +43,16 @@ final class AutomaticReportScheduleTest extends TestCase
         self::assertSame('2026-08-19 14:30:45', $window['start']->setTimezone($timezone)->format('Y-m-d H:i:s'));
         self::assertSame('2026-08-26 14:30:45', $window['end']->setTimezone($timezone)->format('Y-m-d H:i:s'));
     }
+
+    public function test_next_run_uses_the_selected_weekday_and_time_in_santiago(): void
+    {
+        $now = new DateTimeImmutable('2026-08-27 12:00:00', new DateTimeZone(AutomaticReportSchedule::TIMEZONE));
+        $next = AutomaticReportSchedule::nextRun([
+            'informes_nuevos_dia' => '1',
+            'informes_nuevos_hora' => '09:30',
+        ], $now);
+
+        self::assertSame('2026-08-31 09:30', $next->format('Y-m-d H:i'));
+        self::assertSame(AutomaticReportSchedule::TIMEZONE, $next->timezoneName);
+    }
 }

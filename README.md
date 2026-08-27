@@ -297,6 +297,11 @@ se resuelven mediante contratos en `app/Contracts` y enlaces del contenedor.
   pero respeta los permisos internos de cada módulo; solo `root` obtiene
   acceso total automático.
 - Cada módulo conserva sus permisos, roles y tablas operativas específicas.
+- `destinatarios_informes_modulo` define, por módulo y usuario, quién recibe su
+  informe individual de tickets abiertos y quién actúa como jefatura para
+  recibir el resumen consolidado. El envío programado usa de lunes a domingo
+  de la semana anterior; la comprobación manual usa los siete días exactos
+  anteriores a su ejecución.
 - Las reimportaciones desde CORE identifican la solicitud por `id_core`: si el
   reporte sigue pendiente, actualizan sus datos modificados; los reportes
   procesados, con error o archivados no se sobrescriben.

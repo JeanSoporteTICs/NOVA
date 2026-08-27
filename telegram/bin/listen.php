@@ -134,11 +134,12 @@ function telegram_run_tic_daily_reports(): void
             return;
         }
         $result = app(StaleNewReportNotifier::class)->runIfDue();
-        if ((int) ($result['sent'] ?? 0) > 0 || (int) ($result['failed'] ?? 0) > 0) {
+        if ((int) ($result['sent'] ?? 0) > 0 || (int) ($result['manager_sent'] ?? 0) > 0 || (int) ($result['failed'] ?? 0) > 0) {
             fwrite(STDOUT, sprintf(
-                '[%s] Informe TIC: enviados=%d errores=%d'.PHP_EOL,
+                '[%s] Informe TIC: enviados=%d resúmenes_jefatura=%d errores=%d'.PHP_EOL,
                 date('Y-m-d H:i:s'),
                 (int) ($result['sent'] ?? 0),
+                (int) ($result['manager_sent'] ?? 0),
                 (int) ($result['failed'] ?? 0)
             ));
         }
@@ -162,11 +163,12 @@ function telegram_run_mantencion_daily_reports(): void
             return;
         }
         $result = app(MantencionStaleNewReportNotifier::class)->runIfDue();
-        if ((int) ($result['sent'] ?? 0) > 0 || (int) ($result['failed'] ?? 0) > 0) {
+        if ((int) ($result['sent'] ?? 0) > 0 || (int) ($result['manager_sent'] ?? 0) > 0 || (int) ($result['failed'] ?? 0) > 0) {
             fwrite(STDOUT, sprintf(
-                '[%s] Informe Mantencion: enviados=%d errores=%d'.PHP_EOL,
+                '[%s] Informe Mantencion: enviados=%d resúmenes_jefatura=%d errores=%d'.PHP_EOL,
                 date('Y-m-d H:i:s'),
                 (int) ($result['sent'] ?? 0),
+                (int) ($result['manager_sent'] ?? 0),
                 (int) ($result['failed'] ?? 0)
             ));
         }

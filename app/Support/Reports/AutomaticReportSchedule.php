@@ -38,6 +38,18 @@ final class AutomaticReportSchedule
             && $now->format('H:i') >= $settings['time'];
     }
 
+    /** @param array<string, mixed> $config */
+    public static function nextRun(array $config, DateTimeInterface $now): CarbonImmutable
+    {
+        $settings = self::settings($config);
+        $localNow = CarbonImmutable::instance($now)->setTimezone(self::TIMEZONE);
+        [$hour, $minute] = array_map('intval', explode(':', $settings['time']));
+        $daysUntilRun = ((int) $settings['day'] - (int) $localNow->format('N') + 7) % 7;
+        $candidate = $localNow->startOfDay()->addDays($daysUntilRun)->setTime($hour, $minute);
+
+        return $candidate->lessThanOrEqualTo($localNow) ? $candidate->addWeek() : $candidate;
+    }
+
     /** @return array{start:CarbonImmutable,end:CarbonImmutable,label:string} */
     public static function previousWeek(DateTimeInterface $now): array
     {

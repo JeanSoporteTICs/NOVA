@@ -8,6 +8,8 @@ use App\Modulos\RedmineMantencion\Services\MantencionConfiguracionRolesService;
 use App\Modulos\RedmineMantencion\Services\MantencionConfiguracionService;
 use App\Modulos\RedmineMantencion\Services\MantencionNextcloudService;
 use App\Modulos\RedmineMantencion\Services\MantencionStaleNewReportNotifier;
+use App\Repositories\Reports\AutomaticReportRecipientRepository;
+use App\Support\Http\ApplicationPath;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -19,6 +21,7 @@ class ConfiguracionController extends Controller
         private readonly MantencionConfiguracionRolesService $roles,
         private readonly MantencionNextcloudService $nextcloud,
         private readonly MantencionStaleNewReportNotifier $reportsNotifier,
+        private readonly AutomaticReportRecipientRepository $reportRecipientsRepository,
     ) {}
 
     /**
@@ -79,6 +82,7 @@ class ConfiguracionController extends Controller
 
             return in_array($estadoUsuario, ['activo', 'active'], true);
         }));
+        $reportRecipients = $this->reportRecipientsRepository->panelData('redmine-mantencion');
         $usuariosIndex = [];
         foreach ($usuariosSelectableData as $u) {
             if (is_array($u) && isset($u['id'])) {
@@ -267,18 +271,25 @@ class ConfiguracionController extends Controller
                 if (function_exists('csrf_validate')) {
                     csrf_validate();
                 }
+                if (array_key_exists('report_recipients_configured', $_POST)) {
+                    $this->reportRecipientsRepository->sync(
+                        'redmine-mantencion',
+                        (array) ($_POST['report_recipients'] ?? []),
+                        (array) ($_POST['report_managers'] ?? [])
+                    );
+                }
                 $result = $this->reportsNotifier->runManual();
                 session()->put('mantencion_config_flash', sprintf(
-                    'Comprobación Mantención finalizada: %d enviado(s), %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
+                    'Comprobación Mantención finalizada: %d informe(s) individual(es) y %d resumen(es) de jefatura enviados; %d responsable(s) sin pendientes, %d omitido(s), %d error(es) y %d ticket(s) sin estado sincronizado.',
                     (int) ($result['sent'] ?? 0),
+                    (int) ($result['manager_sent'] ?? 0),
                     (int) ($result['empty'] ?? 0),
                     (int) ($result['skipped'] ?? 0),
                     (int) ($result['failed'] ?? 0),
                     (int) ($result['unsynced'] ?? 0)
                 ));
 
-                return redirect(route('redmine.mantencion.section', [
-                    'section' => 'configuracion',
+                return redirect()->away($this->configurationUrl([
                     'panel' => 'informes',
                 ]), 303);
             }
@@ -312,12 +323,11 @@ class ConfiguracionController extends Controller
                     session()->put('mantencion_roles_flash_type', 'success');
                 }
                 session()->put('mantencion_roles_selected', (string) (array_key_first($rolesData) ?? 'usuario'));
-                $rolesRedirectUrl = route('redmine.mantencion.section', [
-                    'section' => 'configuracion',
+                $rolesRedirectUrl = $this->configurationUrl([
                     'panel' => 'roles',
                 ]);
 
-                return redirect($rolesRedirectUrl, 303);
+                return redirect()->away($rolesRedirectUrl, 303);
             } elseif ($action === 'save_roles' && $canManageRoles) {
                 if (function_exists('csrf_validate')) {
                     csrf_validate();
@@ -412,21 +422,19 @@ class ConfiguracionController extends Controller
                     session()->put('mantencion_roles_flash', 'Permisos guardados correctamente.');
                     session()->put('mantencion_roles_flash_type', 'success');
                     session()->put('mantencion_roles_selected', $selectedRole);
-                    $rolesRedirectUrl = route('redmine.mantencion.section', [
-                        'section' => 'configuracion',
+                    $rolesRedirectUrl = $this->configurationUrl([
                         'panel' => 'roles',
                     ]);
 
-                    return redirect($rolesRedirectUrl, 303);
+                    return redirect()->away($rolesRedirectUrl, 303);
                 }
                 session()->put('mantencion_roles_flash', 'El nombre del rol debe tener entre 2 y 40 caracteres y usar solo letras, números, guion o guion bajo.');
                 session()->put('mantencion_roles_flash_type', 'warning');
-                $rolesRedirectUrl = route('redmine.mantencion.section', [
-                    'section' => 'configuracion',
+                $rolesRedirectUrl = $this->configurationUrl([
                     'panel' => 'roles',
                 ]);
 
-                return redirect($rolesRedirectUrl, 303);
+                return redirect()->away($rolesRedirectUrl, 303);
             }
             if ($action === 'load_user_perms' && $canManageUsers) {
                 if (function_exists('csrf_validate')) {
@@ -526,13 +534,12 @@ class ConfiguracionController extends Controller
                     $this->roles->saveUserPermissions($selectedUser, $cfgUser);
                     session()->put('mantencion_usuarios_flash', 'Permisos actualizados para el usuario ID '.$selectedUser);
                     session()->put('mantencion_usuarios_flash_type', 'success');
-                    $usersRedirectUrl = route('redmine.mantencion.section', [
-                        'section' => 'configuracion',
+                    $usersRedirectUrl = $this->configurationUrl([
                         'panel' => 'usuarios',
                         'user_id' => $selectedUser,
                     ]);
 
-                    return redirect($usersRedirectUrl, 303);
+                    return redirect()->away($usersRedirectUrl, 303);
                 }
             }
         }
@@ -545,11 +552,20 @@ class ConfiguracionController extends Controller
             }
             $res = $this->categorias->syncFromApi();
             $msg = isset($res['error']) ? $res['error'] : ('Categorías sincronizadas ('.($res['ok'] ?? 0).' registros).');
-            $configRedirectUrl = function_exists('url') ? url('/redmine-mantencion/app/configuracion') : legacy_app_url('app/configuracion');
 
-            return redirect($configRedirectUrl.'?panel=categorias&synccat='.urlencode($msg));
+            return redirect()->away($this->configurationUrl(['panel' => 'categorias', 'synccat' => $msg]), 303);
         }
 
         return view('redmine-mantencion.configuracion', get_defined_vars());
+    }
+
+    /** @param array<string,scalar> $query */
+    private function configurationUrl(array $query = []): string
+    {
+        return ApplicationPath::make(
+            (string) request()->getBaseUrl(),
+            '/redmine-mantencion/app/configuracion',
+            $query
+        );
     }
 }

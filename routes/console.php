@@ -51,9 +51,11 @@ Artisan::command('redmine:notify-stale-new {--force : Ejecutar aunque el informe
     $force = (bool) $this->option('force');
     $result = $force ? $notifier->run(true) : $notifier->runIfDue();
     $this->info(sprintf(
-        'Informe TIC | responsables=%d enviados=%d sin pendientes=%d omitidos=%d errores=%d',
+        'Informe TIC | responsables=%d enviados=%d jefaturas=%d resúmenes=%d sin pendientes=%d omitidos=%d errores=%d',
         (int) ($result['recipients'] ?? 0),
         (int) ($result['sent'] ?? 0),
+        (int) ($result['managers'] ?? 0),
+        (int) ($result['manager_sent'] ?? 0),
         (int) ($result['empty'] ?? 0),
         (int) ($result['skipped'] ?? 0),
         (int) ($result['failed'] ?? 0)
@@ -66,9 +68,11 @@ Artisan::command('redmine:mantencion-notify-stale-new {--force : Ejecutar aunque
     $force = (bool) $this->option('force');
     $result = $force ? $notifier->run(true) : $notifier->runIfDue();
     $this->info(sprintf(
-        'Informe Mantencion | responsables=%d enviados=%d sin pendientes=%d omitidos=%d errores=%d',
+        'Informe Mantencion | responsables=%d enviados=%d jefaturas=%d resúmenes=%d sin pendientes=%d omitidos=%d errores=%d',
         (int) ($result['recipients'] ?? 0),
         (int) ($result['sent'] ?? 0),
+        (int) ($result['managers'] ?? 0),
+        (int) ($result['manager_sent'] ?? 0),
         (int) ($result['empty'] ?? 0),
         (int) ($result['skipped'] ?? 0),
         (int) ($result['failed'] ?? 0)
