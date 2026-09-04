@@ -281,6 +281,7 @@
                                 <form method="post" action="{{ $redmineRoute('redmine.native.dashboard.action') }}"
                                       data-no-page-loader="true"
                                       data-optimistic-toggle
+                                      data-toggle-action-field="dashboard_action" data-toggle-action-value="toggle_hours_extra"
                                       data-toggle-active-icon="bi-clock-fill" data-toggle-inactive-icon="bi-clock"
                                       data-toggle-active-class="btn-hora-extra--on" data-toggle-inactive-class="btn-hora-extra--off"
                                       data-toggle-active-title="Quitar hora extra" data-toggle-inactive-title="Marcar hora extra">
@@ -770,6 +771,15 @@
         const editButton = event.target.closest('tr')?.querySelector('[data-nova-modal-open="editar-solicitud"]');
         if (editButton) editButton.setAttribute('data-report-hora-extra', event.detail.active ? 'SI' : 'NO');
     });
+    const dashboardSendButton = document.querySelector('[data-dashboard-send-redmine]');
+    const syncDashboardSendAvailability = () => {
+        if (!dashboardSendButton) return;
+        const hasPendingToggle = Boolean(document.querySelector('[data-optimistic-toggle][data-toggle-pending="true"]'));
+        const isSending = Boolean(dashboardSendButton.closest('[data-dashboard-bulk-form]')?.classList.contains('is-sending-redmine'));
+        dashboardSendButton.disabled = hasPendingToggle || isSending;
+    };
+    document.addEventListener('nova-optimistic-toggle:pending', syncDashboardSendAvailability);
+    document.addEventListener('nova-optimistic-toggle:settled', syncDashboardSendAvailability);
     // bootstrap.bundle.min.js loads later in native.blade.php's own <script> tags,
     // so this waits for DOMContentLoaded (fires after that script has run) instead
     // of initializing immediately, which would find `bootstrap` undefined here.

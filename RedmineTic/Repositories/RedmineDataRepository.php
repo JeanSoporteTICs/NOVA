@@ -1633,6 +1633,13 @@ final class RedmineDataRepository
             return false;
         }
 
+        if (array_key_exists('unidad_solicitante', $payload)) {
+            $payload['unidad_solicitante'] = $this->resolveRequestUnit(
+                $payload['unidad_solicitante'],
+                $payload['unidad'] ?? ''
+            );
+        }
+
         $fields = Arr::only($payload, [
             'tipo',
             'asunto',
@@ -2012,6 +2019,8 @@ final class RedmineDataRepository
     {
         $reports = $this->activeReports();
         $now = now('America/Santiago');
+        $unitText = trim((string) ($payload['unidad'] ?? ''));
+        $requestUnit = $this->resolveRequestUnit($payload['unidad_solicitante'] ?? '', $unitText);
         $report = [
             'tipo' => trim((string) ($payload['tipo'] ?? 'webhook')),
             'estado' => 'pendiente',
@@ -2019,8 +2028,8 @@ final class RedmineDataRepository
             'descripcion' => trim((string) ($payload['descripcion'] ?? '')),
             'mensaje' => trim((string) ($payload['mensaje'] ?? '')),
             'solicitante' => trim((string) ($payload['solicitante'] ?? '')),
-            'unidad' => trim((string) ($payload['unidad'] ?? '')),
-            'unidad_solicitante' => trim((string) ($payload['unidad_solicitante'] ?? $payload['unidad'] ?? '')),
+            'unidad' => $unitText,
+            'unidad_solicitante' => $requestUnit,
             'categoria' => trim((string) ($payload['categoria'] ?? '')),
             'prioridad' => trim((string) ($payload['prioridad'] ?? 'NORMAL')),
             'chat_id_telegram' => trim((string) ($payload['chat_id_telegram'] ?? $payload['numero'] ?? '')),
@@ -2087,7 +2096,8 @@ final class RedmineDataRepository
         $category = CatalogMatchSupport::inferCatalogMatch($problem, $categories)
             ?: CatalogMatchSupport::inferCatalogMatch($problem.' '.$unitText, $categories)
             ?: 'Equipos';
-        $requestUnit = CatalogMatchSupport::inferCatalogMatch($unitText, $units) ?: 'HBV';
+        $requestUnit = CatalogMatchSupport::inferCatalogMatch($unitText, $units)
+            ?: CatalogMatchSupport::exactCatalogValue($units, 'HBV');
         $unit = $unitText !== '' ? $unitText : $requestUnit;
         $requester = $requesterText !== '' ? $requesterText : TextSupport::telegramUserDisplayName($telegramUser);
         $chatId = trim((string) data_get($telegramUser, 'telegram_settings.chat_id', ''));
@@ -2125,6 +2135,23 @@ final class RedmineDataRepository
         ]);
 
         return ['ok' => true, 'error' => '', 'report' => $report, 'maintenance' => false];
+    }
+
+    private function resolveRequestUnit(mixed $value, mixed $unitText = ''): string
+    {
+        $units = array_values(array_filter(array_map(
+            static fn (array $row): string => trim((string) ($row['nombre'] ?? '')),
+            $this->units()
+        )));
+
+        foreach ([$value, $unitText] as $candidate) {
+            $match = CatalogMatchSupport::inferCatalogMatch(trim((string) $candidate), $units);
+            if ($match !== '') {
+                return $match;
+            }
+        }
+
+        return CatalogMatchSupport::exactCatalogValue($units, 'HBV');
     }
 
     public function webhookUrl(): string
@@ -2284,6 +2311,9 @@ final class RedmineDataRepository
             'descripcion' => 'descripcion',
         ];
         $columns = array_values(array_intersect_key($columnByField, $fields));
+        if (array_key_exists('unidad', $fields)) {
+            $columns[] = 'unidad_texto';
+        }
         $values = Arr::only($this->databaseReportPayload($moduleId, $report, false), $columns);
         $values['actualizado_at'] = now();
 

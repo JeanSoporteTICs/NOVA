@@ -2,14 +2,15 @@
 
 namespace RedmineTic\Models;
 
+use App\Modulos\Nova\Models\CatalogoModulo;
+use App\Modulos\Nova\Models\ModuloNova;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Modulos\Nova\Models\ModuloNova;
-use App\Modulos\Nova\Models\CatalogoModulo;
 
 class RedmineTicReporte extends Model
 {
     public const CREATED_AT = 'creado_at';
+
     public const UPDATED_AT = 'actualizado_at';
 
     protected $table = 'redmine_tic_reportes';
@@ -23,6 +24,7 @@ class RedmineTicReporte extends Model
         'prioridad',
         'categoria_catalogo_id',
         'unidad_catalogo_id',
+        'unidad_texto',
         'unidad_solicitante_catalogo_id',
         'solicitante',
         'asunto',
@@ -41,12 +43,12 @@ class RedmineTicReporte extends Model
     ];
 
     protected $casts = [
-        'hora_extra'      => 'boolean',
+        'hora_extra' => 'boolean',
         'tiempo_estimado' => 'decimal:2',
-        'fecha'           => 'date',
-        'fecha_inicio'    => 'date',
-        'fecha_fin'       => 'date',
-        'procesado_at'    => 'datetime',
+        'fecha' => 'date',
+        'fecha_inicio' => 'date',
+        'fecha_fin' => 'date',
+        'procesado_at' => 'datetime',
     ];
 
     public function modulo(): BelongsTo

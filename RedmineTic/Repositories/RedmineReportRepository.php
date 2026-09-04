@@ -56,7 +56,9 @@ class RedmineReportRepository
             'tipo' => (string) ($row->tipo ?? ''),
             'prioridad' => (string) ($row->prioridad ?? ''),
             'categoria' => $this->catalogRepo()->nameById($row->categoria_catalogo_id ?? null) ?: (string) ($row->categoria ?? ''),
-            'unidad' => $this->catalogRepo()->nameById($row->unidad_catalogo_id ?? null) ?: (string) ($row->unidad ?? ''),
+            'unidad' => trim((string) ($row->unidad_texto ?? ''))
+                ?: $this->catalogRepo()->nameById($row->unidad_catalogo_id ?? null)
+                ?: (string) ($row->unidad ?? ''),
             'unidad_solicitante_catalogo_id' => (int) ($row->unidad_solicitante_catalogo_id ?? 0),
             'unidad_solicitante' => $this->catalogRepo()->nameById($row->unidad_solicitante_catalogo_id ?? null) ?: (string) ($row->unidad_solicitante ?? ''),
             'solicitante' => (string) ($row->solicitante ?? ''),
@@ -97,6 +99,7 @@ class RedmineReportRepository
             'prioridad' => trim((string) ($report['prioridad'] ?? '')) ?: null,
             'categoria_catalogo_id' => $this->catalogRepo()->idForValue('categoria', $report['categoria'] ?? ''),
             'unidad_catalogo_id' => $this->catalogRepo()->idForValue('unidad', $report['unidad'] ?? ''),
+            'unidad_texto' => trim((string) ($report['unidad'] ?? '')) ?: null,
             'unidad_solicitante_catalogo_id' => $this->catalogRepo()->idForValue('unidad', $report['unidad_solicitante'] ?? ''),
             'solicitante' => trim((string) ($report['solicitante'] ?? '')) ?: null,
             'asunto' => trim((string) ($report['asunto'] ?? '')) ?: null,

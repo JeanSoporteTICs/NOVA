@@ -188,6 +188,15 @@ class RedmineDashboardController extends Controller
         }
 
         $action = (string) $request->input('dashboard_action', $request->input('action', ''));
+        $recognizedAction = in_array($action, [
+            'update',
+            'delete',
+            'delete_selected',
+            'archive_selected',
+            'process_selected',
+            'reset_errors',
+            'toggle_hours_extra',
+        ], true);
         $requiredPermission = match ($action) {
             'delete', 'delete_selected' => 'reportes_eliminar',
             'toggle_hours_extra' => 'horas_extra_editar',
@@ -231,7 +240,10 @@ class RedmineDashboardController extends Controller
         }
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['ok' => $toggleHoursExtraSuccess ?? true, 'message' => $message]);
+            return response()->json([
+                'ok' => $action === 'toggle_hours_extra' ? ($toggleHoursExtraSuccess ?? false) : $recognizedAction,
+                'message' => $message,
+            ], $recognizedAction ? 200 : 422);
         }
 
         return back()->with('redmine_status', $message);

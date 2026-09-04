@@ -1141,6 +1141,8 @@ const NovaOptimisticToggle = (() => {
         const previousAriaLabel = button.getAttribute('aria-label') || '';
 
         applyState(form, button, icon, !wasActive);
+        form.dataset.togglePending = 'true';
+        form.dispatchEvent(new CustomEvent('nova-optimistic-toggle:pending', { bubbles: true }));
         button.disabled = true;
         button.setAttribute('aria-busy', 'true');
         button.classList.add('is-submitting');
@@ -1151,10 +1153,13 @@ const NovaOptimisticToggle = (() => {
             // which makes the legacy controller redirect with an HTML page instead
             // of returning its JSON action result.
             formData.set('ajax', '1');
-            // Every form handled by this component is the hour-extra toggle. Set the
-            // discriminator explicitly because HTML table/form repair performed by
-            // browsers can detach hidden inputs from their visual form.
-            formData.set('action', 'toggle_hora_extra');
+            // Set the module-specific discriminator explicitly because HTML table/form
+            // repair performed by browsers can detach hidden inputs from their visual
+            // form. Mantencion uses action=toggle_hora_extra; TIC declares its own
+            // dashboard_action=toggle_hours_extra through data attributes.
+            const actionField = form.dataset.toggleActionField || 'action';
+            const actionValue = form.dataset.toggleActionValue || 'toggle_hora_extra';
+            formData.set(actionField, actionValue);
             const laravelToken = formData.get('_token')
                 || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                 || '';
@@ -1193,6 +1198,8 @@ const NovaOptimisticToggle = (() => {
             }
             window.NovaToast?.error(error.message || 'No se pudo actualizar el estado.');
         } finally {
+            delete form.dataset.togglePending;
+            form.dispatchEvent(new CustomEvent('nova-optimistic-toggle:settled', { bubbles: true }));
             button.disabled = false;
             button.removeAttribute('aria-busy');
             button.classList.remove('is-submitting');

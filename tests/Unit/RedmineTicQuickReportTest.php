@@ -58,6 +58,20 @@ final class RedmineTicQuickReportTest extends TestCase
         $this->assertSame('', $draft['draft']['unidad_solicitante']);
     }
 
+    public function test_request_unit_uses_catalog_match_while_unit_keeps_free_text(): void
+    {
+        $draft = app(QuickReportService::class)->createDraft(
+            'Instalar computadores, de Farmacia a ex Pediatría, Erick',
+            [['nombre' => 'Equipos']],
+            [['nombre' => 'HBV'], ['nombre' => 'PEDIATRÍA']],
+            '44'
+        );
+
+        $this->assertTrue($draft['ok']);
+        $this->assertSame('de Farmacia a ex Pediatría', $draft['draft']['unidad']);
+        $this->assertSame('PEDIATRÍA', $draft['draft']['unidad_solicitante']);
+    }
+
     public function test_assigned_recipient_uses_the_central_telegram_chat_id(): void
     {
         $recipient = app(QuickReportService::class)->assignedRecipient([
@@ -153,7 +167,7 @@ final class RedmineTicQuickReportTest extends TestCase
         $this->assertStringContainsString('/redmine_tic/app/reporte-rapido/notas', $routes);
         $this->assertStringContainsString("'reporte-rapido' => 'reporte_rapido'", $controller);
         $this->assertStringContainsString('function quickReportNotes(', $controller);
-        $this->assertStringContainsString("Rule::in(\$activeUnits)", $controller);
+        $this->assertStringContainsString('Rule::in($activeUnits)', $controller);
         $this->assertStringContainsString('La unidad solicitante seleccionada ya no existe en la lista vigente.', $controller);
         $this->assertStringContainsString('data-app-confirm-preview="#tic-quick-confirm-summary"', $view);
         $this->assertMatchesRegularExpression('/id="tic-quick-confirm-summary"[^>]+hidden/', $view);

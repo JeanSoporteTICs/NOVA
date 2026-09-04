@@ -11,7 +11,7 @@ namespace RedmineTic\Support;
 final class CatalogMatchSupport
 {
     /**
-     * @param string[] $items
+     * @param  string[]  $items
      */
     public static function inferCatalogMatch(string $text, array $items): string
     {
@@ -31,7 +31,7 @@ final class CatalogMatchSupport
             if ($normalized === '') {
                 continue;
             }
-            if ($normalized === $target || preg_match('/\b' . preg_quote($normalized, '/') . '\b/u', $target)) {
+            if ($normalized === $target || preg_match('/\b'.preg_quote($normalized, '/').'\b/u', $target)) {
                 return $item;
             }
             if (strlen($normalized) >= 4 && (str_contains($target, $normalized) || str_contains($normalized, $target))) {
@@ -46,6 +46,26 @@ final class CatalogMatchSupport
         }
 
         return $bestScore >= 22 ? $bestItem : '';
+    }
+
+    /**
+     * @param  string[]  $items
+     */
+    public static function exactCatalogValue(array $items, string $expected): string
+    {
+        $expected = TextSupport::normalizeTelegramReportText($expected);
+        if ($expected === '') {
+            return '';
+        }
+
+        foreach ($items as $item) {
+            $item = trim($item);
+            if (TextSupport::normalizeTelegramReportText($item) === $expected) {
+                return $item;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -98,7 +118,7 @@ final class CatalogMatchSupport
         $hints = [];
         foreach ($rules as $hint => $needles) {
             foreach ($needles as $needle) {
-                if (preg_match('/\b' . preg_quote($needle, '/') . '\b/u', $target)) {
+                if (preg_match('/\b'.preg_quote($needle, '/').'\b/u', $target)) {
                     $hints[] = $hint;
                     break;
                 }
@@ -109,9 +129,9 @@ final class CatalogMatchSupport
     }
 
     /**
-     * @param array<int,string> $targetTokens
-     * @param array<int,string> $hints
-     * @param array<int,string> $itemTokens
+     * @param  array<int,string>  $targetTokens
+     * @param  array<int,string>  $hints
+     * @param  array<int,string>  $itemTokens
      */
     public static function catalogMatchScore(array $targetTokens, array $hints, array $itemTokens, string $normalizedItem): int
     {
@@ -124,6 +144,7 @@ final class CatalogMatchSupport
             foreach ($itemTokens as $itemToken) {
                 if ($targetToken === $itemToken) {
                     $score += 18;
+
                     continue;
                 }
                 if (strlen($targetToken) >= 4 && strlen($itemToken) >= 4 && (str_starts_with($targetToken, $itemToken) || str_starts_with($itemToken, $targetToken))) {

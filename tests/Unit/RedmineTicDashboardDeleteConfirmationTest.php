@@ -50,6 +50,7 @@ final class RedmineTicDashboardDeleteConfirmationTest extends TestCase
         self::assertSame(5, substr_count($dashboard, '<select class="form-select tic-dashboard-select2"'));
         self::assertStringContainsString('name="estado" data-tic-dashboard-select2', $dashboard);
         self::assertStringContainsString('name="hora_extra" data-tic-dashboard-select2', $dashboard);
+        self::assertStringContainsString('data-toggle-action-field="dashboard_action" data-toggle-action-value="toggle_hours_extra"', $dashboard);
         self::assertStringContainsString("setDashboardSelectValue(form.elements.estado, button.dataset.reportEstado || 'pendiente');", $dashboard);
         self::assertStringContainsString('form.elements.hora_extra,', $dashboard);
         self::assertStringContainsString("estado_usuario'] ?? \$user['estado'] ?? 'activo'", $dashboard);
@@ -66,6 +67,24 @@ final class RedmineTicDashboardDeleteConfirmationTest extends TestCase
         self::assertMatchesRegularExpression('/tic-dashboard-select2.*?select2-selection--single\s*\{[^}]*min-height:\s*44px;/s', $styles);
         self::assertMatchesRegularExpression('/tic-dashboard-select2.*?select2-selection__rendered\s*\{[^}]*font-weight:\s*700;/s', $styles);
         self::assertMatchesRegularExpression('/\.tic-select2-dropdown \.select2-results__option\s*\{[^}]*font-weight:\s*700;/s', $styles);
+    }
+
+    public function test_hours_extra_toggle_uses_the_tic_action_and_blocks_send_while_pending(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $dashboard = file_get_contents($root.'/RedmineTic/views/native-sections/dashboard.blade.php');
+        $ui = file_get_contents($root.'/public/assets/nova-ui.js');
+        $controller = file_get_contents($root.'/RedmineTic/Controllers/RedmineDashboardController.php');
+
+        self::assertIsString($dashboard);
+        self::assertIsString($ui);
+        self::assertIsString($controller);
+        self::assertStringContainsString('data-toggle-action-field="dashboard_action" data-toggle-action-value="toggle_hours_extra"', $dashboard);
+        self::assertStringContainsString('formData.set(actionField, actionValue);', $ui);
+        self::assertStringContainsString("form.dataset.togglePending = 'true';", $ui);
+        self::assertStringContainsString('delete form.dataset.togglePending;', $ui);
+        self::assertStringContainsString('hasPendingToggle || isSending', $dashboard);
+        self::assertStringContainsString("'ok' => \$action === 'toggle_hours_extra' ? (\$toggleHoursExtraSuccess ?? false) : \$recognizedAction", $controller);
     }
 
     public function test_dashboard_editor_starts_with_subject_then_type_status_and_requesting_unit(): void

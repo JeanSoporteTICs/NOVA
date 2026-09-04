@@ -35,6 +35,7 @@ class RedmineReportMappingTest extends TestCase
             'prioridad' => 'NORMAL',
             'categoria_catalogo_id' => null,
             'unidad_catalogo_id' => null,
+            'unidad_texto' => '',
             'unidad_solicitante_catalogo_id' => null,
             'categoria' => '',
             'unidad' => '',
@@ -142,6 +143,16 @@ class RedmineReportMappingTest extends TestCase
         $this->assertSame('Categoria B5.1', $result['categoria']);
     }
 
+    public function test_hydrate_preserves_free_text_unit_that_is_not_in_catalog(): void
+    {
+        $result = $this->repo()->hydrate($this->row([
+            'unidad_catalogo_id' => null,
+            'unidad_texto' => 'de Farmacia a ex Pediatría',
+        ]), fn (string $id): string => '');
+
+        $this->assertSame('de Farmacia a ex Pediatría', $result['unidad']);
+    }
+
     public function test_payload_maps_array_to_typed_db_payload(): void
     {
         $moduleId = DB::table('modulos_nova')->where('clave_modulo', 'redmine_tic')->value('id');
@@ -154,6 +165,7 @@ class RedmineReportMappingTest extends TestCase
             'tiempo_estimado' => '1:30',
             'fecha' => '2026-05-01',
             'fecha_inicio' => '2026-05-01',
+            'unidad' => 'de Farmacia a ex Pediatría',
             'origen' => 'manual',
         ], false);
 
@@ -164,6 +176,7 @@ class RedmineReportMappingTest extends TestCase
         $this->assertSame(1, $payload['hora_extra']);
         $this->assertSame(1.5, $payload['tiempo_estimado']);
         $this->assertSame('2026-05-01', $payload['fecha']);
+        $this->assertSame('de Farmacia a ex Pediatría', $payload['unidad_texto']);
     }
 
     public function test_payload_forces_estado_archivado_when_archived_flag_is_true(): void

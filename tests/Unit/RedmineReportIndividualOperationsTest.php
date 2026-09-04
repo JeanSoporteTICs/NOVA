@@ -23,7 +23,7 @@ class RedmineReportIndividualOperationsTest extends TestCase
 
     private function facade(): RedmineDataRepository
     {
-        return (new RedmineDataRepository())->forProject('redmine_tic');
+        return (new RedmineDataRepository)->forProject('redmine_tic');
     }
 
     private function repo(): RedmineReportRepository
@@ -147,6 +147,22 @@ class RedmineReportIndividualOperationsTest extends TestCase
         $this->assertNotNull($saved);
         $this->assertArrayHasKey('id', $saved);
         $this->assertTrue(DB::table('redmine_tic_reportes')->where('id', $saved['id'])->where('asunto', 'Nuevo')->exists());
+    }
+
+    public function test_update_report_preserves_free_text_unit_outside_catalog(): void
+    {
+        $id = $this->makeReport();
+
+        $updated = $this->facade()->updateReport([
+            'id' => (string) $id,
+            'unidad' => 'de Farmacia a ex Pediatría',
+        ]);
+
+        $this->assertTrue($updated);
+        $this->assertSame(
+            'de Farmacia a ex Pediatría',
+            DB::table('redmine_tic_reportes')->where('id', $id)->value('unidad_texto')
+        );
     }
 
     public function test_upsert_archived_inserts_when_report_has_no_numeric_id(): void

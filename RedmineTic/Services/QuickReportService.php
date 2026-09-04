@@ -30,7 +30,7 @@ final class QuickReportService
             ?: CatalogMatchSupport::inferCatalogMatch($problem.' '.$unitText, $categoryNames)
             ?: $this->preferredCatalogValue($categoryNames, 'Equipos');
         $requestUnit = CatalogMatchSupport::inferCatalogMatch($unitText, $unitNames)
-            ?: $this->exactCatalogValue($unitNames, 'HBV');
+            ?: CatalogMatchSupport::exactCatalogValue($unitNames, 'HBV');
         $now = now('America/Santiago');
         $normalizedInput = implode(', ', $parts);
 
@@ -143,17 +143,5 @@ final class QuickReportService
         }
 
         return $values[0] ?? '';
-    }
-
-    /** @param string[] $values */
-    private function exactCatalogValue(array $values, string $expected): string
-    {
-        foreach ($values as $value) {
-            if (strcasecmp($value, $expected) === 0) {
-                return $value;
-            }
-        }
-
-        return '';
     }
 }
