@@ -1633,6 +1633,10 @@ final class RedmineDataRepository
             return false;
         }
 
+        if (array_key_exists('hora_extra', $payload)) {
+            $payload = $this->normalizeHoursExtraFields($payload);
+        }
+
         if (array_key_exists('unidad_solicitante', $payload)) {
             $payload['unidad_solicitante'] = $this->resolveRequestUnit(
                 $payload['unidad_solicitante'],
@@ -2017,6 +2021,7 @@ final class RedmineDataRepository
 
     public function createSimulatedReport(array $payload): array
     {
+        $payload = $this->normalizeHoursExtraFields($payload);
         $reports = $this->activeReports();
         $now = now('America/Santiago');
         $unitText = trim((string) ($payload['unidad'] ?? ''));
@@ -2038,8 +2043,8 @@ final class RedmineDataRepository
             'fecha_inicio' => trim((string) ($payload['fecha_inicio'] ?? $now->format('Y-m-d'))),
             'fecha_fin' => trim((string) ($payload['fecha_fin'] ?? '')),
             'asignado_a' => trim((string) ($payload['asignado_a'] ?? '')),
-            'hora_extra' => (($payload['hora_extra'] ?? '') === 'SI' || ($payload['hora_extra'] ?? '') === '1') ? 'SI' : 'NO',
-            'tiempo_estimado' => trim((string) ($payload['tiempo_estimado'] ?? '')),
+            'hora_extra' => $payload['hora_extra'],
+            'tiempo_estimado' => $payload['tiempo_estimado'],
             'origen' => trim((string) ($payload['origen'] ?? 'manual')),
             'created_at' => $now->toAtomString(),
         ];
@@ -2054,6 +2059,25 @@ final class RedmineDataRepository
         ]);
 
         return $report;
+    }
+
+    /**
+     * Hora extra and estimated time are one domain decision in TIC: enabled
+     * reports always use one hour, while disabled reports keep no estimate.
+     *
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    private function normalizeHoursExtraFields(array $payload): array
+    {
+        $enabled = $this->reportRepo()->isHoursExtraReport([
+            'hora_extra' => $payload['hora_extra'] ?? '',
+        ]);
+
+        $payload['hora_extra'] = $enabled ? 'SI' : 'NO';
+        $payload['tiempo_estimado'] = $enabled ? '1' : '';
+
+        return $payload;
     }
 
     /**

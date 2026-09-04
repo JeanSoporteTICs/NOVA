@@ -425,7 +425,7 @@
                                 <div class="form-text"><i class="bi bi-lock"></i> Requiere el permiso Editar de Horas extra.</div>
                             @endif
                         </div>
-                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1:30" @disabled(!$canEditHoursExtra)></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Automático según hora extra" readonly aria-readonly="true" @disabled(!$canEditHoursExtra)></div>
                         <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
 
@@ -475,6 +475,14 @@
             window.jQuery(select).trigger('change.select2');
         }
     };
+    const syncDashboardEstimatedTime = (form) => {
+        if (!form?.elements?.hora_extra || !form?.elements?.tiempo_estimado) return;
+        form.elements.tiempo_estimado.value = form.elements.hora_extra.value === 'SI' ? '1' : '';
+    };
+    const dashboardEditForm = document.querySelector('#editar-solicitud form');
+    dashboardEditForm?.elements?.hora_extra?.addEventListener('change', () => {
+        syncDashboardEstimatedTime(dashboardEditForm);
+    });
     const initTicDashboardSelect2 = () => {
         if (!window.jQuery?.fn?.select2) return;
         const modal = window.jQuery('#editar-solicitud');
@@ -730,6 +738,7 @@
             form.elements.fecha_inicio.value = toDateInput(button.dataset.reportFechaInicio);
             form.elements.fecha_fin.value = toDateInput(button.dataset.reportFechaFin);
             form.elements.tiempo_estimado.value = button.dataset.reportTiempoEstimado || '';
+            syncDashboardEstimatedTime(form);
             form.elements.fecha.value = toDateInput(button.dataset.reportFecha);
             form.elements.hora.value = button.dataset.reportHora || '';
             form.elements.mensaje.value = button.dataset.reportMensaje || button.dataset.reportDescripcion || '';
@@ -769,7 +778,10 @@
     // the edit modal right after toggling doesn't show the pre-toggle value.
     document.addEventListener('nova-optimistic-toggle:change', (event) => {
         const editButton = event.target.closest('tr')?.querySelector('[data-nova-modal-open="editar-solicitud"]');
-        if (editButton) editButton.setAttribute('data-report-hora-extra', event.detail.active ? 'SI' : 'NO');
+        if (editButton) {
+            editButton.setAttribute('data-report-hora-extra', event.detail.active ? 'SI' : 'NO');
+            editButton.setAttribute('data-report-tiempo-estimado', event.detail.active ? '1' : '');
+        }
     });
     const dashboardSendButton = document.querySelector('[data-dashboard-send-redmine]');
     const syncDashboardSendAvailability = () => {

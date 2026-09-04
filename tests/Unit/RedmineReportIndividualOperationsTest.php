@@ -101,8 +101,13 @@ class RedmineReportIndividualOperationsTest extends TestCase
         $this->assertTrue($ok);
         $row = DB::table('redmine_tic_reportes')->where('id', $targetId)->first();
         $this->assertSame(1, (int) $row->hora_extra);
-        $this->assertNotNull($row->tiempo_estimado);
+        $this->assertSame(1.0, (float) $row->tiempo_estimado);
         $this->assertSame(0, (int) DB::table('redmine_tic_reportes')->where('id', $keepId)->value('hora_extra'));
+
+        $this->assertTrue($repo->updateActiveHoursExtraFlag($this->moduleId(), (string) $targetId, false));
+        $row = DB::table('redmine_tic_reportes')->where('id', $targetId)->first();
+        $this->assertSame(0, (int) $row->hora_extra);
+        $this->assertNull($row->tiempo_estimado);
     }
 
     public function test_delete_active_by_id_removes_only_the_targeted_row(): void

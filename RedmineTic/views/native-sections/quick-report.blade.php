@@ -248,7 +248,7 @@
                                             <div class="col-md-4"><label class="form-label" for="quick-fecha">Fecha reporte</label><input class="form-control" id="quick-fecha" type="date" name="fecha" value="{{ $field('fecha') }}"></div>
                                             <div class="col-md-4"><label class="form-label" for="quick-hora">Hora</label><input class="form-control" id="quick-hora" type="time" name="hora" value="{{ $field('hora') }}"></div>
                                             <div class="col-md-4"><label class="form-label" for="quick-hora-extra">Hora extra</label><select class="form-select" id="quick-hora-extra" name="hora_extra"><option value="NO" @selected($field('hora_extra', 'NO') === 'NO')>No</option><option value="SI" @selected($field('hora_extra') === 'SI')>Sí</option></select></div>
-                                            <div class="col-md-4"><label class="form-label" for="quick-tiempo">Tiempo estimado</label><input class="form-control" id="quick-tiempo" name="tiempo_estimado" maxlength="40" value="{{ $field('tiempo_estimado') }}" placeholder="Ej: 1.5"></div>
+                                            <div class="col-md-4"><label class="form-label" for="quick-tiempo">Tiempo estimado</label><input class="form-control" id="quick-tiempo" name="tiempo_estimado" maxlength="40" value="{{ $field('tiempo_estimado') }}" placeholder="Automático según hora extra" readonly aria-readonly="true"></div>
                                         </div>
                                     </details>
                                 </section>

@@ -120,6 +120,14 @@
   };
 
   const editor = root.querySelector('[data-tic-quick-form]');
+  const hoursExtra = root.querySelector('#quick-hora-extra');
+  const estimatedTime = root.querySelector('#quick-tiempo');
+  const syncEstimatedTime = () => {
+    if (!hoursExtra || !estimatedTime) return;
+    estimatedTime.value = hoursExtra.value === 'SI' ? '1' : '';
+  };
+  hoursExtra?.addEventListener('change', syncEstimatedTime);
+  syncEstimatedTime();
   const previewDrawer = root.querySelector('[data-quick-preview-drawer]');
   const minimizeDrawerButton = previewDrawer?.querySelector('[data-quick-drawer-minimize]');
   const maximizeDrawerButton = previewDrawer?.querySelector('[data-quick-drawer-maximize]');
