@@ -1137,10 +1137,11 @@ const NovaOptimisticToggle = (() => {
         if (!button || !icon || !activeIcon || button.disabled) return;
 
         const wasActive = icon.classList.contains(activeIcon);
+        const targetActive = !wasActive;
         const previousTitle = button.getAttribute('title') || '';
         const previousAriaLabel = button.getAttribute('aria-label') || '';
 
-        applyState(form, button, icon, !wasActive);
+        applyState(form, button, icon, targetActive);
         form.dataset.togglePending = 'true';
         form.dispatchEvent(new CustomEvent('nova-optimistic-toggle:pending', { bubbles: true }));
         button.disabled = true;
@@ -1160,6 +1161,11 @@ const NovaOptimisticToggle = (() => {
             const actionField = form.dataset.toggleActionField || 'action';
             const actionValue = form.dataset.toggleActionValue || 'toggle_hora_extra';
             formData.set(actionField, actionValue);
+            // applyState() leaves the hidden field prepared for the following
+            // click. The current request must carry the state just displayed.
+            if (form.querySelector('input[name="hora_extra"]')) {
+                formData.set('hora_extra', targetActive ? '1' : '0');
+            }
             const laravelToken = formData.get('_token')
                 || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                 || '';

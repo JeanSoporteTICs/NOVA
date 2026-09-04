@@ -17,8 +17,12 @@ final class RedmineTicHoursExtraEstimatedTimeTest extends TestCase
         $normalize = $reflection->getMethod('normalizeHoursExtraFields');
 
         self::assertSame(
-            ['hora_extra' => 'SI', 'tiempo_estimado' => '1'],
+            ['hora_extra' => 'SI', 'tiempo_estimado' => '3.5'],
             $normalize->invoke($repository, ['hora_extra' => 'SI', 'tiempo_estimado' => '3.5'])
+        );
+        self::assertSame(
+            ['hora_extra' => 'SI', 'tiempo_estimado' => '1'],
+            $normalize->invoke($repository, ['hora_extra' => 'SI', 'tiempo_estimado' => ''])
         );
         self::assertSame(
             ['hora_extra' => 'NO', 'tiempo_estimado' => ''],
@@ -36,7 +40,7 @@ final class RedmineTicHoursExtraEstimatedTimeTest extends TestCase
 
         self::assertIsString($repository);
         self::assertStringContainsString('$payload = $this->normalizeHoursExtraFields($payload);', $repository);
-        self::assertStringContainsString("\$payload['tiempo_estimado'] = \$enabled ? '1' : '';", $repository);
+        self::assertStringContainsString("\$estimatedTime !== '' ? \$estimatedTime : '1'", $repository);
         self::assertMatchesRegularExpression(
             '/public function updateReport.*?array_key_exists\(\'hora_extra\'.*?normalizeHoursExtraFields/s',
             $repository
@@ -59,12 +63,14 @@ final class RedmineTicHoursExtraEstimatedTimeTest extends TestCase
         self::assertIsString($quick);
         self::assertIsString($quickScript);
         self::assertIsString($dashboard);
-        self::assertStringContainsString("estimatedTime.value = hoursExtra.value === 'SI' ? '1' : '';", $manual);
-        self::assertStringContainsString("estimatedTime.value = hoursExtra.value === 'SI' ? '1' : '';", $quickScript);
-        self::assertStringContainsString("form.elements.tiempo_estimado.value = form.elements.hora_extra.value === 'SI' ? '1' : '';", $dashboard);
+        self::assertStringContainsString("estimatedTime.value = '1';", $manual);
+        self::assertStringContainsString(".on('change.ticManualHoursExtra', () => syncEstimatedTime(true))", $manual);
+        self::assertStringContainsString("estimatedTime.value = '1';", $quickScript);
+        self::assertStringContainsString("form.elements.tiempo_estimado.value = '1';", $dashboard);
+        self::assertStringContainsString(".on('change.ticDashboardHoursExtra', sync)", $dashboard);
         self::assertStringContainsString("event.detail.active ? '1' : ''", $dashboard);
-        self::assertSame(1, substr_count($manual, 'name="tiempo_estimado" placeholder="Automático según hora extra" readonly'));
-        self::assertSame(1, substr_count($quick, 'name="tiempo_estimado" maxlength="40" value="{{ $field(\'tiempo_estimado\') }}" placeholder="Automático según hora extra" readonly'));
-        self::assertSame(1, substr_count($dashboard, 'name="tiempo_estimado" placeholder="Automático según hora extra" readonly'));
+        self::assertStringNotContainsString('id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1.5" readonly', $manual);
+        self::assertStringNotContainsString('id="quick-tiempo" name="tiempo_estimado" maxlength="40" value="{{ $field(\'tiempo_estimado\') }}" placeholder="Ej: 1.5" readonly', $quick);
+        self::assertStringNotContainsString('name="tiempo_estimado" placeholder="Ej: 1.5" readonly', $dashboard);
     }
 }

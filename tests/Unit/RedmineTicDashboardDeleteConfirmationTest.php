@@ -81,6 +81,8 @@ final class RedmineTicDashboardDeleteConfirmationTest extends TestCase
         self::assertIsString($controller);
         self::assertStringContainsString('data-toggle-action-field="dashboard_action" data-toggle-action-value="toggle_hours_extra"', $dashboard);
         self::assertStringContainsString('formData.set(actionField, actionValue);', $ui);
+        self::assertStringContainsString('const targetActive = !wasActive;', $ui);
+        self::assertStringContainsString("formData.set('hora_extra', targetActive ? '1' : '0');", $ui);
         self::assertStringContainsString("form.dataset.togglePending = 'true';", $ui);
         self::assertStringContainsString('delete form.dataset.togglePending;', $ui);
         self::assertStringContainsString('hasPendingToggle || isSending', $dashboard);

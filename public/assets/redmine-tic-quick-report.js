@@ -122,11 +122,15 @@
   const editor = root.querySelector('[data-tic-quick-form]');
   const hoursExtra = root.querySelector('#quick-hora-extra');
   const estimatedTime = root.querySelector('#quick-tiempo');
-  const syncEstimatedTime = () => {
+  const syncEstimatedTime = (useDefault = false) => {
     if (!hoursExtra || !estimatedTime) return;
-    estimatedTime.value = hoursExtra.value === 'SI' ? '1' : '';
+    if (hoursExtra.value !== 'SI') {
+      estimatedTime.value = '';
+    } else if (useDefault || estimatedTime.value.trim() === '') {
+      estimatedTime.value = '1';
+    }
   };
-  hoursExtra?.addEventListener('change', syncEstimatedTime);
+  hoursExtra?.addEventListener('change', () => syncEstimatedTime(true));
   syncEstimatedTime();
   const previewDrawer = root.querySelector('[data-quick-preview-drawer]');
   const minimizeDrawerButton = previewDrawer?.querySelector('[data-quick-drawer-minimize]');

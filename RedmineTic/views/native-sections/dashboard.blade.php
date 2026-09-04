@@ -425,7 +425,7 @@
                                 <div class="form-text"><i class="bi bi-lock"></i> Requiere el permiso Editar de Horas extra.</div>
                             @endif
                         </div>
-                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Automático según hora extra" readonly aria-readonly="true" @disabled(!$canEditHoursExtra)></div>
+                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1.5" @disabled(!$canEditHoursExtra)></div>
                         <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
                         <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
 
@@ -475,14 +475,27 @@
             window.jQuery(select).trigger('change.select2');
         }
     };
-    const syncDashboardEstimatedTime = (form) => {
+    const syncDashboardEstimatedTime = (form, useDefault = false) => {
         if (!form?.elements?.hora_extra || !form?.elements?.tiempo_estimado) return;
-        form.elements.tiempo_estimado.value = form.elements.hora_extra.value === 'SI' ? '1' : '';
+        if (form.elements.hora_extra.value !== 'SI') {
+            form.elements.tiempo_estimado.value = '';
+        } else if (useDefault || form.elements.tiempo_estimado.value.trim() === '') {
+            form.elements.tiempo_estimado.value = '1';
+        }
     };
     const dashboardEditForm = document.querySelector('#editar-solicitud form');
-    dashboardEditForm?.elements?.hora_extra?.addEventListener('change', () => {
-        syncDashboardEstimatedTime(dashboardEditForm);
-    });
+    const initTicDashboardHoursExtra = () => {
+        const hoursExtra = dashboardEditForm?.elements?.hora_extra;
+        if (!hoursExtra) return;
+        const sync = () => syncDashboardEstimatedTime(dashboardEditForm, true);
+        if (window.jQuery) {
+            window.jQuery(hoursExtra)
+                .off('change.ticDashboardHoursExtra')
+                .on('change.ticDashboardHoursExtra', sync);
+        } else {
+            hoursExtra.addEventListener('change', sync);
+        }
+    };
     const initTicDashboardSelect2 = () => {
         if (!window.jQuery?.fn?.select2) return;
         const modal = window.jQuery('#editar-solicitud');
@@ -515,10 +528,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             initTicDashboardDescription();
             initTicDashboardSelect2();
+            initTicDashboardHoursExtra();
         }, { once: true });
     } else {
         initTicDashboardDescription();
         initTicDashboardSelect2();
+        initTicDashboardHoursExtra();
     }
 
     const dashboardSelectedInput = document.querySelector('[data-dashboard-selected-ids]');

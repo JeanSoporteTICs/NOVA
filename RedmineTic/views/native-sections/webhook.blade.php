@@ -170,7 +170,7 @@
                             </div>
                             <div class="rm-manual-horizontal-field">
                                 <label class="form-label" for="manual-tiempo-estimado">Tiempo estimado</label>
-                                <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Automático según hora extra" readonly aria-readonly="true">
+                                <input class="form-control" id="manual-tiempo-estimado" type="text" name="tiempo_estimado" placeholder="Ej: 1.5">
                             </div>
                         </div>
                     </div>
@@ -242,10 +242,20 @@
         const estimatedTime = document.getElementById('manual-tiempo-estimado');
         if (!hoursExtra || !estimatedTime) return;
 
-        const syncEstimatedTime = () => {
-            estimatedTime.value = hoursExtra.value === 'SI' ? '1' : '';
+        const syncEstimatedTime = (useDefault = false) => {
+            if (hoursExtra.value !== 'SI') {
+                estimatedTime.value = '';
+            } else if (useDefault || estimatedTime.value.trim() === '') {
+                estimatedTime.value = '1';
+            }
         };
-        hoursExtra.addEventListener('change', syncEstimatedTime);
+        if (window.jQuery) {
+            window.jQuery(hoursExtra)
+                .off('change.ticManualHoursExtra')
+                .on('change.ticManualHoursExtra', () => syncEstimatedTime(true));
+        } else {
+            hoursExtra.addEventListener('change', () => syncEstimatedTime(true));
+        }
         syncEstimatedTime();
     };
     if (document.readyState === 'loading') {

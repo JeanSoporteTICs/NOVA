@@ -2062,8 +2062,8 @@ final class RedmineDataRepository
     }
 
     /**
-     * Hora extra and estimated time are one domain decision in TIC: enabled
-     * reports always use one hour, while disabled reports keep no estimate.
+     * Hora extra uses one hour as its default estimate, but the user may
+     * replace it. Disabled reports keep no estimate.
      *
      * @param  array<string,mixed>  $payload
      * @return array<string,mixed>
@@ -2073,9 +2073,10 @@ final class RedmineDataRepository
         $enabled = $this->reportRepo()->isHoursExtraReport([
             'hora_extra' => $payload['hora_extra'] ?? '',
         ]);
+        $estimatedTime = trim((string) ($payload['tiempo_estimado'] ?? ''));
 
         $payload['hora_extra'] = $enabled ? 'SI' : 'NO';
-        $payload['tiempo_estimado'] = $enabled ? '1' : '';
+        $payload['tiempo_estimado'] = $enabled ? ($estimatedTime !== '' ? $estimatedTime : '1') : '';
 
         return $payload;
     }
