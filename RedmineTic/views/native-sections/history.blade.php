@@ -49,10 +49,23 @@
     $fBusqueda = trim((string) ($query['buscar'] ?? ''));
     $fDescripcion = trim((string) ($query['descripcion'] ?? ''));
     $fCategoria = trim((string) ($query['categoria'] ?? ''));
+    $fEstadoRedmine = trim((string) ($query['estado_redmine'] ?? ''));
     $perPageOptions = [25, 50, 100];
     $perPage = (int) ($query['per_page'] ?? 25);
     if (!in_array($perPage, $perPageOptions, true)) $perPage = 25;
     $currentPage = max(1, (int) ($query['page'] ?? 1));
+
+    $redmineStatusOptions = [];
+    $redmineFilterStatuses = [];
+    foreach ((array) ($config['estados'] ?? []) as $statusOption) {
+        if (!is_array($statusOption)) continue;
+        $statusId = filter_var($statusOption['id'] ?? null, FILTER_VALIDATE_INT);
+        $statusName = trim((string) ($statusOption['nombre'] ?? $statusOption['name'] ?? ''));
+        if ($statusId === false || $statusId <= 0 || $statusName === '') continue;
+        $redmineStatusOptions[$statusId] = ['id' => $statusId, 'name' => $statusName];
+        $redmineFilterStatuses[$statusName] = $statusName;
+    }
+    $redmineStatusOptions = array_values($redmineStatusOptions);
 
     $categories = [];
     $filtered = [];
@@ -61,11 +74,14 @@
         $date = $normDate($row['fecha_inicio'] ?? $row['fecha'] ?? $row['_history_sort_date'] ?? '');
         $source = $sourceValue($row);
         $category = trim((string) ($row['categoria'] ?? $row['core_categoria'] ?? ''));
+        $redmineStatus = trim((string) ($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? ''));
         if ($category !== '') $categories[$category] = $category;
+        if ($redmineStatus !== '') $redmineFilterStatuses[$redmineStatus] = $redmineStatus;
         if ($date !== '' && $fDesde !== '' && $date < $fDesde) continue;
         if ($date !== '' && $fHasta !== '' && $date > $fHasta) continue;
         if ($fFuente !== '' && $source !== $fFuente) continue;
         if ($fCategoria !== '' && $category !== $fCategoria) continue;
+        if ($fEstadoRedmine !== '' && $normalizeText($redmineStatus) !== $normalizeText($fEstadoRedmine)) continue;
         if ($fBusqueda !== '') {
             $needle = $normalizeText($fBusqueda);
             $haystack = $normalizeText(implode(' ', [
@@ -78,6 +94,7 @@
                 $row['asignado_nombre'] ?? '',
                 $row['asignado_a'] ?? '',
                 $category,
+                $redmineStatus,
             ]));
             if ($needle !== '' && !str_contains($haystack, $needle)) continue;
         }
@@ -90,6 +107,7 @@
         $filtered[] = $row;
     }
     ksort($categories);
+    ksort($redmineFilterStatuses, SORT_NATURAL | SORT_FLAG_CASE);
 
     $totalFiltered = count($filtered);
     $totalPages = max(1, (int) ceil($totalFiltered / $perPage));
@@ -101,16 +119,6 @@
     $archivedRows = max(0, $totalFiltered - $hoursRows);
     $canHistoryActions = empty($redmineMaintenance['enabled'])
         && !empty($canHistoryActionsPermission);
-    $redmineStatusOptions = [];
-    foreach ((array) ($config['estados'] ?? []) as $statusOption) {
-        if (!is_array($statusOption)) continue;
-        $statusId = filter_var($statusOption['id'] ?? null, FILTER_VALIDATE_INT);
-        $statusName = trim((string) ($statusOption['nombre'] ?? $statusOption['name'] ?? ''));
-        if ($statusId === false || $statusId <= 0 || $statusName === '') continue;
-        $redmineStatusOptions[$statusId] = ['id' => $statusId, 'name' => $statusName];
-    }
-    $redmineStatusOptions = array_values($redmineStatusOptions);
-
     $baseHistoryUrl = $redmineRoute('redmine.native.section', ['section' => 'historico']);
     $urlWithQuery = static function (array $changes = []) use ($query, $baseHistoryUrl): string {
         $next = array_merge($query, $changes);
@@ -135,6 +143,7 @@
     if ($fBusqueda !== '') $chips[] = ['icon' => 'bi-search', 'label' => 'Busqueda ' . $fBusqueda, 'remove' => 'buscar'];
     if ($fDescripcion !== '') $chips[] = ['icon' => 'bi-card-text', 'label' => 'Descripcion ' . $fDescripcion, 'remove' => 'descripcion'];
     if ($fCategoria !== '') $chips[] = ['icon' => 'bi-tags', 'label' => 'Categoria ' . $fCategoria, 'remove' => 'categoria'];
+    if ($fEstadoRedmine !== '') $chips[] = ['icon' => 'bi-kanban', 'label' => 'Estado Redmine ' . $fEstadoRedmine, 'remove' => 'estado_redmine'];
 
     $tableColspan = $canHistoryActions ? 10 : 9;
 @endphp
@@ -144,7 +153,7 @@
     <div>
         <small>Registro historico</small>
         <h2>Historico</h2>
-        <p>Consulta reportes archivados y horas extra con filtros de fecha, fuente y categoria.</p>
+        <p>Consulta reportes archivados y horas extra con filtros de fecha, fuente, categoria y estado Redmine.</p>
     </div>
     <div class="rm-module-meter">
         <strong>{{ $totalFiltered }}</strong>
@@ -155,53 +164,134 @@
 @php $redmineTicHistoryCssVersion = @filemtime(public_path('assets/redmine-tic-history.css')) ?: '1'; @endphp
 <link href="{{ asset('assets/redmine-tic-history.css') }}?v={{ $redmineTicHistoryCssVersion }}" rel="stylesheet">
 
-<form id="filter-form" class="card card-body shadow-sm mb-3 historico-filter-card" method="get" action="{{ $baseHistoryUrl }}" aria-live="polite">
+<form id="filter-form" class="card mb-3 historico-filter-card" method="get" action="{{ $baseHistoryUrl }}" aria-live="polite">
     <input type="hidden" name="page" value="1">
     <input type="hidden" name="per_page" value="{{ $perPage }}">
-    <div class="row g-3 align-items-end">
-        <div class="col-md-2">
-            <label class="form-label fw-bold" for="history-desde">Desde</label>
-            <input id="history-desde" class="form-control" type="date" name="desde" value="{{ $fDesde }}">
+
+    <header class="historico-filter-head">
+        <div class="historico-filter-heading">
+            <span class="historico-filter-heading__icon"><i class="bi bi-sliders2"></i></span>
+            <div>
+                <span class="historico-filter-eyebrow">Consulta</span>
+                <h3>Filtros del histórico</h3>
+            </div>
         </div>
-        <div class="col-md-2">
-            <label class="form-label fw-bold" for="history-hasta">Hasta</label>
-            <input id="history-hasta" class="form-control" type="date" name="hasta" value="{{ $fHasta }}">
+        <div class="historico-filter-head__tools">
+            <span class="historico-active-filter-count {{ empty($chips) ? 'is-empty' : '' }}">
+                <i class="bi bi-funnel-fill"></i>
+                <strong>{{ count($chips) }}</strong>
+                {{ count($chips) === 1 ? 'filtro activo' : 'filtros activos' }}
+            </span>
+            <button type="button" class="historico-filter-toggle" data-history-filter-toggle aria-expanded="false" aria-controls="historico-filter-body">
+                <span>Mostrar filtros</span><i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
         </div>
-        <div class="col-md-2">
-            <label class="form-label fw-bold" for="history-fuente">Fuente</label>
-            <select id="history-fuente" class="form-select" name="fuente">
-                <option value="">Todas</option>
-                <option value="manual" @selected($fFuente === 'manual')>Manual</option>
-                <option value="telegram" @selected($fFuente === 'telegram')>Telegram</option>
-            </select>
+    </header>
+
+    <section class="historico-search-strip" aria-label="Búsqueda del histórico">
+        <div class="historico-search-grid">
+            <div class="historico-filter-field">
+                <label class="form-label" for="history-buscar">Datos del reporte</label>
+                <span class="historico-input-icon">
+                    <i class="bi bi-ticket-perforated" aria-hidden="true"></i>
+                    <input id="history-buscar" class="form-control" type="search" name="buscar" value="{{ $fBusqueda }}" placeholder="ID, asunto, solicitante o unidad">
+                </span>
+            </div>
+            <div class="historico-filter-field">
+                <label class="form-label" for="history-descripcion">Descripción</label>
+                <span class="historico-input-icon">
+                    <i class="bi bi-card-text" aria-hidden="true"></i>
+                    <input id="history-descripcion" class="form-control" type="search" name="descripcion" value="{{ $fDescripcion }}" placeholder="Palabra o frase contenida">
+                </span>
+            </div>
         </div>
-        <div class="col-md-3">
-            <label class="form-label fw-bold" for="history-buscar">Buscar</label>
-            <input id="history-buscar" class="form-control" type="search" name="buscar" value="{{ $fBusqueda }}" placeholder="ID, asunto, solicitante, unidad">
+        <div class="historico-search-actions">
+            <a class="btn btn-outline-secondary" href="{{ $baseHistoryUrl }}" title="Limpiar todos los filtros"><i class="bi bi-arrow-counterclockwise"></i><span>Limpiar</span></a>
+            <button type="submit" id="btn-apply" class="btn btn-primary"><i class="bi bi-search"></i><span>Buscar</span></button>
         </div>
-        <div class="col-md-3">
-            <label class="form-label fw-bold" for="history-categoria">Categoria</label>
-            <select id="history-categoria" class="form-select" name="categoria">
-                <option value="">Todas</option>
-                @foreach ($categories as $category)
-                    <option value="{{ $category }}" @selected($fCategoria === $category)>{{ $category }}</option>
-                @endforeach
-            </select>
+    </section>
+
+    <div id="historico-filter-body" class="historico-filter-body" data-history-filter-body hidden>
+      <div class="historico-filter-layout">
+        <section class="historico-filter-section historico-filter-section--dates" aria-labelledby="historico-period-title">
+            <div class="historico-filter-section__head">
+                <span><i class="bi bi-calendar-range"></i></span>
+                <div>
+                    <h4 id="historico-period-title">Rango de fechas</h4>
+                    <p>Acota el período de creación del reporte.</p>
+                </div>
+            </div>
+            <div class="historico-date-range" data-history-date-range>
+                <label class="historico-date-control" for="history-desde">
+                    <span>Desde</span>
+                    <span class="historico-input-icon">
+                        <i class="bi bi-calendar2-event" aria-hidden="true"></i>
+                        <input id="history-desde" class="form-control" type="date" name="desde" value="{{ $fDesde }}">
+                    </span>
+                </label>
+                <span class="historico-date-connector" aria-hidden="true"><i></i><span class="bi bi-arrow-right"></span><i></i></span>
+                <label class="historico-date-control" for="history-hasta">
+                    <span>Hasta</span>
+                    <span class="historico-input-icon">
+                        <i class="bi bi-calendar2-check" aria-hidden="true"></i>
+                        <input id="history-hasta" class="form-control" type="date" name="hasta" value="{{ $fHasta }}">
+                    </span>
+                </label>
+            </div>
+            <div class="historico-date-presets" role="group" aria-label="Rangos de fecha rápidos">
+                <button type="button" data-history-range-preset="today">Hoy</button>
+                <button type="button" data-history-range-preset="7">7 días</button>
+                <button type="button" data-history-range-preset="30">30 días</button>
+                <button type="button" data-history-range-preset="month">Este mes</button>
+                <button type="button" data-history-range-preset="all">Sin límite</button>
+            </div>
+            <p class="historico-range-summary"><i class="bi bi-calendar-week" aria-hidden="true"></i><span data-history-range-summary aria-live="polite"></span></p>
+        </section>
+
+        <section class="historico-filter-section historico-filter-section--classify" aria-labelledby="historico-classify-title">
+            <div class="historico-filter-section__head">
+                <span><i class="bi bi-diagram-3"></i></span>
+                <div>
+                    <h4 id="historico-classify-title">Clasificación</h4>
+                    <p>Combina origen, estado y categoría.</p>
+                </div>
+            </div>
+            <div class="historico-classify-grid">
+                <div class="historico-filter-field">
+                    <label class="form-label" for="history-fuente">Fuente</label>
+                    <select id="history-fuente" class="form-select" name="fuente">
+                        <option value="">Todas</option>
+                        <option value="manual" @selected($fFuente === 'manual')>Manual</option>
+                        <option value="telegram" @selected($fFuente === 'telegram')>Telegram</option>
+                    </select>
+                </div>
+                <div class="historico-filter-field">
+                    <label class="form-label" for="history-estado-redmine">Estado Redmine</label>
+                    <select id="history-estado-redmine" class="form-select" name="estado_redmine">
+                        <option value="">Todos</option>
+                        @foreach ($redmineFilterStatuses as $statusName)
+                            <option value="{{ $statusName }}" @selected($normalizeText($fEstadoRedmine) === $normalizeText($statusName))>{{ $statusName }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="historico-filter-field historico-filter-field--wide">
+                    <label class="form-label" for="history-categoria">Categoría</label>
+                    <select id="history-categoria" class="form-select" name="categoria">
+                        <option value="">Todas</option>
+                        @foreach ($categories as $category)
+                            <option value="{{ $category }}" @selected($fCategoria === $category)>{{ $category }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+        </section>
+
         </div>
-        <div class="col-md-4">
-            <label class="form-label fw-bold" for="history-descripcion">Buscar en descripcion</label>
-            <input id="history-descripcion" class="form-control" type="search" name="descripcion" value="{{ $fDescripcion }}" placeholder="Texto contenido en la descripcion">
-        </div>
-        <div class="col-md-2">
-            <button type="submit" id="btn-apply" class="btn btn-primary w-100"><i class="bi bi-funnel"></i>Filtrar</button>
-        </div>
-        <div class="col-md-2">
-            <a class="btn btn-outline-secondary w-100" href="{{ $baseHistoryUrl }}"><i class="bi bi-x-circle"></i>Limpiar</a>
-        </div>
+
     </div>
-    <div id="filter-feedback" class="d-none mt-3 alert alert-info d-flex align-items-center" role="status" aria-live="polite">
-        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-        Aplicando filtros...
+    <div id="filter-feedback" class="d-none historico-filter-feedback" role="status" aria-live="polite">
+        <span class="nova-spinner" aria-hidden="true"></span>
+        <span>Aplicando filtros…</span>
     </div>
 </form>
 
@@ -477,7 +567,7 @@
         <nav class="historico-pagination" aria-label="Paginacion historico">
             <div class="historico-pagination__left">
                 <form method="get" action="{{ $baseHistoryUrl }}" class="historico-page-size-form">
-                    @foreach (['desde' => $fDesde, 'hasta' => $fHasta, 'fuente' => $fFuente, 'buscar' => $fBusqueda, 'descripcion' => $fDescripcion, 'categoria' => $fCategoria] as $name => $value)
+                    @foreach (['desde' => $fDesde, 'hasta' => $fHasta, 'fuente' => $fFuente, 'estado_redmine' => $fEstadoRedmine, 'buscar' => $fBusqueda, 'descripcion' => $fDescripcion, 'categoria' => $fCategoria] as $name => $value)
                         <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                     @endforeach
                     <input type="hidden" name="page" value="1">
@@ -544,7 +634,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const table = document.querySelector('table[role="grid"]');
     const loader = document.getElementById('table-loader');
     const btnApply = document.getElementById('btn-apply');
+    const filterToggle = form?.querySelector('[data-history-filter-toggle]');
+    const filterBody = form?.querySelector('[data-history-filter-body]');
+    const setFilterExpanded = expanded => {
+        if (!form || !filterToggle || !filterBody) return;
+        filterBody.hidden = !expanded;
+        form.classList.toggle('is-expanded', expanded);
+        filterToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const label = filterToggle.querySelector('span');
+        if (label) label.textContent = expanded ? 'Ocultar filtros' : 'Mostrar filtros';
+    };
+    filterToggle?.addEventListener('click', () => {
+        setFilterExpanded(filterToggle.getAttribute('aria-expanded') !== 'true');
+    });
+    setFilterExpanded(false);
     const setLoading = state => {
+        form?.classList.toggle('is-filtering', state);
         feedback?.classList.toggle('d-none', !state);
         loader?.classList.toggle('d-none', !state);
         table?.setAttribute('aria-busy', state ? 'true' : 'false');
@@ -555,6 +660,69 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoading(true);
         setTimeout(() => form.submit(), 60);
     });
+    window.requestAnimationFrame(() => form?.classList.add('is-ready'));
+
+    const dateRange = form?.querySelector('[data-history-date-range]');
+    const dateFrom = document.getElementById('history-desde');
+    const dateTo = document.getElementById('history-hasta');
+    const rangeSummary = form?.querySelector('[data-history-range-summary]');
+    const rangePresets = Array.from(form?.querySelectorAll('[data-history-range-preset]') || []);
+    const toInputDate = date => [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+    const formatRangeDate = value => {
+        if (!value) return '';
+        const [year, month, day] = value.split('-').map(Number);
+        if (!year || !month || !day) return value;
+        return new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+            .format(new Date(year, month - 1, day));
+    };
+    const presetRange = preset => {
+        const today = new Date();
+        const end = toInputDate(today);
+        if (preset === 'all') return ['', ''];
+        if (preset === 'today') return [end, end];
+        if (preset === 'month') return [toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)), end];
+        const days = Number(preset);
+        if (!Number.isFinite(days) || days < 1) return null;
+        const start = new Date(today);
+        start.setDate(start.getDate() - (days - 1));
+        return [toInputDate(start), end];
+    };
+    const syncDateRange = changed => {
+        if (!dateFrom || !dateTo) return;
+        if (dateFrom.value && dateTo.value && dateFrom.value > dateTo.value) {
+            if (changed === dateTo) dateFrom.value = dateTo.value;
+            else dateTo.value = dateFrom.value;
+        }
+        if (rangeSummary) {
+            rangeSummary.textContent = dateFrom.value && dateTo.value
+                ? `${formatRangeDate(dateFrom.value)} — ${formatRangeDate(dateTo.value)}`
+                : (dateFrom.value ? `Desde ${formatRangeDate(dateFrom.value)}` : (dateTo.value ? `Hasta ${formatRangeDate(dateTo.value)}` : 'Todo el histórico'));
+        }
+        rangePresets.forEach(button => {
+            const range = presetRange(button.dataset.historyRangePreset || '');
+            const active = Boolean(range && range[0] === dateFrom.value && range[1] === dateTo.value);
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+    };
+    dateFrom?.addEventListener('change', () => syncDateRange(dateFrom));
+    dateTo?.addEventListener('change', () => syncDateRange(dateTo));
+    rangePresets.forEach(button => {
+        button.addEventListener('click', () => {
+            const range = presetRange(button.dataset.historyRangePreset || '');
+            if (!range || !dateFrom || !dateTo) return;
+            [dateFrom.value, dateTo.value] = range;
+            syncDateRange();
+            dateRange?.classList.remove('is-range-pulsing');
+            window.requestAnimationFrame(() => dateRange?.classList.add('is-range-pulsing'));
+        });
+    });
+    dateRange?.addEventListener('animationend', () => dateRange.classList.remove('is-range-pulsing'));
+    syncDateRange();
 
     const card = document.getElementById('historico-table-card');
     const compactToggle = document.getElementById('historico-compact-toggle');

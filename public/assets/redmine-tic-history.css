@@ -1,5 +1,284 @@
-    .historico-filter-card { border: 1px solid rgba(215,226,239,.95); background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,255,.92)); }
-    .historico-filter-card .btn { min-height: 48px; white-space: nowrap; }
+    .historico-filter-card {
+        --history-ink: #102033;
+        --history-blue: #2563eb;
+        --history-blue-deep: #1e4e7a;
+        --history-sky: #eaf3ff;
+        --history-line: #d7e2ef;
+        --history-muted: #64748b;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(188, 207, 228, .92);
+        border-radius: 18px;
+        background: #f8fbff;
+        box-shadow: 0 14px 34px rgba(30, 78, 122, .1);
+    }
+    .historico-filter-card::before {
+        position: absolute;
+        inset: 0 0 auto;
+        height: 3px;
+        content: "";
+        background: linear-gradient(90deg, #38bdf8, var(--history-blue) 48%, #22c55e);
+    }
+    .historico-filter-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        min-height: 58px;
+        padding: .68rem .85rem;
+        border-bottom: 0;
+        background: rgba(255, 255, 255, .88);
+    }
+    .historico-filter-card.is-expanded .historico-filter-head { border-bottom: 1px solid rgba(188, 207, 228, .7); }
+    .historico-filter-heading { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+    .historico-filter-heading__icon {
+        display: grid;
+        flex: 0 0 36px;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 13px;
+        background: var(--history-ink);
+        color: #fff;
+        box-shadow: 0 9px 18px rgba(16, 32, 51, .2);
+    }
+    .historico-filter-eyebrow {
+        display: block;
+        margin-bottom: .12rem;
+        color: var(--history-blue);
+        font-size: .67rem;
+        font-weight: 900;
+        letter-spacing: .12em;
+        line-height: 1;
+        text-transform: uppercase;
+    }
+    .historico-filter-heading h3 { margin: 0; color: var(--history-ink); font-size: 1.08rem; font-weight: 900; letter-spacing: -.02em; }
+    .historico-filter-head__tools { display: flex; align-items: center; gap: .55rem; }
+    .historico-active-filter-count {
+        display: inline-flex;
+        align-items: center;
+        gap: .38rem;
+        min-height: 34px;
+        padding: .38rem .7rem;
+        border: 1px solid #bfdbfe;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: .76rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .historico-active-filter-count strong { font-size: .9rem; }
+    .historico-active-filter-count.is-empty { border-color: #e2e8f0; background: #f8fafc; color: #64748b; }
+    .historico-filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        min-height: 36px;
+        padding: .42rem .78rem;
+        border: 1px solid #bfd2e8;
+        border-radius: 10px;
+        background: #fff;
+        color: #1e4e7a;
+        font-size: .77rem;
+        font-weight: 900;
+        transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease;
+    }
+    .historico-filter-toggle:hover { border-color: #60a5fa; background: #eff6ff; color: #1d4ed8; transform: translateY(-1px); }
+    .historico-filter-toggle:focus-visible { outline: 3px solid rgba(56, 189, 248, .5); outline-offset: 2px; }
+    .historico-filter-toggle i { transition: transform .22s ease; }
+    .historico-filter-card.is-expanded .historico-filter-toggle i { transform: rotate(180deg); }
+    .historico-filter-body { background: #f8fbff; }
+    .historico-filter-card.is-expanded .historico-filter-body { animation: historico-filter-body-open .28s cubic-bezier(.22, .8, .32, 1) both; }
+    .historico-search-strip {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: .7rem;
+        padding: .58rem .85rem .68rem;
+        border-top: 1px solid rgba(188, 207, 228, .55);
+        background: rgba(255, 255, 255, .74);
+    }
+    .historico-search-actions { display: flex; align-items: center; gap: .42rem; min-height: 39px; }
+    .historico-filter-layout {
+        display: grid;
+        grid-template-columns: minmax(380px, 1.15fr) minmax(310px, .85fr);
+        gap: .62rem;
+        padding: .65rem;
+    }
+    .historico-filter-section {
+        min-width: 0;
+        padding: .72rem;
+        border: 1px solid rgba(203, 216, 232, .88);
+        border-radius: 15px;
+        background: rgba(255, 255, 255, .92);
+        box-shadow: 0 6px 18px rgba(30, 64, 105, .045);
+    }
+    .historico-filter-section--dates {
+        position: relative;
+        background:
+            radial-gradient(circle at 100% 0, rgba(56, 189, 248, .12), transparent 34%),
+            rgba(255, 255, 255, .96);
+    }
+    .historico-filter-section__head { display: flex; align-items: center; gap: .5rem; margin-bottom: .55rem; }
+    .historico-filter-section__head > span {
+        display: grid;
+        flex: 0 0 27px;
+        width: 27px;
+        height: 27px;
+        place-items: center;
+        border-radius: 9px;
+        background: var(--history-sky);
+        color: var(--history-blue);
+    }
+    .historico-filter-section__head h4 { margin: 0; color: var(--history-ink); font-size: .86rem; font-weight: 900; }
+    .historico-filter-section__head p { display: none; }
+    .historico-date-range { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); align-items: end; gap: .38rem; }
+    .historico-date-control { display: grid; gap: .28rem; min-width: 0; }
+    .historico-date-control > span:first-child,
+    .historico-filter-field .form-label {
+        margin: 0;
+        color: #334155;
+        font-size: .72rem;
+        font-weight: 900;
+        letter-spacing: .035em;
+        text-transform: uppercase;
+    }
+    .historico-input-icon { position: relative; display: block; min-width: 0; }
+    .historico-input-icon > i {
+        position: absolute;
+        z-index: 1;
+        top: 50%;
+        left: .78rem;
+        color: #3b82f6;
+        transform: translateY(-50%);
+        pointer-events: none;
+    }
+    .historico-input-icon > .form-control { padding-left: 2.35rem; }
+    .historico-filter-card .form-control,
+    .historico-filter-card .form-select {
+        min-height: 39px;
+        border-color: #cbd9e8;
+        border-radius: 10px;
+        background-color: #fbfdff;
+        color: var(--history-ink);
+        font-weight: 750;
+        transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease, transform .18s ease;
+    }
+    .historico-filter-card .form-control:hover,
+    .historico-filter-card .form-select:hover { border-color: #93b4dc; background-color: #fff; }
+    .historico-filter-card .form-control:focus,
+    .historico-filter-card .form-select:focus {
+        border-color: var(--history-blue);
+        background-color: #fff;
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, .11);
+        transform: translateY(-1px);
+    }
+    .historico-date-connector { display: flex; align-items: center; gap: .16rem; height: 39px; color: #3b82f6; }
+    .historico-date-connector i { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #93c5fd); }
+    .historico-date-connector i:last-child { background: linear-gradient(90deg, #93c5fd, transparent); }
+    .historico-date-connector > span {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border: 1px solid #bfdbfe;
+        border-radius: 50%;
+        background: #eff6ff;
+        font-size: .76rem;
+    }
+    .historico-date-presets { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .48rem; }
+    .historico-date-presets button {
+        min-height: 26px;
+        padding: .2rem .48rem;
+        border: 1px solid #d7e2ef;
+        border-radius: 999px;
+        background: #fff;
+        color: #475569;
+        font-size: .7rem;
+        font-weight: 850;
+        transition: color .18s ease, border-color .18s ease, background-color .18s ease, transform .18s ease, box-shadow .18s ease;
+    }
+    .historico-date-presets button:hover { border-color: #93c5fd; color: #1d4ed8; transform: translateY(-1px); }
+    .historico-date-presets button.is-active {
+        border-color: var(--history-blue);
+        background: var(--history-blue);
+        color: #fff;
+        box-shadow: 0 6px 14px rgba(37, 99, 235, .2);
+    }
+    .historico-date-presets button:focus-visible,
+    .historico-filter-card .btn:focus-visible { outline: 3px solid rgba(56, 189, 248, .5); outline-offset: 2px; }
+    .historico-range-summary { display: flex; align-items: center; gap: .3rem; min-height: .85rem; margin: .34rem 0 0; color: #1e4e7a; font-size: .68rem; font-weight: 850; }
+    .historico-classify-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+    .historico-filter-field { display: grid; gap: .28rem; min-width: 0; }
+    .historico-filter-field--wide { grid-column: 1 / -1; }
+    .historico-search-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+    .historico-filter-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 36px; padding-inline: .8rem; border-radius: 9px; font-size: .78rem; font-weight: 850; white-space: nowrap; }
+    .historico-filter-card #btn-apply { min-width: 100px; box-shadow: 0 8px 18px rgba(37, 99, 235, .2); }
+    .historico-filter-feedback {
+        position: absolute;
+        z-index: 4;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .65rem;
+        background: rgba(248, 251, 255, .78);
+        color: var(--history-blue-deep);
+        font-weight: 900;
+        backdrop-filter: blur(3px);
+    }
+    .historico-filter-card.is-filtering #btn-apply i { animation: historico-filter-spin .8s linear infinite; }
+    .historico-filter-card.is-ready .historico-filter-section { animation: historico-filter-enter .42s cubic-bezier(.22, .8, .32, 1) both; }
+    .historico-filter-card.is-ready .historico-filter-section:nth-child(2) { animation-delay: 65ms; }
+    .historico-filter-card.is-ready .historico-filter-section:nth-child(3) { animation-delay: 130ms; }
+    .historico-date-range.is-range-pulsing { animation: historico-range-pulse .42s ease-out; }
+    @keyframes historico-filter-enter {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes historico-filter-body-open {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes historico-range-pulse {
+        0%, 100% { filter: none; }
+        45% { filter: drop-shadow(0 5px 8px rgba(37, 99, 235, .2)); }
+    }
+    @keyframes historico-filter-spin { to { transform: rotate(360deg); } }
+    @media (max-width: 1399.98px) {
+        .historico-filter-layout { grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); }
+    }
+    @media (max-width: 991.98px) {
+        .historico-filter-layout { grid-template-columns: 1fr; }
+        .historico-search-strip { grid-template-columns: 1fr auto; align-items: end; }
+    }
+    @media (max-width: 575.98px) {
+        .historico-filter-head { align-items: center; flex-wrap: wrap; }
+        .historico-filter-head__tools { width: 100%; justify-content: space-between; }
+        .historico-active-filter-count { align-self: center; }
+        .historico-filter-layout { padding: .7rem; }
+        .historico-filter-section { padding: .85rem; }
+        .historico-date-range { grid-template-columns: 1fr; }
+        .historico-date-connector { height: 22px; justify-content: center; transform: rotate(90deg); }
+        .historico-date-connector i { max-width: 35px; }
+        .historico-classify-grid,
+        .historico-search-grid { grid-template-columns: 1fr; }
+        .historico-filter-field--wide { grid-column: auto; }
+        .historico-search-strip { grid-template-columns: 1fr; }
+        .historico-search-actions { display: grid; grid-template-columns: 1fr 1fr; }
+        .historico-search-actions .btn { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .historico-filter-card.is-ready .historico-filter-section,
+        .historico-filter-card.is-expanded .historico-filter-body,
+        .historico-date-range.is-range-pulsing,
+        .historico-filter-card.is-filtering #btn-apply i { animation: none; }
+        .historico-filter-card *,
+        .historico-filter-card *::before,
+        .historico-filter-card *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
     .historico-summary { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; border-bottom: 1px solid rgba(15,23,42,.08); background: rgba(248,250,255,.9); }
     .historico-count { display: inline-flex; align-items: center; gap: .5rem; color: #0f172a; font-weight: 900; }
     .historico-summary__tools { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; justify-content: flex-end; }
