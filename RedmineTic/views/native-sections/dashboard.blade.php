@@ -321,7 +321,7 @@
         <div class="modal-content rm-redmine-send-modal">
             <div class="modal-body">
                 <img src="{{ asset('assets/img/redmine.gif') }}" alt="Redmine">
-                <strong>Enviando solicitudes a Redmine</strong>
+                <strong>Comprobando Redmine y enviando solicitudes</strong>
                 <span>Espera mientras se procesan los tickets seleccionados.</span>
                 <div class="rm-redmine-send-bar"><i></i></div>
             </div>
@@ -678,7 +678,7 @@
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
-        window.setTimeout(() => form.submit(), 3000);
+        window.setTimeout(() => form.submit(), 50);
     });
 
     document.querySelectorAll('[data-dashboard-error-log-button]').forEach((button) => {

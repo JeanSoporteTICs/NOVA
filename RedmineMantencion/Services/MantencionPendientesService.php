@@ -330,6 +330,7 @@ class MantencionPendientesService
      */
     public function buildRecord(array $input, array $cfg, array $users): array
     {
+        $input = MantencionHoursExtraFields::normalize($input);
         $now = new DateTimeImmutable('now', new DateTimeZone('America/Santiago'));
         $trackerName = $this->optionName($cfg['trackers'] ?? [], $input['tracker_id'] ?? '');
         $priorityName = $this->optionName($cfg['prioridades'] ?? [], $input['priority_id'] ?? '');
@@ -456,7 +457,7 @@ class MantencionPendientesService
             $form['fecha_fin'] = $this->normalizeDate($form['fecha_fin'] ?? '');
             $form['tiempo_estimado'] = $this->normalizeHours($form['tiempo_estimado'] ?? '');
             $form['core_email'] = $this->normalizeEmail($form['core_email'] ?? '');
-            $form['hora_extra'] = ($form['hora_extra'] ?? '0') === '1' ? '1' : '0';
+            $form = MantencionHoursExtraFields::normalize($form);
             $form['core_usuario_asignado'] = $this->findUserName((string) ($form['asignado_a'] ?? ''), $users);
             $trackerName = $this->optionName($cfg['trackers'] ?? [], $form['tracker_id'] ?? '');
             $form['core_tipo_solicitud'] = trim((string) ($form['categoria'] ?? '')) !== '' ? trim((string) $form['categoria']) : $trackerName;

@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RedmineTic\Repositories\RedmineDataRepository;
 use Tests\TestCase;
@@ -15,20 +16,9 @@ use Tests\TestCase;
  * (RedmineReportRepository::findActiveByIds()) plus a punctual per-report
  * persist (updateActiveFields() via the new persistSentReport() helper).
  *
- * The success (HTTP 201) branch is never exercised here — this suite never
- * makes a real outbound call to Redmine; platform_url points at an
- * IANA-reserved TLD so postRedmineIssue() always returns something other
- * than 201, deterministically, without ever reaching a real Redmine.
- *
- * Creating a real usuarios_nova + integraciones_usuario row (needed to get
- * past the "no token" short-circuit) exercises RedmineUserRepository's
- * projectUsers() rebuild, which is expensive against this project's real
- * (remote, non-local) test database — pre-existing cost, unrelated to this
- * lote and out of its scope ("no tocar usuarios"). To keep this suite fast,
- * only ONE test pays that cost, consolidating every assertion that actually
- * requires reaching the send loop (as opposed to the early "no token"
- * short-circuit, which computes attempts via the same findActiveByIds() call
- * and is enough to prove id/module targeting on its own).
+ * HTTP responses are simulated with Http::fake and stray requests are
+ * blocked. Database fixtures exercise targeted persistence, availability
+ * failures before sending, and interruption after a failed POST.
  */
 class RedmineSendReportsTargetedPersistenceTest extends TestCase
 {
@@ -152,6 +142,8 @@ class RedmineSendReportsTargetedPersistenceTest extends TestCase
      */
     public function test_send_reports_attempt_loop_persists_only_the_targeted_report_and_preserves_logs(): void
     {
+        Http::preventStrayRequests();
+        Http::fakeSequence()->push(['issues' => []], 200)->push([], 503);
         $userId = $this->makeUserWithToken('token-b56');
         $this->unreachablePlatformConfig();
         $targetId = $this->makeReport(['estado' => 'pendiente']);
@@ -177,5 +169,36 @@ class RedmineSendReportsTargetedPersistenceTest extends TestCase
         $moduleId = $this->moduleId();
         $this->assertTrue(DB::table('tic_log')->where('modulo_id', $moduleId)->where('evento', 'envio_redmine_error')->exists());
         $this->assertTrue(DB::table('tic_log')->where('modulo_id', $moduleId)->where('evento', 'envio_redmine_resumen')->exists());
+    }
+    public function test_unavailable_redmine_leaves_selected_reports_unchanged(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response('', 503)]);
+        $userId = $this->makeUserWithToken('token-unavailable');
+        $this->unreachablePlatformConfig();
+        $first = $this->makeReport();
+        $second = $this->makeReport();
+        $result = $this->facade()->sendReportsToRedmine([(string) $first, (string) $second], $userId);
+        $this->assertSame(0, $result['attempts']);
+        $this->assertSame('pendiente', DB::table('redmine_tic_reportes')->where('id', $first)->value('estado'));
+        $this->assertSame('pendiente', DB::table('redmine_tic_reportes')->where('id', $second)->value('estado'));
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => $request->method() === 'GET');
+    }
+
+    public function test_batch_stops_after_redmine_fails_during_first_post(): void
+    {
+        Http::preventStrayRequests();
+        Http::fakeSequence()->push(['issues' => []], 200)->push([], 503);
+        $userId = $this->makeUserWithToken('token-stop');
+        $this->unreachablePlatformConfig();
+        $first = $this->makeReport();
+        $second = $this->makeReport();
+        $result = $this->facade()->sendReportsToRedmine([(string) $first, (string) $second], $userId);
+        $this->assertSame(1, $result['attempts']);
+        $states = DB::table('redmine_tic_reportes')->whereIn('id', [$first, $second])->pluck('estado')->all();
+        $this->assertEqualsCanonicalizing(['error', 'pendiente'], $states);
+        $this->assertStringContainsString('evitar duplicados', $result['errors'][0]);
+        Http::assertSentCount(2);
     }
 }

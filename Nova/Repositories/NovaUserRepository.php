@@ -223,8 +223,17 @@ final class NovaUserRepository
             return ['ok' => false, 'error' => 'La contrasena y su validacion no coinciden.'];
         }
 
-        $users[$index]['password'] = $this->service->hashPassword($password);
-        $this->write($users);
+        try {
+            $updated = DB::table('usuarios_nova')->where('uuid', $id)->update([
+                'password' => $this->service->hashPassword($password),
+                'actualizado_at' => now(),
+            ]);
+            if ($updated !== 1) {
+                return ['ok' => false, 'error' => 'No fue posible guardar la contraseña.'];
+            }
+        } catch (\Throwable $exception) {
+            return ['ok' => false, 'error' => 'No fue posible guardar la contraseña. Intenta nuevamente.'];
+        }
 
         return ['ok' => true, 'error' => ''];
     }

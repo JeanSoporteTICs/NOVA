@@ -209,6 +209,9 @@ class MantencionDashboardService
                                 $message[$field] = $value;
                             }
                         }
+                        if (auth_can('horas_extra_editar') && (isset($_POST['hora_extra']) || isset($_POST['tiempo_estimado']))) {
+                            $message = MantencionHoursExtraFields::normalize($message);
+                        }
                         if (!dashboard_can_assign_other_users()) {
                             $currentUser = dashboard_current_user();
                             $currentUserId = trim((string)($currentUser['id'] ?? auth_get_user_id() ?? ''));
@@ -281,7 +284,7 @@ class MantencionDashboardService
                         $isEnabled = $current !== '1';
                         $message['hora_extra'] = $isEnabled ? '1' : '0';
                         if ($isEnabled) {
-                            $message['tiempo_estimado'] = $this->dashboard_hora_extra_default_time('1');
+                            $message['tiempo_estimado'] = '1';
                         } else {
                             $message['tiempo_estimado'] = '';
                         }
@@ -307,7 +310,7 @@ class MantencionDashboardService
                         $ajaxPayload['row'] = [
                             'id' => $id,
                             'hora_extra' => $isEnabled ? '1' : '0',
-                            'tiempo_estimado' => $isEnabled ? $this->dashboard_hora_extra_default_time('1') : '',
+                            'tiempo_estimado' => $isEnabled ? '1' : '',
                             'title' => $isEnabled ? 'Hora extra: Sí. Cambiar a No' : 'Hora extra: No. Cambiar a Sí',
                             'icon' => $isEnabled ? 'bi-clock-fill' : 'bi-clock',
                             'buttonClass' => $isEnabled ? 'btn-hora-extra--on' : 'btn-hora-extra--off',

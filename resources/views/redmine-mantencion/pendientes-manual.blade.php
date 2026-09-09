@@ -124,7 +124,7 @@
             <div class="field-label">Tiempo estimado</div>
             <div>
               <div class="input-group">
-                <input name="tiempo_estimado" class="form-control" value="<?= $h($form['tiempo_estimado'] ?? '') ?>">
+                <input name="tiempo_estimado" id="manual-tiempo-estimado" class="form-control" value="<?= $h($form['tiempo_estimado'] ?? '') ?>">
                 <span class="input-group-text">Horas</span>
               </div>
             </div>
@@ -162,7 +162,7 @@
             <div><input name="unidad" class="form-control" placeholder="Lugar donde realizar la actividad" value="<?= $h($form['unidad'] ?? '') ?>"></div>
             <div class="field-label">Hora Extra *</div>
             <div>
-              <select name="hora_extra" class="form-select">
+              <select name="hora_extra" id="manual-hora-extra" class="form-select">
                 <option value="0" <?= ($form['hora_extra'] ?? '0') === '0' ? 'selected' : '' ?>>No</option>
                 <option value="1" <?= ($form['hora_extra'] ?? '0') === '1' ? 'selected' : '' ?>>Sí</option>
               </select>
@@ -181,6 +181,16 @@
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
 <script data-partial-nav-script>
   (() => {
+    const hoursExtra = document.getElementById('manual-hora-extra');
+    const estimatedTime = document.getElementById('manual-tiempo-estimado');
+    const syncEstimatedTime = (useDefault = false) => {
+      if (!hoursExtra || !estimatedTime) return;
+      if (hoursExtra.value !== '1') estimatedTime.value = '';
+      else if (useDefault || estimatedTime.value.trim() === '') estimatedTime.value = '1';
+    };
+    hoursExtra?.addEventListener('change', () => syncEstimatedTime(true));
+    syncEstimatedTime();
+
     const initMantencionManualSelect2 = () => {
       if (!window.jQuery?.fn?.select2) return;
       window.jQuery('[data-mantencion-select2]').each(function () {

@@ -15750,3 +15750,30 @@ nav.sb-navbar > .container-fluid,
   }
 
 }
+
+/* Personal password dialog shared by every module. */
+.nova-password-modal {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid #dbe3ee;
+  border-radius: 18px;
+  color: #102033;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(16, 32, 51, .25);
+}
+.nova-password-modal::backdrop { background: rgba(16, 32, 51, .6); }
+.nova-password-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: #eef4fb;
+  border-bottom: 1px solid #dbe3ee;
+}
+.nova-password-header h2 { margin: 0; font-size: 1.2rem; font-weight: 700; }
+.nova-password-body { padding: 24px; }
+.nova-password-modal .input-group { flex-wrap: nowrap; }
+.nova-password-modal .input-group .form-control { min-width: 0; }
+.nova-password-modal .input-group button { min-width: 44px; }

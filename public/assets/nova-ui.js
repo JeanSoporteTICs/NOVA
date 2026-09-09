@@ -555,6 +555,117 @@ const NovaUserMenu = (() => {
         });
     }
 
+    async function openPassword(url, trigger) {
+        if (document.querySelector('.nova-password-modal')) return;
+        const dialog = document.createElement('dialog');
+        dialog.className = 'nova-password-modal';
+        dialog.setAttribute('aria-labelledby', 'nova-password-title');
+        dialog.innerHTML = `<div class="nova-password-header"><h2 id="nova-password-title">Cambiar contraseña</h2><button type="button" class="btn-close" aria-label="Cerrar"></button></div><div class="nova-password-body"><p role="status">Cargando formulario…</p></div>`;
+        document.body.appendChild(dialog);
+        const body = dialog.querySelector('.nova-password-body');
+        const controller = new AbortController();
+        dialog.querySelector('.btn-close').addEventListener('click', () => dialog.close());
+        dialog.addEventListener('close', () => {
+            controller.abort();
+            dialog.remove();
+            trigger.focus();
+        });
+        dialog.showModal();
+        try {
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                signal: controller.signal,
+            });
+            if (!response.ok || response.redirected) throw new Error('No se pudo cargar el formulario. Comprueba que tu sesión siga activa.');
+            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const form = page.querySelector('form');
+            if (!form) throw new Error('No se pudo cargar el formulario.');
+            body.replaceChildren(document.importNode(form, true));
+            const passwordForm = body.querySelector('form');
+            const status = document.createElement('div');
+            status.hidden = true;
+            status.setAttribute('role', 'status');
+            passwordForm.prepend(status);
+            passwordForm.querySelectorAll('input[type="password"]').forEach(input => {
+                const group = document.createElement('div');
+                group.className = 'input-group';
+                input.before(group);
+                group.append(input);
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'btn btn-outline-secondary';
+                const label = passwordForm.querySelector(`label[for="${input.id}"]`).textContent;
+                toggle.setAttribute('aria-controls', input.id);
+                const update = () => {
+                    const visible = input.type === 'text';
+                    toggle.setAttribute('aria-label', `${visible ? 'Ocultar' : 'Mostrar'} ${label.toLowerCase()}`);
+                    toggle.setAttribute('aria-pressed', String(visible));
+                    toggle.innerHTML = `<i class="bi ${visible ? 'bi-eye-slash' : 'bi-eye'}" aria-hidden="true"></i>`;
+                };
+                update();
+                toggle.addEventListener('click', () => {
+                    input.type = input.type === 'password' ? 'text' : 'password';
+                    update();
+                });
+                group.append(toggle);
+            });
+            passwordForm.querySelector('input[type="password"]').focus();
+            let saving = false;
+            dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+            passwordForm.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (saving) return;
+                saving = true;
+                dialog.querySelector('.btn-close').disabled = true;
+                const submit = passwordForm.querySelector('[type="submit"]');
+                submit.disabled = true;
+                status.hidden = false;
+                status.className = 'alert alert-info';
+                status.textContent = 'Guardando contraseña…';
+                try {
+                    const result = await fetch(passwordForm.action, {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { Accept: 'application/json' },
+                        body: new FormData(passwordForm), signal: controller.signal,
+                    });
+                    const data = await result.json().catch(() => ({}));
+                    if (!result.ok || result.redirected) {
+                        const message = result.status === 429 ? 'Demasiados intentos. Espera un minuto e intenta nuevamente.'
+                            : result.status === 419 || result.redirected ? 'Tu sesión venció. Recarga la página e inicia sesión.'
+                            : Object.values(data.errors || {}).flat().join(' ') || 'No se pudo guardar la contraseña. Intenta nuevamente.';
+                        throw new Error(message);
+                    }
+                    if (data.csrf_token) {
+                        document.querySelectorAll('input[name="_token"]').forEach(input => {
+                            input.value = data.csrf_token;
+                            input.defaultValue = data.csrf_token;
+                        });
+                        document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', data.csrf_token);
+                        if (window.axios?.defaults?.headers?.common) window.axios.defaults.headers.common['X-CSRF-TOKEN'] = data.csrf_token;
+                    }
+                    passwordForm.reset();
+                    passwordForm.querySelectorAll('.input-group input').forEach(input => {
+                        if (input.type === 'text') input.parentElement.querySelector('button').click();
+                    });
+                    status.className = 'alert alert-success';
+                    status.textContent = data.message;
+                } catch (error) {
+                    if (error.name === 'AbortError') return;
+                    status.className = 'alert alert-danger';
+                    status.textContent = error.message;
+                } finally {
+                    saving = false;
+                    dialog.querySelector('.btn-close').disabled = false;
+                    submit.disabled = false;
+                }
+            });
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            body.textContent = error.message;
+        }
+    }
+
     function build(container, labelElement, form) {
         const name = String(labelElement.textContent || '').replace(/\s+/g, ' ').trim() || 'Usuario';
         const initial = Array.from(name)[0]?.toLocaleUpperCase('es') || 'U';
@@ -591,13 +702,20 @@ const NovaUserMenu = (() => {
         panel.setAttribute('role', 'menu');
         panel.hidden = true;
 
-        const passwordButton = document.createElement('button');
-        passwordButton.type = 'button';
+        const passwordButton = document.createElement('a');
+        const passwordUrl = new URL(form.action, window.location.href);
+        passwordUrl.pathname = passwordUrl.pathname.replace(/\/logout(?:\.php)?\/?$/, '/mi-cuenta/password');
+        passwordUrl.search = '';
+        passwordUrl.hash = '';
+        passwordButton.href = passwordUrl.href;
+        passwordButton.addEventListener('click', event => {
+            event.preventDefault();
+            close(menu);
+            openPassword(passwordUrl.href, trigger);
+        });
         passwordButton.className = 'nova-user-menu-action';
-        passwordButton.disabled = true;
         passwordButton.setAttribute('role', 'menuitem');
-        passwordButton.setAttribute('aria-disabled', 'true');
-        passwordButton.innerHTML = '<i class="bi bi-key" aria-hidden="true"></i><span>Cambiar contrase\u00f1a</span><small>Pr\u00f3ximamente</small>';
+        passwordButton.innerHTML = '<i class="bi bi-key" aria-hidden="true"></i><span>Cambiar contrase\u00f1a</span>';
 
         const divider = document.createElement('div');
         divider.className = 'nova-user-menu-divider';

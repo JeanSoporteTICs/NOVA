@@ -2,9 +2,13 @@
 
 namespace RedmineTic\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use RedmineTic\Support\RedmineUrlSupport;
+
 /**
  * ETAPA B / Lote B5.4 — transporte HTTP puro para creación de issues en
- * Redmine (construcción del payload + POST vía cURL), extraído verbatim de
+ * Redmine (construcción del payload + POST HTTP), extraído de
  * RedmineDataRepository::buildIssuePayload()/postRedmineIssue(). No conoce
  * persistencia, activity log ni el dominio de Reportes/Horas Extra — eso
  * permanece en RedmineDataRepository::sendReportsToRedmine(), que sigue
@@ -133,28 +137,46 @@ final class RedmineIssueSenderService
         if ($url === '') {
             return ['http_code' => 0, 'body' => '', 'error' => 'URL no configurada'];
         }
-        if (! function_exists('curl_init')) {
-            return ['http_code' => 0, 'body' => '', 'error' => 'Extension cURL no disponible'];
-        }
+        return $this->requestRedmine($url, $token, $payload, 20);
+    }
 
-        $ch = curl_init($url);
-        $headers = ['Content-Type: application/json', 'Accept: application/json'];
-        if ($token !== '') {
-            $headers[] = 'X-Redmine-API-Key: '.$token;
+    public function checkAvailability(array $config, string $token): array
+    {
+        $url = RedmineUrlSupport::redmineIssuesUrl((string) ($config['platform_url'] ?? ''));
+        if ($url === '') {
+            return ['ok' => false, 'error' => 'La URL de Redmine no está configurada o no es válida.'];
         }
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            CURLOPT_TIMEOUT => 20,
-        ]);
-        $body = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = (string) curl_error($ch);
-        curl_close($ch);
+        $result = $this->requestRedmine($url.'?limit=1', $token, null, 5);
+        $data = json_decode($result['body'], true);
+        if ($result['error'] === '' && $result['http_code'] === 200 && is_array($data) && isset($data['issues']) && is_array($data['issues'])) {
+            return ['ok' => true, 'error' => ''];
+        }
+        return ['ok' => false, 'error' => match ($result['http_code']) {
+            401, 403 => 'Redmine rechazó el acceso. Revisa tu API Key personal y tus permisos.',
+            429 => 'Redmine está limitando las solicitudes. Intenta más tarde.',
+            default => 'Redmine no está disponible o no respondió en 5 segundos. No se enviaron reportes; intenta más tarde.',
+        }];
+    }
 
-        return ['http_code' => $httpCode, 'body' => (string) $body, 'error' => $error];
+    public function shouldStopBatch(array $result): bool
+    {
+        $code = (int) ($result['http_code'] ?? 0);
+        return !empty($result['error']) || $code === 0 || $code >= 500 || in_array($code, [401, 403, 429], true);
+    }
+
+    private function requestRedmine(string $url, string $token, ?array $payload, int $timeout): array
+    {
+        try {
+            $request = Http::acceptJson()->asJson()->connectTimeout(3)->timeout($timeout)->withoutRedirecting();
+            if ($token !== '') {
+                $request = $request->withHeaders(['X-Redmine-API-Key' => $token]);
+            }
+            // Do not retry ticket creation: an unanswered POST may have created the issue.
+            $response = $payload === null ? $request->get($url) : $request->post($url, $payload);
+            return ['http_code' => $response->status(), 'body' => $response->body(), 'error' => ''];
+        } catch (ConnectionException $exception) {
+            return ['http_code' => 0, 'body' => '', 'error' => 'No se pudo conectar con Redmine o se agotó el tiempo de espera ('.$timeout.' segundos).'];
+        }
     }
 
     private function parseDate(mixed $value): string

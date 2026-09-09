@@ -1874,6 +1874,18 @@ final class RedmineDataRepository
             return ['attempts' => $attempts, 'success' => 0, 'errors' => [$message], 'redmine_ids' => []];
         }
 
+        if ($reports === []) {
+            return ['attempts' => 0, 'success' => 0, 'errors' => [], 'redmine_ids' => []];
+        }
+        $availability = $this->issueSender()->checkAvailability($config, $token);
+        if (!$availability['ok']) {
+            $this->appendActivityLog('envio_redmine_error', [
+                'user_id' => $userId ?? '',
+                'error' => $availability['error'],
+            ]);
+            return ['attempts' => 0, 'success' => 0, 'errors' => [$availability['error']], 'redmine_ids' => []];
+        }
+
         // The runtime catalog comes from NOVA's database. Do not refresh it
         // with the reporting user's token: Redmine restricts custom-field
         // definitions to administrators. Redmine still performs the final
@@ -1979,6 +1991,10 @@ final class RedmineDataRepository
                 'unidad' => $report['unidad'] ?? '',
             ]);
             $this->persistSentReport($moduleId, $report);
+            if ($this->issueSender()->shouldStopBatch($result)) {
+                array_unshift($errors, 'Se detuvo el lote porque Redmine no pudo continuar. Los reportes restantes no se enviaron. Revisa en Redmine si el último reporte creó un ticket antes de reintentarlo para evitar duplicados.');
+                break;
+            }
         }
 
         if ($attempts > 0) {

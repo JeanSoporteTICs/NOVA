@@ -300,37 +300,59 @@ class MantencionRedmineSyncService
         try { \Illuminate\Support\Facades\DB::table('mantencion_log')->where('canal','redmine')->whereIn('mensaje_id',$ids)->delete(); } catch (\Throwable) {}
     }
 
+    public function check_redmine_availability(array $cfg, string $userToken): array {
+        $url = $this->redmine_api_issues_url((string)($cfg['platform_url'] ?? ''));
+        if ($url === '') {
+            return ['ok' => false, 'error' => 'La URL de Redmine no está configurada.'];
+        }
+        $url = explode('?', $url, 2)[0] . '?limit=1';
+        $result = $this->request_redmine($url, $userToken, null, 5);
+        $data = json_decode($result['body'], true);
+        if ($result['error'] === '' && $result['http_code'] === 200 && is_array($data) && isset($data['issues']) && is_array($data['issues'])) {
+            return ['ok' => true, 'error' => ''];
+        }
+        $error = match ($result['http_code']) {
+            401, 403 => 'Redmine rechazó el acceso. Revisa tu API Key personal y tus permisos.',
+            429 => 'Redmine está limitando las solicitudes. Intenta más tarde.',
+            default => 'Redmine no está disponible o no respondió en 5 segundos. No se enviaron reportes; intenta más tarde.',
+        };
+        return ['ok' => false, 'error' => $error];
+    }
+
+    protected function request_redmine(string $url, string $token, ?array $issue, int $timeout): array {
+        $ch = curl_init($url);
+        $headers = ['Content-Type: application/json', 'Accept: application/json'];
+        if (trim($token) !== '') {
+            $headers[] = 'X-Redmine-API-Key: ' . trim($token);
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => $timeout,
+        ]);
+        if ($issue !== null) {
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode(['issue' => $issue], JSON_UNESCAPED_UNICODE),
+            ]);
+        }
+        $body = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+        return ['http_code' => $httpCode, 'body' => is_string($body) ? $body : '', 'error' => $curlErr];
+    }
+
     public function send_redmine_issue(array $issue, array $cfg, string $userToken = ''): array {
         $url = $this->redmine_api_issues_url((string)($cfg['platform_url'] ?? ''));
         if ($url === '') {
             return ['http_code' => 0, 'body' => '', 'error' => 'URL no configurada'];
         }
-        $ch = curl_init($url);
-        $headers = [
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ];
-        $token = trim($userToken);
-        if ($token !== '') {
-            $headers[] = 'X-Redmine-API-Key: ' . $token;
-        }
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => json_encode(['issue' => $issue], JSON_UNESCAPED_UNICODE),
-            CURLOPT_TIMEOUT => 20,
-        ]);
-        $body = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
-        return ['http_code' => $httpCode, 'body' => $body ?? '', 'error' => $curlErr];
+        return $this->request_redmine($url, $userToken, $issue, 20);
     }
 
     public function send_selected_messages(array &$messages, array $ids, array $cfg, string $userToken): array {
-        $catMap = load_name_map('categorias');
-        $unitMap = load_name_map('unidades');
         $attempts = 0;
         $success = 0;
         $created = [];
@@ -350,6 +372,12 @@ class MantencionRedmineSyncService
                 'redmine_ids' => [],
             ];
         }
+        $availability = $this->check_redmine_availability($cfg, $userToken);
+        if (!$availability['ok']) {
+            return ['success' => 0, 'errors' => [$availability['error']], 'attempts' => 0, 'blocked' => 0, 'redmine_ids' => []];
+        }
+        $catMap = load_name_map('categorias');
+        $unitMap = load_name_map('unidades');
         foreach ($messages as &$message) {
             if (!in_array(($message['id'] ?? ''), $ids, true)) {
                 continue;
@@ -407,6 +435,10 @@ class MantencionRedmineSyncService
                 );
             }
             append_hours_extra_record($message);
+            if (!empty($result['error']) || $result['http_code'] === 0 || $result['http_code'] >= 500 || in_array($result['http_code'], [401, 403, 429], true)) {
+                $errors[] = 'Se detuvo el lote porque Redmine no pudo continuar. Los reportes restantes no se enviaron. Revisa en Redmine si el último reporte creó un ticket antes de reintentarlo para evitar duplicados.';
+                break;
+            }
         }
         unset($message);
         if ($blocked > 0) {

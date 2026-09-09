@@ -881,6 +881,15 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
 
 <script>
+function syncMantencionDashboardHours(useDefault = false) {
+  const extra = document.getElementById('md-hora_extra');
+  const hours = document.getElementById('md-tiempo_estimado');
+  if (!extra || !hours || extra.disabled || hours.disabled) return;
+  if (extra.value !== '1') hours.value = '';
+  else if (useDefault || hours.value.trim() === '') hours.value = '1';
+}
+document.getElementById('md-hora_extra')?.addEventListener('change', () => syncMantencionDashboardHours(true));
+
 
   const dashboardMaintenanceMode = <?= $maintenanceMode ? 'true' : 'false' ?>;
   const dashboardCanEditReports = <?= $canEditReports ? 'true' : 'false' ?>;
@@ -1135,6 +1144,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
   setDate('md-fecha_fin', 'data-fecha_fin');
 
   set('md-tiempo_estimado', 'data-tiempo_estimado');
+  syncMantencionDashboardHours();
 
   setDate('md-fecha', 'data-fecha');
 
@@ -1500,7 +1510,7 @@ if (processForm && processIds) {
       redmineSubmitDelayDone = true;
       window.setTimeout(() => {
         processForm.requestSubmit();
-      }, 3000);
+      }, 50);
     }
 
     refreshDashboardCounters();
@@ -1927,7 +1937,7 @@ function showDashboardProgress(mode = 'core') {
       { at: 94, text: 'Finalizando...', step: 'Esperando respuesta' }
     ],
     redmine: [
-      { at: 8, text: 'Preparando reportes...', step: 'Validando seleccion' },
+      { at: 8, text: 'Comprobando disponibilidad de Redmine...', step: 'Espera máxima de 5 segundos para validar la API' },
       { at: 24, text: 'Conectando con Redmine...', step: 'Abriendo conexion' },
       { at: 46, text: 'Enviando reportes...', step: 'Creando tickets' },
       { at: 68, text: 'Confirmando respuestas...', step: 'Registrando resultados' },

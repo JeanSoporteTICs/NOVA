@@ -66,6 +66,8 @@ Route::get('/{project}/assets/{path}', [LegacyProjectController::class, 'asset']
     ->where('path', '.*');
 
 Route::middleware('nova.auth')->group(function () use ($modulePattern, $legacyModulePattern) {
+Route::get('/mi-cuenta/password', [NovaAuthController::class, 'showPassword'])->name('account.password');
+Route::post('/mi-cuenta/password', [NovaAuthController::class, 'updatePassword'])->middleware('throttle:5,1')->name('account.password.update');
 Route::get('/', function (ModuleRegistry $modules, NovaAccessRepository $access) {
     $user = session('nova_user', []);
     $projects = $modules->enabled();

@@ -5,6 +5,8 @@ namespace App\Modulos\Nova\Controllers;
 use App\Http\Controllers\Controller;
 
 use App\Modulos\Nova\Repositories\NovaAuditRepository;
+use App\Modulos\Nova\Repositories\NovaUserRepository;
+use App\Modulos\Nova\Services\NovaUserService;
 use App\Modulos\Nova\Services\LegacyUserProvider;
 use App\Modulos\Nova\Services\LegacyLoggerService;
 use App\Modulos\Nova\Repositories\NovaSettingsRepository;
@@ -52,6 +54,51 @@ class NovaAuthController extends Controller
         $audit->record('login_success', 'Inicio de sesion NOVA.', ['username' => $credentials['username']], $request);
 
         return redirect()->intended(route('home'));
+    }
+
+    public function showPassword(Request $request): View|RedirectResponse
+    {
+        if (!$request->ajax()) {
+            return redirect()->route('home');
+        }
+
+        return view('nova.partials.password-form');
+    }
+
+    public function updatePassword(Request $request, NovaUserRepository $users, NovaUserService $service, NovaAuditRepository $audit): RedirectResponse|JsonResponse
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'string', 'max:512'],
+            'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed', 'different:current_password'],
+        ], [
+            'current_password.required' => 'Ingresa tu contraseña actual.',
+            'password.required' => 'Ingresa la nueva contraseña.',
+            'password.min' => 'La nueva contraseña debe tener al menos 8 caracteres.',
+            'password.max' => 'La nueva contraseña no debe superar los 72 caracteres.',
+            'password.confirmed' => 'La confirmación no coincide con la nueva contraseña.',
+            'password.different' => 'La nueva contraseña debe ser distinta de la actual.',
+        ]);
+        $id = (string) $request->session()->get('nova_user.id', '');
+        $user = $id !== '' ? $users->find($id) : null;
+        if (!$user || (string) $user['id'] !== $id || !$service->verifyPassword($user, $data['current_password'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['current_password' => 'La contraseña actual no es correcta.']);
+        }
+        // PASSWORD_DEFAULT uses bcrypt, whose limit is 72 bytes (also for Unicode).
+        if (strlen($data['password']) > 72) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['password' => 'La contraseña supera el límite de 72 bytes; usa menos caracteres.']);
+        }
+        $result = $users->changePassword($id, $data['password'], (string) $request->input('password_confirmation'));
+        if (!$result['ok']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['password' => $result['error']]);
+        }
+        $request->session()->regenerate();
+        $audit->record('password_changed', 'El usuario cambió su contraseña de NOVA.', [], $request);
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Tu contraseña se actualizó correctamente.', 'csrf_token' => $request->session()->token()]);
+        }
+
+        return redirect()->route('account.password')->with('status', 'Tu contraseña se actualizó correctamente.');
     }
 
     public function logout(Request $request, NovaAuditRepository $audit): RedirectResponse

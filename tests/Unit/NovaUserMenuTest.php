@@ -15,7 +15,7 @@ final class NovaUserMenuTest extends TestCase
         self::assertStringContainsString("form.querySelector('button[type=\"submit\"], input[type=\"submit\"]')", $script);
         self::assertStringContainsString('panel.appendChild(form);', $script);
         self::assertStringContainsString('Cambiar contrase\\u00f1a', $script);
-        self::assertStringContainsString('Pr\\u00f3ximamente', $script);
+        self::assertStringContainsString('/mi-cuenta/password', $script);
         self::assertStringContainsString('Cerrar sesi\\u00f3n', $script);
         self::assertStringContainsString("document.addEventListener('partial:loaded', () => init())", $script);
     }
