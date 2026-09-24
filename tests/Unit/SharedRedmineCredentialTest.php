@@ -104,6 +104,22 @@ class SharedRedmineCredentialTest extends TestCase
         );
     }
 
+    public function test_batch_selection_matches_individual_encrypted_credentials(): void
+    {
+        $first = $this->makeNovaUser();
+        $second = $this->makeNovaUser();
+        DB::table('integraciones_usuario')->insert([
+            ['usuario_id' => $first['db_id'], 'tipo' => 'redmine', 'valor_secreto' => encrypt('canonical'), 'actualizado_at' => '2026-01-01'],
+            ['usuario_id' => $first['db_id'], 'tipo' => 'redmine_tic', 'valor_secreto' => encrypt('newer-legacy'), 'actualizado_at' => '2026-09-01'],
+            ['usuario_id' => $second['db_id'], 'tipo' => 'redmine_mantencion', 'valor_secreto' => encrypt('second-owner'), 'actualizado_at' => '2026-09-01'],
+        ]);
+        $repository = app(UserIntegrationRepository::class);
+        $expected = [$first['db_id'] => $repository->credentialForUserId($first['db_id']), $second['db_id'] => $repository->credentialForUserId($second['db_id'])];
+        $this->assertSame($expected, $repository->redmineCredentialsForUserIds(array_keys($expected)));
+        $this->assertSame('canonical', $expected[$first['db_id']]['secret']);
+        $this->assertSame('second-owner', $expected[$second['db_id']]['secret']);
+    }
+
     public function test_redmine_identity_without_api_key_is_not_reported_as_configured(): void
     {
         $user = $this->makeNovaUser();

@@ -19,16 +19,17 @@ use Illuminate\Support\Facades\Schema;
 final class MantencionHoursExtraRepository
 {
     private const MODULE_KEY = 'redmine-mantencion';
+
     private const ORIGEN = 'mantencion';
 
     private ?int $moduleId = null;
+
     private bool $moduleIdResolved = false;
 
     public function __construct(
         private readonly MantencionReportRepository $reports,
         private readonly HorasExtraRepository $shared,
-    ) {
-    }
+    ) {}
 
     public function tableReady(): bool
     {
@@ -41,8 +42,33 @@ final class MantencionHoursExtraRepository
         }
     }
 
-    /** @return array<int,array<string,mixed>> */
-    public function groups(): array
+    /**
+     * Metadata includes every public ID and assignee needed for reconciliation;
+     * optional DB IDs restrict details without changing group/report ordering.
+     *
+     * @param  array<int,int>|null  $reportIds
+     * @return array<int,array<string,mixed>>
+     */
+    public function groups(bool $metadataOnly = false, ?array $reportIds = null): array
+    {
+        return $this->readGroups($metadataOnly, $reportIds);
+    }
+
+    /** Candidate projection when IDs are null; otherwise full messages for those IDs. */
+    public function statisticsMessages(?array $reportIds = null): array
+    {
+        $messages = [];
+        foreach ($this->readGroups(false, $reportIds, $reportIds === null) as $group) {
+            foreach ($group['reports'] as $report) {
+                $report['fecha'] = $report['fecha'] ?? $group['fecha'];
+                $messages[] = $report;
+            }
+        }
+
+        return $messages;
+    }
+
+    private function readGroups(bool $metadataOnly = false, ?array $reportIds = null, bool $statisticsOnly = false): array
     {
         if (! $this->tableReady()) {
             return [];
@@ -58,6 +84,10 @@ final class MantencionHoursExtraRepository
             $grupos
         ))));
 
+        if ($reportIds !== null) {
+            $todosLosReporteIds = array_values(array_intersect($todosLosReporteIds, $reportIds));
+        }
+
         if ($todosLosReporteIds === []) {
             return [];
         }
@@ -69,27 +99,43 @@ final class MantencionHoursExtraRepository
                 ->where('r.estado', 'archivado')
                 ->orderByDesc('r.fecha_reporte')
                 ->orderByDesc('r.id')
-                ->get(['r.*', 'c.nombre as categoria_nombre']);
+                ->get($statisticsOnly ? MantencionReportRepository::statisticsColumns()
+                    : ($metadataOnly ? ['r.id', 'r.fuente_id', 'r.id_redmine_asignado'] : ['r.*', 'c.nombre as categoria_nombre']));
         } catch (\Throwable) {
             return [];
         }
 
-        $result = [];
-        foreach ($grupos as $grupo) {
-            $reporteIdsDelGrupo = array_flip($grupo['reporte_ids']);
-            $reportesDelGrupo = [];
-            // Se itera $rows (ya ordenado por fecha_reporte/id desc) en vez de
-            // reporte_ids (sin orden) para conservar el orden de visualizacion previo.
-            foreach ($rows as $row) {
-                if (!isset($reporteIdsDelGrupo[$row->id])) {
-                    continue;
-                }
-                $message = $this->reports->rowToMessage($row);
-                $message['hora_extra'] = '1';
-                $message['_fuente'] = 'horas_extra';
-                $reportesDelGrupo[] = $message;
+        // Index memberships once, then traverse the SQL order once. Each row
+        // is hydrated once even if several jornadas reference the same report.
+        $groupsByReport = [];
+        foreach ($grupos as $index => $grupo) {
+            foreach (array_unique($grupo['reporte_ids']) as $reportId) {
+                $groupsByReport[$reportId][] = $index;
             }
+        }
+        $reportsByGroup = [];
+        foreach ($rows as $row) {
+            if (! isset($groupsByReport[$row->id])) {
+                continue;
+            }
+            $message = $metadataOnly ? [
+                'id' => trim((string) ($row->fuente_id ?? '')) !== '' ? trim((string) $row->fuente_id) : (string) $row->id,
+                'asignado_a' => trim((string) ($row->id_redmine_asignado ?? '')),
+                '_database_id' => (int) $row->id,
+            ] : $this->reports->rowToMessage($row);
+            if ($statisticsOnly) {
+                $message['_statistics_id'] = (string) $row->id;
+            }
+            $message['hora_extra'] = '1';
+            $message['_fuente'] = 'horas_extra';
+            foreach ($groupsByReport[$row->id] as $index) {
+                $reportsByGroup[$index][] = $message;
+            }
+        }
 
+        $result = [];
+        foreach ($grupos as $index => $grupo) {
+            $reportesDelGrupo = $reportsByGroup[$index] ?? [];
             if ($reportesDelGrupo === []) {
                 continue;
             }
@@ -123,35 +169,44 @@ final class MantencionHoursExtraRepository
     }
 
     /** @param array<string,mixed> $message */
-    public function syncMessage(array $message): void
+    public function syncMessage(array $message): bool
     {
-        if (! $this->tableReady() || ! $this->messageHasHoursExtra($message)) {
-            return;
+        if (! $this->tableReady()) {
+            return false;
         }
-
-        $reportId = $this->reportIdForMessage($message);
-        if ($reportId === null) {
-            return;
+        if (! $this->messageHasHoursExtra($message)) {
+            return true;
         }
-
         $fecha = $this->dateFromMessage($message);
         if ($fecha === null) {
-            return;
+            return true;
+        } // Preserve the existing no-op for an unparseable date.
+        try {
+            return $this->shared->atomic(function () use ($message, $fecha): bool {
+                $reportId = $this->reportIdForMessage($message);
+                if ($reportId === null || ! DB::table('redmine_mantencion_reportes')->where('id', $reportId)->lockForUpdate()->first()) {
+                    return false;
+                }
+                $horaInicio = $this->timeFromMessage($message, ['hora_inicio', 'hora']);
+                $horaFin = $this->timeFromMessage($message, ['hora_fin', 'hora']);
+                $usuarioId = $this->shared->resolveUsuarioId((string) ($message['asignado_a'] ?? $message['id_redmine_asignado'] ?? ''));
+                $this->shared->lockTransition(self::ORIGEN, $reportId, $usuarioId, $fecha);
+                $grupoId = $this->shared->findOrCreateGroup($usuarioId, $fecha, $horaInicio, $horaFin);
+                if ($grupoId === null || ! $this->shared->updateGroupTime($grupoId, $horaInicio, $horaFin)) {
+                    throw new \RuntimeException('No se pudo guardar la jornada de horas extra.');
+                }
+                // Preserve Mantención's existing links and non-empty incoming-hour precedence.
+                $this->shared->attachReporte($grupoId, self::ORIGEN, $reportId);
+
+                return true;
+            });
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                throw $exception;
+            }
+
+            return false;
         }
-
-        $horaInicio = $this->timeFromMessage($message, ['hora_inicio', 'hora']);
-        $horaFin = $this->timeFromMessage($message, ['hora_fin', 'hora']);
-        $usuarioId = $this->shared->resolveUsuarioId((string) ($message['asignado_a'] ?? $message['id_redmine_asignado'] ?? ''));
-
-        $grupoId = $this->shared->findOrCreateGroup($usuarioId, $fecha, $horaInicio, $horaFin);
-        if ($grupoId === null) {
-            return;
-        }
-
-        // Si el grupo ya existia (p.ej. creado antes por TIC para el mismo usuario+fecha),
-        // se fusionan aqui las horas de este mensaje sin pisar valores ya definidos.
-        $this->shared->updateGroupTime($grupoId, $horaInicio, $horaFin);
-        $this->shared->attachReporte($grupoId, self::ORIGEN, $reportId);
     }
 
     public function detachMessageId(string $messageId): bool
@@ -160,21 +215,22 @@ final class MantencionHoursExtraRepository
         if (! $this->tableReady() || $messageId === '') {
             return false;
         }
-
-        $reportId = $this->reportIdForMessage(['id' => $messageId, 'fuente_id' => $messageId]);
-        if ($reportId === null) {
-            return false;
-        }
-
         try {
-            $detached = $this->shared->detachReporte(self::ORIGEN, $reportId);
+            return $this->shared->atomic(function () use ($messageId): bool {
+                $reportId = $this->reportIdForMessage(['id' => $messageId, 'fuente_id' => $messageId]);
+                if ($reportId === null || ! DB::table('redmine_mantencion_reportes')->where('id', $reportId)->lockForUpdate()->first()) {
+                    return false;
+                }
+                $this->shared->detachReporte(self::ORIGEN, $reportId);
+                DB::table('redmine_mantencion_reportes')->where('id', $reportId)->update(['hora_extra' => 0, 'actualizado_at' => now()]);
 
-            DB::table('redmine_mantencion_reportes')
-                ->where('id', $reportId)
-                ->update(['hora_extra' => 0, 'actualizado_at' => now()]);
+                return true;
+            });
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                throw $exception;
+            }
 
-            return $detached;
-        } catch (\Throwable) {
             return false;
         }
     }
@@ -221,6 +277,7 @@ final class MantencionHoursExtraRepository
             }
 
             $id = $query->value('id');
+
             return $id !== null ? (int) $id : null;
         } catch (\Throwable) {
             return null;

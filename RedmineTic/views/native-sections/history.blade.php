@@ -2,17 +2,7 @@
     $query = request()->query();
     $h = static fn ($value): string => e((string) ($value ?? ''));
 
-    $normDate = static function ($value): string {
-        $value = trim((string) $value);
-        if ($value === '') return '';
-        foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'Y/m/d'] as $format) {
-            $date = DateTimeImmutable::createFromFormat($format, $value);
-            if ($date instanceof DateTimeImmutable) {
-                return $date->format('Y-m-d');
-            }
-        }
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
-    };
+    $normDate = [\RedmineTic\Support\HistoryFilter::class, 'date'];
 
     $fmtDate = static function ($value) use ($normDate): string {
         $date = $normDate($value);
@@ -21,11 +11,7 @@
         return $dt ? $dt->format('d-m-Y') : $date;
     };
 
-    $normalizeText = static function ($value): string {
-        $value = strtolower(trim((string) $value));
-        $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-        return is_string($converted) ? $converted : $value;
-    };
+    $normalizeText = [\RedmineTic\Support\HistoryFilter::class, 'text'];
 
     $redmineIssueUrl = static function ($redmineId) use ($config): string {
         return \RedmineTic\Support\RedmineUrlSupport::redmineIssueUrl(
@@ -67,55 +53,68 @@
     }
     $redmineStatusOptions = array_values($redmineStatusOptions);
 
-    $categories = [];
-    $filtered = [];
-    foreach ($rows as $row) {
-        if (!is_array($row)) continue;
-        $date = $normDate($row['fecha_inicio'] ?? $row['fecha'] ?? $row['_history_sort_date'] ?? '');
-        $source = $sourceValue($row);
-        $category = trim((string) ($row['categoria'] ?? $row['core_categoria'] ?? ''));
-        $redmineStatus = trim((string) ($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? ''));
-        if ($category !== '') $categories[$category] = $category;
-        if ($redmineStatus !== '') $redmineFilterStatuses[$redmineStatus] = $redmineStatus;
-        if ($date !== '' && $fDesde !== '' && $date < $fDesde) continue;
-        if ($date !== '' && $fHasta !== '' && $date > $fHasta) continue;
-        if ($fFuente !== '' && $source !== $fFuente) continue;
-        if ($fCategoria !== '' && $category !== $fCategoria) continue;
-        if ($fEstadoRedmine !== '' && $normalizeText($redmineStatus) !== $normalizeText($fEstadoRedmine)) continue;
-        if ($fBusqueda !== '') {
-            $needle = $normalizeText($fBusqueda);
-            $haystack = $normalizeText(implode(' ', [
-                $row['redmine_id'] ?? '',
-                $row['asunto'] ?? '',
-                $row['mensaje'] ?? '',
-                $row['solicitante'] ?? '',
-                $row['unidad_solicitante'] ?? '',
-                $row['unidad'] ?? '',
-                $row['asignado_nombre'] ?? '',
-                $row['asignado_a'] ?? '',
-                $category,
-                $redmineStatus,
-            ]));
-            if ($needle !== '' && !str_contains($haystack, $needle)) continue;
+    if (isset($historyPage)) {
+        $categories = $historyPage['categories'];
+        foreach ($historyPage['statuses'] as $statusName) $redmineFilterStatuses[$statusName] = $statusName;
+        ksort($redmineFilterStatuses, SORT_NATURAL | SORT_FLAG_CASE);
+        $totalFiltered = $historyPage['total'];
+        $totalPages = $historyPage['pages'];
+        $currentPage = $historyPage['page'];
+        $pagedRows = $historyPage['rows'];
+        $visibleRows = count($pagedRows);
+        $hoursRows = $historyPage['hours'];
+        $pageOffset = ($currentPage - 1) * $perPage;
+    } else {
+        $categories = [];
+        $filtered = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            $date = $normDate($row['fecha_inicio'] ?? $row['fecha'] ?? $row['_history_sort_date'] ?? '');
+            $source = $sourceValue($row);
+            $category = trim((string) ($row['categoria'] ?? $row['core_categoria'] ?? ''));
+            $redmineStatus = trim((string) ($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? ''));
+            if ($category !== '') $categories[$category] = $category;
+            if ($redmineStatus !== '') $redmineFilterStatuses[$redmineStatus] = $redmineStatus;
+            if ($date !== '' && $fDesde !== '' && $date < $fDesde) continue;
+            if ($date !== '' && $fHasta !== '' && $date > $fHasta) continue;
+            if ($fFuente !== '' && $source !== $fFuente) continue;
+            if ($fCategoria !== '' && $category !== $fCategoria) continue;
+            if ($fEstadoRedmine !== '' && $normalizeText($redmineStatus) !== $normalizeText($fEstadoRedmine)) continue;
+            if ($fBusqueda !== '') {
+                $needle = $normalizeText($fBusqueda);
+                $haystack = $normalizeText(implode(' ', [
+                    $row['redmine_id'] ?? '',
+                    $row['asunto'] ?? '',
+                    $row['mensaje'] ?? '',
+                    $row['solicitante'] ?? '',
+                    $row['unidad_solicitante'] ?? '',
+                    $row['unidad'] ?? '',
+                    $row['asignado_nombre'] ?? '',
+                    $row['asignado_a'] ?? '',
+                    $category,
+                    $redmineStatus,
+                ]));
+                if ($needle !== '' && !str_contains($haystack, $needle)) continue;
+            }
+            if ($fDescripcion !== '') {
+                $descriptionNeedle = $normalizeText($fDescripcion);
+                $descriptionText = $normalizeText($row['descripcion'] ?? '');
+                if ($descriptionNeedle !== '' && !str_contains($descriptionText, $descriptionNeedle)) continue;
+            }
+            $row['_history_date_norm'] = $date;
+            $filtered[] = $row;
         }
-        if ($fDescripcion !== '') {
-            $descriptionNeedle = $normalizeText($fDescripcion);
-            $descriptionText = $normalizeText($row['descripcion'] ?? '');
-            if ($descriptionNeedle !== '' && !str_contains($descriptionText, $descriptionNeedle)) continue;
-        }
-        $row['_history_date_norm'] = $date;
-        $filtered[] = $row;
-    }
-    ksort($categories);
-    ksort($redmineFilterStatuses, SORT_NATURAL | SORT_FLAG_CASE);
+        ksort($categories);
+        ksort($redmineFilterStatuses, SORT_NATURAL | SORT_FLAG_CASE);
 
-    $totalFiltered = count($filtered);
-    $totalPages = max(1, (int) ceil($totalFiltered / $perPage));
-    $currentPage = min($currentPage, $totalPages);
-    $pageOffset = ($currentPage - 1) * $perPage;
-    $pagedRows = array_slice($filtered, $pageOffset, $perPage);
-    $visibleRows = count($pagedRows);
-    $hoursRows = count(array_filter($filtered, static fn ($row): bool => is_array($row) && !empty($row['_history_is_hours_extra'])));
+        $totalFiltered = count($filtered);
+        $totalPages = max(1, (int) ceil($totalFiltered / $perPage));
+        $currentPage = min($currentPage, $totalPages);
+        $pageOffset = ($currentPage - 1) * $perPage;
+        $pagedRows = array_slice($filtered, $pageOffset, $perPage);
+        $visibleRows = count($pagedRows);
+        $hoursRows = count(array_filter($filtered, static fn ($row): bool => is_array($row) && !empty($row['_history_is_hours_extra'])));
+    }
     $archivedRows = max(0, $totalFiltered - $hoursRows);
     $canHistoryActions = empty($redmineMaintenance['enabled'])
         && !empty($canHistoryActionsPermission);
@@ -303,7 +302,7 @@
         </div>
         <div class="historico-summary__tools">
             @if ($canHistoryActions)
-                <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-app-confirm="¿Consultar Redmine y actualizar únicamente el campo estado_redmine de todos los tickets TIC almacenados?" data-app-confirm-title="Sincronizar todos los estados Redmine" data-app-confirm-tone="info" data-app-confirm-text="Sincronizar">
+                <form method="post" action="{{ $redmineRoute('redmine.native.history.action') }}" class="m-0" data-history-full-sync data-app-confirm="¿Consultar Redmine y actualizar únicamente el campo estado_redmine de todos los tickets TIC almacenados?" data-app-confirm-title="Sincronizar todos los estados Redmine" data-app-confirm-tone="info" data-app-confirm-text="Sincronizar">
                     @csrf
                     <input type="hidden" name="action" value="sync_redmine_statuses">
                     <button type="submit" class="btn-nova btn-nova-info" title="Actualiza únicamente estado_redmine en todos los reportes TIC">
@@ -364,11 +363,11 @@
     @endif
     <div id="redmine-sync-panel" class="historico-redmine-sync d-none" role="status" aria-live="polite">
         <div class="historico-redmine-sync__header">
-            <span><i class="bi bi-arrow-repeat"></i> Sincronizando estados con Redmine</span>
+            <span class="historico-redmine-sync__title"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span data-redmine-sync-title>Consultando estados en Redmine</span></span>
             <strong id="redmine-sync-count">0/0</strong>
         </div>
         <div class="progress" aria-hidden="true">
-            <div id="redmine-sync-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+            <div id="redmine-sync-bar" class="progress-bar" style="width: 0%"></div>
         </div>
     </div>
     <div class="card-body p-0 position-relative">
@@ -475,7 +474,7 @@
                             </td>
                             <td>
                                 @if ($redmineId !== '')
-                                    <span class="historico-redmine-status historico-redmine-status--syncing js-redmine-status" data-redmine-id="{{ $redmineId }}" title="Sincronizando con Redmine">
+                                    <span class="historico-redmine-status historico-redmine-status--syncing js-redmine-status" data-redmine-id="{{ $redmineId }}" data-saved-status="{{ $row['estado_redmine'] ?? '' }}" title="Sincronizando con Redmine">
                                         <i class="bi bi-arrow-repeat"></i><span>Sincronizando</span>
                                     </span>
                                 @else
@@ -627,6 +626,8 @@
     </div>
 </div>
 
+@php $redmineHistorySyncVersion = @filemtime(public_path('assets/redmine-history-sync.js')) ?: '1'; @endphp
+<script src="{{ asset('assets/redmine-history-sync.js') }}?v={{ $redmineHistorySyncVersion }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('filter-form');
@@ -853,7 +854,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const message = String((status && status.message) || '');
         const cssClass = !available ? 'historico-redmine-status--unknown' : (closed ? 'historico-redmine-status--closed' : redmineStatusTone(statusName));
         const iconClass = !available ? 'bi-question-circle' : (closed ? 'bi-lock-fill' : 'bi-folder2-open');
-        const label = !available ? 'No disponible' : (closed ? 'Cerrado' : 'Abierto');
+        if (available) badge.dataset.savedStatus = statusName;
+        const label = !available ? (badge.dataset.savedStatus || 'Sin consultar') : (closed ? 'Cerrado' : 'Abierto');
         const detail = available && !closed && statusName ? `<small>${escapeHtml(statusName)}</small>` : '';
         badge.className = `historico-redmine-status js-redmine-status ${cssClass}`;
         badge.title = available ? `Redmine: ${statusName}` : message;
@@ -889,43 +891,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncPanel = document.getElementById('redmine-sync-panel');
     const syncBar = document.getElementById('redmine-sync-bar');
     const syncCount = document.getElementById('redmine-sync-count');
-    const syncRedmineStatuses = async () => {
-        const ids = [...new Set(statusBadges.map(badge => badge.getAttribute('data-redmine-id')).filter(Boolean))];
-        if (!ids.length) return;
-        const chunkSize = 5;
-        let done = 0;
-        syncPanel?.classList.remove('d-none');
-        if (syncCount) syncCount.textContent = `0/${ids.length}`;
-        if (syncBar) syncBar.style.width = '0%';
-        for (let index = 0; index < ids.length; index += chunkSize) {
-            const chunk = ids.slice(index, index + chunkSize);
-            try {
-                const response = await fetch(`{{ $redmineRoute('redmine.native.history.statuses') }}?ids=${encodeURIComponent(chunk.join(','))}`, {
-                    headers: { 'Accept': 'application/json' },
-                    cache: 'no-store',
-                });
-                const payload = await response.json();
-                const statuses = payload && payload.statuses ? payload.statuses : {};
-                chunk.forEach(id => {
-                    document.querySelectorAll(`.js-redmine-status[data-redmine-id="${CSS.escape(id)}"]`).forEach(badge => {
-                        setBadgeStatus(badge, statuses[id] || { available: false, message: 'Sin respuesta desde Redmine' });
-                    });
-                });
-            } catch (error) {
-                chunk.forEach(id => {
-                    document.querySelectorAll(`.js-redmine-status[data-redmine-id="${CSS.escape(id)}"]`).forEach(badge => {
-                        setBadgeStatus(badge, { available: false, message: 'No se pudo sincronizar con Redmine' });
-                    });
-                });
-            }
-            done += chunk.length;
-            const percent = Math.min(100, Math.round((done / ids.length) * 100));
-            if (syncCount) syncCount.textContent = `${Math.min(done, ids.length)}/${ids.length}`;
-            if (syncBar) syncBar.style.width = `${percent}%`;
-        }
-        setTimeout(() => syncPanel?.classList.add('d-none'), 1200);
+    const syncRedmineStatuses = () => {
+        window.NovaRedmineHistory.start({ endpoint: @json($redmineRoute('redmine.native.history.statuses')),
+            badges: statusBadges, panel: syncPanel, count: syncCount, bar: syncBar, render: setBadgeStatus });
     };
     syncRedmineStatuses();
+
+    document.querySelector('[data-history-full-sync]')?.addEventListener('submit', async event => {
+        const form = event.currentTarget;
+        if (event.defaultPrevented || form.dataset.confirmAccepted !== '1') return;
+        event.preventDefault();
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        const button = form.querySelector('button');
+        button.disabled = true;
+        try {
+            const response = await fetch(form.action, { method: 'POST', body: new FormData(form),
+                headers: { Accept: 'application/json' }, signal: controller.signal });
+            if (!response.ok) throw new Error(`No se pudo sincronizar (HTTP ${response.status}).`);
+            const result = await response.json();
+            window.NovaToast?.[result.ok ? 'success' : 'warning']?.(result.message || result.error);
+            if (!result.complete) button.textContent = 'Continuar sincronización completa';
+            else window.location.reload();
+        } catch (error) {
+            window.NovaToast?.error?.(error.name === 'AbortError' ? 'Se alcanzó el límite de 30 segundos. Pulsa nuevamente para continuar.' : error.message);
+        } finally {
+            clearTimeout(timer);
+            button.disabled = false;
+            delete form.dataset.confirmAccepted;
+            window.appUi?.setLoading(false);
+            window.appUi?.setIntegrationLoading?.(false);
+        }
+    });
 
     const modal = document.getElementById('historicoDetalleModal');
     modal?.addEventListener('show.bs.modal', event => {

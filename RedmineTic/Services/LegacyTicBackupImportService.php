@@ -277,6 +277,13 @@ final class LegacyTicBackupImportService
                         if ($reportId === null) {
                             throw new RuntimeException("No se pudo resolver el reporte legacy {$legacyId} para horas extra.");
                         }
+                        // The stored report date remains authoritative, also for existing tickets.
+                        $storedReport = DB::table('redmine_tic_reportes')->where('id', $reportId)
+                            ->lockForUpdate()->first(['fecha_inicio', 'fecha']);
+                        $reportDate = trim((string) ($storedReport->fecha_inicio ?? $storedReport->fecha ?? ''));
+                        if ($reportDate === '' || $reportDate !== $date) {
+                            throw new RuntimeException('La jornada del respaldo no coincide con la fecha de inicio del reporte '.$reportId.'. No se modificó la fecha del reporte; la importación se revierte.');
+                        }
                         $exists = DB::table('horas_extra_grupo_reportes')
                             ->where('grupo_id', $groupId)
                             ->where('origen', 'tic')

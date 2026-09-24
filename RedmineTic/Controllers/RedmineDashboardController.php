@@ -168,7 +168,7 @@ class RedmineDashboardController extends Controller
             'redmineProjectKey' => $redmine->projectKey(),
             'redmineProjectName' => $redmine->projectName(),
             'dashboardFilter' => $dashboardFilter,
-            'redmineMaintenance' => $redmine->dashboardSummary()['maintenance'],
+            'redmineMaintenance' => $redmine->maintenanceStatus(),
             'redmineRetentionHours' => max(1, (int) ($config['retencion_horas'] ?? 24)),
             'allowedConfigPanels' => array_keys(array_filter(
                 self::CONFIG_PANEL_PERMISSIONS,
@@ -177,6 +177,21 @@ class RedmineDashboardController extends Controller
             'effectivePermissions' => $permissions,
             'canHistoryActionsPermission' => $this->can($permissions, 'historico_acciones'),
         ]));
+    }
+
+    public function dashboardReportDetail(Request $request, RedmineDataRepository $redmine): JsonResponse
+    {
+        $this->prepare($request, $redmine);
+        $this->authorizePermission($request, $redmine, 'mensajes_acceso');
+        $this->authorizePermission($request, $redmine, 'reportes_editar');
+        $user = $request->session()->get('redmine_project_user', []);
+        $detail = $redmine->dashboardReportText(
+            (string) $request->query('id', ''),
+            is_array($user) ? $user : []
+        );
+        abort_if($detail === null, 404);
+
+        return response()->json($detail)->header('Cache-Control', 'private, no-store');
     }
 
     public function dashboardAction(Request $request, RedmineDataRepository $redmine): RedirectResponse|JsonResponse
@@ -223,10 +238,10 @@ class RedmineDashboardController extends Controller
         $message = match ($action) {
             'update' => $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->updateReport($updatePayload) ? 'Solicitud actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
             'delete' => $redmine->deleteReport($redmine->canAccessActiveReport((string) $request->input('id'), $user) ? (string) $request->input('id') : '').' solicitud(es) eliminada(s).',
-            'delete_selected' => $redmine->deleteReports($redmine->filterAccessibleActiveReportIds($ids, $user)).' solicitud(es) eliminada(s).',
-            'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user)).' solicitud(es) archivada(s).',
-            'process_selected' => $this->sendReports($request, $redmine, $redmine->filterAccessibleActiveReportIds($ids, $user)),
-            'reset_errors' => $redmine->resetErrors($redmine->filterAccessibleActiveReportIds($ids, $user)).' error(es) marcados como pendientes.',
+            'delete_selected' => $redmine->deleteReports($redmine->filterAccessibleActiveReportIds($ids, $user, true)).' solicitud(es) eliminada(s).',
+            'archive_selected' => $redmine->archiveReports($redmine->filterAccessibleActiveReportIds($ids, $user, true)).' solicitud(es) archivada(s).',
+            'process_selected' => $this->sendReports($request, $redmine, $redmine->filterAccessibleActiveReportIds($ids, $user, true)),
+            'reset_errors' => $redmine->resetErrors($redmine->filterAccessibleActiveReportIds($ids, $user, true)).' error(es) marcados como pendientes.',
             'toggle_hours_extra' => ($toggleHoursExtraSuccess = $redmine->canAccessActiveReport((string) $request->input('id'), $user) && $redmine->toggleHoursExtra((string) $request->input('id'), $request->boolean('hora_extra'))) ? 'Hora extra actualizada.' : 'No se encontro la solicitud o no tienes acceso.',
             default => 'Accion no reconocida.',
         };
@@ -436,7 +451,7 @@ class RedmineDashboardController extends Controller
 
             return redirect()
                 ->route('redmine.native.section', $this->routeParameters($redmine, ['section' => 'configuracion', 'panel' => 'usuarios-permisos']), 303)
-                ->with('redmine_status', $updated ? 'Permisos de usuario guardados.' : 'No se encontro el usuario seleccionado.')
+                ->with('redmine_status', $updated ? 'Permisos de usuario guardados.' : 'No fue posible guardar los permisos del usuario. Recarga la página e intenta nuevamente.')
                 ->with('redmine_selected_user_permissions', $userId);
         }
 
@@ -581,7 +596,7 @@ class RedmineDashboardController extends Controller
         );
     }
 
-    public function historyAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
+    public function historyAction(Request $request, RedmineDataRepository $redmine): RedirectResponse|JsonResponse
     {
         $this->prepare($request, $redmine);
         $this->authorizePermission($request, $redmine, 'historico');
@@ -601,6 +616,8 @@ class RedmineDashboardController extends Controller
                     $result['requested'],
                     $result['updated']
                 );
+
+            if ($request->expectsJson()) return response()->json($result + ['message' => $message, 'ok' => $result['error'] === '']);
 
             return back()
                 ->with('redmine_status', $message)
@@ -656,10 +673,10 @@ class RedmineDashboardController extends Controller
             ->all();
 
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
-        $statuses = $redmine->issueStatuses($ids, is_array($user) ? (string) ($user['id'] ?? '') : '');
-        $redmine->persistIssueStatuses($statuses);
+        $result = $redmine->synchronizeVisibleIssueStatuses($ids, is_array($user) ? (string) ($user['id'] ?? '') : '');
+        $redmine->persistIssueStatuses($result['statuses']);
 
-        return response()->json(['ok' => true, 'statuses' => $statuses]);
+        return response()->json($result);
     }
 
     public function hoursAction(Request $request, RedmineDataRepository $redmine): RedirectResponse
@@ -674,9 +691,10 @@ class RedmineDashboardController extends Controller
         $this->authorizePermission($request, $redmine, 'horas_extra_editar');
         $source = (string) $request->input('_source_file');
 
-        $redmine->saveHoursGroup($source, $request->all());
+        $saved = $redmine->saveHoursGroup($source, $request->all());
 
-        return back()->with('redmine_status', 'Grupo de horas extra guardado.');
+        return back()->with('redmine_status', $saved ? 'Grupo de horas extra guardado.' : 'No se pudo guardar el grupo de horas extra. No se aplicaron cambios.')
+            ->with('redmine_status_type', $saved ? 'success' : 'danger');
     }
 
     public function activityAction(Request $request, RedmineDataRepository $redmine): RedirectResponse

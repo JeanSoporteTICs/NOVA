@@ -15777,3 +15777,65 @@ nav.sb-navbar > .container-fluid,
 .nova-password-modal .input-group { flex-wrap: nowrap; }
 .nova-password-modal .input-group .form-control { min-width: 0; }
 .nova-password-modal .input-group button { min-width: 44px; }
+
+/* History status review: progress is transient, completion is a quiet receipt. */
+.historico-redmine-sync[data-sync-state] {
+  padding: .85rem 1.15rem;
+  border-left: 3px solid #2b6fd6;
+  border-bottom: 1px solid #dbe7f5;
+  background: #f2f7fd;
+}
+.historico-redmine-sync[data-sync-state="complete"] {
+  padding-top: .65rem;
+  padding-bottom: .65rem;
+  border-left-color: #16804a;
+  border-bottom-color: #d8eadf;
+  background: #f1faf5;
+}
+.historico-redmine-sync[data-sync-state="paused"] {
+  border-left-color: #b7791f;
+  border-bottom-color: #f0dfbd;
+  background: #fffaf0;
+}
+.historico-redmine-sync[data-sync-state] .historico-redmine-sync__header {
+  align-items: center;
+  margin-bottom: .4rem;
+  color: #183d6b;
+  font-size: .86rem;
+  font-weight: 750;
+}
+.historico-redmine-sync[data-sync-state="complete"] .historico-redmine-sync__header {
+  margin-bottom: 0;
+  color: #16613c;
+}
+.historico-redmine-sync[data-sync-state="paused"] .historico-redmine-sync__header { color: #81551d; }
+.historico-redmine-sync .historico-redmine-sync__title { display: inline-flex; align-items: center; gap: .5rem; }
+.historico-redmine-sync .historico-redmine-sync__title i { animation: none; font-size: 1rem; }
+.historico-redmine-sync[data-sync-state="running"] .historico-redmine-sync__title i { animation: nova-history-sync-spin 1.2s linear infinite; }
+.historico-redmine-sync[data-sync-state] #redmine-sync-count {
+  flex: none;
+  padding: .17rem .55rem;
+  border-radius: 999px;
+  background: #e0ecfb;
+  color: #1d4f89;
+  font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+}
+.historico-redmine-sync[data-sync-state="complete"] #redmine-sync-count { background: #dcefe3; color: #16613c; }
+.historico-redmine-sync[data-sync-state="paused"] #redmine-sync-count { background: #f7e9cb; color: #81551d; }
+.historico-redmine-sync[data-sync-state] .progress { height: .35rem; margin-bottom: .4rem; background: #dbe7f5; }
+.historico-redmine-sync[data-sync-state="complete"] .progress { display: none; }
+.historico-redmine-sync[data-sync-state="paused"] .progress { background: #f4e7cd; }
+.historico-redmine-sync[data-sync-state] .progress-bar { background: #2b6fd6; }
+.historico-redmine-sync[data-sync-state="paused"] .progress-bar { background: #c58a2a; }
+.historico-redmine-sync .historico-redmine-sync__details { display: flex; align-items: center; justify-content: space-between; gap: .55rem 1rem; flex-wrap: wrap; }
+.historico-redmine-sync .historico-redmine-sync__message { color: #4c6177; font-size: .79rem; line-height: 1.4; }
+.historico-redmine-sync[data-sync-state="complete"] .historico-redmine-sync__message { display: none; }
+.historico-redmine-sync[data-sync-state="paused"] .historico-redmine-sync__message { color: #76572e; }
+.historico-redmine-sync .historico-redmine-sync__details .btn { min-height: 34px; white-space: normal; }
+.historico-redmine-sync .historico-redmine-sync__details .btn.d-none,
+.historico-redmine-sync .historico-redmine-sync__details .btn[hidden] { display: none !important; }
+@keyframes nova-history-sync-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .historico-redmine-sync[data-sync-state="running"] .historico-redmine-sync__title i { animation: none; }
+}

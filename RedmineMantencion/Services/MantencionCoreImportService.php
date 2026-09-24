@@ -444,6 +444,11 @@ class MantencionCoreImportService
                 $slugs[] = $slug;
             }
         }
+        if ($normalizedType === 'modificar usuario') {
+            $slugs[] = 'modificar_perfil';
+        } elseif ($normalizedType === 'modificar perfil') {
+            $slugs[] = 'modificar_usuario';
+        }
         if (
             $normalizedType === 'creacion de usuario'
             || $normalizedType === 'creacion usuario'
@@ -469,11 +474,13 @@ class MantencionCoreImportService
             if ((microtime(true) - $startedAt) >= 45) {
                 break;
             }
-            $candidateIds = [];
-            foreach ((array)($row['_candidate_request_ids'] ?? []) as $candidateId) {
-                $candidateIds[] = trim((string)$candidateId);
+            $requestId = trim((string)($row['id_solicitud_core'] ?? $row['id'] ?? ''));
+            $candidateIds = $requestId !== '' ? [$requestId] : [];
+            if ($requestId === '') {
+                foreach ((array)($row['_candidate_request_ids'] ?? []) as $candidateId) {
+                    $candidateIds[] = trim((string)$candidateId);
+                }
             }
-            $candidateIds[] = trim((string)($row['id_solicitud_core'] ?? $row['id'] ?? ''));
             $candidateIds = array_values(array_unique(array_filter($candidateIds, fn($id) => $id !== '')));
             if (empty($candidateIds)) {
                 continue;
@@ -501,13 +508,18 @@ class MantencionCoreImportService
                     }
                     $detailBody = (string)($detailResponse['body'] ?? '');
                     $detailFields = $this->dashboard_core_extract_detail_from_body($detailBody);
-                    $row = $this->dashboard_core_merge_detail_fields($row, $detailFields);
-                    foreach ($this->dashboard_core_extract_related_request_ids_from_body($detailBody) as $relatedId) {
-                        if (!isset($visitedIds[$relatedId])) {
-                            $candidateIds[] = $relatedId;
+                    $hasDetail = $this->dashboard_core_has_substantive_detail($detailFields);
+                    if ($hasDetail) {
+                        $row = $this->dashboard_core_merge_detail_fields($row, $detailFields);
+                    }
+                    if ($requestId === '') {
+                        foreach ($this->dashboard_core_extract_related_request_ids_from_body($detailBody) as $relatedId) {
+                            if (!isset($visitedIds[$relatedId])) {
+                                $candidateIds[] = $relatedId;
+                            }
                         }
                     }
-                    if (!empty($detailFields['detalle_items']) || trim((string)($detailFields['detalle_run'] ?? '')) !== '' || trim((string)($detailFields['detalle_nombre'] ?? '')) !== '') {
+                    if ($hasDetail) {
                         $rows[$index] = $row;
                         break 2;
                     }
@@ -518,17 +530,43 @@ class MantencionCoreImportService
         return $rows;
     }
 
+    public function dashboard_core_has_substantive_detail(array $details): bool {
+        $fields = ['detalle_run', 'detalle_motivo', 'detalle_establecimientos',
+            'detalle_otros_permisos', 'detalle_fecha_nacimiento', 'detalle_email',
+            'detalle_departamento', 'detalle_cargo', 'detalle_rol'];
+        foreach (array_merge([$details], (array)($details['detalle_items'] ?? [])) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            foreach ($fields as $field) {
+                $value = trim((string)($item[$field] ?? ''));
+                if ($value !== '' && $value !== '-') {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public function dashboard_core_extract_candidate_request_ids(string $html): array {
         if ($html === '') {
             return [];
         }
         $ids = [];
-        if (preg_match_all('/data-(?:id|solicitud|solicitud-id|solicitud_id)\s*=\s*["\']?(\d{2,})["\']?/i', $html, $matches)) {
+        // El enlace de detalle identifica la solicitud; otros data-id del renglón
+        // pueden corresponder al usuario, establecimiento o botón de acciones.
+        if (preg_match_all('#/obtener_detalle_[^/]+/(\d+)#i', $html, $matches)) {
+            foreach (($matches[1] ?? []) as $id) {
+                $ids[] = trim((string)$id);
+            }
+            return array_values(array_unique($ids));
+        }
+        if (preg_match_all('/data-(?:solicitud-id|solicitud_id|id-solicitud|id_solicitud|solicitud)\s*=\s*["\']?(\d{2,})["\']?/i', $html, $matches)) {
             foreach (($matches[1] ?? []) as $id) {
                 $ids[] = trim((string)$id);
             }
         }
-        if (preg_match_all('#/obtener_detalle_[^/]+/(\d+)#i', $html, $matches)) {
+        if (preg_match_all('/data-id\s*=\s*["\']?(\d{2,})["\']?/i', $html, $matches)) {
             foreach (($matches[1] ?? []) as $id) {
                 $ids[] = trim((string)$id);
             }
@@ -639,8 +677,7 @@ class MantencionCoreImportService
             foreach ($this->dashboard_core_collect_recursive_strings($json) as $candidateHtml) {
                 $detailItems = $this->dashboard_core_extract_detail_table_rows($candidateHtml);
                 if (!empty($detailItems)) {
-                    $details['detalle_items'] = $detailItems;
-                    $details = $this->dashboard_core_merge_detail_fields($details, $detailItems[0]);
+                    $details = $this->dashboard_core_apply_detail_table($details, $detailItems);
                     break;
                 }
             }
@@ -651,8 +688,7 @@ class MantencionCoreImportService
             $detailItems = [];
         }
         if (!empty($detailItems)) {
-            $details['detalle_items'] = $detailItems;
-            $details = $this->dashboard_core_merge_detail_fields($details, $detailItems[0]);
+            $details = $this->dashboard_core_apply_detail_table($details, $detailItems);
         }
         $normalizedBody = preg_replace("/\r\n?/", "\n", html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
         if ($normalizedBody === null) {
@@ -676,6 +712,17 @@ class MantencionCoreImportService
                     $details[$field] = trim($match[1]);
                     break;
                 }
+            }
+        }
+        return $details;
+    }
+
+    public function dashboard_core_apply_detail_table(array $details, array $items): array {
+        $details['detalle_items'] = $items;
+        foreach (($items[0] ?? []) as $field => $value) {
+            if (array_key_exists($field, $details) && $field !== 'detalle_items'
+                && trim((string)$value) !== '') {
+                $details[$field] = trim((string)$value);
             }
         }
         return $details;
@@ -1677,6 +1724,7 @@ class MantencionCoreImportService
         $dbCoreIds = ($dbImportRepo !== null) ? $dbImportRepo->getExistingCoreIds() : [];
         $imported = 0;
         $updated = 0;
+        $originalMessages = $messages;
         $messagesToPersist = [];
         foreach ($rows as $row) {
             $message = $this->dashboard_core_build_message($row, $catalogs, $users);
@@ -1737,15 +1785,19 @@ class MantencionCoreImportService
             $imported++;
             $traceCounters['imported']++;
         }
-        $cfg['core_last_sync'] = (new \DateTimeImmutable())->format(\DateTime::ATOM);
-        $cfg['core_last_error'] = '';
-        save_platform_config($cfg);
         if ($imported > 0 || $updated > 0) {
             // Persistir solo filas nuevas o pendientes realmente modificadas.
             // Guardar toda la cola tambien tocaba actualizado_at de reportes
             // procesados y reiniciaba indebidamente su reloj de retencion.
-            save_messages($messagesToPersist);
+            if (!save_messages($messagesToPersist, $originalMessages)) {
+                return ['skipped' => false, 'imported' => 0, 'updated' => 0,
+                    'error' => 'No se pudieron guardar todos los reportes importados. Recarga y revisa los pendientes antes de repetir la importación.',
+                    'authenticated' => $coreAuthenticated];
+            }
         }
+        $cfg['core_last_sync'] = (new \DateTimeImmutable())->format(\DateTime::ATOM);
+        $cfg['core_last_error'] = '';
+        save_platform_config($cfg);
         $this->dashboard_core_log_import_trace($traceCounters, $traceSample);
         return [
             'skipped' => false,

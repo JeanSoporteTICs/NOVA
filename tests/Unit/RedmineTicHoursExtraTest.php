@@ -217,4 +217,19 @@ class RedmineTicHoursExtraTest extends TestCase
         $this->assertFalse($suggestion['ok']);
         $this->assertSame('Configura tus credenciales EMACH antes de calcular.', $suggestion['status']);
     }
+    public function test_archive_and_hours_links_are_rolled_back_together_on_failure(): void
+    {
+        $user = $this->makeNovaUserWithRedmineId();
+        $reportId = $this->makeTicReport($user['redmine_id'], '2026-05-11', 'procesado');
+        DB::connection()->beforeExecuting(function (string $query): void {
+            if (str_starts_with(strtolower($query), 'insert into `horas_extra_grupo_reportes`')) {
+                throw new \RuntimeException('Synthetic attachment failure');
+            }
+        });
+        $this->assertSame(0, $this->facade()->archiveReports([(string) $reportId]));
+        $this->assertSame('procesado', DB::table('redmine_tic_reportes')->where('id', $reportId)->value('estado'));
+        $this->assertFalse(DB::table('horas_extra_grupos')->where('usuario_id', $user['nova_id'])->exists());
+        $this->assertFalse(DB::table('horas_extra_grupo_reportes')->where('origen', 'tic')->where('reporte_id', $reportId)->exists());
+    }
+
 }

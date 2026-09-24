@@ -49,7 +49,7 @@ class LegacyTicBackupImportServiceTest extends TestCase
         $this->assertSame(0, $summary['existing_ticket_matches']);
     }
 
-    public function test_import_is_idempotent_and_preserves_one_report_in_multiple_hour_dates(): void
+    public function test_import_is_idempotent_and_preserves_the_report_start_date(): void
     {
         [$first, $second] = $this->createUsers();
         $ticketA = random_int(81000000, 81999999);
@@ -62,8 +62,8 @@ class LegacyTicBackupImportServiceTest extends TestCase
             archived: [$reportA, $reportB],
             pending: [$this->report('pending-a', 83000001, $first, '03-07-2026')],
             hours: [
-                ['fecha' => '2026-07-04', 'hora_inicio' => '18:00:00', 'hora_fin' => '20:00:00', 'reports' => [$reportA]],
-                ['fecha' => '2026-07-05', 'hora_inicio' => '19:00:00', 'hora_fin' => '21:00:00', 'reports' => [$reportA]],
+                ['fecha' => '2026-07-01', 'hora_inicio' => '18:00:00', 'hora_fin' => '20:00:00', 'reports' => [$reportA]],
+                ['fecha' => '2026-07-02', 'hora_inicio' => '19:00:00', 'hora_fin' => '21:00:00', 'reports' => [$reportB]],
             ],
         );
 
@@ -82,13 +82,15 @@ class LegacyTicBackupImportServiceTest extends TestCase
         $this->assertSame(2, $result['created_hour_links']);
         $this->assertCount(2, $rows);
         $this->assertSame(['archivado'], $rows->pluck('estado')->unique()->values()->all());
-        $this->assertSame(2, DB::table('horas_extra_grupo_reportes')
+        $this->assertSame(1, DB::table('horas_extra_grupo_reportes')
             ->where('origen', 'tic')
             ->where('reporte_id', $reportDatabaseId)
             ->count());
         $hourGroups = collect(app(HorasExtraRepository::class)->groupsForOrigen('tic'))
             ->filter(static fn (array $group): bool => in_array($reportDatabaseId, $group['reporte_ids'], true));
-        $this->assertCount(2, $hourGroups);
+        $this->assertCount(1, $hourGroups);
+        $this->assertSame('2026-07-01', $hourGroups->first()['fecha']);
+        $this->assertSame('2026-07-01', $rows->firstWhere('redmine_id', $ticketA)->fecha_inicio);
 
         $categoryRow = DB::table('catalogos_modulo')
             ->where('modulo_id', $moduleId)
@@ -112,6 +114,27 @@ class LegacyTicBackupImportServiceTest extends TestCase
             ->where('modulo_id', $moduleId)
             ->whereIn('redmine_id', [$ticketA, $ticketB])
             ->count());
+    }
+
+    public function test_import_rejects_a_different_hour_date_and_rolls_back_the_package(): void
+    {
+        [$first, $second] = $this->createUsers();
+        $ticket = random_int(84000000, 84999999);
+        $report = $this->report('date-mismatch', $ticket, $first, '01-07-2026');
+        $package = $this->createPackage([$report], [], [
+            ['fecha' => '2026-07-04', 'hora_inicio' => '18:00', 'hora_fin' => '20:00', 'reports' => [$report]],
+        ]);
+        $groups = DB::table('horas_extra_grupos')->orderBy('id')->get()->toJson();
+        $links = DB::table('horas_extra_grupo_reportes')->orderBy('id')->get()->toJson();
+        try {
+            app(LegacyTicBackupImportService::class)->import($package, [$first, $second]);
+            $this->fail('An inconsistent backup must be rejected.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('no coincide con la fecha de inicio', $exception->getMessage());
+        }
+        $this->assertFalse(DB::table('redmine_tic_reportes')->where('redmine_id', $ticket)->exists());
+        $this->assertSame($groups, DB::table('horas_extra_grupos')->orderBy('id')->get()->toJson());
+        $this->assertSame($links, DB::table('horas_extra_grupo_reportes')->orderBy('id')->get()->toJson());
     }
 
     /** @return array{0:string,1:string} */

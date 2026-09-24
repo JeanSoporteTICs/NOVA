@@ -237,15 +237,11 @@ class HistoricoController extends Controller
                 explode(',', (string) ($_GET['ids'] ?? ''))
             ))));
             $ids = array_slice($ids, 0, 100);
-            $statuses = [];
+            $result = $this->historico->synchronizeStatuses($redminePlatformUrl, $redmineToken, $ids);
+            $statuses = $result['statuses'];
             $changedIds = [];
             $reportRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
-            foreach ($ids as $id) {
-                if ($id === '') {
-                    continue;
-                }
-                $statuses[$id] = $this->historico->fetchRedmineStatus($redminePlatformUrl, $id, $redmineToken);
-                $remoteStatus = $statuses[$id];
+            foreach ($statuses as $id => $remoteStatus) {
                 $remoteStatusId = (int) ($remoteStatus['id'] ?? 0);
                 $remoteStatusName = trim((string) ($remoteStatus['name'] ?? ''));
                 if (($remoteStatus['available'] ?? false) && $remoteStatusId > 0 && $remoteStatusName !== '') {
@@ -256,16 +252,10 @@ class HistoricoController extends Controller
                 }
             }
 
-            return response()->json([
-                'ok' => true,
-                'statuses' => $statuses,
+            return response()->json($result + [
                 'changed_ids' => array_values(array_unique($changedIds)),
             ]);
         }
-
-        $items = [];
-        $items = array_merge($items, $this->historico->loadReportes());
-        $items = array_merge($items, $this->historico->loadHorasExtras());
 
         $redmineStatusesSel = [];
         foreach ($redmineStatusOptions as $statusLabel) {
@@ -275,76 +265,18 @@ class HistoricoController extends Controller
             }
         }
 
-        $filtered = [];
-        foreach ($items as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            if (! in_array(strtolower(trim((string) ($row['estado'] ?? ''))), ['procesado', 'archivado'], true)) {
-                continue;
-            }
-            $fecha = $this->historico->normDate($row['fecha'] ?? ($row['fecha_inicio'] ?? ''));
-            if ($fecha === '') {
-                continue;
-            }
-            if ($f_desde && $fecha < $f_desde) {
-                continue;
-            }
-            if ($f_hasta && $fecha > $f_hasta) {
-                continue;
-            }
-            if ($f_fuente && ($row['_fuente'] ?? '') !== $f_fuente) {
-                continue;
-            }
-            if ($f_estado_redmine !== '') {
-                $rowRedmineStatus = trim((string) ($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? ''));
-                if ($rowRedmineStatus === '') {
-                    $rowStatusId = (int) ($row['status_id'] ?? $row['estado_id'] ?? 0);
-                    $rowRedmineStatus = trim((string) ($redmineStatusOptions[$rowStatusId] ?? ''));
-                }
-                if (dashboard_normalize_text($rowRedmineStatus) !== dashboard_normalize_text($f_estado_redmine)) {
-                    continue;
-                }
-            }
-            if ($f_usuario !== '' && (string) ($row['asignado_a'] ?? '') !== (string) $f_usuario) {
-                continue;
-            }
-            if ($f_scope === 'asignados' && ! $this->historico->recordMatchesCurrentUser($row, $userId, $userNames)) {
-                continue;
-            }
-            $cat = strtolower($row['categoria'] ?? '');
-            if ($f_categoria !== '' && $cat !== $f_categoria) {
-                continue;
-            }
-            if (! $this->historico->matchesSearch($row, $f_busqueda)) {
-                continue;
-            }
-            if ($f_descripcion !== '') {
-                $descriptionNeedle = dashboard_normalize_text($f_descripcion);
-                $descriptionText = dashboard_normalize_text((string) ($row['descripcion'] ?? ''));
-                if ($descriptionNeedle !== '' && ! str_contains($descriptionText, $descriptionNeedle)) {
-                    continue;
-                }
-            }
-            $row['_fecha_norm'] = $fecha;
-            $filtered[] = $row;
-        }
-
-        if ($f_fuente === '') {
-            $filtered = $this->historico->dedupeRows($filtered);
-        }
-
-        usort($filtered, function ($a, $b) {
-            return strcmp($b['_fecha_norm'] ?? '', $a['_fecha_norm'] ?? '');
-        });
-
-        $totalFiltered = count($filtered);
-        $totalPages = max(1, (int) ceil($totalFiltered / $perPage));
-        if ($currentPage > $totalPages) {
-            $currentPage = $totalPages;
-        }
+        $historyPage = app(\App\Modulos\RedmineMantencion\Repositories\MantencionHistoryRepository::class)->page(
+            $this->historico,
+            ['desde' => $f_desde, 'hasta' => $f_hasta, 'fuente' => $f_fuente,
+                'estado_redmine' => $f_estado_redmine, 'usuario' => $f_usuario, 'scope' => $f_scope,
+                'categoria' => $f_categoria, 'buscar' => $f_busqueda, 'descripcion' => $f_descripcion],
+            $userId, $userNames, $redmineStatusOptions, $currentPage, $perPage
+        );
+        $totalFiltered = $historyPage['total'];
+        $totalPages = $historyPage['pages'];
+        $currentPage = $historyPage['page'];
         $pageOffset = ($currentPage - 1) * $perPage;
-        $pagedRows = array_slice($filtered, $pageOffset, $perPage);
+        $pagedRows = $historyPage['rows'];
         $visibleRows = count($pagedRows);
         $historicoFilterChips = [];
         if ($f_desde !== '') {
@@ -405,17 +337,8 @@ class HistoricoController extends Controller
             return $historicoBaseUrl.'?'.http_build_query($query);
         };
 
-        $usuariosSel = [];
-        $catsSel = [];
-        foreach ($items as $r) {
-            if (! is_array($r)) {
-                continue;
-            }
-            $usuariosSel[(string) ($r['asignado_a'] ?? '')] = $r['asignado_nombre'] ?? ($r['asignado_a'] ?? '');
-            $catsSel[strtolower($r['categoria'] ?? '')] = $r['categoria'] ?? '';
-        }
-        ksort($usuariosSel);
-        ksort($catsSel);
+        $usuariosSel = $historyPage['users'];
+        $catsSel = $historyPage['categories'];
 
         $historicoService = $this->historico;
 

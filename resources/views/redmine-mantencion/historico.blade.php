@@ -101,7 +101,7 @@
   <div class="card shadow-sm historico-table-card" id="historico-table-card">
     <div class="historico-summary">
       <div>
-        <span class="historico-count"><i class="bi bi-clock-history text-primary"></i> <?= count($filtered) ?> registros</span>
+        <span class="historico-count"><i class="bi bi-clock-history text-primary"></i> <?= $totalFiltered ?> registros</span>
         <span class="text-muted ms-2">Mostrando <?= $h($visibleRows) ?> de <?= $h($totalFiltered) ?> registros</span>
       </div>
       <div class="historico-summary__tools">
@@ -167,11 +167,11 @@
     <?php endif; ?>
     <div id="redmine-sync-panel" class="historico-redmine-sync d-none" role="status" aria-live="polite">
       <div class="historico-redmine-sync__header">
-        <span><i class="bi bi-arrow-repeat"></i> Sincronizando estados con Redmine</span>
+        <span class="historico-redmine-sync__title"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span data-redmine-sync-title>Consultando estados en Redmine</span></span>
         <strong id="redmine-sync-count">0/0</strong>
       </div>
       <div class="progress" aria-hidden="true">
-        <div id="redmine-sync-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+        <div id="redmine-sync-bar" class="progress-bar" style="width: 0%"></div>
       </div>
     </div>
     <div class="card-body p-0 position-relative">
@@ -272,6 +272,7 @@
                       <span
                         class="historico-redmine-status historico-redmine-status--syncing js-redmine-status"
                         data-redmine-id="<?= $h($redmineId) ?>"
+                        data-saved-status="<?= $h($row['estado_redmine'] ?? '') ?>"
                         title="Sincronizando con Redmine">
                         <i class="bi bi-arrow-repeat"></i>
                         <span>Sincronizando</span>
@@ -494,7 +495,9 @@
     </div>
   </div>
 
-  <script>
+  @php $redmineHistorySyncVersion = @filemtime(public_path('assets/redmine-history-sync.js')) ?: '1'; @endphp
+<script src="{{ asset('assets/redmine-history-sync.js') }}?v={{ $redmineHistorySyncVersion }}"></script>
+<script>
     document.addEventListener('DOMContentLoaded', function () {
       const form = document.getElementById('filter-form');
       const feedback = document.getElementById('filter-feedback');
@@ -531,7 +534,8 @@
 
       const activeRedmineStatusFilter = <?= json_encode($f_estado_redmine, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-      const initializeHistoricoTable = () => {
+      const confirmedStatuses = new Map();
+      const initializeHistoricoTable = (synchronize = true) => {
       const statusBadges = Array.from(document.querySelectorAll('.js-redmine-status[data-redmine-id]'));
       const syncPanel = document.getElementById('redmine-sync-panel');
       const syncBar = document.getElementById('redmine-sync-bar');
@@ -648,7 +652,8 @@
           ? 'historico-redmine-status--unknown'
           : (closed ? 'historico-redmine-status--closed' : redmineStatusTone(statusName));
         const iconClass = !available ? 'bi-question-circle' : (closed ? 'bi-lock-fill' : 'bi-folder2-open');
-        const label = !available ? 'No disponible' : (statusName || (closed ? 'Cerrada' : 'Abierto'));
+        if (available) { badge.dataset.savedStatus = statusName; confirmedStatuses.set(badge.dataset.redmineId, status); }
+        const label = !available ? (badge.dataset.savedStatus || 'Sin consultar') : (statusName || (closed ? 'Cerrada' : 'Abierto'));
 
         badge.className = `historico-redmine-status js-redmine-status ${cssClass}`;
         badge.title = available ? `Redmine: ${statusName}` : message;
@@ -668,74 +673,30 @@
         }
       };
 
-      const syncRedmineStatuses = async () => {
-        const ids = [...new Set(statusBadges.map(badge => badge.getAttribute('data-redmine-id')).filter(Boolean))];
-        if (!ids.length) return;
-
+      const syncRedmineStatuses = () => {
         const redmineStatusEndpoint = <?= json_encode($historicoActionUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-
-        const chunkSize = 5;
-        const chunks = [];
-        for (let index = 0; index < ids.length; index += chunkSize) {
-          chunks.push(ids.slice(index, index + chunkSize));
-        }
-
-        let done = 0;
-        let tableNeedsRefresh = false;
-        if (syncPanel) syncPanel.classList.remove('d-none');
-        if (syncCount) syncCount.textContent = `0/${ids.length}`;
-        if (syncBar) syncBar.style.width = '0%';
-
-        for (const chunk of chunks) {
-          try {
-            const statusUrl = new URL(redmineStatusEndpoint, window.location.href);
-            statusUrl.searchParams.set('ajax', 'redmine_statuses');
-            statusUrl.searchParams.set('ids', chunk.join(','));
-            const response = await fetch(statusUrl.toString(), {
-              headers: { 'Accept': 'application/json' },
-              cache: 'no-store',
-            });
-            if (!response.ok) {
-              throw new Error(`No se pudo consultar Redmine (HTTP ${response.status}).`);
+        const endpoint = new URL(redmineStatusEndpoint, window.location.href);
+        endpoint.searchParams.set('ajax', 'redmine_statuses');
+        window.NovaRedmineHistory.start({ endpoint: endpoint.toString(), badges: statusBadges,
+          panel: syncPanel, count: syncCount, bar: syncBar, render: setBadgeStatus,
+          onComplete: async result => {
+            const tableNeedsRefresh = Array.isArray(result.changed_ids) && result.changed_ids.length > 0;
+            if (activeRedmineStatusFilter && tableNeedsRefresh) {
+              await refreshHistoricoTable(redmineStatusEndpoint, false);
             }
-            const payload = await response.json();
-            const statuses = payload && payload.statuses ? payload.statuses : {};
-            if (Array.isArray(payload?.changed_ids) && payload.changed_ids.length > 0) {
-              tableNeedsRefresh = true;
-            }
-            chunk.forEach(id => {
-              document.querySelectorAll(`.js-redmine-status[data-redmine-id="${CSS.escape(id)}"]`).forEach(badge => {
-                setBadgeStatus(badge, statuses[id] || { available: false, message: 'Sin respuesta desde Redmine' });
-              });
-            });
-          } catch (error) {
-            chunk.forEach(id => {
-              document.querySelectorAll(`.js-redmine-status[data-redmine-id="${CSS.escape(id)}"]`).forEach(badge => {
-                setBadgeStatus(badge, { available: false, message: 'No se pudo sincronizar con Redmine' });
-              });
-            });
-          }
-
-          done += chunk.length;
-          const percent = Math.min(100, Math.round((done / ids.length) * 100));
-          if (syncCount) syncCount.textContent = `${Math.min(done, ids.length)}/${ids.length}`;
-          if (syncBar) syncBar.style.width = `${percent}%`;
-        }
-
-        if (syncPanel) {
-          syncPanel.classList.add('historico-redmine-sync--done');
-          setTimeout(() => syncPanel.classList.add('d-none'), 1200);
-        }
-        if (activeRedmineStatusFilter && tableNeedsRefresh) {
-          await refreshHistoricoTable(redmineStatusEndpoint);
-        }
+          } });
       };
 
-      syncRedmineStatuses();
+      if (synchronize) syncRedmineStatuses();
+      else statusBadges.forEach(badge => setBadgeStatus(badge, confirmedStatuses.get(badge.dataset.redmineId) || { available: false, message: 'Último estado guardado. Recarga para consultar Redmine.' }));
       };
 
-      const refreshHistoricoTable = async (url) => {
+      const refreshHistoricoTable = async (url, synchronize = true) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        try {
         const response = await fetch(url, {
+          signal: controller.signal,
           headers: {
             'Accept': 'text/html',
             'X-Requested-With': 'XMLHttpRequest',
@@ -755,7 +716,8 @@
         }
 
         currentCard.replaceWith(updatedCard);
-        initializeHistoricoTable();
+        initializeHistoricoTable(synchronize);
+        } finally { clearTimeout(timer); }
       };
 
       const submitRedmineStatus = async (statusForm) => {

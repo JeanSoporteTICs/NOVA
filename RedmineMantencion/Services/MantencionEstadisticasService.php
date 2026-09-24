@@ -4,6 +4,7 @@ namespace App\Modulos\RedmineMantencion\Services;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class MantencionEstadisticasService
@@ -286,16 +287,77 @@ class MantencionEstadisticasService
 
         $filters = $this->resolveFilters($_POST, $_GET);
 
-        $messages = [];
-        $messages = array_merge($messages, $this->loadReportMessages(base_path('RedmineMantencion/data/reportes')));
-        $messages = array_merge($messages, $this->loadLiveMessages(''));
-        $messages = array_merge($messages, $this->loadExtraMessages(''));
+        return $this->statisticsForFilters($filters);
+    }
 
-        $filtered = $this->filterMessages($messages, $filters);
-
+    public function statisticsForFilters(array $filters): array
+    {
+        $filtered = $this->filteredDatabaseMessages($filters);
         $stats = $this->computeStats($filtered);
         $stats['filtros_aplicados'] = $filters;
 
         return $stats;
     }
+
+    private function fullFilteredDatabaseMessages(array $filters): array
+    {
+        return $this->filterMessages(array_merge(
+            $this->loadReportMessages(''),
+            $this->loadLiveMessages(''),
+            $this->loadExtraMessages('')
+        ), $filters);
+    }
+
+    private function filteredDatabaseMessages(array $filters): array
+    {
+        // With no selective filters the complete response needs all details;
+        // retain the original reader instead of adding a metadata round trip.
+        if (! ($filters['desde'] ?? '') && ! ($filters['hasta'] ?? '')
+            && trim((string) ($filters['categoria'] ?? '')) === ''
+            && trim((string) ($filters['unidad'] ?? '')) === ''
+            && trim((string) ($filters['usuario'] ?? '')) === '') {
+            return $this->fullFilteredDatabaseMessages($filters);
+        }
+
+        $reports = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+        $hours = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
+        if ($reports === null) {
+            return [];
+        }
+
+        try {
+            return DB::transaction(function () use ($reports, $hours, $filters): array {
+                $readers = [
+                    'reportes' => fn (?array $ids) => $reports->archivedMessages($ids, $ids === null),
+                    'mensajes' => fn (?array $ids) => $reports->activeMessages($ids, $ids === null),
+                    'horas_extra' => fn (?array $ids) => $hours !== null ? $hours->statisticsMessages($ids) : [],
+                ];
+                $filtered = [];
+                foreach ($readers as $source => $read) {
+                    $normalize = function (array $row) use ($source): array {
+                        $row['_fuente'] = $source;
+
+                        return $this->normalizeMessage($row);
+                    };
+                    $candidates = $this->filterMessages(array_map($normalize, $read(null)), $filters);
+                    $ids = array_values(array_unique(array_column($candidates, '_statistics_id')));
+                    if ($ids === []) {
+                        continue;
+                    }
+                    // Reuse the complete DTO and normalizer for selected rows. Keep
+                    // repeated hours links and the order of all three sources.
+                    $details = $this->filterMessages(array_map($normalize, $read($ids)), $filters);
+                    if (count($details) !== count($candidates)) {
+                        return $this->fullFilteredDatabaseMessages($filters);
+                    }
+                    $filtered = array_merge($filtered, $details);
+                }
+
+                return $filtered;
+            });
+        } catch (Throwable) {
+            return $this->fullFilteredDatabaseMessages($filters);
+        }
+    }
+
 }

@@ -129,8 +129,8 @@ class MantencionUsuariosStorageService
         return array_values($rows);
     }
 
-    public function load_usuarios($path) {
-        $data = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion(false) : [];
+    public function load_usuarios($path, bool $forAdministration = false) {
+        $data = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion(false, true, $forAdministration) : [];
         if (!is_array($data)) $data = [];
         foreach ($data as &$item) {
             $this->ensure_user_fields($item);
@@ -154,7 +154,7 @@ class MantencionUsuariosStorageService
         return strtolower((string)preg_replace('/[^0-9a-z]/i', '', $value));
     }
 
-    public function usuarios_migrate_global_nextcloud_credentials(array &$rows): bool {
+    public function usuarios_migrate_global_nextcloud_credentials(array &$rows, bool $projected = false): bool {
         $userId = function_exists('auth_get_user_id') ? (string)auth_get_user_id() : '';
         if ($userId === '') {
             return false;
@@ -168,6 +168,11 @@ class MantencionUsuariosStorageService
         $globalPassEnc = trim((string)($cfg['nextcloud_admin_pass_enc'] ?? ''));
         if ($globalUser === '' || $globalPassEnc === '') {
             return false;
+        }
+        if ($projected) {
+            // A migration must use real credentials and the original save path,
+            // never the display-only indicators returned to the ordinary GET.
+            $rows = $this->load_usuarios('');
         }
         $changed = false;
         foreach ($rows as &$row) {

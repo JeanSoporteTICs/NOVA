@@ -32,7 +32,7 @@ final class MantencionHistoricoRouteTest extends TestCase
         self::assertStringContainsString('updateRedmineStatus($id, $remoteStatusId, $remoteStatusName)', $controller);
         self::assertStringContainsString('const activeRedmineStatusFilter =', $view);
         self::assertStringContainsString('if (activeRedmineStatusFilter && tableNeedsRefresh)', $view);
-        self::assertStringContainsString('await refreshHistoricoTable(redmineStatusEndpoint);', $view);
+        self::assertStringContainsString('await refreshHistoricoTable(redmineStatusEndpoint, false);', $view);
         self::assertStringContainsString("statusName || (closed ? 'Cerrada' : 'Abierto')", $view);
         self::assertStringNotContainsString('const detail = available && !closed', $view);
         self::assertStringContainsString("->orWhere('estado_id', '!=', (string) \$statusId)", $repository);

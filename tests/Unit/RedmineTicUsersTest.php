@@ -261,7 +261,9 @@ class RedmineTicUsersTest extends TestCase
             [$newId, $newId],
             DB::table('integraciones_usuario')
                 ->where('usuario_id', $nova->id)
-                ->whereIn('tipo', ['redmine_tic', 'redmine_mantencion'])
+                // TIC now creates the shared 'redmine' integration; the explicit
+                // legacy Mantencion row above must still receive the same ID.
+                ->whereIn('tipo', ['redmine', 'redmine_mantencion'])
                 ->orderBy('tipo')
                 ->pluck('usuario_externo')
                 ->map(static fn ($value): string => (string) $value)

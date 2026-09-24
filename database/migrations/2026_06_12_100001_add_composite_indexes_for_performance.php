@@ -44,25 +44,11 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (Schema::hasTable('redmine_tic_reportes')) {
-            Schema::table('redmine_tic_reportes', function (Blueprint $table): void {
-                $table->dropIndexIfExists('idx_reportes_modulo_estado_fecha');
-                $table->dropIndexIfExists('idx_reportes_modulo_asignado_estado');
-            });
-        }
-
-        if (Schema::hasTable('integraciones_usuario')) {
-            Schema::table('integraciones_usuario', function (Blueprint $table): void {
-                $table->dropIndexIfExists('idx_integraciones_usuario_tipo');
-            });
-        }
-
-        if (Schema::hasTable('usuarios_nova')) {
-            Schema::table('usuarios_nova', function (Blueprint $table): void {
-                $table->dropIndexIfExists('idx_usuarios_nova_estado');
-                $table->dropIndexIfExists('idx_usuarios_nova_rol_estado');
-            });
-        }
+        // The historical up() never recorded which indexes it created versus
+        // inherited. Keep these additive indexes on downgrade: dropping by name
+        // could remove a pre-existing index. This also avoids the unsupported
+        // Blueprint::dropIndexIfExists call. A physical index removal requires a
+        // separate reviewed migration with explicit provenance (P07 recovery).
     }
 
     private function indexExists(string $table, string $index): bool

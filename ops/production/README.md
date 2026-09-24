@@ -7,6 +7,9 @@ Este directorio implementa únicamente PROD-01. No despliega ni rota secretos.
 - El repositorio debe estar limpio y el origen debe ser un commit/tag.
 - El artefacto se construye por allowlist, no copiando el working tree.
 - `.env`, datos runtime, tests, herramientas, dumps, logs y backups no entran.
+- `database/baselines/` también se excluye: el esquema de recuperación P07 se
+  distribuye por separado para operaciones administrativas, fuera del artefacto
+  web. Las migraciones PHP permanecen incluidas y el verificador sigue rechazando SQL.
 - La única raíz HTTP válida es `<release>/public`.
 - Los ejemplos Apache/Nginx son plantillas; requieren validación operacional.
 

@@ -75,7 +75,7 @@
           $uRol = strtolower(trim((string)($u['rol'] ?? 'usuario')));
           $uLogin = trim((string)($u['ultimo_login_at'] ?? ''));
           $uLoginFmt = $uLogin !== '' ? date('d/m/Y H:i', strtotime($uLogin)) : '-';
-          $hasApi = trim((string)($u['api'] ?? '')) !== '';
+          $hasApi = $u['has_api_credentials'] ?? (trim((string)($u['api'] ?? '')) !== '');
           $hasCore = !empty($u['has_core_credentials'])
               || (trim((string)($u['core_user'] ?? '')) !== '' && trim((string)($u['core_pass_enc'] ?? '')) !== '');
           $hasNc = !empty($u['has_nextcloud_credentials'])

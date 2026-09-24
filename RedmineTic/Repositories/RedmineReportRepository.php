@@ -4,6 +4,7 @@ namespace RedmineTic\Repositories;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RedmineTic\Support\DateSupport;
 
 /**
  * Thin wrapper for redmine_tic_reportes table operations that are isolated
@@ -33,6 +34,88 @@ class RedmineReportRepository
         private string $projectName,
     ) {}
 
+    /** Minimal input for the existing dashboard scope and state filters. */
+    public function dashboardCandidates(int $moduleId, callable $assignedNameResolver): ?array
+    {
+        $query = DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)
+            ->where(fn ($query) => $query->whereNull('estado')->orWhere('estado', '<>', 'archivado'));
+        // The original reader has no tie breaker. Keep its query when changing
+        // the projection could change the order of reports sharing a timestamp.
+        if ((clone $query)->select('creado_at')->groupBy('creado_at')->havingRaw('COUNT(*) > 1')->exists()) {
+            return null;
+        }
+
+        return $query->orderBy('creado_at')->get(['id', 'estado', 'asignado_a'])
+            ->map(static fn ($row): array => [
+                'id' => (string) $row->id,
+                'estado' => (string) ($row->estado ?? ''),
+                'asignado_a' => (string) ($row->asignado_a ?? ''),
+                'asignado_nombre' => $assignedNameResolver((string) ($row->asignado_a ?? '')),
+            ])->all();
+    }
+
+    /** Only the fields consumed by the existing action authorization filter. */
+    public function actionScopeCandidates(int $moduleId, array $ids, callable $assignedNameResolver): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $pdo = DB::connection()->getPdo();
+        $quotedIds = array_map(fn ($id): string => $pdo->quote((string) $id), $ids);
+
+        // PHP still checks the exact requested IDs after SQL selection. SQL's
+        // numeric comparison must not authorize alternate spellings such as 01.
+        return DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)
+            ->where(fn ($query) => $query->whereNull('estado')->orWhere('estado', '<>', 'archivado'))
+            ->whereRaw('id IN ('.implode(',', $quotedIds).')')
+            ->get(['id', 'asignado_a'])
+            ->map(static fn ($row): array => [
+                'id' => (string) $row->id,
+                'asignado_a' => (string) ($row->asignado_a ?? ''),
+                'asignado_nombre' => $assignedNameResolver((string) ($row->asignado_a ?? '')),
+            ])->all();
+    }
+
+    /**
+     * Statistics do not use descriptions/messages or report detail. Preserve
+     * the original reader when timestamp ties could change chart label order.
+     *
+     * @return array<int,array<string,mixed>>|null
+     */
+    public function statisticsRows(int $moduleId, callable $assignedNameResolver): ?array
+    {
+        return DB::transaction(function () use ($moduleId, $assignedNameResolver): ?array {
+            $active = DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)
+                ->where(fn ($query) => $query->whereNull('estado')->orWhere('estado', '<>', 'archivado'));
+            $archived = DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)->where('estado', 'archivado');
+            foreach ([[$active, 'creado_at'], [$archived, 'actualizado_at']] as [$query, $order]) {
+                if ((clone $query)->select($order)->groupBy($order)->havingRaw('COUNT(*) > 1')->exists()) {
+                    return null;
+                }
+            }
+
+            $columns = ['id', 'estado', 'categoria_catalogo_id', 'unidad_solicitante_catalogo_id',
+                'asignado_a', 'fecha', 'fecha_inicio', 'creado_at', 'actualizado_at'];
+            // Old installations may still have the textual catalogue fallbacks.
+            foreach (['categoria', 'unidad_solicitante'] as $column) {
+                if (Schema::hasColumn('redmine_tic_reportes', $column)) {
+                    $columns[] = $column;
+                }
+            }
+            $fields = array_flip(['estado', 'categoria', 'unidad_solicitante', 'asignado_nombre', 'fecha', 'fecha_inicio']);
+            $rows = [];
+            foreach ([$active->orderBy('creado_at'), $archived->orderByDesc('actualizado_at')] as $query) {
+                foreach ($query->get($columns) as $row) {
+                    $row->tiempo_estimado = null;
+                    $rows[] = array_intersect_key($this->hydrate($row, $assignedNameResolver), $fields);
+                }
+            }
+
+            return $rows;
+        });
+    }
+
     /**
      * DB row -> public report array. $assignedNameResolver receives the raw
      * asignado_a value and must return the display name (kept as a callback
@@ -43,10 +126,7 @@ class RedmineReportRepository
     public function hydrate(object $row, callable $assignedNameResolver): array
     {
         $estado = (string) ($row->estado ?? '');
-        $processedAt = $row->procesado_at ?? null;
-        if ($processedAt === null && in_array(strtolower(trim($estado)), ['procesado', 'procesada', 'error', 'archivado'], true)) {
-            $processedAt = $row->actualizado_at ?? null;
-        }
+        $processedAt = $this->processedAtValue($row);
 
         return [
             'id' => (string) ($row->id ?? ''),
@@ -337,23 +417,64 @@ class RedmineReportRepository
      * @param  string[]  $states
      * @return array<int,array<string,mixed>>
      */
-    public function findActiveByStates(int $moduleId, array $states, callable $assignedNameResolver): array
+    public function findActiveByStates(int $moduleId, array $states, callable $assignedNameResolver, ?int $processedBefore = null): array
     {
         if (! $this->tableAvailable() || $moduleId <= 0 || $states === []) {
             return [];
         }
 
         try {
-            return DB::table('redmine_tic_reportes')
+            $query = DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->whereIn('estado', $states)
-                ->get()
+                ->whereIn('estado', $states);
+            if ($processedBefore !== null) {
+                // SQL only removes clearly recent rows. DATETIME is parsed in
+                // PHP's default timezone. One calendar day covers ambiguous
+                // local times at a daylight-saving boundary. TIMESTAMP falls
+                // back to the DB session timezone, so its null-processed path
+                // gets three days for the maximum timezone offset difference.
+                // PHP below still decides expiration and preserves row order.
+                $cutoff = (new \DateTimeImmutable('@'.$processedBefore))
+                    ->setTimezone(new \DateTimeZone(date_default_timezone_get()));
+                $processedCutoff = $cutoff->modify('+1 day')->format('Y-m-d H:i:s');
+                $updatedCutoff = $cutoff->modify('+3 days')->format('Y-m-d H:i:s');
+                $query->where(function ($query) use ($processedCutoff, $updatedCutoff): void {
+                    $query->where('procesado_at', '<=', $processedCutoff)
+                        ->orWhere(function ($query) use ($updatedCutoff): void {
+                            $query->whereNull('procesado_at')
+                                ->where('actualizado_at', '<=', $updatedCutoff);
+                        });
+                });
+                // Finish reading before the caller starts archive transactions.
+                $reports = [];
+                foreach ($query->cursor() as $row) {
+                    $timestamp = DateSupport::timestampFromValue($this->processedAtValue($row));
+                    if ($timestamp !== null && $timestamp <= $processedBefore) {
+                        $reports[] = $this->hydrate($row, $assignedNameResolver);
+                    }
+                }
+
+                return $reports;
+            }
+
+            return $query->get()
                 ->map(fn ($row): array => $this->hydrate($row, $assignedNameResolver))
                 ->values()
                 ->all();
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /** Same fallback for full hydration and the retention preselection. */
+    private function processedAtValue(object $row): mixed
+    {
+        $processedAt = $row->procesado_at ?? null;
+        if ($processedAt === null && in_array(strtolower(trim((string) ($row->estado ?? ''))), ['procesado', 'procesada', 'error', 'archivado'], true)) {
+            $processedAt = $row->actualizado_at ?? null;
+        }
+
+        return $processedAt;
     }
 
     /**
@@ -379,13 +500,13 @@ class RedmineReportRepository
         }
 
         try {
-            return DB::table('redmine_tic_reportes')
+            $query = DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
                 ->whereIn('id', $reportIds)
                 ->where(function ($query): void {
                     $query->whereNull('estado')->orWhere('estado', '<>', 'archivado');
-                })
-                ->delete();
+                });
+            return $this->deleteWithHours($query);
         } catch (\Throwable) {
             return 0;
         }
@@ -472,13 +593,13 @@ class RedmineReportRepository
         }
 
         try {
-            return DB::table('redmine_tic_reportes')
+            $query = DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
                 ->where('id', $reportId)
                 ->where(function ($query): void {
                     $query->whereNull('estado')->orWhere('estado', '<>', 'archivado');
-                })
-                ->delete();
+                });
+            return $this->deleteWithHours($query);
         } catch (\Throwable) {
             return 0;
         }
@@ -534,7 +655,8 @@ class RedmineReportRepository
                 $reportId = (int) DB::table('redmine_tic_reportes')->insertGetId($payload);
                 $report['id'] = (string) $reportId;
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) throw $exception;
         }
 
         return $report;
@@ -550,10 +672,10 @@ class RedmineReportRepository
         }
 
         try {
-            return DB::table('redmine_tic_reportes')
+            $query = DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->where('id', $reportId)
-                ->delete();
+                ->where('id', $reportId);
+            return $this->deleteWithHours($query);
         } catch (\Throwable) {
             return 0;
         }
@@ -574,11 +696,11 @@ class RedmineReportRepository
         }
 
         try {
-            return DB::table('redmine_tic_reportes')
+            $query = DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
                 ->where('id', (int) $id)
-                ->where('estado', 'archivado')
-                ->delete();
+                ->where('estado', 'archivado');
+            return $this->deleteWithHours($query);
         } catch (\Throwable) {
             return 0;
         }
@@ -675,7 +797,7 @@ class RedmineReportRepository
         try {
             return DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->where('asignado_a', (int) $assigneeId)
+                ->where('asignado_a', $assigneeId)
                 ->where('estado_redmine', 'Nueva')
                 ->whereNotNull('redmine_id')
                 ->where('creado_at', '>=', $start)
@@ -701,7 +823,7 @@ class RedmineReportRepository
         try {
             return DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
-                ->where('asignado_a', (int) $assigneeId)
+                ->where('asignado_a', $assigneeId)
                 ->whereNotNull('redmine_id')
                 ->where(function ($query): void {
                     $query->whereNull('estado_redmine')->orWhere('estado_redmine', '');
@@ -734,9 +856,20 @@ class RedmineReportRepository
                 $query->whereNotIn('id', $keepIds);
             }
 
-            $query->delete();
+            $this->deleteWithHours($query);
         } catch (\Throwable) {
         }
+    }
+
+    private function deleteWithHours(\Illuminate\Database\Query\Builder $query): int
+    {
+        $hours = app(\App\Modulos\Nova\Repositories\HorasExtraRepository::class);
+        return $hours->atomic(function () use ($query, $hours): int {
+            $ids = (clone $query)->orderBy('id')->lockForUpdate()->pluck('id');
+            if ($ids->isEmpty()) return 0;
+            $hours->detachReportes('tic', $ids);
+            return (clone $query)->whereIn('id', $ids)->delete();
+        });
     }
 
     private function moduleId(): ?int

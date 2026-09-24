@@ -70,7 +70,7 @@ class ConfiguracionController extends Controller
 
         $rolesData = auth_load_roles();
         $rolesData = is_array($rolesData) ? $rolesData : [];
-        $usuariosData = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
+        $usuariosData = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion(true, false) : [];
         if (! is_array($usuariosData)) {
             $usuariosData = [];
         }

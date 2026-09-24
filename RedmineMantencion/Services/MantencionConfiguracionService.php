@@ -85,6 +85,8 @@ class MantencionConfiguracionService
         $repo = config_mantencion_repository();
         if ($repo !== null) {
             $repo->saveAll($cfg);
+        } else {
+            throw new \App\Modulos\RedmineMantencion\Exceptions\ConfigurationWriteException;
         }
         // No filesystem write: configuraciones_modulo is now the single source of truth (S30)
     }
@@ -113,15 +115,16 @@ class MantencionConfiguracionService
                 $originalId = trim((string) ($_POST['opt_id_original'] ?? $id));
                 $name = trim((string) ($_POST['opt_nombre'] ?? ''));
                 $default = isset($_POST['opt_default']);
+                $saved = false;
                 if ($repo !== null) {
-                    match ($optionAction) {
+                    $saved = match ($optionAction) {
                         'create' => $repo->createOption($optionType, $id, $name, $default),
                         'update' => $repo->updateOption($optionType, $originalId, $id, $name, $default),
                         'delete' => $repo->deleteOption($optionType, $originalId),
                         'set_default' => $repo->setDefaultOption($optionType, $id),
                     };
                 }
-                session()->put('mantencion_config_flash', 'Configuración guardada');
+                session()->put('mantencion_config_flash', $saved ? 'Configuración guardada' : 'No fue posible guardar la opción. No se aplicaron cambios; revisa los datos e intenta nuevamente.');
 
                 return redirect()->away($this->currentConfigurationUrl(), 303);
             }
@@ -159,14 +162,20 @@ class MantencionConfiguracionService
                 $cfg['informes_nuevos_hora'] = $schedule['time'];
             }
             $cfg['session_timeout'] = max(60, (int) ($_POST['session_timeout'] ?? ($cfg['session_timeout'] ?? 300)));
-            if (array_key_exists('report_recipients_configured', $_POST)) {
-                $this->reportRecipients->sync(
-                    'redmine-mantencion',
-                    (array) ($_POST['report_recipients'] ?? []),
-                    (array) ($_POST['report_managers'] ?? [])
-                );
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($cfg): void {
+                    $this->saveConfig($cfg);
+                    if (array_key_exists('report_recipients_configured', $_POST)) {
+                        $this->reportRecipients->sync(
+                            'redmine-mantencion',
+                            (array) ($_POST['report_recipients'] ?? []),
+                            (array) ($_POST['report_managers'] ?? [])
+                        );
+                    }
+                });
+            } catch (\Throwable) {
+                throw new \App\Modulos\RedmineMantencion\Exceptions\ConfigurationWriteException;
             }
-            $this->saveConfig($cfg);
             session()->put('mantencion_config_flash', 'Configuración guardada');
 
             return redirect()->away($this->currentConfigurationUrl(), 303);

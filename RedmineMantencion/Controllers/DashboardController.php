@@ -56,7 +56,7 @@ class DashboardController extends Controller
         $corePendingToken = is_array($pendingCoreTotp) ? trim((string)($pendingCoreTotp['token'] ?? '')) : '';
         $coreRuntimeUserSession = trim((string) session()->pull('mantencion_dashboard_core_runtime_user', ''));
 
-        $dashboardResult = $this->dashboardService->handle_request();
+        $dashboardResult = $this->dashboardService->handle_request(true);
         if ($dashboardResult instanceof RedirectResponse) {
             return $dashboardResult;
         }
@@ -65,11 +65,7 @@ class DashboardController extends Controller
             $flash = $flashSession;
         }
 
-        $pendientes = array_filter($messages, fn ($m) => strtolower($m['estado'] ?? '') === 'pendiente');
-
-        $procesados = array_filter($messages, fn ($m) => strtolower($m['estado'] ?? '') === 'procesado');
-
-        $errores = array_filter($messages, fn ($m) => strtolower($m['estado'] ?? '') === 'error');
+        $statusCounts = $this->dashboardService->dashboard_status_counts($messages);
 
         $cfg = load_platform_config();
         $mantencionBaseUrl = function_exists('legacy_app_url')
@@ -137,7 +133,13 @@ class DashboardController extends Controller
         $estadoOptions = ['pendiente', 'procesado', 'error']; // estados locales (dashboard)
         $estadoRedmineId = null;
         $estadoRedmineNombre = null;
-        $logsByMessage = $this->redmineSync->load_redmine_logs_by_message();
+        $errorIds = [];
+        foreach ($messages as $message) {
+            if (strtolower($message['estado'] ?? '') === 'error' && !empty($message['id'])) {
+                $errorIds[] = (string) $message['id'];
+            }
+        }
+        $logsByMessage = $this->redmineSync->load_redmine_logs_by_message($errorIds);
         $cfgData = function_exists('load_platform_config') ? load_platform_config() : [];
         if (is_array($cfgData)) {
             foreach (($cfgData['trackers'] ?? []) as $t) {
@@ -169,6 +171,20 @@ class DashboardController extends Controller
         return view('redmine-mantencion.dashboard', get_defined_vars());
     }
 
+    /** Read-only detail for the exact dashboard row, including duplicate public IDs. */
+    public function reportDetail(Request $request): JsonResponse
+    {
+        require_once base_path('RedmineMantencion/controllers/dashboard.php');
+        abort_unless(auth_can('mensajes_acceso'), 403);
+        $databaseId = $request->query('database_id');
+        abort_unless(is_string($databaseId) && ctype_digit($databaseId) && $databaseId !== '0', 404);
+
+        $detail = $this->dashboardService->reportDetailForDatabaseId($databaseId);
+        abort_if($detail === null, 404);
+
+        return response()->json($detail)->header('Cache-Control', 'private, no-store');
+    }
+
     /**
      * Toggle de "hora extra" sobre un reporte del dashboard. Migrado desde
      * Nova/Controllers/LegacyProjectController::toggleMantencionHoursExtra().
@@ -191,8 +207,9 @@ class DashboardController extends Controller
         }
 
         $id = trim((string) $request->input('id', ''));
-        $messages = load_messages();
-        if ($id === '' || !dashboard_can_access_message($messages, $id)) {
+        $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+        $messages = $repo !== null ? $repo->bulkActionMessages([$id], false) : [];
+        if ($id === '' || ! dashboard_can_access_message($messages, $id)) {
             return response()->json(['ok' => false, 'message' => 'No se encontró la solicitud o no tienes acceso.'], 404);
         }
 
@@ -209,7 +226,7 @@ class DashboardController extends Controller
             break;
         }
 
-        if (!is_array($updatedMessage) || !dashboard_update_message_hora_extra($updatedMessage)) {
+        if (! is_array($updatedMessage) || ! dashboard_update_message_hora_extra($updatedMessage)) {
             return response()->json(['ok' => false, 'message' => 'No se pudo actualizar la hora extra.'], 422);
         }
 

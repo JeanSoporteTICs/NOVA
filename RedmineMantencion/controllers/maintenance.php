@@ -533,7 +533,11 @@ function handle_maintenance_request(): ?string {
     } elseif (!$enabled) {
         unset($cfg['maintenance_started_at']);
     }
-    maintenance_save_config($cfg);
+    if (!maintenance_save_config($cfg)) {
+        maintenance_set_flash('No fue posible guardar la configuración de mantención. Intenta nuevamente.');
+        maintenance_redirect_back();
+        return null;
+    }
     maintenance_set_flash($cfg['maintenance_mode'] ? 'Modo mantencion activado.' : 'Modo mantencion desactivado.');
     maintenance_redirect_back();
 }

@@ -44,10 +44,10 @@ class NovaAdministrationController extends Controller
 
         return view('nova.admin.index', [
             'section'                     => $section,
-            'users'                       => $users->all(),
+            'users'                       => $users->allForAdministration(),
             'settings'                    => $settings->all(),
             'onlyOffice'                  => $settings->onlyOfficeStatus(),
-            'accessMatrix'                => $access->matrix(),
+            'accessMatrix'                => $access->matrix(true),
             'telegramConfig'              => $this->telegram->readConfig(),
             'telegramConfigured'          => $this->telegram->isConfigured(),
             'telegramListener'            => $needsTelegram ? $this->telegram->listenerStatus() : [],

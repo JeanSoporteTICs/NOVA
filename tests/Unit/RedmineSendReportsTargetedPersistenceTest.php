@@ -201,4 +201,41 @@ class RedmineSendReportsTargetedPersistenceTest extends TestCase
         $this->assertStringContainsString('evitar duplicados', $result['errors'][0]);
         Http::assertSentCount(2);
     }
+    public function test_overlapping_tic_sends_make_only_one_post_and_keep_payload(): void
+    {
+        Http::preventStrayRequests();
+        $userId = $this->makeUserWithToken('synthetic-reservation');
+        $this->unreachablePlatformConfig();
+        $id = $this->makeReport();
+        $nested = null;
+        $posts = 0;
+        Http::fake(function ($request) use ($id, $userId, &$nested, &$posts) {
+            if ($request->method() === 'GET') return Http::response(['issues'=>[]]);
+            $posts++;
+            if ($posts > 1) throw new \RuntimeException('Duplicate POST');
+            $nested = $this->facade()->sendReportsToRedmine([(string)$id],$userId);
+            self::assertSame('Reporte B5.6', $request['issue']['subject']);
+            return Http::response(['issue'=>['id'=>444,'status'=>['name'=>'Nueva']]],201);
+        });
+        $result = $this->facade()->sendReportsToRedmine([(string)$id],$userId);
+        self::assertSame(1,$posts);
+        self::assertSame(1,$result['success']);
+        self::assertSame(0,$nested['attempts']);
+        self::assertSame(444,(int)DB::table('redmine_tic_reportes')->where('id',$id)->value('redmine_id'));
+    }
+
+    public function test_uncertain_tic_post_is_not_retried_after_new_request(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(fn ($request) => $request->method() === 'GET' ? Http::response(['issues'=>[]]) : Http::response([],503));
+        $userId = $this->makeUserWithToken('synthetic-uncertain');
+        $this->unreachablePlatformConfig();
+        $id = $this->makeReport();
+        $this->facade()->sendReportsToRedmine([(string)$id],$userId);
+        $retry = $this->facade()->sendReportsToRedmine([(string)$id],$userId);
+        self::assertSame(0,$retry['attempts']);
+        self::assertSame(1,Http::recorded(fn ($request) => $request->method() === 'POST')->count());
+        self::assertSame('uncertain',DB::table('redmine_send_attempts')->where('report_key','tic:'.$id)->value('status'));
+    }
+
 }

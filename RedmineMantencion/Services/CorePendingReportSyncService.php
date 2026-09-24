@@ -2,6 +2,8 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use App\Modulos\RedmineMantencion\Support\CoreReportDetail;
+
 /**
  * Matches repeated CORE imports by stable request ID and refreshes only
  * reports that are still pending in NOVA.
@@ -68,6 +70,16 @@ final class CorePendingReportSyncService
         $incoming['redmine_id'] = $current['redmine_id'] ?? ($incoming['redmine_id'] ?? '');
         $incoming['procesado_ts'] = $current['procesado_ts'] ?? ($incoming['procesado_ts'] ?? '');
         $incoming['id'] = $current['id'] ?? ($incoming['id'] ?? '');
+        // Una consulta parcial de CORE no debe borrar el detalle ya guardado.
+        foreach (CoreReportDetail::decode(CoreReportDetail::encode($current)) as $field => $value) {
+            if ($field === 'core_detalle_items') {
+                if (empty($incoming[$field])) {
+                    $incoming[$field] = $value;
+                }
+            } elseif (trim((string) ($incoming[$field] ?? '')) === '') {
+                $incoming[$field] = $value;
+            }
+        }
         foreach (['hora_extra', 'tiempo_estimado'] as $localField) {
             if (array_key_exists($localField, $current)) {
                 $incoming[$localField] = $current[$localField];
@@ -121,6 +133,7 @@ final class CorePendingReportSyncService
             'core_id' => $this->coreId($message),
             'asunto' => $this->first($message, ['asunto', 'mensaje']),
             'descripcion' => $this->first($message, ['descripcion']),
+            'core_detalle' => CoreReportDetail::encode($message) ?? '',
             'core_estado' => $this->first($message, ['core_estado', 'estado_redmine']),
             'categoria' => $this->first($message, ['categoria', 'core_tipo_solicitud']),
             'unidad' => $this->first($message, ['unidad', 'unidad_texto', 'core_departamento']),

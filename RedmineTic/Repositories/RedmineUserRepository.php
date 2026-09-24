@@ -27,6 +27,8 @@ class RedmineUserRepository
     private ?bool $userIntegrationsTableAvailableCache = null;
     private ?RedmineIdentityService $redmineIdentityInst = null;
 
+    private ?array $listColumns = null;
+
     public function __construct(
         private string $projectKey,
         private string $projectName,
@@ -39,19 +41,24 @@ class RedmineUserRepository
     /**
      * @return array<int,array<string,mixed>>
      */
-    public function projectUsers(): array
+    public function projectUsers(bool $withCredentials = true): array
     {
         if (!$this->novaUsersTableAvailable()) {
             return [];
         }
 
-        $profiles  = $this->redmineTicProfilesByUserId();
         $central   = [];
-        foreach ($this->novaUsersWithProjectAccess() as $nova) {
+        foreach ($this->novaUsersWithProjectAccess($withCredentials) as $nova) {
             $central[(int) $nova->id] = $nova;
         }
 
-        $allRelationalPerms = $this->permRepo()->allPermissionsFromRelational();
+        // Keep legacy integer-key collision behavior for oversized BIGINT IDs.
+        // Ordinary listings only need profiles and permissions of their members.
+        $userIds = array_keys($central);
+        $profiles = $this->redmineTicProfilesByUserId(in_array(PHP_INT_MAX, $userIds, true) ? null : $userIds);
+        $profileIds = array_map(static fn ($profile): int => (int) $profile->id, array_values($profiles));
+        $allRelationalPerms = $this->permRepo()->allPermissionsFromRelational(in_array(PHP_INT_MAX, $profileIds, true) ? null : $profileIds);
+        $credentials = $withCredentials ? app(UserIntegrationRepository::class)->redmineCredentialsForUserIds(array_keys($central)) : [];
 
         $users = [];
         foreach ($central as $nova) {
@@ -80,7 +87,7 @@ class RedmineUserRepository
                 'numero_celular'        => '',
                 'telegram_chat_id'      => $telegramChatId,
                 'telegram_source'       => $telegramChatId !== '' ? 'nova' : '',
-                'api'                   => $this->integrationSecret((int) ($nova->id ?? 0), UserIntegrationRepository::REDMINE_TYPE),
+                'api'                   => $credentials[(int) $nova->id]['secret'] ?? '',
                 'rol'                   => trim((string) ($profile->rol ?? $nova->rol ?? 'usuario')) ?: 'usuario',
                 'rol_nova'              => strtolower(trim((string) ($nova->rol ?? 'usuario'))),
                 'estado_nova'           => strtolower(trim((string) ($nova->estado ?? 'activo'))) ?: 'activo',
@@ -149,7 +156,11 @@ class RedmineUserRepository
                 if (isset($roles[$role]) && is_array($roles[$role])) {
                     $users[$index]['permisos'] = $roles[$role];
                 }
-                $this->persistUsers([$users[$index]], true, 'baneado');
+                try {
+                    $this->persistUsers([$users[$index]], true, 'baneado');
+                } catch (\Throwable) {
+                    return ['ok' => false, 'error' => 'No fue posible guardar el usuario.', 'users' => $users];
+                }
 
                 return ['ok' => true, 'error' => '', 'users' => $users];
             }
@@ -240,7 +251,11 @@ class RedmineUserRepository
             $users[] = $row;
         }
 
-        $this->persistUsers($users);
+        try {
+            $this->persistUsers([$row]);
+        } catch (\Throwable) {
+            return ['ok' => false, 'error' => 'No fue posible guardar el usuario.', 'users' => $users];
+        }
 
         return ['ok' => true, 'error' => '', 'users' => $users];
     }
@@ -373,7 +388,11 @@ class RedmineUserRepository
                 $users[$index]['rol'] = trim($role);
             }
             $users[$index]['permisos'] = $permissions;
-            $this->persistUsers([$users[$index]], true, 'baneado');
+            try {
+                $this->persistUsers([$users[$index]], true, 'baneado');
+            } catch (\Throwable) {
+                return false;
+            }
 
             return true;
         }
@@ -424,7 +443,7 @@ class RedmineUserRepository
     public function persistUsers(array $projectUsers, bool $preserveExistingStatus = false, string $defaultStatus = 'activo'): void
     {
         if (!$this->novaUsersTableAvailable()) {
-            return;
+            throw new \RuntimeException('La tabla de usuarios no esta disponible.');
         }
 
         foreach ($projectUsers as $projectUser) {
@@ -445,49 +464,53 @@ class RedmineUserRepository
                 $lastName = $rest;
             }
 
-            $nova          = $this->upsertNovaUserFromProjectUser($projectUser, $name, $lastName, $preserveExistingStatus, $defaultStatus);
-            $apiToken      = trim((string) ($projectUser['api'] ?? ''));
-            $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
+            DB::transaction(function () use ($projectUser, $name, $lastName, $preserveExistingStatus, $defaultStatus, $redmineId): void {
+                $nova          = $this->upsertNovaUserFromProjectUser($projectUser, $name, $lastName, $preserveExistingStatus, $defaultStatus);
+                $apiToken      = trim((string) ($projectUser['api'] ?? ''));
+                $telegramChatId = trim((string) ($projectUser['telegram_chat_id'] ?? data_get($projectUser, 'telegram_settings.chat_id', '')));
 
-            if ($nova !== null) {
-                $this->saveUserIntegration($nova, UserIntegrationRepository::REDMINE_TYPE, $apiToken, (string) $redmineId);
-                $this->saveTelegramChatId($nova, $telegramChatId);
-                $this->grantProjectAccess($nova);
-            }
+                if ($nova !== null) {
+                    $this->saveUserIntegration($nova, UserIntegrationRepository::REDMINE_TYPE, $apiToken, (string) $redmineId);
+                    $this->saveTelegramChatId($nova, $telegramChatId);
+                    $this->grantProjectAccess($nova);
+                }
 
-            if ($nova === null || !$this->redmineTicProfilesTableAvailable()) {
-                continue;
-            }
+                if ($nova === null || !$this->redmineTicProfilesTableAvailable()) {
+                    throw new \RuntimeException('No fue posible guardar el perfil del usuario.');
+                }
 
-            $currentProfile = DB::table('redmine_tic_perfiles_usuario')
-                ->where('usuario_id', $nova)
-                ->first();
-            $incomingStatus = array_key_exists('estado_usuario', $projectUser)
-                ? trim((string) $projectUser['estado_usuario'])
-                : '';
-            $status = $preserveExistingStatus && $currentProfile !== null
-                ? trim((string) ($currentProfile->estado_usuario ?? 'activo'))
-                : ($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
-
-            $permsToSave = is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [];
-
-            // Phase 3c: 'permisos' column was dropped — write only relational columns
-            DB::table('redmine_tic_perfiles_usuario')->updateOrInsert(
-                ['usuario_id' => $nova],
-                [
-                    'rol'                  => trim((string) ($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
-                    'estado_usuario'       => $this->normalizeProjectStatus($status),
-                    'redmine_membership_id' => $this->unsignedIntegerOrNull($projectUser['redmine_membership_id'] ?? null),
-                    'actualizado_at'       => now(),
-                ]
-            );
-
-            if ($this->permRepo()->userPermissionsTableAvailable()) {
-                $perfilId = (int) DB::table('redmine_tic_perfiles_usuario')
+                $currentProfile = DB::table('redmine_tic_perfiles_usuario')
                     ->where('usuario_id', $nova)
-                    ->value('id');
-                $this->permRepo()->savePermissionsToRelational($perfilId, $permsToSave);
-            }
+                    ->first();
+                $incomingStatus = array_key_exists('estado_usuario', $projectUser)
+                    ? trim((string) $projectUser['estado_usuario'])
+                    : '';
+                $status = $preserveExistingStatus && $currentProfile !== null
+                    ? trim((string) ($currentProfile->estado_usuario ?? 'activo'))
+                    : ($incomingStatus !== '' ? $incomingStatus : $defaultStatus);
+
+                $permsToSave = is_array($projectUser['permisos'] ?? null) ? $projectUser['permisos'] : [];
+
+                // Phase 3c: 'permisos' column was dropped — write only relational columns
+                DB::table('redmine_tic_perfiles_usuario')->updateOrInsert(
+                    ['usuario_id' => $nova],
+                    [
+                        'rol'                  => trim((string) ($projectUser['rol'] ?? 'usuario')) ?: 'usuario',
+                        'estado_usuario'       => $this->normalizeProjectStatus($status),
+                        'redmine_membership_id' => $this->unsignedIntegerOrNull($projectUser['redmine_membership_id'] ?? null),
+                        'actualizado_at'       => now(),
+                    ]
+                );
+
+                if ($this->permRepo()->userPermissionsTableAvailable()) {
+                    $perfilId = (int) DB::table('redmine_tic_perfiles_usuario')
+                        ->where('usuario_id', $nova)
+                        ->value('id');
+                    $this->permRepo()->savePermissionsToRelational($perfilId, $permsToSave);
+                } elseif ($permsToSave !== []) {
+                    throw new \RuntimeException('La tabla de permisos no esta disponible.');
+                }
+            });
         }
     }
 
@@ -633,7 +656,7 @@ class RedmineUserRepository
     /**
      * @return array<int,object>
      */
-    private function novaUsersWithProjectAccess(): array
+    private function novaUsersWithProjectAccess(bool $withCredentials = true): array
     {
         $moduleId = $this->moduleId();
         if ($moduleId === null || !$this->projectAccessTableAvailable() || !$this->novaUsersTableAvailable()) {
@@ -641,11 +664,18 @@ class RedmineUserRepository
         }
 
         try {
+            if (! $withCredentials && $this->listColumns === null) {
+                $this->listColumns = ['id', 'uuid', 'redmine_id', 'usuario', 'nombre', 'apellido', 'rut', 'telegram_id_chat', 'rol', 'estado', 'ultimo_login_at', 'creado_at'];
+                // S31 removed email; older installations may still expose it.
+                if (Schema::hasColumn('usuarios_nova', 'email')) {
+                    $this->listColumns[] = 'email';
+                }
+            }
             return DB::table('usuarios_nova')
                 ->join('permisos_usuario_modulo', 'permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id')
                 ->where('permisos_usuario_modulo.modulo_id', $moduleId)
                 ->where('permisos_usuario_modulo.permitido', 1)
-                ->select('usuarios_nova.*')
+                ->select($withCredentials ? ['usuarios_nova.*'] : array_map(static fn (string $column): string => 'usuarios_nova.'.$column, $this->listColumns))
                 ->get()
                 ->all();
         } catch (\Throwable) {
@@ -859,15 +889,17 @@ class RedmineUserRepository
     /**
      * @return array<int,object>  keyed by usuario_id
      */
-    private function redmineTicProfilesByUserId(): array
+    private function redmineTicProfilesByUserId(?array $userIds = null): array
     {
-        if (!$this->redmineTicProfilesTableAvailable()) {
+        if ($userIds === [] || !$this->redmineTicProfilesTableAvailable()) {
             return [];
         }
 
         try {
             $profiles = [];
-            foreach (DB::table('redmine_tic_perfiles_usuario')->get() as $profile) {
+            foreach (DB::table('redmine_tic_perfiles_usuario')
+                ->when($userIds !== null, fn ($query) => $query->whereIntegerInRaw('usuario_id', $userIds))
+                ->get() as $profile) {
                 $profiles[(int) ($profile->usuario_id ?? 0)] = $profile;
             }
 

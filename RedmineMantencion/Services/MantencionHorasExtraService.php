@@ -3,6 +3,7 @@
 namespace App\Modulos\RedmineMantencion\Services;
 
 use App\Modulos\Nova\Repositories\UserIntegrationRepository;
+use App\Modulos\RedmineMantencion\Repositories\MantencionHoursExtraRepository;
 use DateTime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -18,6 +19,116 @@ class MantencionHorasExtraService
         $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
 
         return $repo !== null ? $repo->groups() : [];
+    }
+
+    /** Read metadata first; keep hours and years from the complete reconciliation. */
+    public function screenData(string $userId, string $month, string $year, string $currentYear): array
+    {
+        $repo = app(MantencionHoursExtraRepository::class);
+        if (! $repo->tableReady()) {
+            return $this->selectScreenGroups([], $userId, $month, $year, $currentYear);
+        }
+
+        return DB::transaction(function () use ($repo, $userId, $month, $year, $currentYear): array {
+            $metadata = $repo->groups(true);
+            $data = $this->selectScreenGroups($metadata, $userId, $month, $year, $currentYear);
+            $visibleKeys = [];
+            foreach ($data['grupos'] as $group) {
+                foreach ($group['reports'] as $report) {
+                    $visibleKeys[$report['id']] = true;
+                }
+            }
+            if ($visibleKeys === []) {
+                return $data;
+            }
+
+            // Several DB rows can share a public fuente_id. Preserve all their
+            // contributions to the existing non-empty-field merge, even when
+            // their individual assignee differs from the merged visible one.
+            $ids = [];
+            foreach ($metadata as $group) {
+                foreach ($group['reports'] as $report) {
+                    if (isset($visibleKeys[$report['id']])) {
+                        $ids[$report['_database_id']] = $report['_database_id'];
+                    }
+                }
+            }
+            $details = [];
+            foreach ($this->deduplicateGroupsBySharedDate($repo->groups(false, array_values($ids))) as $group) {
+                foreach ($group['reports'] as $report) {
+                    $details[$group['fecha']][$report['id']] = $report;
+                }
+            }
+            foreach ($data['grupos'] as &$group) {
+                $date = $group['fecha'];
+                $group['reports'] = array_values(array_filter(array_map(
+                    static fn (array $report): ?array => $details[$date][$report['id']] ?? null,
+                    $group['reports']
+                )));
+            }
+            unset($group);
+
+            return $data;
+        });
+    }
+
+    private function selectScreenGroups(array $raw, string $userId, string $selMes, string $selAnio, string $anioActual): array
+    {
+        $grupos = $this->filterGroupsForUser($this->deduplicateGroupsBySharedDate($raw), $userId);
+        $aniosDisponibles = [];
+        foreach ($grupos as $g) {
+            $fechaBase = $g['fecha'] ?? '';
+            if ($fechaBase) {
+                $dt = DateTime::createFromFormat('Y-m-d', $fechaBase) ?: DateTime::createFromFormat('d-m-Y', $fechaBase);
+                if ($dt instanceof DateTime) {
+                    $aniosDisponibles[$dt->format('Y')] = true;
+                }
+            }
+        }
+        $aniosDisponibles = array_keys($aniosDisponibles);
+        $aniosDisponibles[] = $anioActual;
+        if ($selAnio !== '') {
+            $aniosDisponibles[] = $selAnio;
+        }
+        $aniosDisponibles = array_values(array_unique(array_map('strval', $aniosDisponibles)));
+        $aniosDisponibles ? sort($aniosDisponibles, SORT_NUMERIC) : [];
+
+        $grupos = array_values(array_filter($grupos, function ($g) use ($selMes, $selAnio) {
+            $fechaBase = $g['fecha'] ?? '';
+            if ($fechaBase) {
+                $dt = DateTime::createFromFormat('Y-m-d', $fechaBase) ?: DateTime::createFromFormat('d-m-Y', $fechaBase);
+                if ($dt instanceof DateTime) {
+                    $mesNum = (int) $dt->format('n');
+                    $anioNum = $dt->format('Y');
+                    if ($selMes !== '' && (int) $selMes !== $mesNum) {
+                        return false;
+                    }
+                    if ($selAnio !== '' && $selAnio !== $anioNum) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }));
+
+        usort($grupos, function ($a, $b) {
+            $fa = $this->normalizeDateKey($a['fecha'] ?? '');
+            $fb = $this->normalizeDateKey($b['fecha'] ?? '');
+            if ($fa === $fb) {
+                return 0;
+            }
+            if ($fa === '') {
+                return 1;
+            }
+            if ($fb === '') {
+                return -1;
+            }
+
+            return $fa <=> $fb; // mostrar primero las fechas más antiguas
+        });
+
+        return ['grupos' => $grupos, 'aniosDisponibles' => $aniosDisponibles];
     }
 
     public function normalizeDateKey($fecha)

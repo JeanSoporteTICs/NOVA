@@ -2,6 +2,8 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use Illuminate\Support\Facades\DB;
+
 class MantencionDashboardService
 {
     private readonly MantencionCoreImportService $coreImport;
@@ -129,12 +131,143 @@ class MantencionDashboardService
         return array_values(array_filter(array_map('trim', $ids), static fn(string $id): bool => $id !== '' && isset($allowed[$id])));
     }
 
-    public function handle_request(): array|\Illuminate\Http\RedirectResponse {
-        $messages = load_messages();
+    /** Selected POST projection is opt-in; other writers keep complete input. */
+    public function messagesForRequest(string $method, ?\DateTimeImmutable $retentionThreshold = null, ?array $bulkIds = null, bool $withDatabaseId = false): array
+    {
+        if ($method === 'POST' && $bulkIds !== null) {
+            $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+
+            return $repo !== null ? $repo->bulkActionMessages($bulkIds) : [];
+        }
+        if (! in_array($method, ['GET', 'HEAD'], true)) {
+            return load_messages();
+        }
+        $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+        if ($repo === null) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($repo, $retentionThreshold, $withDatabaseId): array {
+            $candidates = $repo->dashboardCandidates();
+            $ids = array_fill_keys(array_column(dashboard_filter_messages_by_scope($candidates), '_dashboard_id'), true);
+            // Retention still includes other users' expired reports. Recent
+            // hidden reports need no details; use the same cutoff when archiving.
+            // Callers without a cutoff retain the complete processed selection.
+            foreach ($candidates as $candidate) {
+                if (strtolower($candidate['estado']) === 'procesado') {
+                    $timestamp = $retentionThreshold !== null ? parse_message_timestamp($candidate) : null;
+                    if ($retentionThreshold === null || ($timestamp !== null && $timestamp <= $retentionThreshold)) {
+                        $ids[$candidate['_dashboard_id']] = true;
+                    }
+                }
+            }
+
+            return $repo->activeMessages(count($ids) === count($candidates) ? null : array_keys($ids), false, $withDatabaseId);
+        });
+    }
+
+    /** Visible rows omit text; only expired processed rows retain full retention input. */
+    private function messagesForDashboardView(?\DateTimeImmutable $retentionThreshold): array
+    {
+        $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+        if ($repo === null) {
+            return [];
+        }
+
+        try {
+            return DB::transaction(function () use ($repo, $retentionThreshold): array {
+                $candidates = $repo->dashboardCandidates();
+                $visible = array_fill_keys(array_column(dashboard_filter_messages_by_scope($candidates), '_dashboard_id'), true);
+                $expired = [];
+                foreach ($candidates as $candidate) {
+                    if (strtolower((string) ($candidate['estado'] ?? '')) !== 'procesado') {
+                        continue;
+                    }
+                    $timestamp = $retentionThreshold !== null ? parse_message_timestamp($candidate) : null;
+                    if ($retentionThreshold === null || ($timestamp !== null && $timestamp <= $retentionThreshold)) {
+                        $expired[$candidate['_dashboard_id']] = true;
+                    }
+                }
+                $required = $visible + $expired;
+                if ($required === []) {
+                    return [];
+                }
+
+                $full = $expired === [] ? [] : $repo->activeMessages(array_keys($expired), false, true);
+                $lightIds = array_keys(array_diff_key($visible, $expired));
+                $light = $lightIds === [] ? [] : $repo->activeMessages($lightIds, false, true, true);
+                $details = array_column(array_merge($full, $light), null, '_dashboard_id');
+                if (count($details) !== count($required)) {
+                    return $this->messagesForRequest('GET', $retentionThreshold, null, true);
+                }
+
+                $ordered = [];
+                foreach ($candidates as $candidate) {
+                    $id = $candidate['_dashboard_id'];
+                    if (isset($required[$id])) {
+                        $ordered[] = $details[$id];
+                    }
+                }
+
+                return $ordered;
+            });
+        } catch (\Throwable) {
+            return $this->messagesForRequest('GET', $retentionThreshold, null, true);
+        }
+    }
+
+    /** Scope first by the real row ID; public fuente_id values may repeat. */
+    public function reportDetailForDatabaseId(string $databaseId): ?array
+    {
+        return DB::transaction(function () use ($databaseId): ?array {
+            $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+            if ($repo === null) {
+                return null;
+            }
+            $selected = null;
+            foreach (dashboard_filter_messages_by_scope($repo->dashboardCandidates()) as $candidate) {
+                if (($candidate['_dashboard_id'] ?? '') === $databaseId) {
+                    $selected = $candidate;
+                    break;
+                }
+            }
+            if ($selected === null) {
+                return null;
+            }
+            foreach ($repo->activeMessages([$databaseId]) as $message) {
+                if (($message['id'] ?? '') === $selected['id']
+                    && dashboard_filter_messages_by_scope([$message]) !== []) {
+                    return [
+                        'descripcion' => (string) ($message['descripcion'] ?? ''),
+                        'preview_rows' => array_values(dashboard_detail_preview_rows($message)),
+                        'preview_columns' => dashboard_core_detail_table_schema($message),
+                    ];
+                }
+            }
+
+            return null;
+        });
+    }
+
+    public function handle_request(bool $withDatabaseId = false): array|\Illuminate\Http\RedirectResponse {
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        $retentionThreshold = in_array($method, ['GET', 'HEAD'], true) ? $this->retention->retention_threshold() : null;
+        $action = $_POST['action'] ?? '';
+        $bulkIds = null;
+        if ($method === 'POST' && in_array($action, ['process_selected', 'archive_selected', 'delete_selected', 'reset_errors'], true)
+            && (!isset($_POST['ids']) || is_string($_POST['ids']))) {
+            $bulkIds = explode(',', $_POST['ids'] ?? '');
+        } elseif ($method === 'POST' && in_array($action, ['update', 'toggle_hora_extra', 'delete'], true)
+            && (!isset($_POST['id']) || is_string($_POST['id']))) {
+            $bulkIds = [(string) ($_POST['id'] ?? '')];
+        }
+        $messages = $withDatabaseId && in_array($method, ['GET', 'HEAD'], true)
+            ? $this->messagesForDashboardView($retentionThreshold)
+            : $this->messagesForRequest($method, $retentionThreshold, $bulkIds, $withDatabaseId);
         $userId = auth_get_user_id();
         $userToken = load_user_api_token($userId);
-        if (!maintenance_mode_enabled() && $this->retention->apply_retention_archive($messages)) {
-            save_messages($messages);
+        if (!maintenance_mode_enabled()) {
+            $this->retention->apply_retention_archive($messages, $retentionThreshold);
         }
         $flash = $this->dashboard_consume_flash();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -196,10 +329,12 @@ class MantencionDashboardService
                         $fields = array_values(array_diff($fields, ['hora_extra', 'tiempo_estimado']));
                     }
                     $updatedMessage = null;
+                    $originalMessage = null;
                     foreach ($messages as &$message) {
                         if (($message['id'] ?? '') !== $id) {
                             continue;
                         }
+                        $originalMessage = $message;
                         foreach ($fields as $field) {
                             if (isset($_POST[$field])) {
                                 $value = $_POST[$field];
@@ -245,14 +380,11 @@ class MantencionDashboardService
                     }
                     unset($message);
                     if ($updated) {
-                        // Punctual update: persist only the one edited record via
-                        // save_messages()/syncMessages()'s existing per-message upsert,
-                        // instead of resyncing every message in the account for a single
-                        // edit. Same function, same guards (tableReady()/try-catch inside
-                        // the repository) — just scoped to what actually changed. Mirrors
-                        // the pattern already used by 'toggle_hora_extra' and 'delete' in
-                        // this same file (see dashboard_update_message_hora_extra()).
-                        save_messages([$updatedMessage]);
+                        if (!save_messages([$updatedMessage], [$originalMessage])) {
+                            $flashMsg = 'No fue posible guardar el mensaje; pudo ser modificado por otra operación. Recarga e intenta nuevamente.';
+                            $ajaxPayload['ok'] = false;
+                            break;
+                        }
                         if (is_array($updatedMessage)) {
                             append_hours_extra_record($updatedMessage);
                         }
@@ -302,7 +434,11 @@ class MantencionDashboardService
                             }
                             append_hours_extra_record($updatedMessage);
                         } else {
-                            remove_hours_extra_record_by_id($id);
+                            if (!remove_hours_extra_record_by_id($id)) {
+                                $flashMsg = 'No se pudo desactivar la hora extra. No se guardaron cambios.';
+                                $ajaxPayload['ok'] = false;
+                                break;
+                            }
                         }
                         $flashMsg = $isEnabled ? 'Hora extra activada.' : 'Hora extra desactivada.';
                         dashboard_log_action('HORA_EXTRA', ($isEnabled ? 'Activo' : 'Desactivo') . ' hora extra en reporte ID ' . $id);
@@ -347,17 +483,17 @@ class MantencionDashboardService
                     }
                     if (!empty($deletedFuenteIds) || !empty($deletedPkIds)) {
                         $dbRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
-                        if ($dbRepo !== null && !empty($deletedFuenteIds)) {
-                            $dbRepo->deleteByFuenteIds($deletedFuenteIds);
+                        $deleted = $dbRepo !== null
+                            ? (!empty($deletedFuenteIds) ? $dbRepo->deleteByFuenteIds($deletedFuenteIds) : $dbRepo->deleteByIds($deletedPkIds))
+                            : 0;
+                        if ($deleted === 0) {
+                            $flashMsg = 'No se pudo eliminar el reporte y sus vínculos de horas extra.';
+                            $ajaxPayload['ok'] = false;
+                            break;
                         }
-                        if (!empty($deletedPkIds)) {
-                            try {
-                                \Illuminate\Support\Facades\DB::table('redmine_mantencion_reportes')
-                                    ->whereIn('id', $deletedPkIds)
-                                    ->delete();
-                            } catch (\Throwable) {
-                            }
-                        }
+                        // Releer la cola tras borrar: los contadores AJAX deben reflejar
+                        // las filas que realmente quedaron en la base de datos.
+                        $messages = load_messages();
                         $flashMsg = 'Mensaje eliminado.';
                         dashboard_log_action('REPORT_DELETE', 'Elimino reporte ID ' . $id);
                         $ajaxPayload['ids'] = [$id];
@@ -606,13 +742,14 @@ class MantencionDashboardService
                 case 'archive_selected':
                     $ids = isset($_POST['ids']) ? explode(',', $_POST['ids']) : [];
                     $ids = $this->dashboard_filter_ids_by_scope($messages, $ids);
+                    $beforeArchiveIds = array_column($messages, 'id');
                     $archived = $this->retention->archive_selected_messages($messages, $ids);
                     if ($archived > 0) {
                         $flashMsg = $archived . ' tickets archivados.';
                         dashboard_log_action('REPORT_ARCHIVE', 'Archivo ' . $archived . ' reporte(s)');
-                        $ajaxPayload['ids'] = array_values(array_filter(array_map('trim', $ids)));
+                        $ajaxPayload['ids'] = array_values(array_diff($beforeArchiveIds, array_column($messages, 'id')));
                     } else {
-                        $flashMsg = 'No había mensajes seleccionados para archivar.';
+                        $flashMsg = empty($ids) ? 'No había mensajes seleccionados para archivar.' : 'No se pudieron archivar los reportes seleccionados. Recarga y revisa su estado.';
                         $ajaxPayload['ok'] = false;
                     }
                     break;
@@ -625,23 +762,19 @@ class MantencionDashboardService
                         break;
                     }
                     $deletedFuenteIds = [];
+                    $selected = array_fill_keys($ids, true);
                     foreach ($messages as $m) {
-                        if (is_array($m) && in_array(($m['id'] ?? ''), $ids, true)) {
+                        if (is_array($m) && is_string($m['id'] ?? null) && isset($selected[$m['id']])) {
                             $fid = trim((string)($m['fuente_id'] ?? $m['id'] ?? ''));
                             if ($fid !== '') {
                                 $deletedFuenteIds[] = $fid;
                             }
                         }
                     }
-                    $before = count($messages);
-                    $messages = array_values(array_filter($messages, fn($m) => !in_array(($m['id'] ?? ''), $ids, true)));
-                    $deleted = $before - count($messages);
+                    $dbRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
+                    $deleted = $dbRepo !== null ? $dbRepo->deleteByFuenteIds($deletedFuenteIds) : 0;
                     if ($deleted > 0) {
-                        save_messages($messages);
-                        $dbRepo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
-                        if ($dbRepo !== null && !empty($deletedFuenteIds)) {
-                            $dbRepo->deleteByFuenteIds($deletedFuenteIds);
-                        }
+                        $messages = load_messages();
                         $flashMsg = $deleted . ' mensaje(s) eliminados.';
                         dashboard_log_action('REPORT_DELETE_BULK', 'Elimino ' . $deleted . ' reporte(s)');
                         $ajaxPayload['ids'] = $ids;
@@ -654,22 +787,31 @@ class MantencionDashboardService
                     $ids = isset($_POST['ids']) ? explode(',', $_POST['ids']) : [];
                     $ids = $this->dashboard_filter_ids_by_scope($messages, $ids);
                     $updated = 0;
+                    $originalMessages = $messages;
+                    $changedMessages = [];
+                    $selected = array_fill_keys($ids, true);
                     foreach ($messages as &$message) {
-                        if (!in_array(($message['id'] ?? ''), $ids, true)) {
+                        if (!is_string($message['id'] ?? null) || !isset($selected[$message['id']])) {
                             continue;
                         }
                         if (strtolower($message['estado'] ?? '') !== 'error') {
                             continue;
                         }
                         $message['estado'] = 'pendiente';
-                        unset($message['redmine_id']);
+                        $message['redmine_id'] = '';
+                        $message['numero_ticket_redmine'] = '';
                         $message['procesado_ts'] = '';
+                        $changedMessages[] = $message;
                         $updated++;
                     }
                     unset($message);
                     if ($updated > 0) {
+                        if (!save_messages($changedMessages, $originalMessages)) {
+                            $flashMsg = 'No se pudieron actualizar todos los reportes. Recarga para revisar su estado.';
+                            $ajaxPayload['ok'] = false;
+                            break;
+                        }
                         $this->redmineSync->remove_redmine_logs_for_messages($ids);
-                        save_messages($messages);
                         $flashMsg = $updated . ' error(es) marcados como pendientes.';
                         dashboard_log_action('REPORT_RESET_ERRORS', 'Marco ' . $updated . ' error(es) como pendientes');
                         $ajaxPayload['ids'] = array_values($ids);
@@ -732,6 +874,12 @@ class MantencionDashboardService
             $securityLog = array_filter($rawLog, fn($entry) => in_array(($entry['tag'] ?? ''), ['LOGIN_SUCCESS', 'LOG', 'AUTH_SUCCESS']));
         }
         $messages = dashboard_filter_messages_by_scope($messages);
+        if ($withDatabaseId) {
+            foreach ($messages as &$message) {
+                $message['descripcion'] = '';
+            }
+            unset($message);
+        }
         return [$messages, $flash, $securityLog];
     }
 }

@@ -12,6 +12,18 @@ class CorePendingReportSyncServiceTest extends TestCase
 {
     use DatabaseTransactions;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // A clean migration run does not register the legacy Mantencion module.
+        // Declare this fixture explicitly instead of depending on runtime data.
+        if (!DB::table('modulos_nova')->where('clave_modulo', 'redmine-mantencion')->exists()) {
+            DB::table('modulos_nova')->insert([
+                'clave_modulo' => 'redmine-mantencion', 'nombre' => 'Mantención de prueba',
+            ]);
+        }
+    }
+
     public function test_changed_core_status_updates_the_same_pending_report(): void
     {
         $service = app(CorePendingReportSyncService::class);

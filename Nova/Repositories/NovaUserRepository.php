@@ -5,6 +5,7 @@ namespace App\Modulos\Nova\Repositories;
 use App\Modulos\Nova\Repositories\ModuleRegistry;
 use App\Modulos\Nova\Services\NovaUserService;
 use App\Modulos\Nova\Support\SecretValue;
+use App\Repositories\Database\SqlText;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -27,11 +28,83 @@ final class NovaUserRepository
 
         $deduplicated = $this->service->deduplicateUsers($users);
         if ($deduplicated !== $users) {
-            $this->write($deduplicated);
-            $users = $deduplicated;
+            try {
+                $users = DB::transaction(function (): array {
+                    // Re-read under locks: a projection captured before this transaction
+                    // must never restore an older password, role or integration secret.
+                    $fresh = $this->usersFromDatabase([], true);
+                    $merged = $this->service->deduplicateUsers($fresh);
+                    $originals = array_column($fresh, null, 'id');
+                    $fields = array_flip(['redmine_id', 'username', 'name', 'apellido', 'rut',
+                        'core_user', 'role', 'status', 'password', 'email', 'emach_credentials', 'telegram_settings']);
+                    $changed = [];
+                    foreach ($merged as $user) {
+                        $original = $originals[$user['id']] ?? [];
+                        $values = array_intersect_key($user, $fields);
+                        $before = array_intersect_key($original, $fields);
+                        foreach (['telegram_settings', 'emach_credentials'] as $field) {
+                            unset($values[$field]['updated_at'], $before[$field]['updated_at']);
+                        }
+                        if ($values !== $before) {
+                            $changed[] = $user;
+                        }
+                    }
+                    $this->writeUsersToDatabase($changed);
+
+                    return $merged;
+                });
+            } catch (\Throwable) {
+                $users = $this->service->deduplicateUsers($this->usersFromDatabase([]));
+            }
         }
 
         return is_array($users) ? array_values(array_filter($users, 'is_array')) : [];
+    }
+
+    /** Display-only projection. Duplicate repairs still go through all(). */
+    public function allForAdministration(): array
+    {
+        $users = null;
+        try {
+            if (DB::connection()->getDriverName() === 'mysql') {
+                $users = DB::transaction(function (): ?array {
+                    // Preserve the existing reader's tie order and merge precedence.
+                    if (DB::table('usuarios_nova')->select('nombre', 'apellido')
+                        ->groupBy('nombre', 'apellido')->havingRaw('COUNT(*) > 1')->exists()) {
+                        return null;
+                    }
+                    $rows = $this->usersFromDatabase([], false, null, true);
+                    $keys = [];
+                    foreach ($rows as $row) {
+                        $key = $this->service->dedupeKey($row);
+                        if ($key !== '' && isset($keys[$key])) {
+                            return null;
+                        }
+                        $keys[$key] = true;
+                    }
+
+                    return $rows;
+                });
+            }
+        } catch (\Throwable) {
+            // Unsupported schemas/drivers retain the complete reader.
+        }
+
+        // Finish the read transaction before the original repair/locking flow.
+        return array_map(static function (array $user): array {
+            $user['password'] = '';
+            foreach (['emach', 'nextcloud'] as $type) {
+                $field = $type.'_credentials';
+                $credentials = $user[$field] ?? [];
+                $user['has_'.$field] = trim((string) ($credentials['user'] ?? '')) !== ''
+                    && trim((string) ($credentials['password'] ?? '')) !== '';
+                if (is_array($user[$field] ?? null)) {
+                    $user[$field]['password'] = '';
+                }
+            }
+
+            return $user;
+        }, $users ?? $this->all());
     }
 
     public function attempt(string $username, string $password, bool $allowApiToken = false): ?array
@@ -61,6 +134,56 @@ final class NovaUserRepository
             return null;
         }
 
+        // SQL mirrors byte normalization and first-match ordering. A normalized
+        // collision still uses all(), whose historical merge can persist repairs.
+        try {
+            if (DB::connection()->getDriverName() === 'mysql') {
+                $lookup = app(NovaIdentityLookupRepository::class)->lookup($needle);
+                if (! $lookup['ambiguous']) {
+                    return $lookup['id'] === null ? null : ($this->usersFromDatabase([], false, [$lookup['id']])[0] ?? null);
+                }
+                // Keep the service's established duplicate merge and all identifiers.
+                foreach ($this->all() as $user) {
+                    foreach ($this->service->loginCandidates($user) as $candidate) {
+                        if ($needle === $this->service->normalizeIdentity((string) $candidate)) {
+                            return $user;
+                        }
+                    }
+                }
+
+                return null;
+            }
+            $identities = DB::table('usuarios_nova')->orderBy('nombre')->orderBy('apellido')
+                ->get(['id', 'uuid', 'usuario', 'redmine_id', 'rut', 'usuario_core', 'nombre', 'apellido']);
+            $keys = [];
+            $targetId = null;
+            $ambiguous = false;
+            foreach ($identities as $row) {
+                $identity = [
+                    'id' => (string) $row->uuid, 'username' => trim((string) $row->usuario),
+                    'rut_sin_dv' => trim((string) $row->usuario), 'redmine_id' => trim((string) $row->redmine_id),
+                    'rut' => trim((string) $row->rut), 'core_user' => trim((string) $row->usuario_core),
+                    'name' => trim((string) $row->nombre), 'apellido' => trim((string) $row->apellido),
+                ];
+                $key = $this->service->dedupeKey($identity);
+                if ($key !== '' && isset($keys[$key])) { $ambiguous = true; break; }
+                $keys[$key] = true;
+                if ($targetId === null) {
+                    foreach ($this->service->loginCandidates($identity) as $candidate) {
+                        if ($needle === $this->service->normalizeIdentity((string) $candidate)) {
+                            $targetId = (int) $row->id;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!$ambiguous) {
+                return $targetId === null ? null : ($this->usersFromDatabase([], false, [$targetId])[0] ?? null);
+            }
+        } catch (\Throwable) {
+            // Retain the established failure/merge path; never broaden matching.
+        }
+
         foreach ($this->all() as $user) {
             foreach ($this->service->loginCandidates($user) as $candidate) {
                 if ($needle === $this->service->normalizeIdentity((string) $candidate)) {
@@ -78,6 +201,20 @@ final class NovaUserRepository
      */
     public function save(array $payload): array
     {
+        // Capture the stored values before reading projections/validating the form.
+        // They are used only to detect a conflicting edit, never to rewrite other accounts.
+        $requestedId = trim((string) ($payload['id'] ?? ''));
+        try {
+            $snapshot = $requestedId !== ''
+                ? DB::table('usuarios_nova')->where('uuid', $requestedId)->first()
+                : null;
+        } catch (\Throwable) {
+            return ['ok' => false, 'error' => 'No fue posible consultar el usuario.'];
+        }
+        if ($requestedId !== '' && $snapshot === null) {
+            return ['ok' => false, 'error' => 'Usuario no encontrado.'];
+        }
+
         $users = $this->all();
         $id    = trim((string) ($payload['id'] ?? ''));
         $isNew = $id === '';
@@ -178,13 +315,10 @@ final class NovaUserRepository
             $row['telegram_settings'] = $current['telegram_settings'];
         }
 
-        if ($index === null) {
-            $users[] = $row;
-        } else {
-            $users[$index] = $row;
-        }
-
-        if (!$this->write($users)) {
+        $saved = $isNew
+            ? $this->write([$row])
+            : $this->writeUserEdit($row, $snapshot, $password !== '');
+        if (!$saved) {
             return [
                 'ok' => false,
                 'error' => $this->lastWriteError !== ''
@@ -247,6 +381,58 @@ final class NovaUserRepository
     // Private — data access only
     // -------------------------------------------------------------------------
 
+    /** Persist only fields owned by the administration form that actually changed. */
+    private function writeUserEdit(array $user, object $snapshot, bool $changePassword): bool
+    {
+        $this->lastWriteError = '';
+        $values = [
+            'usuario' => $user['username'],
+            'rut' => $user['rut'] ?: null,
+            'nombre' => $user['name'],
+            'apellido' => $user['apellido'],
+            'usuario_core' => $user['core_user'] ?: null,
+            'rol' => $user['role'],
+            'estado' => $user['status'],
+        ];
+        if ($changePassword) {
+            $values['password'] = $user['password'];
+        }
+        $changes = [];
+        foreach ($values as $column => $value) {
+            if ($value !== ($snapshot->$column ?? null)) {
+                $changes[$column] = $value;
+            }
+        }
+
+        try {
+            return DB::transaction(function () use ($user, $snapshot, $changes): bool {
+                $query = DB::table('usuarios_nova')->where('uuid', $user['id']);
+                $latest = (clone $query)->lockForUpdate()->first();
+                if ($latest === null) {
+                    $this->lastWriteError = 'Usuario no encontrado.';
+
+                    return false;
+                }
+                foreach ($changes as $column => $value) {
+                    if (($latest->$column ?? null) !== ($snapshot->$column ?? null)) {
+                        $this->lastWriteError = 'El usuario fue modificado por otra operación. Recarga la ficha e intenta nuevamente.';
+
+                        return false;
+                    }
+                }
+                if ($changes !== []) {
+                    $query->update($changes + ['actualizado_at' => now()]);
+                }
+
+                return true;
+            });
+        } catch (\Throwable) {
+            $this->lastWriteError = 'No fue posible guardar el usuario. Intenta nuevamente.';
+
+            return false;
+        }
+    }
+
     /**
      * @param array<int,array<string,mixed>> $users
      */
@@ -282,18 +468,31 @@ final class NovaUserRepository
      * @param array<int,array<string,mixed>> $fileUsers
      * @return array<int,array<string,mixed>>
      */
-    private function usersFromDatabase(array $fileUsers): array
+    private function usersFromDatabase(array $fileUsers, bool $lock = false, ?array $userIds = null, bool $forAdministration = false): array
     {
         if (!$this->usersTableAvailable()) {
             return [];
         }
 
         try {
-            $integrationsByUser = $this->databaseIntegrationsByUserId();
-            $users              = DB::table('usuarios_nova')
+            $query = DB::table('usuarios_nova')
                 ->orderBy('nombre')
-                ->orderBy('apellido')
-                ->get()
+                ->orderBy('apellido');
+            if ($userIds !== null) $query->whereIn('id', $userIds);
+            if ($lock) {
+                $query->lockForUpdate();
+            }
+            $columns = ['*'];
+            if ($forAdministration) {
+                $columns = ['id', 'uuid', 'redmine_id', 'usuario', 'nombre', 'apellido', 'rut', 'usuario_core',
+                    'rol', 'estado', 'telegram_id_chat', 'ultimo_login_at', 'creado_at', 'actualizado_at'];
+                if (Schema::hasColumn('usuarios_nova', 'email')) {
+                    $columns[] = 'email';
+                }
+            }
+            $rows = $query->get($columns);
+            $integrationsByUser = $this->databaseIntegrationsByUserId($lock, $userIds, $forAdministration);
+            $users = $rows
                 ->map(function (object $row) use ($integrationsByUser): array {
                     $current = [];
 
@@ -317,7 +516,7 @@ final class NovaUserRepository
                         'email'           => trim((string) ($row->email ?? '')),
                         'role'            => $this->service->normalizeNovaRole((string) $row->rol),
                         'status'          => $this->service->normalizeStatus((string)   $row->estado),
-                        'password'        => (string) $row->password,
+                        'password'        => (string) ($row->password ?? ''),
                         'ultimo_login_at' => (string) ($row->ultimo_login_at ?? ''),
                         'creado_at'       => (string) ($row->creado_at ?? ''),
                     ]);
@@ -335,7 +534,10 @@ final class NovaUserRepository
                 })
                 ->values()
                 ->all();
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            if ($lock || $forAdministration) {
+                throw $exception;
+            }
             return [];
         }
 
@@ -404,15 +606,31 @@ final class NovaUserRepository
     /**
      * @return array<int,array<string,array<string,string>>>
      */
-    private function databaseIntegrationsByUserId(): array
+    private function databaseIntegrationsByUserId(bool $lock = false, ?array $userIds = null, bool $forAdministration = false): array
     {
         if (!$this->integrationsTableAvailable()) {
             return [];
         }
 
         try {
-            $rows = DB::table('integraciones_usuario')->get();
-        } catch (\Throwable) {
+            $query = DB::table('integraciones_usuario')->orderBy('id');
+            if ($userIds !== null) $query->whereIn('usuario_id', $userIds);
+            if ($lock) {
+                $query->lockForUpdate();
+            }
+            $columns = ['*'];
+            if ($forAdministration) {
+                $type = SqlText::trim('tipo');
+                $secret = SqlText::trim('valor_secreto');
+                $query->whereRaw("BINARY ($type) IN ('emach', 'nextcloud')");
+                $columns = ['usuario_id', 'tipo', 'usuario_externo', 'actualizado_at',
+                    DB::raw("CASE WHEN OCTET_LENGTH($secret) > 0 THEN '1' ELSE '' END as valor_secreto")];
+            }
+            $rows = $query->get($columns);
+        } catch (\Throwable $exception) {
+            if ($lock || $forAdministration) {
+                throw $exception;
+            }
             return [];
         }
 

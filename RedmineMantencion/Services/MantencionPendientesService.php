@@ -472,9 +472,8 @@ class MantencionPendientesService
             } elseif (trim((string) ($_POST['fecha_fin'] ?? '')) !== '' && $form['fecha_fin'] === '') {
                 $error = 'La fecha fin no es válida.';
             } else {
-                $messages = load_messages();
-                $messages[] = $this->buildRecord($form, $cfg, $users);
-                if (!save_messages($messages)) {
+                $message = $this->buildRecord($form, $cfg, $users);
+                if (!save_messages([$message])) {
                     $error = 'No fue posible guardar el pendiente. Intenta nuevamente o revisa el registro del sistema.';
                 } else {
                     manual_pending_flash_set('Pendiente manual creado correctamente.');

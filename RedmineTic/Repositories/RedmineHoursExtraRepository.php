@@ -3,6 +3,7 @@
 namespace RedmineTic\Repositories;
 
 use App\Modulos\Nova\Repositories\HorasExtraRepository;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -24,7 +25,7 @@ class RedmineHoursExtraRepository
     public function saveGroup(string $sourceFile, array $payload): bool
     {
         $date = trim((string) ($payload['fecha'] ?? ''));
-        if ($date === '' || !$this->tableAvailable()) {
+        if ($date === '' || ! $this->tableAvailable()) {
             return false;
         }
 
@@ -44,62 +45,80 @@ class RedmineHoursExtraRepository
      */
     public function deleteGroup(string $sourceFile, string $date): int
     {
-        if ($date === '' || !$this->pivotTableAvailable()) {
+        if ($date === '' || ! $this->pivotTableAvailable()) {
             return 0;
         }
 
-        $reporteIds = $this->shared()->reporteIdsPorOrigenYFecha(self::ORIGEN, $this->parseDate($date));
+        try {
+            return $this->shared()->atomic(function () use ($date): int {
+                $reporteIds = $this->shared()->reporteIdsPorOrigenYFecha(self::ORIGEN, $this->parseDate($date));
+                DB::table('redmine_tic_reportes')->whereIn('id', $reporteIds)->orderBy('id')->lockForUpdate()->get(['id']);
+                $count = 0;
+                foreach ($reporteIds as $reporteId) {
+                    if ($this->shared()->detachReporte(self::ORIGEN, $reporteId)) {
+                        $count++;
+                    }
+                }
 
-        $count = 0;
-        foreach ($reporteIds as $reporteId) {
-            if ($this->shared()->detachReporte(self::ORIGEN, $reporteId)) {
-                $count++;
+                return $count;
+            });
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                throw $exception;
             }
-        }
 
-        return $count;
+            return 0;
+        }
     }
 
-    public function syncForReport(array $report): void
+    public function syncForReport(array $report): bool
     {
         $id = (string) ($report['id'] ?? '');
-        if ($id === '' || !$this->tableAvailable()) {
-            return;
+        if ($id === '' || ! $this->tableAvailable()) {
+            return false;
         }
-
-        $this->remove($id);
-
-        if (!in_array(strtolower((string) ($report['hora_extra'] ?? '')), ['si', 'sí', '1', 'true'], true)) {
-            return;
-        }
-
-        $date = trim((string) ($report['fecha_inicio'] ?? $report['fecha'] ?? now('America/Santiago')->format('Y-m-d')));
-        $dt = date_create($date) ?: now('America/Santiago');
-        $targetDate = $dt->format('Y-m-d');
-
         $reporteId = is_numeric($id) ? (int) $id : 0;
-        if ($reporteId <= 0 || !$this->pivotTableAvailable()) {
-            return;
+        if ($reporteId <= 0 || ! $this->pivotTableAvailable()) {
+            return false;
         }
+        try {
+            return $this->shared()->atomic(function () use ($report, $reporteId): bool {
+                if (! DB::table('redmine_tic_reportes')->where('id', $reporteId)->lockForUpdate()->first()) {
+                    return false;
+                }
+                $enabled = in_array(strtolower((string) ($report['hora_extra'] ?? '')), ['si', 'sí', '1', 'true'], true);
+                $date = trim((string) ($report['fecha_inicio'] ?? $report['fecha'] ?? now('America/Santiago')->format('Y-m-d')));
+                $dt = date_create($date) ?: now('America/Santiago');
+                $targetDate = $dt->format('Y-m-d');
+                $horaInicio = $this->parseTime($report['hora_inicio'] ?? $report['hora'] ?? null);
+                $horaFin = $this->parseTime($report['hora_fin'] ?? $report['hora'] ?? null);
+                $usuarioId = $this->shared()->resolveUsuarioId((string) ($report['asignado_a'] ?? ''));
+                $this->shared()->lockTransition(self::ORIGEN, $reporteId, $enabled ? $usuarioId : null, $enabled ? $targetDate : null);
+                // Preserve TIC's existing detach/recreate and incoming-hour precedence.
+                $this->shared()->detachReporte(self::ORIGEN, $reporteId);
+                if (! $enabled) {
+                    return true;
+                }
+                $grupoId = $this->shared()->findOrCreateGroup($usuarioId, $targetDate, $horaInicio, $horaFin);
+                if ($grupoId === null || ! $this->shared()->updateGroupTime($grupoId, $horaInicio, $horaFin)) {
+                    throw new \RuntimeException('No se pudo guardar la jornada de horas extra.');
+                }
+                $this->shared()->attachReporte($grupoId, self::ORIGEN, $reporteId);
 
-        $horaInicio = $this->parseTime($report['hora_inicio'] ?? $report['hora'] ?? null);
-        $horaFin = $this->parseTime($report['hora_fin'] ?? $report['hora'] ?? null);
-        $usuarioId = $this->shared()->resolveUsuarioId((string) ($report['asignado_a'] ?? ''));
+                return true;
+            });
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                throw $exception;
+            }
 
-        $grupoId = $this->shared()->findOrCreateGroup($usuarioId, $targetDate, $horaInicio, $horaFin);
-        if ($grupoId === null) {
-            return;
+            return false;
         }
-
-        // Si el grupo ya existia (p.ej. creado antes por Mantencion para el mismo
-        // usuario+fecha), se fusionan aqui las horas de este reporte sin pisar valores ya definidos.
-        $this->shared()->updateGroupTime($grupoId, $horaInicio, $horaFin);
-        $this->shared()->attachReporte($grupoId, self::ORIGEN, $reporteId);
     }
 
     public function remove(string $id): void
     {
-        if (!$this->pivotTableAvailable() || trim($id) === '') {
+        if (! $this->pivotTableAvailable() || trim($id) === '') {
             return;
         }
 
@@ -153,12 +172,20 @@ class RedmineHoursExtraRepository
 
     public function attachReporte(int $grupoId, int $reporteId): void
     {
-        $this->shared()->attachReporte($grupoId, self::ORIGEN, $reporteId);
+        $this->shared()->atomic(function () use ($grupoId, $reporteId): void {
+            $report = DB::table('redmine_tic_reportes')->where('id', $reporteId)->lockForUpdate()->first(['fecha_inicio', 'fecha']);
+            $group = DB::table('horas_extra_grupos')->where('id', $grupoId)->lockForUpdate()->first(['fecha']);
+            $date = trim((string) ($report->fecha_inicio ?? $report->fecha ?? ''));
+            if ($date === '' || $group === null || $date !== (string) $group->fecha) {
+                throw new \RuntimeException('La jornada de horas extra debe coincidir con la fecha de inicio del reporte.');
+            }
+            $this->shared()->attachReporte($grupoId, self::ORIGEN, $reporteId);
+        });
     }
 
     private function shared(): HorasExtraRepository
     {
-        return $this->shared ??= new HorasExtraRepository();
+        return $this->shared ??= new HorasExtraRepository;
     }
 
     // ---- small date/time utilities (duplicated from RedmineDataRepository) ----
@@ -184,8 +211,8 @@ class RedmineHoursExtraRepository
         }
 
         if (preg_match('/^\d{1,2}:\d{2}(?::\d{2})?$/', $value)) {
-            $parts  = explode(':', $value);
-            $hour   = max(0, min(23, (int) ($parts[0] ?? 0)));
+            $parts = explode(':', $value);
+            $hour = max(0, min(23, (int) ($parts[0] ?? 0)));
             $minute = max(0, min(59, (int) ($parts[1] ?? 0)));
             $second = max(0, min(59, (int) ($parts[2] ?? 0)));
 

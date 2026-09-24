@@ -10,13 +10,83 @@ class MantencionHistoricoService
     {
     }
 
+    /** Preserve legacy normalization and scope on a narrow projection before paging. */
+    public function filterRows(array $items, array $filters, string $userId, array $userNames, array $redmineStatusOptions): array
+    {
+        $f_desde = $filters['desde'] ?? '';
+        $f_hasta = $filters['hasta'] ?? '';
+        $f_fuente = $filters['fuente'] ?? '';
+        $f_estado_redmine = $filters['estado_redmine'] ?? '';
+        $f_usuario = $filters['usuario'] ?? '';
+        $f_scope = $filters['scope'] ?? 'asignados';
+        $f_categoria = $filters['categoria'] ?? '';
+        $f_busqueda = $filters['buscar'] ?? '';
+        $f_descripcion = $filters['descripcion'] ?? '';
+        $filtered = [];
+        foreach ($items as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if (! in_array(strtolower(trim((string) ($row['estado'] ?? ''))), ['procesado', 'archivado'], true)) {
+                continue;
+            }
+            $fecha = $this->normDate($row['fecha'] ?? ($row['fecha_inicio'] ?? ''));
+            if ($fecha === '') {
+                continue;
+            }
+            if ($f_desde && $fecha < $f_desde) {
+                continue;
+            }
+            if ($f_hasta && $fecha > $f_hasta) {
+                continue;
+            }
+            if ($f_fuente && ($row['_fuente'] ?? '') !== $f_fuente) {
+                continue;
+            }
+            if ($f_estado_redmine !== '') {
+                $rowRedmineStatus = trim((string) ($row['estado_redmine'] ?? $row['redmine_estado'] ?? $row['status_name'] ?? ''));
+                if ($rowRedmineStatus === '') {
+                    $rowStatusId = (int) ($row['status_id'] ?? $row['estado_id'] ?? 0);
+                    $rowRedmineStatus = trim((string) ($redmineStatusOptions[$rowStatusId] ?? ''));
+                }
+                if (dashboard_normalize_text($rowRedmineStatus) !== dashboard_normalize_text($f_estado_redmine)) {
+                    continue;
+                }
+            }
+            if ($f_usuario !== '' && (string) ($row['asignado_a'] ?? '') !== (string) $f_usuario) {
+                continue;
+            }
+            if ($f_scope === 'asignados' && ! $this->recordMatchesCurrentUser($row, $userId, $userNames)) {
+                continue;
+            }
+            $cat = strtolower($row['categoria'] ?? '');
+            if ($f_categoria !== '' && $cat !== $f_categoria) {
+                continue;
+            }
+            if (! $this->matchesSearch($row, $f_busqueda)) {
+                continue;
+            }
+            if ($f_descripcion !== '') {
+                $descriptionNeedle = dashboard_normalize_text($f_descripcion);
+                $descriptionText = dashboard_normalize_text((string) ($row['descripcion'] ?? ''));
+                if ($descriptionNeedle !== '' && ! str_contains($descriptionText, $descriptionNeedle)) {
+                    continue;
+                }
+            }
+            $row['_fecha_norm'] = $fecha;
+            $filtered[] = $row;
+        }
+
+        if ($f_fuente === '') $filtered = $this->dedupeRows($filtered);
+        usort($filtered, static fn (array $a, array $b): int => strcmp($b['_fecha_norm'] ?? '', $a['_fecha_norm'] ?? ''));
+        return $filtered;
+    }
+
     public function deleteReporte(string $id): bool
     {
         $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
         if ($repo !== null && $repo->tableReady()) {
-            $repo->deleteByFuenteIds([$id]);
-
-            return true;
+            return $repo->deleteByFuenteIds([$id]) > 0;
         }
 
         return false;
@@ -85,6 +155,18 @@ class MantencionHistoricoService
         }
 
         return $cache[$cacheKey] = $this->redmineStatus->fetchStatus($platformUrl, $redmineId, $token);
+    }
+
+    public function synchronizeStatuses(string $url, string $token, array $ids): array
+    {
+        return app(\App\Services\Redmine\HistorySyncService::class)->statuses(
+            $this->redmineStatus->issuesCollectionApiUrl($url), $token, $ids,
+            function (array $status): array {
+                $closed = array_key_exists('is_closed', $status) ? filter_var($status['is_closed'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) : null;
+                return ['id' => (int) ($status['id'] ?? 0), 'name' => trim((string) $status['name']),
+                    'closed' => $this->redmineStatus->isClosedStatus($status['name'], $closed)];
+            }
+        );
     }
 
     public function updateRedmineStatus(string $platformUrl, string $redmineId, int $statusId, string $token): array

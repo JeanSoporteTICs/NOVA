@@ -143,6 +143,7 @@ Route::post('/redmine_tic/app/mis-integraciones', [UserIntegrationController::cl
 Route::get('/redmine_tic/app/configuracion', [RedmineDashboardController::class, 'show'])
     ->defaults('section', 'configuracion');
 Route::get('/redmine_tic/app/{section}', [RedmineDashboardController::class, 'show'])->name('redmine.native.section');
+Route::get('/redmine_tic/app/dashboard/detalle', [RedmineDashboardController::class, 'dashboardReportDetail'])->name('redmine.native.dashboard.detail');
 Route::post('/redmine_tic/app/dashboard', [RedmineDashboardController::class, 'dashboardAction'])->name('redmine.native.dashboard.action');
 Route::post('/redmine_tic/app/usuarios', [RedmineDashboardController::class, 'userAction'])->name('redmine.native.users.action');
 Route::post('/redmine_tic/app/categorias', [RedmineDashboardController::class, 'categoryAction'])->name('redmine.native.categories.action');
@@ -166,6 +167,7 @@ Route::get('/redmine-mantencion/health.php', fn () => response()->json([
     'base_path' => data_get(config('modules.redmine-mantencion', []), 'path', base_path('redmine-mantencion')),
 ]))->name('redmine.mantencion.health');
 Route::get('/redmine-mantencion', fn () => redirect()->route('redmine.mantencion.dashboard'));
+Route::get('/redmine-mantencion/app/dashboard/detalle', [MantencionDashboardController::class, 'reportDetail'])->name('redmine.mantencion.dashboard.detail');
 Route::post('/redmine-mantencion/app/dashboard/hora-extra', [MantencionDashboardController::class, 'toggleHoursExtra'])
     ->name('redmine.mantencion.dashboard.hours-extra');
 Route::match(['GET', 'POST'], '/redmine-mantencion/app', [MantencionDashboardController::class, 'index'])

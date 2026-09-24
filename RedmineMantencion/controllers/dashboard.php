@@ -356,6 +356,7 @@ function dashboard_core_detail_table_schema(array $message): array {
         ['label' => 'RUN', 'key' => 'detalle_run'],
         ['label' => 'Nombre', 'key' => 'detalle_nombre'],
         ['label' => 'Motivo', 'key' => 'detalle_motivo'],
+        ['label' => 'Establecimientos', 'key' => 'detalle_establecimientos'],
         ['label' => 'Otros permisos', 'key' => 'detalle_otros_permisos'],
     ];
 }
@@ -476,10 +477,10 @@ function load_messages(): array {
     return [];
 }
 
-function save_messages(array $messages): bool {
+function save_messages(array $messages, ?array $originalMessages = null): bool {
     $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
     if ($repo !== null && $repo->tableReady()) {
-        return $repo->syncMessages($messages, load_platform_config());
+        return $repo->syncMessages($messages, load_platform_config(), $originalMessages);
     }
 
     return false;
@@ -547,6 +548,8 @@ function save_platform_config(array $cfg): void {
     $repo = config_mantencion_repository();
     if ($repo !== null) {
         $repo->saveAll($cfg);
+    } else {
+        throw new \App\Modulos\RedmineMantencion\Exceptions\ConfigurationWriteException;
     }
 }
 
@@ -766,7 +769,7 @@ function dashboard_user_is_active(array $user): bool {
 }
 
 function dashboard_active_mantencion_users(): array {
-    $users = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
+    $users = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion(true, false) : [];
     if (!is_array($users)) {
         return [];
     }
@@ -1044,21 +1047,15 @@ function message_has_hora_extra(array $message): bool {
     return normalize_hour_extra_value($message['hora_extra'] ?? '') === '1';
 }
 
-function append_hours_extra_record(array $message): void {
-    if (!message_has_hora_extra($message) || strtolower(trim((string) ($message['estado'] ?? ''))) !== 'archivado') {
-        return;
-    }
+function append_hours_extra_record(array $message): bool {
+    if (!message_has_hora_extra($message) || strtolower(trim((string) ($message['estado'] ?? ''))) !== 'archivado') return true;
     $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
-    if ($repo !== null) {
-        $repo->syncMessage($message);
-    }
+    return $repo !== null && $repo->syncMessage($message);
 }
 
-function remove_hours_extra_record_by_id(string $messageId): void {
+function remove_hours_extra_record_by_id(string $messageId): bool {
     $repo = function_exists('mantencion_hours_extra_repository') ? mantencion_hours_extra_repository() : null;
-    if ($repo !== null) {
-        $repo->detachMessageId($messageId);
-    }
+    return $repo !== null && $repo->detachMessageId($messageId);
 }
 
 function load_user_api_token(?string $userId): string {

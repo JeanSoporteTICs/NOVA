@@ -89,9 +89,12 @@ final class UserIntegrationRepository
     public function userForSession(array $sessionUser): array
     {
         $users = $this->users();
-        $index = $this->userIndexForSession($sessionUser);
-
-        return $index === null ? [] : ($users[$index] ?? []);
+        $needles = $this->needles($sessionUser);
+        if ($needles === []) return [];
+        foreach ($users as $user) {
+            if (array_intersect($needles, $this->needles($user)) !== []) return $user;
+        }
+        return [];
     }
 
     /**
@@ -301,6 +304,28 @@ final class UserIntegrationRepository
         } catch (\Throwable) {
             return ['user' => '', 'secret' => '', 'stored' => false];
         }
+    }
+
+    /**
+     * Batch counterpart of credentialForUserId for legacy consumers requiring credentials.
+     * The result is local to the call; it is never cached across users or requests.
+     * @return array<int,array{user:string,secret:string,stored:bool}>
+     */
+    public function redmineCredentialsForUserIds(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0)));
+        if ($userIds === [] || !$this->tablesAvailable()) return [];
+        try {
+            $rows = DB::table('integraciones_usuario')->whereIn('usuario_id', $userIds)
+                ->whereIn('tipo', $this->redmineTypes())->get()->groupBy('usuario_id');
+            $result = [];
+            foreach ($userIds as $userId) {
+                $row = $this->preferredRedmineRow($rows->get($userId, collect()));
+                $secret = SecretValue::decryptSecret((string) ($row->valor_secreto ?? '')) ?? '';
+                $result[$userId] = ['user' => trim((string) ($row->usuario_externo ?? '')), 'secret' => $secret, 'stored' => $secret !== ''];
+            }
+            return $result;
+        } catch (\Throwable) { return []; }
     }
 
     public function redmineTokenForRedmineId(string $redmineId): string
@@ -547,6 +572,11 @@ final class UserIntegrationRepository
         }
 
         $rows = $query->whereIn('tipo', $this->redmineTypes())->get();
+        return $this->preferredRedmineRow($rows);
+    }
+
+    private function preferredRedmineRow(\Illuminate\Support\Collection $rows): ?object
+    {
         $canonical = $rows->firstWhere('tipo', self::REDMINE_TYPE);
         if ($canonical !== null && $this->rowHasDecryptableSecret($canonical)) {
             return $canonical;

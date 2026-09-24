@@ -199,6 +199,18 @@ final class RedmineDataRepository
         return $this->configRepo()->maintenanceModeEnabled();
     }
 
+    /** Maintenance display data without loading active and archived reports. */
+    public function maintenanceStatus(): array
+    {
+        $config = $this->configuration();
+
+        return [
+            'enabled' => ! empty($config['maintenance_mode']),
+            'until' => trim((string) ($config['maintenance_until'] ?? '')),
+            'until_text' => DateSupport::formatUntil(trim((string) ($config['maintenance_until'] ?? ''))),
+        ];
+    }
+
     /**
      * @return array<string,mixed>
      */
@@ -215,11 +227,7 @@ final class RedmineDataRepository
             'errors' => ArraySupport::countByState($active, ['error', 'fallido', 'fallida']),
             'archived_total' => count($archived),
             'project_name' => (string) ($config['project_name'] ?? 'Redmine'),
-            'maintenance' => [
-                'enabled' => ! empty($config['maintenance_mode']),
-                'until' => trim((string) ($config['maintenance_until'] ?? '')),
-                'until_text' => DateSupport::formatUntil(trim((string) ($config['maintenance_until'] ?? ''))),
-            ],
+            'maintenance' => $this->maintenanceStatus(),
             'recent' => array_slice(array_reverse($active), 0, 10),
         ];
     }
@@ -241,19 +249,19 @@ final class RedmineDataRepository
     /**
      * @return array<string,mixed>
      */
-    public function dashboardData(string $filter = 'todos', array $user = []): array
+    public function dashboardData(string $filter = 'todos', array $user = [], bool $includeDetailText = true): array
     {
         $this->archiveExpiredProcessedReports();
 
         $filter = $this->normalizeDashboardFilter($filter);
-        $allReports = $this->activeReports();
-        $reports = $this->filterReportsByUserScope($allReports, $user, 'mensajes');
-        $visibleReports = $this->filterReportsByDashboardStatus($reports, $filter);
+        [$allReports, $reports, $visibleReports] = $this->dashboardReportSelection($filter, $user, ! $includeDetailText);
+        if (! $includeDetailText) {
+            $visibleReports = array_map(static fn (array $report): array => array_replace($report, ['mensaje' => '', 'descripcion' => '']), $visibleReports);
+        }
         $allSummary = $this->dashboardSummaryForReports($reports);
-        $visibleSummary = $this->dashboardSummaryForReports($reports);
 
         return [
-            'summary' => array_merge($allSummary, $visibleSummary, [
+            'summary' => array_merge($allSummary, [
                 'filter' => $filter,
                 'visible_total' => count($visibleReports),
                 'scope_total' => count($reports),
@@ -268,6 +276,42 @@ final class RedmineDataRepository
         ];
     }
 
+    private function dashboardReportSelection(string $filter, array $user, bool $withoutDetailText = false): array
+    {
+        if ($this->activeReportsCache === null && $this->reportsTableAvailable()
+            && ($moduleId = $this->databaseModuleId()) !== null) {
+            try {
+                $selection = DB::transaction(function () use ($moduleId, $filter, $user, $withoutDetailText): ?array {
+                    $all = $this->reportRepo()->dashboardCandidates($moduleId, fn (string $id): string => $this->assignedUserName($id));
+                    if ($all === null) {
+                        return null;
+                    }
+                    $scoped = $this->filterReportsByUserScope($all, $user, 'mensajes');
+                    $visible = $this->filterReportsByDashboardStatus($scoped, $filter);
+
+                    $details = $this->activeReportsFromDatabase(array_column($visible, 'id'), $withoutDetailText);
+                    // The detail reader can return an empty/partial result when a
+                    // projection or database read fails. Never render a partial
+                    // dashboard after the candidate selection found visible rows.
+                    if (count($details) !== count($visible)) {
+                        return null;
+                    }
+
+                    return [$all, $scoped, $details];
+                });
+                if ($selection !== null) {
+                    return $selection;
+                }
+            } catch (\Throwable) {
+                // Preserve the complete reader on unsupported/older schemas.
+            }
+        }
+        $all = $this->activeReports();
+        $scoped = $this->filterReportsByUserScope($all, $user, 'mensajes');
+
+        return [$all, $scoped, $this->filterReportsByDashboardStatus($scoped, $filter)];
+    }
+
     /**
      * @param  array<string,mixed>  $user
      */
@@ -278,13 +322,7 @@ final class RedmineDataRepository
             return false;
         }
 
-        foreach ($this->filterReportsByUserScope($this->activeReports(), $user, 'mensajes') as $report) {
-            if ((string) ($report['id'] ?? '') === $id) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->filterAccessibleActiveReportIds([$id], $user, true) === [$id];
     }
 
     /**
@@ -292,14 +330,15 @@ final class RedmineDataRepository
      * @param  array<string,mixed>  $user
      * @return array<int,string>
      */
-    public function filterAccessibleActiveReportIds(array $ids, array $user): array
+    public function filterAccessibleActiveReportIds(array $ids, array $user, bool $forAction = false): array
     {
         if ($ids === []) {
             return [];
         }
 
         $allowed = [];
-        foreach ($this->filterReportsByUserScope($this->activeReports(), $user, 'mensajes') as $report) {
+        $reports = $forAction ? $this->actionScopeReports($ids) : $this->activeReports();
+        foreach ($this->filterReportsByUserScope($reports, $user, 'mensajes') as $report) {
             $reportId = (string) ($report['id'] ?? '');
             if ($reportId !== '') {
                 $allowed[$reportId] = true;
@@ -309,12 +348,61 @@ final class RedmineDataRepository
         return array_values(array_filter($ids, static fn (string $id): bool => isset($allowed[$id])));
     }
 
+    /** Full text for one editable dashboard report, with the same exact-ID scope as POST actions. */
+    public function dashboardReportText(string $id, array $user): ?array
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return null;
+        }
+
+        return DB::transaction(function () use ($id, $user): ?array {
+            if (! $this->canAccessActiveReport($id, $user)) {
+                return null;
+            }
+            $moduleId = $this->databaseModuleId();
+            if ($moduleId === null) {
+                return null;
+            }
+            foreach ($this->reportRepo()->findActiveByIds($moduleId, [$id], fn (string $assigneeId): string => $this->assignedUserName($assigneeId)) as $report) {
+                if ((string) ($report['id'] ?? '') === $id) {
+                    return [
+                        'mensaje' => (string) ($report['mensaje'] ?? ''),
+                        'descripcion' => (string) ($report['descripcion'] ?? ''),
+                    ];
+                }
+            }
+
+            return null;
+        });
+    }
+
+    private function actionScopeReports(array $ids): array
+    {
+        // Preserve an already loaded snapshot and the default reader contract.
+        // The partial projection must never populate the complete-report cache.
+        if ($this->activeReportsCache === null && $this->reportsTableAvailable()) {
+            try {
+                $moduleId = $this->databaseModuleId();
+                if ($moduleId !== null) {
+                    return DB::transaction(fn (): array => $this->reportRepo()->actionScopeCandidates(
+                        $moduleId, $ids, fn (string $id): string => $this->assignedUserName($id)
+                    ));
+                }
+            } catch (\Throwable) {
+                // Older schemas/unsupported query forms keep the full reader.
+            }
+        }
+
+        return $this->activeReports();
+    }
+
     /**
      * @return array<int,array<string,mixed>>
      */
-    public function users(): array
+    public function users(bool $withCredentials = true): array
     {
-        return $this->userRepo()->projectUsers();
+        return $this->userRepo()->projectUsers($withCredentials);
     }
 
     /**
@@ -625,7 +713,11 @@ final class RedmineDataRepository
         }
 
         unset($roles[$role]);
-        $this->saveRolesToDatabase($roles);
+        try {
+            $this->saveRolesToDatabase($roles);
+        } catch (\Throwable) {
+            return ['ok' => false, 'error' => 'No fue posible eliminar el rol. Intenta nuevamente.'];
+        }
 
         return ['ok' => true, 'error' => ''];
     }
@@ -787,7 +879,18 @@ final class RedmineDataRepository
      */
     public function hoursExtraData(array $filters = [], array $user = []): array
     {
-        $groups = $this->deduplicateHoursGroups($this->hoursExtra());
+        if (! $this->reportsTableAvailable()) {
+            return $this->buildHoursExtraData($filters, $user);
+        }
+
+        return DB::transaction(fn (): array => $this->buildHoursExtraData($filters, $user));
+    }
+
+    private function buildHoursExtraData(array $filters, array $user): array
+    {
+        // Reconcile every jornada before applying scope: other users' groups
+        // can determine the day's hours. Details are only needed after filtering.
+        $groups = $this->deduplicateHoursGroups($this->hoursExtraFromDatabase(true));
         $userId = (string) ($user['id'] ?? '');
         if ($userId !== '') {
             $groups = array_values(array_filter(array_map(static function (array $group) use ($userId): ?array {
@@ -828,6 +931,21 @@ final class RedmineDataRepository
         usort($visible, function (array $a, array $b): int {
             return ((string) (DateSupport::normalizeDateKey((string) ($b['fecha'] ?? '')))) <=> ((string) (DateSupport::normalizeDateKey((string) ($a['fecha'] ?? ''))));
         });
+
+        $ids = [];
+        foreach ($visible as $group) {
+            foreach ($group['reports'] as $report) {
+                $ids[(int) $report['id']] = (int) $report['id'];
+            }
+        }
+        $details = array_column($this->archivedReportsFromDatabase(array_values($ids)), null, 'id');
+        foreach ($visible as &$group) {
+            $group['reports'] = array_values(array_filter(array_map(
+                static fn (array $report): ?array => $details[$report['id']] ?? null,
+                $group['reports']
+            )));
+        }
+        unset($group);
 
         $totalMinutes = array_reduce($visible, fn (int $carry, array $group): int => $carry + (DateSupport::minutesDiff((string) ($group['hora_inicio'] ?? ''), (string) ($group['hora_fin'] ?? '')) ?? 0), 0);
         $emachSuggestions = $this->emachOvertimeSuggestionsForGroups($visible, $user);
@@ -1119,6 +1237,39 @@ final class RedmineDataRepository
         return $rows;
     }
 
+    public function historyPage(array $filters = [], array $user = []): ?array
+    {
+        if (DB::connection()->getDriverName() !== 'mysql' || ! $this->reportsTableAvailable()
+            || ! Schema::hasTable('catalogos_modulo')) {
+            return null;
+        }
+        $moduleId = $this->databaseModuleId();
+        if ($moduleId === null) {
+            return null;
+        }
+
+        try {
+            return (new RedmineHistoryRepository)->page(
+                $moduleId, $filters,
+                fn (string $id): string => $this->assignedUserName($id),
+                fn (array $rows): array => $this->filterReportsByUserScope($rows, $user, 'historico_scope'),
+                fn (object $row): array => $this->databaseReportToArray($row),
+                $this->hoursExtraTableAvailable() && $this->hoursExtraPivotTableAvailable(),
+            );
+        } catch (\Throwable) {
+            // The caller already uses history() when the SQL page is unavailable.
+            return null;
+        }
+    }
+
+    private function historySectionData(array $filters, array $user): array
+    {
+        $page = $this->historyPage($filters, $user);
+
+        return ['rows' => $page === null ? $this->history($user) : [],
+            'historyPage' => $page, 'config' => $this->configuration()];
+    }
+
     public function redmineIssueUrl(string $redmineId): string
     {
         return RedmineUrlSupport::redmineIssueUrl(
@@ -1165,20 +1316,18 @@ final class RedmineDataRepository
      */
     public function issueStatuses(array $redmineIds, ?string $userId = null): array
     {
-        $token = $this->userApiToken($userId);
-        $statuses = [];
+        return $this->synchronizeVisibleIssueStatuses($redmineIds, $userId)['statuses'];
+    }
 
-        foreach ($redmineIds as $redmineId) {
-            $id = trim((string) $redmineId);
-            if (! preg_match('/^\d+$/', $id)) {
-                continue;
-            }
-
-            $issueUrl = $this->redmineIssueUrl($id);
-            $statuses[$id] = $this->issueStatus()->fetch($issueUrl, $token);
-        }
-
-        return $statuses;
+    public function synchronizeVisibleIssueStatuses(array $ids, ?string $userId = null): array
+    {
+        $url = RedmineUrlSupport::redmineIssuesUrl((string) ($this->configuration()['platform_url'] ?? ''));
+        return app(\App\Services\Redmine\HistorySyncService::class)->statuses($url, $this->userApiToken($userId), $ids,
+            static function (array $status): array {
+                $closed = array_key_exists('is_closed', $status) ? filter_var($status['is_closed'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) : null;
+                return ['id' => (int) ($status['id'] ?? 0), 'name' => trim((string) $status['name']),
+                    'closed' => $closed ?? \RedmineTic\Support\TextSupport::isClosedIssueStatus($status['name'])];
+            });
     }
 
     /**
@@ -1209,40 +1358,18 @@ final class RedmineDataRepository
         $config = $this->configuration();
         $token = $this->userApiToken($userId);
         $projectId = trim((string) ($config['project_id'] ?? ''));
-        $issuesUrl = RedmineUrlSupport::redmineIssuesUrl((string) ($config['platform_url'] ?? ''));
-        if ($token === '' || $projectId === '' || $issuesUrl === '') {
-            return ['requested' => 0, 'updated' => 0, 'error' => 'Falta API Key personal, proyecto o URL de Redmine.'];
-        }
-
-        $issues = $this->fetchRedmineIssues($issuesUrl, $token, [
-            'project_id' => $projectId,
-            'status_id' => '*',
-        ]);
-        if (isset($issues['error'])) {
-            return ['requested' => 0, 'updated' => 0, 'error' => (string) $issues['error']];
-        }
-
-        $statusNames = [];
-        foreach ((array) ($issues['rows'] ?? []) as $issue) {
-            $redmineId = trim((string) ($issue['id'] ?? ''));
-            $statusName = trim((string) data_get($issue, 'status.name', ''));
-            if (preg_match('/^[1-9]\d*$/', $redmineId) && $statusName !== '') {
-                $statusNames[$redmineId] = $statusName;
-            }
-        }
-
-        $updated = $this->reportRepo()->syncRedmineStatuses($statusNames);
-        if ($updated > 0) {
-            $this->activeReportsCache = null;
-            $this->archivedReportsCache = null;
-        }
+        $url = RedmineUrlSupport::redmineIssuesUrl((string) ($config['platform_url'] ?? ''));
+        $cursorKey = 'redmine.history.cursor.'.hash('sha256', $this->projectKey().'|'.$url.'|'.$projectId.'|'.$userId);
+        $offset = (int) session()->get($cursorKey, 0);
+        $result = app(\App\Services\Redmine\HistorySyncService::class)->allStatuses($url, $token, $projectId, $offset);
+        $updated = $this->reportRepo()->syncRedmineStatuses($result['statuses']);
+        session()->put($cursorKey, $result['next_offset']);
+        if ($updated > 0) { $this->activeReportsCache = null; $this->archivedReportsCache = null; }
+        $requested = count($result['statuses']);
         $this->appendActivityLog('historico_estados_redmine_sincronizados', [
-            'user_id' => $userId ?? '',
-            'requested' => count($statusNames),
-            'updated' => $updated,
+            'user_id' => $userId ?? '', 'requested' => $requested, 'updated' => $updated, 'complete' => $result['complete'],
         ]);
-
-        return ['requested' => count($statusNames), 'updated' => $updated, 'error' => ''];
+        return ['requested' => $requested, 'updated' => $updated, 'error' => $result['error'], 'complete' => $result['complete']];
     }
 
     /**
@@ -1422,7 +1549,11 @@ final class RedmineDataRepository
                 continue;
             }
 
-            $logs[$messageId][] = $this->formatErrorLogEntry($entry, $context);
+            // The display already keeps only the first eight entries. Avoid
+            // formatting payloads that will be discarded immediately.
+            if (count($logs[$messageId] ?? []) < 8) {
+                $logs[$messageId][] = $this->formatErrorLogEntry($entry, $context);
+            }
         }
 
         return array_map(
@@ -1449,7 +1580,18 @@ final class RedmineDataRepository
      */
     public function statistics(array $filters = []): array
     {
-        $reports = array_merge($this->activeReports(), $this->archivedReports());
+        $reports = null;
+        // Keep the established per-instance snapshot if another consumer has
+        // already read reports. Otherwise avoid fetching unused large text.
+        if ($this->activeReportsCache === null && $this->archivedReportsCache === null
+            && $this->reportsTableAvailable() && ($moduleId = $this->databaseModuleId()) !== null) {
+            try {
+                $reports = $this->reportRepo()->statisticsRows($moduleId, fn (string $id): string => $this->assignedUserName($id));
+            } catch (\Throwable) {
+                // Older schemas and read failures retain the existing reader.
+            }
+        }
+        $reports ??= array_merge($this->activeReports(), $this->archivedReports());
         [$from, $to] = DateSupport::statisticsDateRange($filters);
         $reports = DateSupport::filterReportsByDateRange($reports, $from, $to);
 
@@ -1613,15 +1755,15 @@ final class RedmineDataRepository
     public function nativeSectionData(string $section, string $dashboardFilter = 'todos', array $filters = [], array $user = []): array
     {
         return match ($section) {
-            'dashboard' => array_merge($this->dashboardData($dashboardFilter, $user), ['users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units()]),
-            'webhook' => ['config' => $this->configuration(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units()],
-            'reporte-rapido' => ['config' => $this->configuration(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units()],
+            'dashboard' => array_merge($this->dashboardData($dashboardFilter, $user, false), ['users' => $this->users(false), 'categories' => $this->categories(), 'units' => $this->units()]),
+            'webhook' => ['config' => $this->configuration(), 'users' => $this->users(false), 'categories' => $this->categories(), 'units' => $this->units()],
+            'reporte-rapido' => ['config' => $this->configuration(), 'users' => $this->users(false), 'categories' => $this->categories(), 'units' => $this->units()],
             'horas-extra' => $this->hoursExtraData($filters, $user),
-            'historico' => ['rows' => $this->history($user), 'config' => $this->configuration()],
-            'usuarios' => ['users' => $this->users(), 'roles' => $this->roles()],
-            'configuracion' => ['config' => $this->configuration(), 'roles' => $this->roles(), 'baseRoles' => $this->baseRoles(), 'users' => $this->users(), 'categories' => $this->categories(), 'units' => $this->units(), 'webhookUrl' => $this->webhookUrl()],
+            'historico' => $this->historySectionData($filters, $user),
+            'usuarios' => ['users' => $this->users(false), 'roles' => $this->roles()],
+            'configuracion' => ['config' => $this->configuration(), 'roles' => $this->roles(), 'baseRoles' => $this->baseRoles(), 'users' => $this->users(false), 'categories' => $this->categories(), 'units' => $this->units(), 'webhookUrl' => $this->webhookUrl()],
             'estadisticas' => ['stats' => $this->statistics($filters)],
-            'actividad' => ['users' => $this->users()],
+            'actividad' => ['users' => $this->users(false)],
             default => [],
         };
     }
@@ -1674,10 +1816,6 @@ final class RedmineDataRepository
     public function deleteReport(string $id): int
     {
         $deleted = $this->deleteActiveReportFromDatabase($id);
-        if ($deleted > 0) {
-            $this->removeHoursExtraRecord($id);
-        }
-
         return $deleted;
     }
 
@@ -1699,9 +1837,6 @@ final class RedmineDataRepository
         $deleted = $this->reportRepo()->deleteActiveByIds($moduleId, $ids);
         if ($deleted > 0) {
             $this->activeReportsCache = null;
-            foreach ($ids as $id) {
-                $this->removeHoursExtraRecord($id);
-            }
         }
 
         return $deleted;
@@ -1725,8 +1860,7 @@ final class RedmineDataRepository
         $targets = $this->reportRepo()->findActiveByIds($moduleId, $ids, fn (string $assigneeId): string => $this->assignedUserName($assigneeId));
         $archived = 0;
         foreach ($targets as $report) {
-            $this->archiveReport($report);
-            $archived++;
+            if ($this->archiveReport($report)) $archived++;
         }
 
         if ($archived > 0) {
@@ -1748,7 +1882,7 @@ final class RedmineDataRepository
         $limit = now('America/Santiago')->subHours($retentionHours)->getTimestamp();
         $moduleId = $this->databaseModuleId();
         $candidates = $moduleId !== null
-            ? $this->reportRepo()->findActiveByStates($moduleId, ['procesado', 'procesada'], fn (string $assigneeId): string => $this->assignedUserName($assigneeId))
+            ? $this->reportRepo()->findActiveByStates($moduleId, ['procesado', 'procesada'], fn (string $assigneeId): string => $this->assignedUserName($assigneeId), $limit)
             : [];
         $archived = 0;
 
@@ -1759,8 +1893,7 @@ final class RedmineDataRepository
             }
 
             $report['_retencion_horas'] = $retentionHours;
-            $this->archiveReport($report);
-            $archived++;
+            if ($this->archiveReport($report)) $archived++;
         }
 
         if ($archived > 0) {
@@ -1772,23 +1905,15 @@ final class RedmineDataRepository
 
     public function toggleHoursExtra(string $id, bool $enabled): bool
     {
-        $report = $this->activeReportFromDatabaseById($id);
-        if ($report === null) {
-            return false;
-        }
-
-        $report['hora_extra'] = $enabled ? 'SI' : 'NO';
-        $report['tiempo_estimado'] = $enabled ? '1' : '';
-
-        if (! $this->updateActiveReportHoursExtraInDatabase($id, $enabled)) {
-            return false;
-        }
-
-        if (! $enabled) {
-            $this->removeHoursExtraRecord($id);
-        }
-
-        return true;
+        try {
+            return app(\App\Modulos\Nova\Repositories\HorasExtraRepository::class)->atomic(function () use ($id, $enabled): bool {
+                $moduleId = $this->databaseModuleId();
+                if (!$moduleId || !DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)->where('id', $id)->lockForUpdate()->first()) return false;
+                if (!$this->updateActiveReportHoursExtraInDatabase($id, $enabled)) return false;
+                if (!$enabled) $this->removeHoursExtraRecord($id);
+                return true;
+            });
+        } catch (\Throwable) { return false; }
     }
 
     /**
@@ -1849,6 +1974,7 @@ final class RedmineDataRepository
      */
     public function sendReportsToRedmine(array $ids, ?string $userId = null): array
     {
+        $requestStarted = microtime(true);
         $ids = array_values(array_filter(array_map('strval', $ids)));
         $config = $this->configuration();
         $token = $this->userApiToken($userId);
@@ -1932,8 +2058,40 @@ final class RedmineDataRepository
                 }
             }
 
-            $result = $this->issueSender()->send($report, $config, $token, fn (string $category): int => $this->redmineCategoryId($category));
+            $attemptRepo = app(\App\Repositories\Redmine\SendAttemptRepository::class);
+            $reservation = $attemptRepo->reserve($moduleId, 'tic:'.$report['id'], $requestStarted, function () use ($moduleId, $report): bool {
+                $row = DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)->where('id', $report['id'])->lockForUpdate()->first();
+                return $row && $row->estado !== 'archivado' && (string) $row->estado === (string) $report['estado']
+                    && (string) ($row->redmine_id ?? '') === (string) ($report['redmine_id'] ?? '');
+            });
+            if (!$reservation['ok']) { $attempts--; $errors[] = $reservation['error']; continue; }
+            $attemptId = $reservation['attempt_id'];
+            try {
+                $result = $this->issueSender()->send($report, $config, $token, fn (string $category): int => $this->redmineCategoryId($category));
+            } catch (\Throwable) {
+                $errors[] = 'Resultado de envío incierto. Revisa el intento '.$attemptId.' antes de reenviar.';
+                break;
+            }
+            if (!$attemptRepo->recordResponse($attemptId, $result)) {
+                $errors[] = 'No se pudo registrar la respuesta de Redmine. El intento '.$attemptId.' quedó reservado para conciliación.';
+                break;
+            }
             $payload = $result['payload'];
+
+
+            $receipt = json_decode($result['body'], true);
+            if ($result['http_code'] === 201 && (int) ($receipt['issue']['id'] ?? 0) > 0 && empty($result['error'])) {
+                $decoded = json_decode($result['body'], true);
+                $report['estado'] = 'procesado';
+                $report['redmine_id'] = $decoded['issue']['id'] ?? $report['redmine_id'] ?? '';
+                $report['estado_redmine'] = trim((string) data_get($decoded, 'issue.status.name', ''));
+                $report['procesado_ts'] = now('America/Santiago')->toAtomString();
+                $success++;
+                $redmineIds[] = (string) $report['redmine_id'];
+                if (!$this->persistSentReport($moduleId, $report)) {
+                    $errors[] = 'Redmine aceptó el ticket '.$report['redmine_id'].', pero falló el guardado local. Concilia el intento '.$attemptId.' antes de reenviar.';
+                    break;
+                }
             $this->appendSendLog([
                 'ts' => now('America/Santiago')->toAtomString(),
                 'message_id' => $report['id'] ?? '',
@@ -1942,12 +2100,6 @@ final class RedmineDataRepository
                 'body' => $result['body'],
                 'payload' => $payload,
             ]);
-
-            if ($result['http_code'] === 201) {
-                $decoded = json_decode($result['body'], true);
-                $report['estado'] = 'procesado';
-                $report['redmine_id'] = $decoded['issue']['id'] ?? $report['redmine_id'] ?? '';
-                $report['estado_redmine'] = trim((string) data_get($decoded, 'issue.status.name', ''));
                 if ($report['estado_redmine'] === '' && ! empty($report['redmine_id'])) {
                     $remoteStatus = $this->issueStatus()->fetch(
                         $this->redmineIssueUrl((string) $report['redmine_id']),
@@ -1958,10 +2110,7 @@ final class RedmineDataRepository
                     }
                 }
                 $report['procesado_ts'] = now('America/Santiago')->toAtomString();
-                $success++;
-                if (! empty($report['redmine_id'])) {
-                    $redmineIds[] = (string) $report['redmine_id'];
-                }
+
                 $this->appendActivityLog('envio_redmine_ok', [
                     'message_id' => $report['id'] ?? '',
                     'user_id' => $userId ?? '',
@@ -1972,8 +2121,11 @@ final class RedmineDataRepository
                     'unidad' => $report['unidad'] ?? '',
                     'unidad_solicitante' => $report['unidad_solicitante'] ?? '',
                 ]);
-                $this->persistSentReport($moduleId, $report);
+                if ($report['estado_redmine'] !== '') {
+                    $this->reportRepo()->syncRedmineStatuses([(string) $report['redmine_id'] => $report['estado_redmine']]);
+                }
 
+                $attemptRepo->finish($attemptId);
                 continue;
             }
 
@@ -1981,6 +2133,20 @@ final class RedmineDataRepository
             $report['procesado_ts'] = now('America/Santiago')->toAtomString();
             $failureMessage = $this->issueSender()->failureMessage($result);
             $errors[] = 'No se pudo enviar '.($report['id'] ?? 'sin-id').': '.$failureMessage;
+            if (!$this->persistSentReport($moduleId, $report)) {
+                $errors[] = 'Falló el guardado local; se detuvo el lote. Revisa el intento '.$attemptId.'.';
+                break;
+            }
+            $attemptRepo->finish($attemptId);
+                if ($attemptRepo->needsReconciliation($attemptId)) { $errors[] = 'El intento '.$attemptId.' tiene resultado incierto y requiere conciliación antes de reenviar.'; }
+            $this->appendSendLog([
+                'ts' => now('America/Santiago')->toAtomString(),
+                'message_id' => $report['id'] ?? '',
+                'http_code' => $result['http_code'],
+                'error' => $result['error'],
+                'body' => $result['body'],
+                'payload' => $payload,
+            ]);
             $this->appendActivityLog('envio_redmine_error', [
                 'message_id' => $report['id'] ?? '',
                 'user_id' => $userId ?? '',
@@ -1990,8 +2156,7 @@ final class RedmineDataRepository
                 'categoria' => $report['categoria'] ?? '',
                 'unidad' => $report['unidad'] ?? '',
             ]);
-            $this->persistSentReport($moduleId, $report);
-            if ($this->issueSender()->shouldStopBatch($result)) {
+            if ($this->issueSender()->shouldStopBatch($result) || $attemptRepo->needsReconciliation($attemptId)) {
                 array_unshift($errors, 'Se detuvo el lote porque Redmine no pudo continuar. Los reportes restantes no se enviaron. Revisa en Redmine si el último reporte creó un ticket antes de reintentarlo para evitar duplicados.');
                 break;
             }
@@ -2023,16 +2188,23 @@ final class RedmineDataRepository
      *
      * @param  array<string,mixed>  $report
      */
-    private function persistSentReport(?int $moduleId, array $report): void
+    private function persistSentReport(?int $moduleId, array $report): bool
     {
         if ($moduleId === null) {
-            return;
+            return false;
         }
 
         $values = Arr::only($this->databaseReportPayload($moduleId, $report, false), ['estado', 'redmine_id', 'estado_redmine', 'procesado_at']);
         $values['actualizado_at'] = now();
 
-        $this->reportRepo()->updateActiveFields($moduleId, (string) ($report['id'] ?? ''), $values);
+        try {
+            return DB::transaction(function () use ($moduleId, $report, $values): bool {
+                $query = DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)->where('id', $report['id'])->where('estado', '<>', 'archivado');
+                if (!(clone $query)->lockForUpdate()->first()) return false;
+                $query->update($values);
+                return true;
+            });
+        } catch (\Throwable) { return false; }
     }
 
     public function createSimulatedReport(array $payload): array
@@ -2217,7 +2389,7 @@ final class RedmineDataRepository
     /**
      * @return array<int,array<string,mixed>>
      */
-    private function hoursExtraFromDatabase(): array
+    private function hoursExtraFromDatabase(bool $metadataOnly = false): array
     {
         if (! $this->hoursExtraTableAvailable() || ! $this->reportsTableAvailable() || ! $this->hoursExtraPivotTableAvailable()) {
             return [];
@@ -2228,7 +2400,10 @@ final class RedmineDataRepository
             return [];
         }
 
-        $reports = collect($this->archivedReportsFromDatabase())
+        // Preserve the shared reader's integer IDs and pivot order, including
+        // its legacy BIGINT conversion. Unlinked archives never enter a group.
+        $reportIds = array_values(array_unique(array_merge(...array_column($grupos, 'reporte_ids'))));
+        $reports = collect($this->archivedReportsFromDatabase($reportIds, $metadataOnly))
             ->keyBy(static fn (array $report): string => (string) ($report['id'] ?? ''));
 
         return array_map(function (array $grupo) use ($reports): array {
@@ -2397,9 +2572,9 @@ final class RedmineDataRepository
     /**
      * @return array<int,array<string,mixed>>
      */
-    private function activeReportsFromDatabase(): array
+    private function activeReportsFromDatabase(?array $reportIds = null, bool $withoutDetailText = false): array
     {
-        if (! $this->reportsTableAvailable()) {
+        if ($reportIds === [] || ! $this->reportsTableAvailable()) {
             return [];
         }
 
@@ -2409,13 +2584,31 @@ final class RedmineDataRepository
         }
 
         try {
+            $columns = ['*'];
+            if ($withoutDetailText) {
+                try {
+                    $availableColumns = Schema::getColumnListing('redmine_tic_reportes');
+                    if ($availableColumns !== []) {
+                        $columns = array_values(array_diff($availableColumns, ['mensaje', 'descripcion']));
+                    }
+                } catch (\Throwable) {
+                    // Preserve the full reader on schemas without column metadata.
+                }
+            }
             return DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
                 ->where(function ($query): void {
                     $query->whereNull('estado')->orWhere('estado', '<>', 'archivado');
                 })
+                ->when($reportIds !== null, function ($query) use ($reportIds): void {
+                    // Quoted strings preserve unsigned BIGINT IDs and do not
+                    // exhaust prepared-statement bindings in large dashboards.
+                    $pdo = DB::connection()->getPdo();
+                    $ids = array_map(fn ($id): string => $pdo->quote((string) $id), $reportIds);
+                    $query->whereRaw('id IN ('.implode(',', $ids).')');
+                })
                 ->orderBy('creado_at')
-                ->get()
+                ->get($columns)
                 ->map(fn ($row): array => $this->databaseReportToArray($row))
                 ->values()
                 ->all();
@@ -2443,7 +2636,7 @@ final class RedmineDataRepository
 
         if ($this->assignedUserNames === null) {
             $this->assignedUserNames = [];
-            foreach ($this->users() as $user) {
+            foreach ($this->users(false) as $user) {
                 $name = trim((string) (($user['nombre'] ?? $user['name'] ?? '').' '.($user['apellido'] ?? '')));
                 if ($name === '') {
                     $name = trim((string) ($user['username'] ?? $user['usuario'] ?? ''));
@@ -2526,9 +2719,10 @@ final class RedmineDataRepository
     }
 
     /**
+     * @param  array<int,int>|null  $reportIds Null keeps the complete archive reader.
      * @return array<int,array<string,mixed>>
      */
-    private function archivedReportsFromDatabase(): array
+    private function archivedReportsFromDatabase(?array $reportIds = null, bool $metadataOnly = false): array
     {
         if (! $this->reportsTableAvailable()) {
             return [];
@@ -2539,13 +2733,22 @@ final class RedmineDataRepository
             return [];
         }
 
+        if ($reportIds === []) {
+            return [];
+        }
+
         try {
             return DB::table('redmine_tic_reportes')
                 ->where('modulo_id', $moduleId)
                 ->where('estado', 'archivado')
+                ->when($reportIds !== null, fn ($query) => $query->whereIntegerInRaw('id', $reportIds))
                 ->orderByDesc('actualizado_at')
-                ->get()
-                ->map(fn ($row): array => $this->databaseReportToArray($row))
+                ->get($metadataOnly ? ['id', 'asignado_a', 'fecha_inicio'] : ['*'])
+                ->map(fn ($row): array => $metadataOnly ? [
+                    'id' => (string) $row->id,
+                    'asignado_a' => (string) ($row->asignado_a ?? ''),
+                    'fecha_inicio' => DateSupport::databaseDate($row->fecha_inicio ?? null),
+                ] : $this->databaseReportToArray($row))
                 ->values()
                 ->all();
         } catch (\Throwable) {
@@ -2608,15 +2811,23 @@ final class RedmineDataRepository
         return $this->hoursExtraRepo()->pivotTableAvailable();
     }
 
-    private function archiveReport(array $report): void
+    private function archiveReport(array $report): bool
     {
-        $this->archivedReportsCache = null;
-        $report['estado'] = 'archivado';
-        $report = $this->saveArchivedReportToDatabase($report);
-
-        if ($this->reportRepo()->isHoursExtraReport($report)) {
-            $this->syncHoursExtraForReport($report);
-        }
+        try {
+            $moduleId = $this->databaseModuleId();
+            if ($moduleId === null) return false;
+            $saved = app(\App\Modulos\Nova\Repositories\HorasExtraRepository::class)->atomic(function () use ($moduleId, $report): bool {
+                if (!DB::table('redmine_tic_reportes')->where('modulo_id', $moduleId)->where('id', $report['id'])->lockForUpdate()->first()) return false;
+                $report['estado'] = 'archivado';
+                $report = $this->saveArchivedReportToDatabase($report);
+                if ($this->reportRepo()->isHoursExtraReport($report) && !$this->hoursExtraRepo()->syncForReport($report)) {
+                    throw new \RuntimeException('No se pudieron guardar los vínculos de horas extra.');
+                }
+                return true;
+            });
+            if ($saved) $this->archivedReportsCache = null;
+            return $saved;
+        } catch (\Throwable) { return false; }
     }
 
     private function redmineCategoryId(string $category): int

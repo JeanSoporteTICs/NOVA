@@ -233,11 +233,12 @@ class MantencionRedmineSyncService
         return trim($text);
     }
 
-    public function load_redmine_logs_by_message(): array {
+    public function load_redmine_logs_by_message(?array $messageIds = null): array {
         $grouped = [];
-        foreach ($this->parse_redmine_log_entries() as $entry) {
+        $wanted = $messageIds === null ? null : array_fill_keys(array_map('strval', $messageIds), true);
+        foreach ($this->parse_redmine_log_entries($messageIds) as $entry) {
             $mid = trim((string)($entry['message_id'] ?? ''));
-            if ($mid === '') {
+            if ($mid === '' || ($wanted !== null && !isset($wanted[$mid]))) {
                 continue;
             }
             $decoded = is_array($entry['decoded'] ?? null) ? $entry['decoded'] : [];
@@ -246,12 +247,24 @@ class MantencionRedmineSyncService
         return $grouped;
     }
 
-    public function parse_redmine_log_entries(): array {
+    public function parse_redmine_log_entries(?array $messageIds = null): array {
         $entries = [];
-        try { foreach (\Illuminate\Support\Facades\DB::table('mantencion_log')->where('canal','redmine')->orderBy('id')->get() as $row) {
-            $decoded = json_decode((string)($row->contexto ?? '{}'), true); if (!is_array($decoded)) $decoded = [];
-            $entries[] = ['message_id'=>(string)($row->mensaje_id ?? ''),'raw'=>json_encode($decoded, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE),'decoded'=>$decoded];
-        }} catch (\Throwable) {}
+        $ids = $messageIds === null ? null : array_values(array_unique(array_map('strval', $messageIds)));
+        if ($ids === []) return [];
+        $chunks = $ids === null ? [null] : array_chunk($ids, 500);
+        try {
+            foreach ($chunks as $chunk) {
+                $query = \Illuminate\Support\Facades\DB::table('mantencion_log')->where('canal', 'redmine')->orderBy('id');
+                if ($chunk !== null) $query->whereIn('mensaje_id', $chunk);
+                foreach ($query->get(['mensaje_id', 'contexto']) as $row) {
+                    $decoded = json_decode((string)($row->contexto ?? '{}'), true); if (!is_array($decoded)) $decoded = [];
+                    $entries[] = ['message_id'=>(string)($row->mensaje_id ?? ''),'raw'=>json_encode($decoded, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE),'decoded'=>$decoded];
+                }
+            }
+        } catch (\Throwable) {
+            // Preserve the original reader if a filtered query is unavailable.
+            return $messageIds === null ? [] : $this->parse_redmine_log_entries();
+        }
         return $entries;
     }
 
@@ -353,6 +366,7 @@ class MantencionRedmineSyncService
     }
 
     public function send_selected_messages(array &$messages, array $ids, array $cfg, string $userToken): array {
+        $requestStarted = microtime(true);
         $attempts = 0;
         $success = 0;
         $created = [];
@@ -382,16 +396,33 @@ class MantencionRedmineSyncService
             if (!in_array(($message['id'] ?? ''), $ids, true)) {
                 continue;
             }
+            $originalMessage = $message;
             $blockReason = $this->dashboard_redmine_send_block_reason($message);
             if ($blockReason !== null) {
                 $message['estado'] = 'pendiente';
                 $blocked++;
                 $blockedIds[] = (string)($message['id'] ?? 'sin-id');
+                if (!$this->persist_message_changes($message, $originalMessage)) {
+                    $errors[] = 'No fue posible conservar el estado pendiente del reporte ' . ($message['id'] ?? '') . '.';
+                }
                 continue;
             }
-            $attempts++;
             $issue = $this->build_redmine_issue_payload($message, $cfg, $catMap, $unitMap);
-            $result = $this->send_redmine_issue($issue, $cfg, $userToken);
+            $reservation = $this->reserve_send($message, $requestStarted);
+            if (!$reservation['ok']) { $errors[] = $reservation['error']; continue; }
+            $attemptId = $reservation['attempt_id'];
+            $attemptRepo = app(\App\Repositories\Redmine\SendAttemptRepository::class);
+            $attempts++;
+            try {
+                $result = $this->send_redmine_issue($issue, $cfg, $userToken);
+            } catch (\Throwable) {
+                $errors[] = 'Resultado de envío incierto. Revisa el intento '.$attemptId.' antes de reenviar.';
+                break;
+            }
+            if (!$attemptRepo->recordResponse($attemptId, $result)) {
+                $errors[] = 'No se pudo registrar la respuesta de Redmine. El intento '.$attemptId.' quedó reservado para conciliación.';
+                break;
+            }
             $entry = [
                 'ts' => (new \DateTimeImmutable())->format(\DateTime::ATOM),
                 'http_code' => $result['http_code'],
@@ -400,8 +431,8 @@ class MantencionRedmineSyncService
                 'payload' => ['issue' => $issue],
                 'message_id' => $message['id'] ?? '',
             ];
-            $this->append_redmine_log($entry);
-            if ($result['http_code'] === 201) {
+            $decodedReceipt = json_decode($result['body'] ?? '', true);
+            if ($result['http_code'] === 201 && (int) ($decodedReceipt['issue']['id'] ?? 0) > 0 && empty($result['error'])) {
                 $success++;
                 $decoded = json_decode($result['body'] ?? '', true);
                 $message['estado'] = 'procesado';
@@ -410,6 +441,12 @@ class MantencionRedmineSyncService
                 if ($message['redmine_id']) {
                     $created[] = (string)$message['redmine_id'];
                 }
+                if (!$this->persist_message_changes($message, $originalMessage)) {
+                    $errors[] = 'Redmine aceptó el reporte ' . ($message['id'] ?? '') . ' (ticket ' . ($message['redmine_id'] ?? '') . '), pero no se pudo guardar su estado local. Concilia el intento ' . $attemptId . ' antes de reintentar.';
+                    $this->append_redmine_log($entry);
+                    break;
+                }
+                $attemptRepo->finish($attemptId);
                 log_security_event(
                     'REDMINE_SEND',
                     sprintf(
@@ -423,6 +460,13 @@ class MantencionRedmineSyncService
                 $message['estado'] = 'error';
                 $message['procesado_ts'] = (new \DateTimeImmutable())->format(\DateTime::ATOM);
                 $errors[] = sprintf('No se pudo enviar %s: %s', $message['id'] ?? 'sin-id', $result['error'] ?: $result['body']);
+                if (!$this->persist_message_changes($message, $originalMessage)) {
+                    $errors[] = 'No se pudo guardar el estado local del último reporte. Se detuvo el lote; recarga antes de continuar.';
+                    $this->append_redmine_log($entry);
+                    break;
+                }
+                $attemptRepo->finish($attemptId);
+                if ($attemptRepo->needsReconciliation($attemptId)) { $errors[] = 'El intento '.$attemptId.' tiene resultado incierto y requiere conciliación antes de reenviar.'; }
                 log_security_event(
                     'REDMINE_SEND_FAIL',
                     sprintf(
@@ -434,8 +478,9 @@ class MantencionRedmineSyncService
                     )
                 );
             }
+            $this->append_redmine_log($entry);
             append_hours_extra_record($message);
-            if (!empty($result['error']) || $result['http_code'] === 0 || $result['http_code'] >= 500 || in_array($result['http_code'], [401, 403, 429], true)) {
+            if ($attemptRepo->needsReconciliation($attemptId) || !empty($result['error']) || $result['http_code'] === 0 || $result['http_code'] >= 500 || in_array($result['http_code'], [401, 403, 429], true)) {
                 $errors[] = 'Se detuvo el lote porque Redmine no pudo continuar. Los reportes restantes no se enviaron. Revisa en Redmine si el último reporte creó un ticket antes de reintentarlo para evitar duplicados.';
                 break;
             }
@@ -444,7 +489,6 @@ class MantencionRedmineSyncService
         if ($blocked > 0) {
             $errors[] = $blocked . ' reporte(s) permanecen pendientes por estar En Revisión en CORE: ' . implode(', ', $blockedIds) . '.';
         }
-        save_messages($messages);
         return [
             'success' => $success,
             'errors' => array_values(array_filter($errors)),
@@ -452,5 +496,15 @@ class MantencionRedmineSyncService
             'blocked' => $blocked,
             'redmine_ids' => $created,
         ];
+    }
+
+    protected function reserve_send(array $message, float $started): array
+    {
+        return app(\App\Modulos\RedmineMantencion\Repositories\MantencionReportRepository::class)->reserveSend($message, $started);
+    }
+
+    protected function persist_message_changes(array $message, array $original): bool
+    {
+        return save_messages([$message], [$original]);
     }
 }

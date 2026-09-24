@@ -115,9 +115,10 @@ if [[ -d "$source_dir/public/build" ]]; then
     cp -a "$source_dir/public/build" "$output_dir/public/build"
 fi
 
-# Allowlisted modules may contain historical runtime subtrees in old commits.
+# Allowlisted paths may contain recovery material or historical runtime subtrees.
 # Remove only explicit paths inside the newly-created, validated output directory.
 rm -rf -- \
+    "$output_dir/database/baselines" \
     "$output_dir/bootstrap/cache" \
     "$output_dir/RedmineMantencion/data" \
     "$output_dir/redmine-mantencion/data" \

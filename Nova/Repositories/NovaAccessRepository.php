@@ -18,10 +18,10 @@ final class NovaAccessRepository
     /**
      * @return array{users:array<int,array<string,mixed>>,modules:array<string,array<string,mixed>>,overrides:array<string,array<string,bool>>,matrix:array<int,array<string,mixed>>}
      */
-    public function matrix(): array
+    public function matrix(bool $forAdministration = false): array
     {
         $users     = array_values(array_filter(
-            $this->users->all(),
+            $forAdministration ? $this->users->allForAdministration() : $this->users->all(),
             static fn (array $user): bool => strtolower(trim((string) ($user['status'] ?? ''))) === 'activo'
         ));
         $modules   = $this->manageableModules();

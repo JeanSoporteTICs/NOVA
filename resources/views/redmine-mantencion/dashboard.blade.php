@@ -127,7 +127,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
       <div class="dashboard-stat__top">
         <span class="dashboard-stat__icon"><i class="bi bi-hourglass-split"></i></span>
         <div class="dashboard-stat__content">
-          <div class="dashboard-stat__value"><?= count($pendientes) ?></div>
+          <div class="dashboard-stat__value"><?= $statusCounts['pendiente'] ?></div>
           <div class="dashboard-stat__label">Pendientes por revisar</div>
         </div>
       </div>
@@ -136,7 +136,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
       <div class="dashboard-stat__top">
         <span class="dashboard-stat__icon"><i class="bi bi-check2-circle"></i></span>
         <div class="dashboard-stat__content">
-          <div class="dashboard-stat__value"><?= count($procesados) ?></div>
+          <div class="dashboard-stat__value"><?= $statusCounts['procesado'] ?></div>
           <div class="dashboard-stat__label">Procesados correctamente</div>
         </div>
       </div>
@@ -145,7 +145,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
       <div class="dashboard-stat__top">
         <span class="dashboard-stat__icon"><i class="bi bi-exclamation-octagon"></i></span>
         <div class="dashboard-stat__content">
-          <div class="dashboard-stat__value"><?= count($errores) ?></div>
+          <div class="dashboard-stat__value"><?= $statusCounts['error'] ?></div>
           <div class="dashboard-stat__label">Errores pendientes</div>
         </div>
       </div>
@@ -230,8 +230,6 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
               <th>Departamento</th>
 
-              <th>Estado local</th>
-
               <th class="nova-col-actions text-center">Acciones</th>
 
             </tr>
@@ -241,7 +239,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
           <tbody>
 
           <?php if (!$messages): ?>
-            <tr id="dashboard-empty-row"><td colspan="<?= $canSelectReports ? 9 : 8 ?>" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes disponibles.</td></tr>
+            <tr id="dashboard-empty-row"><td colspan="<?= $canSelectReports ? 8 : 7 ?>" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes disponibles.</td></tr>
           <?php endif; ?>
           <?php foreach ($messages as $m): ?>
 
@@ -304,27 +302,13 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
               <td><?= $h($displayDepartamento) ?></td>
 
-              <?php
-                $statusIconClass = $estado === 'pendiente' ? 'dashboard-status-icon--pending' : ($estado === 'procesado' ? 'dashboard-status-icon--processed' : 'dashboard-status-icon--error');
-                $statusIcon = $estado === 'pendiente' ? 'bi-hourglass-split' : ($estado === 'procesado' ? 'bi-check2' : 'bi-exclamation-lg');
-              ?>
-              <td>
-                <span class="dashboard-status-icon <?= $statusIconClass ?> action-tooltip" data-bs-placement="top" title="<?= $h(ucfirst($m['estado'] ?? '')) ?>">
-                  <i class="bi <?= $statusIcon ?>"></i>
-                </span>
-              </td>
-
               <td class="nova-col-actions">
                 <div class="dashboard-row-actions">
 
-                <?php
-                  $previewRows = dashboard_detail_preview_rows($m);
-                  $previewRowsJson = $h((string)json_encode(array_values($previewRows), JSON_UNESCAPED_UNICODE));
-                  $previewColumnsJson = $h((string)json_encode(dashboard_core_detail_table_schema($m), JSON_UNESCAPED_UNICODE));
-                ?>
                 <button type="button" class="btn-action btn-action-view action-tooltip" data-bs-toggle="modal" data-bs-target="#detalleModal" data-bs-placement="top" title="<?= $canEditReports ? 'Detalle / Editar' : 'Detalle' ?>" aria-label="<?= $canEditReports ? 'Detalle / Editar' : 'Detalle' ?>" <?= $canEditReports ? 'data-processed-action' : '' ?>
 
                   data-id="<?= $h($m['id'] ?? '') ?>"
+                  data-dashboard-id="<?= $h($m['_dashboard_id'] ?? '') ?>"
 
                   data-fuente="<?= $h($m['fuente'] ?? '') ?>"
 
@@ -360,7 +344,6 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
                   data-hora="<?= $h($m['hora'] ?? '') ?>"
 
                   data-numero="<?= $h($m['numero'] ?? '') ?>"
-                  data-descripcion="<?= $h($m['descripcion'] ?? '') ?>"
                   data-core_fecha_creacion="<?= $h($m['core_fecha_creacion'] ?? '') ?>"
                   data-core_tipo_solicitud="<?= $h($m['core_tipo_solicitud'] ?? '') ?>"
                   data-core_establecimiento="<?= $h($m['core_establecimiento'] ?? '') ?>"
@@ -370,8 +353,6 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
                   data-core_telefono="<?= $h($m['core_telefono'] ?? '') ?>"
                   data-core_celular="<?= $h($m['core_celular'] ?? '') ?>"
                   data-core_email="<?= $h($m['core_email'] ?? '') ?>"
-                  data-preview_rows="<?= $previewRowsJson ?>"
-                  data-preview_columns="<?= $previewColumnsJson ?>"
 
                 ><i class="bi <?= $canEditReports ? 'bi-pencil-square' : 'bi-eye' ?>"></i></button>
                 <?php
@@ -651,6 +632,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
         <div class="modal-body">
 
+          <div class="alert alert-info" role="status" data-dashboard-detail-status hidden></div>
           <input type="hidden" name="id" id="md-id">
 
           <input type="hidden" name="action" value="update">
@@ -1070,6 +1052,7 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
     }
   };
 
+  let dashboardDetailRequest = 0;
   if (detalleModal) {
   detalleModal.addEventListener('show.bs.modal', event => {
 
@@ -1152,7 +1135,8 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
 
   set('md-numero', 'data-numero');
 
-  set('md-descripcion', 'data-descripcion');
+  const descriptionInput = document.getElementById('md-descripcion');
+  if (descriptionInput) descriptionInput.value = '';
 
   set('md-core_email', 'data-core_email');
 
@@ -1163,19 +1147,8 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
 
   const previewHead = document.getElementById('md-preview-head');
   const previewBody = document.getElementById('md-preview-body');
+  let renderDetailPreview = () => {};
   if (previewBody && previewHead) {
-    let previewRows = [];
-    let previewColumns = [];
-    try {
-      previewRows = JSON.parse(btn.getAttribute('data-preview_rows') || '[]');
-    } catch (error) {
-      previewRows = [];
-    }
-    try {
-      previewColumns = JSON.parse(btn.getAttribute('data-preview_columns') || '[]');
-    } catch (error) {
-      previewColumns = [];
-    }
     const escapeHtml = value => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -1227,9 +1200,11 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
         { label: 'RUN', key: 'detalle_run' },
         { label: 'Nombre', key: 'detalle_nombre' },
         { label: 'Motivo', key: 'detalle_motivo' },
+        { label: 'Establecimientos', key: 'detalle_establecimientos' },
         { label: 'Otros permisos', key: 'detalle_otros_permisos' }
       ];
     };
+    renderDetailPreview = (previewRows, previewColumns) => {
     const forcedColumns = resolveDefaultColumns(btn);
     const forcedType = normalizeText(btn?.getAttribute('data-core_tipo_solicitud') || btn?.getAttribute('data-asunto') || '');
     const shouldForceColumns =
@@ -1259,7 +1234,48 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
         </tr>
       `).join('');
     }
+    };
+    renderDetailPreview([], []);
   }
+
+  const detailForm = detalleModal.querySelector('form');
+  const detailStatus = detalleModal.querySelector('[data-dashboard-detail-status]');
+  const saveButton = detailForm?.querySelector('[type="submit"]');
+  if (detailForm) detailForm.dataset.detailReady = '0';
+  if (saveButton) saveButton.disabled = true;
+  if (openPreviewModalBtn) openPreviewModalBtn.disabled = true;
+  const openDescriptionButton = document.getElementById('open-descripcion-modal-btn');
+  if (openDescriptionButton) openDescriptionButton.disabled = true;
+  if (detailStatus) {
+    detailStatus.hidden = false;
+    detailStatus.className = 'alert alert-info';
+    detailStatus.textContent = 'Cargando detalle del reporte…';
+  }
+  const requestId = ++dashboardDetailRequest;
+  const detailUrl = new URL(<?= json_encode(route('redmine.mantencion.dashboard.detail'), JSON_UNESCAPED_SLASHES) ?>, window.location.href);
+  detailUrl.searchParams.set('database_id', btn.getAttribute('data-dashboard-id') || '');
+  fetch(detailUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
+    .then(response => {
+      if (!response.ok) throw new Error('No se pudo cargar el detalle.');
+      return response.json();
+    })
+    .then(detail => {
+      if (requestId !== dashboardDetailRequest) return;
+      if (descriptionInput) descriptionInput.value = detail.descripcion || '';
+      renderDetailPreview(detail.preview_rows || [], detail.preview_columns || []);
+      if (detailForm) detailForm.dataset.detailReady = '1';
+      if (saveButton) saveButton.disabled = <?= $maintenanceMode ? 'true' : 'false' ?>;
+      if (openPreviewModalBtn) openPreviewModalBtn.disabled = false;
+      if (openDescriptionButton) openDescriptionButton.disabled = false;
+      if (detailStatus) detailStatus.hidden = true;
+    })
+    .catch(() => {
+      if (requestId !== dashboardDetailRequest) return;
+      if (detailStatus) {
+        detailStatus.className = 'alert alert-danger';
+        detailStatus.textContent = 'No se pudo cargar el detalle. Cierra el modal e inténtalo nuevamente.';
+      }
+    });
 
   const estadoInput = document.getElementById('md-estado');
   const estadoHelp = document.getElementById('estado-help');
@@ -1285,6 +1301,10 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
 
 });
   }
+
+  detalleModal?.querySelector('form')?.addEventListener('submit', event => {
+    if (event.currentTarget.dataset.detailReady !== '1') event.preventDefault();
+  }, true);
 
   if (openPreviewModalBtn) {
     openPreviewModalBtn.addEventListener('click', event => {
@@ -1676,9 +1696,15 @@ async function submitDashboardAction(form) {
 }
 
 async function submitDashboardBulkAction(form) {
+  if (form.dataset.archivePending === '1') return;
   const data = new FormData(form);
   data.set('ajax', '1');
   const ids = String(data.get('ids') || '').split(',').filter(Boolean);
+  const archiving = data.get('action') === 'archive_selected';
+  if (archiving && !window.NovaArchiveFeedback.start(
+    form, document.getElementById('archive-btn'), ids.length,
+    ['process-btn', 'delete-selected-btn', 'reset-errors-btn'].map(id => document.getElementById(id))
+  )) return;
   ids.forEach(id => document.querySelector(`tr[data-id="${escapeDashboardId(id)}"]`)?.classList.add('is-row-updating'));
   try {
     const response = await fetch(form.getAttribute('action') || window.location.href, {
@@ -1686,7 +1712,7 @@ async function submitDashboardBulkAction(form) {
       headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
       body: data
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await response.json().catch(() => { throw new Error('No se pudo confirmar la acción. Recarga la página para comprobar el resultado.'); });
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.message || 'No se pudo completar la acción.');
     }
@@ -1695,6 +1721,12 @@ async function submitDashboardBulkAction(form) {
   } catch (error) {
     ids.forEach(id => document.querySelector(`tr[data-id="${escapeDashboardId(id)}"]`)?.classList.remove('is-row-updating'));
     showDashboardToast(error.message || 'No se pudo completar la acción.', 'danger');
+  } finally {
+    if (archiving) {
+      window.NovaArchiveFeedback.finish(form);
+      ids.forEach(id => document.querySelector(`tr[data-id="${escapeDashboardId(id)}"]`)?.classList.remove('is-row-updating'));
+      refreshDashboardCounters();
+    }
   }
 }
 
@@ -1716,16 +1748,6 @@ function applyDashboardActionResult(payload, form, row) {
       targetRow.classList.remove('is-row-updating');
       const detailBtn = targetRow.querySelector('[data-bs-target="#detalleModal"]');
       detailBtn?.setAttribute('data-estado', 'pendiente');
-      const statusIcon = targetRow.querySelector('.dashboard-status-icon');
-      if (statusIcon) {
-        statusIcon.classList.remove('dashboard-status-icon--processed', 'dashboard-status-icon--error');
-        statusIcon.classList.add('dashboard-status-icon--pending');
-        statusIcon.setAttribute('title', 'Pendiente');
-        const icon = statusIcon.querySelector('i');
-        if (icon) icon.className = 'bi bi-hourglass-split';
-        bootstrap.Tooltip.getInstance(statusIcon)?.dispose();
-        new bootstrap.Tooltip(statusIcon);
-      }
       const currentFilter = filterNav?.querySelector('[data-filter].is-active')?.getAttribute('data-filter') || 'pendiente';
       targetRow.style.display = currentFilter === 'pendiente' || currentFilter === 'all' ? '' : 'none';
     });
@@ -2252,6 +2274,12 @@ refreshDashboardCounters();
     }
     processAction.value = action;
     processIds.value = ids.join(',');
+    if (action === 'archive_selected') {
+      if (!window.NovaArchiveFeedback.start(processForm, archiveBtn, ids.length,
+        [processBtn, deleteSelectedBtn, resetErrorsBtn])) return;
+      window.setTimeout(() => HTMLFormElement.prototype.submit.call(processForm), 50);
+      return;
+    }
     processForm.submit();
   };
 

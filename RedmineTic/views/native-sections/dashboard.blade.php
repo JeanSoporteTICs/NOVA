@@ -271,9 +271,7 @@
                                     data-report-tiempo-estimado="{{ $report['tiempo_estimado'] ?? '' }}"
                                     data-report-fecha="{{ $report['fecha'] ?? $report['fecha_inicio'] ?? '' }}"
                                     data-report-hora="{{ $report['hora'] ?? '' }}"
-                                    data-report-chat-id-telegram="{{ $report['chat_id_telegram'] ?? $report['numero'] ?? '' }}"
-                                    data-report-mensaje="{{ $report['mensaje'] ?? '' }}"
-                                    data-report-descripcion="{{ $report['descripcion'] ?? '' }}">
+                                    data-report-chat-id-telegram="{{ $report['chat_id_telegram'] ?? $report['numero'] ?? '' }}">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
                                 @endif
@@ -365,6 +363,7 @@
                 <button type="button" class="btn-close" data-nova-modal-close aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-info" role="status" data-dashboard-detail-status hidden></div>
                 <div class="detail-drawer-view is-active" id="drawer-detail-view">
                     <div class="row g-3">
                         <input type="hidden" name="id">
@@ -657,6 +656,25 @@
             event.preventDefault();
             return;
         }
+        const bulkForm = event.currentTarget;
+        if (bulkForm.dataset.archivePending === '1') {
+            event.preventDefault();
+            return;
+        }
+        if (submitter instanceof HTMLButtonElement && submitter.value === 'archive_selected') {
+            if (event.defaultPrevented) return;
+            event.preventDefault();
+            const count = String(bulkForm.querySelector('[name="ids"]')?.value || '').split(',').filter(Boolean).length;
+            if (!count) {
+                window.NovaToast?.warning('Selecciona al menos un reporte para archivar.');
+                return;
+            }
+            // The clicked button is disabled during the wait; preserve its action in the POST.
+            bulkForm.querySelector('input[name="dashboard_action"]').value = 'archive_selected';
+            if (!window.NovaArchiveFeedback.start(bulkForm, submitter, count)) return;
+            window.setTimeout(() => HTMLFormElement.prototype.submit.call(bulkForm), 50);
+            return;
+        }
         if (!(submitter instanceof HTMLButtonElement) || submitter.value !== 'process_selected') {
             return;
         }
@@ -702,6 +720,8 @@
         });
     });
 
+    const dashboardDetailUrl = @json($redmineRoute('redmine.native.dashboard.detail'));
+    let dashboardDetailRequest = 0;
     document.querySelectorAll('[data-nova-modal-open="editar-solicitud"]').forEach((button) => {
         button.addEventListener('click', () => {
             const modal = document.getElementById('editar-solicitud');
@@ -756,8 +776,40 @@
             syncDashboardEstimatedTime(form);
             form.elements.fecha.value = toDateInput(button.dataset.reportFecha);
             form.elements.hora.value = button.dataset.reportHora || '';
-            form.elements.mensaje.value = button.dataset.reportMensaje || button.dataset.reportDescripcion || '';
-            form.elements.descripcion.value = button.dataset.reportDescripcion || '';
+            form.elements.mensaje.value = '';
+            form.elements.descripcion.value = '';
+            form.dataset.detailReady = '0';
+            const saveButton = form.querySelector('[type="submit"]');
+            if (saveButton) saveButton.disabled = true;
+            const detailStatus = form.querySelector('[data-dashboard-detail-status]');
+            if (detailStatus) {
+                detailStatus.hidden = false;
+                detailStatus.className = 'alert alert-info';
+                detailStatus.textContent = 'Cargando detalle del reporte…';
+            }
+            const detailRequest = ++dashboardDetailRequest;
+            const detailQuery = new URL(dashboardDetailUrl, window.location.href);
+            detailQuery.searchParams.set('id', form.elements.id.value);
+            fetch(detailQuery, { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
+                .then((response) => {
+                    if (!response.ok) throw new Error('No se pudo cargar el detalle.');
+                    return response.json();
+                })
+                .then((detail) => {
+                    if (detailRequest !== dashboardDetailRequest) return;
+                    form.elements.mensaje.value = detail.mensaje || detail.descripcion || '';
+                    form.elements.descripcion.value = detail.descripcion || '';
+                    form.dataset.detailReady = '1';
+                    if (saveButton) saveButton.disabled = false;
+                    if (detailStatus) detailStatus.hidden = true;
+                })
+                .catch(() => {
+                    if (detailRequest !== dashboardDetailRequest) return;
+                    if (detailStatus) {
+                        detailStatus.className = 'alert alert-danger';
+                        detailStatus.textContent = 'No se pudo cargar el detalle. Cierra el modal e inténtalo nuevamente.';
+                    }
+                });
             ticDashboardDescriptionTabs?.show(false);
             modal.classList.add('show');
             modal.removeAttribute('aria-hidden');
@@ -768,6 +820,10 @@
     });
     document.querySelector('#editar-solicitud form')?.addEventListener('submit', (event) => {
         const form = event.currentTarget;
+        if (form.dataset.detailReady !== '1') {
+            event.preventDefault();
+            return;
+        }
         if (form?.elements?.descripcion && form?.elements?.mensaje) {
             form.elements.descripcion.value = form.elements.mensaje.value;
         }

@@ -15,7 +15,7 @@ services:
       DB_HOST: ${MONITOR_DB_HOST:-${DB_HOST:-host.docker.internal}}
       DB_PORT: ${DB_PORT:-3306}
       DB_DATABASE: ${DB_DATABASE:-nova}
-      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_USERNAME: ${DB_USERNAME:-nova_app}
       DB_PASSWORD: ${DB_PASSWORD:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}

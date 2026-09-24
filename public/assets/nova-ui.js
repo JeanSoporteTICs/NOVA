@@ -1460,3 +1460,47 @@ const NovaScrollTop = (() => {
 })();
 
 window.NovaScrollTop = NovaScrollTop;
+
+// Shared feedback for dashboard archive requests (AJAX and normal POST).
+window.NovaArchiveFeedback = (() => {
+    const pending = new Map();
+
+    function start(form, button, count, controls = []) {
+        if (!form || pending.has(form) || count < 1) return false;
+        const buttons = [...new Set([...form.querySelectorAll('button, input[type="submit"]'), button, ...controls].filter(Boolean))];
+        pending.set(form, {
+            button,
+            label: button?.innerHTML,
+            busy: form.getAttribute('aria-busy'),
+            buttons: buttons.map(control => [control, control.disabled]),
+        });
+        form.dataset.archivePending = '1';
+        form.setAttribute('aria-busy', 'true');
+        buttons.forEach(control => { control.disabled = true; });
+        if (button) button.innerHTML = '<span class="nova-spinner" aria-hidden="true"></span> Archivando…';
+        window.appUi?.setLoading?.(true);
+        window.appUi?.setIntegrationLoading?.(true, {
+            title: 'Archivando reportes',
+            detail: `${count === 1 ? 'Se está archivando 1 reporte' : `Se están archivando ${count} reportes`}. Espera a que termine; puede tardar unos segundos.`,
+            icon: 'bi-archive',
+        });
+        return true;
+    }
+
+    function finish(form) {
+        const state = pending.get(form);
+        if (!state) return;
+        pending.delete(form);
+        delete form.dataset.archivePending;
+        if (state.busy === null) form.removeAttribute('aria-busy');
+        else form.setAttribute('aria-busy', state.busy);
+        state.buttons.forEach(([control, disabled]) => { control.disabled = disabled; });
+        if (state.button) state.button.innerHTML = state.label;
+        window.appUi?.setIntegrationLoading?.(false);
+        window.appUi?.setLoading?.(false);
+    }
+
+    // A POST page can be restored by the browser's back/forward cache.
+    window.addEventListener('pageshow', () => [...pending.keys()].forEach(finish));
+    return { start, finish };
+})();

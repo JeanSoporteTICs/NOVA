@@ -1,0 +1,1439 @@
+{
+    "reference": "2026-09-15",
+    "server": "MariaDB 12.3.2",
+    "candidate": "All repository migrations on an empty disposable database, including pending P04",
+    "schema_differences": {
+        "tables": {
+            "missing": [],
+            "extra": [
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "ENGINE": "InnoDB",
+                    "TABLE_COLLATION": "utf8mb4_unicode_ci",
+                    "ROW_FORMAT": "Dynamic"
+                }
+            ]
+        },
+        "columns": {
+            "missing": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "COLUMN_NAME": "actualizado_at",
+                    "ORDINAL_POSITION": "9",
+                    "COLUMN_TYPE": "timestamp",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": "current_timestamp()",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "COLUMN_NAME": "asignado_a",
+                    "ORDINAL_POSITION": "21",
+                    "COLUMN_TYPE": "varchar(80)",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": "utf8mb4",
+                    "COLLATION_NAME": "utf8mb4_unicode_ci",
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "COLUMN_NAME": "redmine_id",
+                    "ORDINAL_POSITION": "5",
+                    "COLUMN_TYPE": "varchar(80)",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": "utf8mb4",
+                    "COLLATION_NAME": "utf8mb4_unicode_ci",
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "COLUMN_NAME": "actualizado_at",
+                    "ORDINAL_POSITION": "15",
+                    "COLUMN_TYPE": "timestamp",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": "current_timestamp()",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                }
+            ],
+            "extra": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "COLUMN_NAME": "actualizado_at",
+                    "ORDINAL_POSITION": "9",
+                    "COLUMN_TYPE": "timestamp",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": "current_timestamp()",
+                    "EXTRA": "on update current_timestamp()",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "id",
+                    "ORDINAL_POSITION": "1",
+                    "COLUMN_TYPE": "bigint unsigned",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": null,
+                    "EXTRA": "auto_increment",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "2",
+                    "COLUMN_TYPE": "bigint unsigned",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": null,
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "report_key",
+                    "ORDINAL_POSITION": "3",
+                    "COLUMN_TYPE": "varchar(191)",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": null,
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": "utf8mb4",
+                    "COLLATION_NAME": "utf8mb4_unicode_ci",
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "attempt_id",
+                    "ORDINAL_POSITION": "4",
+                    "COLUMN_TYPE": "char(36)",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": null,
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": "utf8mb4",
+                    "COLLATION_NAME": "utf8mb4_unicode_ci",
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "reservation",
+                    "ORDINAL_POSITION": "5",
+                    "COLUMN_TYPE": "tinyint unsigned",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "status",
+                    "ORDINAL_POSITION": "6",
+                    "COLUMN_TYPE": "varchar(30)",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": null,
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": "utf8mb4",
+                    "COLLATION_NAME": "utf8mb4_unicode_ci",
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "redmine_id",
+                    "ORDINAL_POSITION": "7",
+                    "COLUMN_TYPE": "bigint unsigned",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "http_code",
+                    "ORDINAL_POSITION": "8",
+                    "COLUMN_TYPE": "smallint unsigned",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "finished_epoch",
+                    "ORDINAL_POSITION": "9",
+                    "COLUMN_TYPE": "decimal(20,6)",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "resolution_note",
+                    "ORDINAL_POSITION": "10",
+                    "COLUMN_TYPE": "varchar(500)",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": "utf8mb4",
+                    "COLLATION_NAME": "utf8mb4_unicode_ci",
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "created_at",
+                    "ORDINAL_POSITION": "11",
+                    "COLUMN_TYPE": "timestamp(6)",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "COLUMN_NAME": "updated_at",
+                    "ORDINAL_POSITION": "12",
+                    "COLUMN_TYPE": "timestamp(6)",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "COLUMN_NAME": "asignado_a",
+                    "ORDINAL_POSITION": "21",
+                    "COLUMN_TYPE": "int unsigned",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "COLUMN_NAME": "redmine_id",
+                    "ORDINAL_POSITION": "5",
+                    "COLUMN_TYPE": "int unsigned",
+                    "IS_NULLABLE": "YES",
+                    "COLUMN_DEFAULT": "NULL",
+                    "EXTRA": "",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "COLUMN_NAME": "actualizado_at",
+                    "ORDINAL_POSITION": "15",
+                    "COLUMN_TYPE": "timestamp",
+                    "IS_NULLABLE": "NO",
+                    "COLUMN_DEFAULT": "current_timestamp()",
+                    "EXTRA": "on update current_timestamp()",
+                    "CHARACTER_SET_NAME": null,
+                    "COLLATION_NAME": null,
+                    "GENERATION_EXPRESSION": null
+                }
+            ]
+        },
+        "indexes": {
+            "missing": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "INDEX_NAME": "idx_catalogos_nombre",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "nombre",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "INDEX_NAME": "idx_catalogos_tipo",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "tipo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "INDEX_NAME": "idx_modulos_nova_orden",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "orden",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "INDEX_NAME": "idx_modulos_nova_tipo",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "tipo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "INDEX_NAME": "uq_modulos_nova_clave",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "clave_modulo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "INDEX_NAME": "fk_permisos_modulo",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "modulo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_asignado",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "asignado_a",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_categoria",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "categoria_catalogo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_fecha",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "fecha",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_origen",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "origen",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_redmine_id",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "redmine_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_unidad",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "unidad_catalogo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "idx_reportes_unidad_solicitante",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "unidad_solicitante_catalogo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "redmine_tic_reportes_fecha_fin_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "fecha_fin",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "redmine_tic_reportes_fecha_inicio_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "fecha_inicio",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "idx_usuarios_nova_nombre",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "nombre",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "idx_usuarios_nova_nombre",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "2",
+                    "COLUMN_NAME": "apellido",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "idx_usuarios_nova_rol",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "rol",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "uq_usuarios_nova_redmine_id",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "redmine_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "uq_usuarios_nova_rut",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "rut",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "uq_usuarios_nova_usuario",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "usuario",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "uq_usuarios_nova_uuid",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "uuid",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                }
+            ],
+            "extra": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "INDEX_NAME": "catalogos_modulo_nombre_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "nombre",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "INDEX_NAME": "catalogos_modulo_tipo_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "tipo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "integraciones_usuario",
+                    "INDEX_NAME": "idx_integraciones_usuario_tipo",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "tipo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "INDEX_NAME": "modulos_nova_clave_modulo_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "clave_modulo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "INDEX_NAME": "modulos_nova_orden_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "orden",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "INDEX_NAME": "modulos_nova_tipo_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "tipo",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "INDEX_NAME": "permisos_usuario_modulo_modulo_id_foreign",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "modulo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "PRIMARY",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_attempts_attempt_id_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "attempt_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_attempts_modulo_id_report_key_id_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "modulo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_attempts_modulo_id_report_key_id_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "2",
+                    "COLUMN_NAME": "report_key",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_attempts_modulo_id_report_key_id_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "3",
+                    "COLUMN_NAME": "id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_reservation_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "modulo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_reservation_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "2",
+                    "COLUMN_NAME": "report_key",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "INDEX_NAME": "redmine_send_reservation_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "3",
+                    "COLUMN_NAME": "reservation",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_asignado_a_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "asignado_a",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_categoria_catalogo_id_foreign",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "categoria_catalogo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_fecha_fin_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "fecha_fin",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_fecha_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "fecha",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_fecha_inicio_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "fecha_inicio",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_origen_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "origen",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_redmine_id_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "redmine_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_unidad_catalogo_id_foreign",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "unidad_catalogo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "INDEX_NAME": "reportes_redmine_unidad_solicitante_catalogo_id_foreign",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "unidad_solicitante_catalogo_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_estado_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "estado",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_nombre_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "nombre",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_redmine_id_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "redmine_id",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_rol_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "rol",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_rut_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "rut",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_usuario_core_index",
+                    "NON_UNIQUE": "1",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "usuario_core",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_usuario_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "usuario",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "INDEX_NAME": "usuarios_nova_uuid_unique",
+                    "NON_UNIQUE": "0",
+                    "SEQ_IN_INDEX": "1",
+                    "COLUMN_NAME": "uuid",
+                    "COLLATION": "A",
+                    "SUB_PART": null,
+                    "INDEX_TYPE": "BTREE",
+                    "INDEX_COMMENT": ""
+                }
+            ]
+        },
+        "keys": {
+            "missing": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "CONSTRAINT_NAME": "fk_catalogos_modulo",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "configuraciones_modulo",
+                    "CONSTRAINT_NAME": "fk_configuraciones_modulo",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "integraciones_usuario",
+                    "CONSTRAINT_NAME": "fk_integraciones_usuario",
+                    "COLUMN_NAME": "usuario_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "CONSTRAINT_NAME": "uq_modulos_nova_clave",
+                    "COLUMN_NAME": "clave_modulo",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "fk_permisos_modulo",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "fk_permisos_usuario",
+                    "COLUMN_NAME": "usuario_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_asignado",
+                    "COLUMN_NAME": "asignado_a",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "REFERENCED_COLUMN_NAME": "redmine_id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_categoria",
+                    "COLUMN_NAME": "categoria_catalogo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_modulo",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_unidad",
+                    "COLUMN_NAME": "unidad_catalogo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_unidad_solicitante",
+                    "COLUMN_NAME": "unidad_solicitante_catalogo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "uq_usuarios_nova_redmine_id",
+                    "COLUMN_NAME": "redmine_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "uq_usuarios_nova_rut",
+                    "COLUMN_NAME": "rut",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "uq_usuarios_nova_usuario",
+                    "COLUMN_NAME": "usuario",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "uq_usuarios_nova_uuid",
+                    "COLUMN_NAME": "uuid",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                }
+            ],
+            "extra": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "CONSTRAINT_NAME": "catalogos_modulo_modulo_id_foreign",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "configuraciones_modulo",
+                    "CONSTRAINT_NAME": "configuraciones_modulo_modulo_id_foreign",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "integraciones_usuario",
+                    "CONSTRAINT_NAME": "integraciones_usuario_usuario_id_foreign",
+                    "COLUMN_NAME": "usuario_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "modulos_nova",
+                    "CONSTRAINT_NAME": "modulos_nova_clave_modulo_unique",
+                    "COLUMN_NAME": "clave_modulo",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "permisos_usuario_modulo_modulo_id_foreign",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "permisos_usuario_modulo_usuario_id_foreign",
+                    "COLUMN_NAME": "usuario_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "CONSTRAINT_NAME": "PRIMARY",
+                    "COLUMN_NAME": "id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "CONSTRAINT_NAME": "redmine_send_attempts_attempt_id_unique",
+                    "COLUMN_NAME": "attempt_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "CONSTRAINT_NAME": "redmine_send_reservation_unique",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "CONSTRAINT_NAME": "redmine_send_reservation_unique",
+                    "COLUMN_NAME": "report_key",
+                    "ORDINAL_POSITION": "2",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "redmine_send_attempts",
+                    "CONSTRAINT_NAME": "redmine_send_reservation_unique",
+                    "COLUMN_NAME": "reservation",
+                    "ORDINAL_POSITION": "3",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_categoria_catalogo_id_foreign",
+                    "COLUMN_NAME": "categoria_catalogo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_modulo_id_foreign",
+                    "COLUMN_NAME": "modulo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_unidad_catalogo_id_foreign",
+                    "COLUMN_NAME": "unidad_catalogo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_unidad_solicitante_catalogo_id_foreign",
+                    "COLUMN_NAME": "unidad_solicitante_catalogo_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": "@schema",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "REFERENCED_COLUMN_NAME": "id"
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "usuarios_nova_redmine_id_unique",
+                    "COLUMN_NAME": "redmine_id",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "usuarios_nova_rut_unique",
+                    "COLUMN_NAME": "rut",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "usuarios_nova_usuario_unique",
+                    "COLUMN_NAME": "usuario",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                },
+                {
+                    "TABLE_NAME": "usuarios_nova",
+                    "CONSTRAINT_NAME": "usuarios_nova_uuid_unique",
+                    "COLUMN_NAME": "uuid",
+                    "ORDINAL_POSITION": "1",
+                    "REFERENCED_TABLE_SCHEMA": null,
+                    "REFERENCED_TABLE_NAME": null,
+                    "REFERENCED_COLUMN_NAME": null
+                }
+            ]
+        },
+        "references": {
+            "missing": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "CONSTRAINT_NAME": "fk_catalogos_modulo",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "configuraciones_modulo",
+                    "CONSTRAINT_NAME": "fk_configuraciones_modulo",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "integraciones_usuario",
+                    "CONSTRAINT_NAME": "fk_integraciones_usuario",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "fk_permisos_modulo",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "fk_permisos_usuario",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_asignado",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_categoria",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_modulo",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_unidad",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "fk_reportes_unidad_solicitante",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                }
+            ],
+            "extra": [
+                {
+                    "TABLE_NAME": "catalogos_modulo",
+                    "CONSTRAINT_NAME": "catalogos_modulo_modulo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "configuraciones_modulo",
+                    "CONSTRAINT_NAME": "configuraciones_modulo_modulo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "integraciones_usuario",
+                    "CONSTRAINT_NAME": "integraciones_usuario_usuario_id_foreign",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "permisos_usuario_modulo_modulo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "permisos_usuario_modulo",
+                    "CONSTRAINT_NAME": "permisos_usuario_modulo_usuario_id_foreign",
+                    "REFERENCED_TABLE_NAME": "usuarios_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_categoria_catalogo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_modulo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "modulos_nova",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "CASCADE",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_unidad_catalogo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                },
+                {
+                    "TABLE_NAME": "redmine_tic_reportes",
+                    "CONSTRAINT_NAME": "reportes_redmine_unidad_solicitante_catalogo_id_foreign",
+                    "REFERENCED_TABLE_NAME": "catalogos_modulo",
+                    "UPDATE_RULE": "RESTRICT",
+                    "DELETE_RULE": "SET NULL",
+                    "MATCH_OPTION": "NONE"
+                }
+            ]
+        },
+        "triggers": {
+            "missing": [
+                {
+                    "TRIGGER_NAME": "trg_catalogos_modulo_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "catalogos_modulo",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                },
+                {
+                    "TRIGGER_NAME": "trg_configuraciones_modulo_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "configuraciones_modulo",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                },
+                {
+                    "TRIGGER_NAME": "trg_integraciones_usuario_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "integraciones_usuario",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                },
+                {
+                    "TRIGGER_NAME": "trg_modulos_nova_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "modulos_nova",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                },
+                {
+                    "TRIGGER_NAME": "trg_permisos_usuario_modulo_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "permisos_usuario_modulo",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                },
+                {
+                    "TRIGGER_NAME": "trg_reportes_redmine_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "redmine_tic_reportes",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                },
+                {
+                    "TRIGGER_NAME": "trg_usuarios_nova_actualizado",
+                    "EVENT_MANIPULATION": "UPDATE",
+                    "EVENT_OBJECT_TABLE": "usuarios_nova",
+                    "ACTION_ORDER": "1",
+                    "ACTION_CONDITION": null,
+                    "ACTION_STATEMENT": "BEGIN\n  SET NEW.actualizado_at = CURRENT_TIMESTAMP;\nEND",
+                    "ACTION_ORIENTATION": "ROW",
+                    "ACTION_TIMING": "BEFORE",
+                    "SQL_MODE": "NO_AUTO_VALUE_ON_ZERO",
+                    "CHARACTER_SET_CLIENT": "utf8mb4",
+                    "COLLATION_CONNECTION": "utf8mb4_uca1400_ai_ci",
+                    "DATABASE_COLLATION": "utf8mb4_unicode_ci"
+                }
+            ],
+            "extra": []
+        }
+    },
+    "reference_migration_count": 83,
+    "candidate_migration_count": 84
+}

@@ -16,8 +16,9 @@ class MantencionUsuariosService
     }
 
     public function handle_usuarios() {
-        $rows = $this->storage->load_usuarios('');
-        if ($this->storage->usuarios_migrate_global_nextcloud_credentials($rows)) {
+        $projected = in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true);
+        $rows = $this->storage->load_usuarios('', $projected);
+        if ($this->storage->usuarios_migrate_global_nextcloud_credentials($rows, $projected)) {
             $this->storage->save_usuarios('', $rows);
         }
         $flash = $this->storage->usuarios_consume_flash();

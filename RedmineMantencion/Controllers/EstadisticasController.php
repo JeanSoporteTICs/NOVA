@@ -89,7 +89,7 @@ class EstadisticasController extends Controller
         $catalogRepo = function_exists('mantencion_catalog_repository') ? mantencion_catalog_repository() : null;
         $cats = $catalogRepo !== null ? $catalogRepo->categoriaNames() : [];
         sort($cats, SORT_NATURAL | SORT_FLAG_CASE);
-        $parsed = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion() : [];
+        $parsed = function_exists('auth_central_users_for_mantencion') ? auth_central_users_for_mantencion(true, false) : [];
         if (is_array($parsed)) {
             foreach ($parsed as $u) {
                 if (!is_array($u)) {

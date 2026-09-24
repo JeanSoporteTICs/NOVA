@@ -96,12 +96,24 @@ function auth_norm_key($v) {
     return strtolower(preg_replace('/[^0-9a-z]/i', '', (string)$v));
 }
 
-function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): array {
+function auth_mantencion_administration_user(array $user): array {
+    $user['has_api_credentials'] = trim((string)($user['api'] ?? '')) !== '';
+    $user['has_core_credentials'] = trim((string)($user['core_user'] ?? '')) !== ''
+        && trim((string)($user['core_pass_enc'] ?? '')) !== '';
+    $user['has_nextcloud_credentials'] = trim((string)($user['nextcloud_user'] ?? '')) !== ''
+        && trim((string)($user['nextcloud_pass_enc'] ?? '')) !== '';
+    return array_replace($user, ['api' => '', 'password' => '', 'core_pass_enc' => '', 'nextcloud_pass_enc' => '']);
+}
+
+function auth_central_users_for_mantencion(bool $includeModuleAdmins = true, bool $withCredentials = true, bool $forAdministration = false): array {
     if (!class_exists(\Illuminate\Support\Facades\DB::class) || !class_exists(\Illuminate\Support\Facades\Schema::class)) {
         return [];
     }
 
     try {
+        if ($forAdministration && \Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'mysql') {
+            return array_map('auth_mantencion_administration_user', auth_central_users_for_mantencion($includeModuleAdmins));
+        }
         if (!\Illuminate\Support\Facades\Schema::hasTable('usuarios_nova')
             || !\Illuminate\Support\Facades\Schema::hasTable('modulos_nova')
             || !\Illuminate\Support\Facades\Schema::hasTable('permisos_usuario_modulo')) {
@@ -131,11 +143,14 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
             'usuarios_nova.ultimo_login_at',
             'usuarios_nova.creado_at',
         ];
+        if (!$withCredentials || $forAdministration) {
+            $selectColumns = array_values(array_filter($selectColumns, static fn (string $column): bool => $column !== 'usuarios_nova.password'));
+        }
         if (\Illuminate\Support\Facades\Schema::hasColumn('usuarios_nova', 'email')) {
             $selectColumns[] = 'usuarios_nova.email';
         }
 
-        $rows = \Illuminate\Support\Facades\DB::table('usuarios_nova')
+        $query = \Illuminate\Support\Facades\DB::table('usuarios_nova')
             ->leftJoin('permisos_usuario_modulo', function ($join) use ($moduleId): void {
                 $join->on('permisos_usuario_modulo.usuario_id', '=', 'usuarios_nova.id');
                 if ($moduleId !== null) {
@@ -163,25 +178,49 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
                 $where->whereRaw('1 = 0');
             })
             ->orderBy('usuarios_nova.nombre')
-            ->orderBy('usuarios_nova.apellido')
-            ->get();
+            ->orderBy('usuarios_nova.apellido');
+
+        // The old query has no ID tie breaker. Changing its projection may
+        // reorder equal names under the database collation; retain that reader.
+        if ((!$withCredentials || $forAdministration) && (clone $query)->reorder()
+            ->select(['usuarios_nova.nombre', 'usuarios_nova.apellido'])
+            ->groupBy('usuarios_nova.nombre', 'usuarios_nova.apellido')
+            ->havingRaw('COUNT(*) > 1')->exists()) {
+            if ($forAdministration) {
+                return array_map('auth_mantencion_administration_user', auth_central_users_for_mantencion($includeModuleAdmins));
+            }
+            return array_map(static fn (array $user): array => array_replace($user, [
+                'api' => '', 'password' => '', 'core_pass_enc' => '', 'nextcloud_pass_enc' => '',
+            ]), auth_central_users_for_mantencion($includeModuleAdmins, true));
+        }
+        $rows = $query->get();
 
         if ($rows->isEmpty()) {
             return [];
         }
 
         $ids = $rows->pluck('nova_id')->map(fn ($id) => (int)$id)->all();
-        $integrations = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
+        $integrationQuery = \Illuminate\Support\Facades\DB::table('integraciones_usuario')
             ->whereIn('usuario_id', $ids)
-            ->get()
-            ->groupBy('usuario_id');
+            // Selectors need external usernames for CORE matching, but no secrets.
+            ->when(!$withCredentials && !$forAdministration, fn ($query) => $query->whereIn('tipo', ['core', 'nextcloud']));
+        $integrationColumns = $withCredentials ? ['*'] : ['usuario_id', 'tipo', 'usuario_externo'];
+        if ($forAdministration) {
+            $integrationQuery->whereIn('tipo', ['core', 'nextcloud', 'redmine', 'redmine_mantencion', 'redmine_tic']);
+            $secret = \App\Repositories\Database\SqlText::trim('valor_secreto');
+            $integrationColumns = ['usuario_id', 'tipo', 'usuario_externo',
+                // Redmine must still be decrypted: encrypted empty values and
+                // legacy plaintext have different configured-state semantics.
+                \Illuminate\Support\Facades\DB::raw("CASE WHEN BINARY tipo IN ('core', 'nextcloud') THEN CASE WHEN OCTET_LENGTH($secret) > 0 THEN '1' ELSE '' END ELSE valor_secreto END as valor_secreto")];
+        }
+        $integrations = $integrationQuery->get($integrationColumns)->groupBy('usuario_id');
         $userPermissions = collect();
         if (\Illuminate\Support\Facades\Schema::hasTable('mantencion_permisos_usuario')) {
             $userPermissions = \Illuminate\Support\Facades\DB::table('mantencion_permisos_usuario')
-                ->whereIn('usuario_id', $ids)->get()->groupBy('usuario_id');
+                ->whereIn('usuario_id', $ids)->get(['usuario_id', 'permiso', 'valor'])->groupBy('usuario_id');
         }
 
-        return $rows->map(function ($row) use ($integrations, $userPermissions): array {
+        return $rows->map(function ($row) use ($integrations, $userPermissions, $forAdministration): array {
             $rowIntegrations = $integrations[(int)$row->nova_id] ?? collect();
             $byType = $rowIntegrations->keyBy('tipo');
             $redmine = collect(['redmine', 'redmine_mantencion', 'redmine_tic'])
@@ -211,7 +250,7 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
                 $permissions[(string)$permissionRow->permiso] = $value === '1' ? true : ($value === '' ? false : $value);
             }
 
-            return [
+            $user = [
                 'id'              => trim((string)($row->redmine_id ?? '')) ?: trim((string)($row->usuario ?? $row->uuid ?? '')),
                 'rut_sin_dv'      => trim((string)($row->usuario ?? '')),
                 'nombre'          => trim((string)($row->nombre ?? '')),
@@ -234,8 +273,12 @@ function auth_central_users_for_mantencion(bool $includeModuleAdmins = true): ar
                 'ultimo_login_at' => (string)($row->ultimo_login_at ?? ''),
                 'creado_at'       => (string)($row->creado_at ?? ''),
             ];
+            return $forAdministration ? auth_mantencion_administration_user($user) : $user;
         })->values()->all();
     } catch (\Throwable) {
+        if ($forAdministration) {
+            return array_map('auth_mantencion_administration_user', auth_central_users_for_mantencion($includeModuleAdmins));
+        }
         return [];
     }
 }

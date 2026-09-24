@@ -26,8 +26,8 @@ class MantencionNextcloudService
             if (function_exists('maintenance_mode_block_if_enabled')) maintenance_mode_block_if_enabled();
             $action = (string)$request->input('action', '');
             if ($action === 'save_nextcloud_config') {
-                $this->nextcloud_save_config($request->all());
-                $this->nextcloud_set_flash('Configuración de Nextcloud guardada');
+                $saved = $this->nextcloud_save_config($request->all());
+                $this->nextcloud_set_flash($saved ? 'Configuración de Nextcloud guardada' : 'No fue posible guardar la configuración de Nextcloud. Intenta nuevamente.');
                 return $this->nextcloud_redirect_back('nextcloud');
             }
             if ($action === 'fetch_nextcloud_groups') {

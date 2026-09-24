@@ -2,6 +2,7 @@
 
 namespace App\Modulos\RedmineMantencion\Repositories;
 
+use App\Modulos\RedmineMantencion\Support\CoreReportDetail;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,8 @@ final class MantencionReportRepository
     private bool $moduleIdResolved = false;
 
     private ?bool $tableReadyCache = null;
+
+    private array $columnAvailableCache = [];
 
     public function __construct(private readonly MantencionCatalogRepository $catalogs) {}
 
@@ -108,23 +111,34 @@ final class MantencionReportRepository
      *
      * @param  array<int,string>  $fuenteIds
      */
-    public function deleteByFuenteIds(array $fuenteIds): void
+    public function deleteByFuenteIds(array $fuenteIds): int
     {
-        if (! $this->tableReady() || empty($fuenteIds)) {
-            return;
-        }
-
+        if (!$this->tableReady() || empty($fuenteIds)) return 0;
         $moduleId = $this->resolveModuleId();
-        if ($moduleId === null) {
-            return;
-        }
+        if ($moduleId === null) return 0;
+        return $this->deleteWithHours(DB::table('redmine_mantencion_reportes')->where('modulo_id', $moduleId)->whereIn('fuente_id', $fuenteIds));
+    }
 
+    public function deleteByIds(array $ids): int
+    {
+        $moduleId = $this->resolveModuleId();
+        if (!$this->tableReady() || $moduleId === null || $ids === []) return 0;
+        return $this->deleteWithHours(DB::table('redmine_mantencion_reportes')->where('modulo_id', $moduleId)->whereIn('id', $ids));
+    }
+
+    private function deleteWithHours(\Illuminate\Database\Query\Builder $query): int
+    {
         try {
-            DB::table('redmine_mantencion_reportes')
-                ->where('modulo_id', $moduleId)
-                ->whereIn('fuente_id', $fuenteIds)
-                ->delete();
-        } catch (\Throwable) {
+            $hours = app(\App\Modulos\Nova\Repositories\HorasExtraRepository::class);
+            return $hours->atomic(function () use ($query, $hours): int {
+                $ids = (clone $query)->orderBy('id')->lockForUpdate()->pluck('id');
+                if ($ids->isEmpty()) return 0;
+                $hours->detachReportes('mantencion', $ids);
+                return (clone $query)->whereIn('id', $ids)->delete();
+            });
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) throw $exception;
+            return 0;
         }
     }
 
@@ -167,7 +181,7 @@ final class MantencionReportRepository
     }
 
     /** @param array<int,array<string,mixed>> $messages */
-    public function syncMessages(array $messages, array $config = []): bool
+    public function syncMessages(array $messages, array $config = [], ?array $originalMessages = null): bool
     {
         if (! $this->tableReady()) {
             return false;
@@ -180,14 +194,142 @@ final class MantencionReportRepository
         // across many messages. See Fase 4 lote 2.
         $categoriaIds = $this->prefetchCategoriaIds($messages);
 
-        $persisted = true;
-        foreach ($messages as $message) {
-            if (is_array($message)) {
-                $persisted = $this->upsertMessage($message, $config, $categoriaIds) && $persisted;
+        $originals = [];
+        foreach ($originalMessages ?? [] as $original) {
+            $originals[$this->messageKey($original)] = $original;
+        }
+
+        try {
+            return DB::transaction(function () use ($messages, $originals, $config, $categoriaIds): bool {
+                foreach ($messages as $message) {
+                    if (! is_array($message)) {
+                        continue;
+                    }
+                    $original = $originals[$this->messageKey($message)] ?? null;
+                    $saved = $original !== null
+                        ? $this->updateMessage($message, $original, $config, $categoriaIds)
+                        : $this->upsertMessage($message, $config, $categoriaIds);
+                    if (! $saved) {
+                        throw new \RuntimeException('No se pudo guardar el lote de reportes.');
+                    }
+                }
+
+                return true;
+            });
+        } catch (\Throwable $exception) {
+            Log::warning('Se revirtió el lote de reportes de Mantención.', [
+                'exception_class' => $exception::class,
+            ]);
+
+            return false;
+        }
+    }
+
+    public function reserveSend(array $message, float $started): array
+    {
+        $moduleId = $this->resolveModuleId();
+        if (!$moduleId) return ['ok' => false, 'error' => 'Módulo Mantención no disponible.'];
+        $sourceId = trim((string) ($message['fuente_id'] ?? $message['id'] ?? ''));
+        $query = DB::table('redmine_mantencion_reportes')->where('modulo_id', $moduleId)
+            ->where('fuente', trim((string) ($message['fuente'] ?? '')) ?: null)->where('fuente_id', $sourceId);
+        $row = (clone $query)->first();
+        if (!$row) return ['ok' => false, 'error' => 'Reporte no encontrado.'];
+        return app(\App\Repositories\Redmine\SendAttemptRepository::class)->reserve(
+            $moduleId, 'mantencion:'.$row->id, $started,
+            function () use ($query, $message): bool {
+                $current = (clone $query)->lockForUpdate()->first();
+                return $current && $current->estado !== 'archivado'
+                    && (string) $current->estado === (string) ($message['estado'] ?? '')
+                    && (string) ($current->numero_ticket_redmine ?? '') === (string) ($message['redmine_id'] ?? $message['numero_ticket_redmine'] ?? '');
+            }
+        );
+    }
+
+    private function messageKey(array $message): string
+    {
+        return json_encode([(string) ($message['fuente'] ?? ''), (string) ($message['fuente_id'] ?? $message['id'] ?? '')]);
+    }
+
+    /** Update only changed fields; never recreate a report deleted since the read. */
+    public function updateMessage(array $message, array $original, array $config = [], ?array $categoriaIds = null): bool
+    {
+        $moduleId = $this->resolveModuleId();
+        if ($moduleId === null || ! $this->tableReady()) {
+            return false;
+        }
+        $sourceId = trim((string) ($original['fuente_id'] ?? $original['id'] ?? ''));
+        if ($sourceId === '') {
+            return false;
+        }
+        $categoriaIds ??= [];
+        foreach ([$original, $message] as $item) {
+            $name = trim((string) ($item['categoria'] ?? $item['core_tipo_solicitud'] ?? ''));
+            if ($name !== '' && ! array_key_exists($name, $categoriaIds)) {
+                $categoriaIds[$name] = $this->catalogs->categoriaIdPorNombre($name);
+            }
+        }
+        $before = $this->filterColumns($this->payload($moduleId, $original, $config, $categoriaIds));
+        if (array_key_exists('_core_detalle_stored', $original) && array_key_exists('core_detalle', $before)) {
+            // El detalle puede haberse reconstruido desde descripcion aunque la columna siga NULL.
+            $before['core_detalle'] = $original['_core_detalle_stored'];
+        }
+        $after = $this->filterColumns($this->payload($moduleId, $message, $config, $categoriaIds));
+        $changes = [];
+        foreach ($after as $column => $value) {
+            if (! in_array($column, ['modulo_id', 'fuente', 'fuente_id', 'actualizado_at'], true)
+                && ! $this->sameStoredValue($value, $before[$column] ?? null)) {
+                $changes[$column] = $value;
             }
         }
 
-        return $persisted;
+        try {
+            return DB::transaction(function () use ($moduleId, $original, $sourceId, $changes, $before, $after): bool {
+                $query = DB::table('redmine_mantencion_reportes')
+                    ->where('modulo_id', $moduleId)
+                    ->where('fuente', trim((string) ($original['fuente'] ?? '')) ?: null)
+                    ->where('fuente_id', $sourceId);
+                $latest = (clone $query)->lockForUpdate()->first();
+                if ($latest === null) {
+                    return false;
+                }
+                foreach ($changes as $column => $value) {
+                    if (! $this->sameStoredValue($latest->$column ?? null, $before[$column] ?? null)) {
+                        return false;
+                    }
+                }
+                // CORE refreshes may only change reports that are still pending.
+                if (($original['estado'] ?? '') === 'pendiente' && ($latest->estado ?? '') !== 'pendiente') {
+                    return false;
+                }
+                if ($changes !== []) {
+                    DB::table('redmine_mantencion_reportes')->where('id', $latest->id)
+                        ->update($changes + ['actualizado_at' => $after['actualizado_at'] ?? now()]);
+                }
+
+                return true;
+            });
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function sameStoredValue(mixed $left, mixed $right): bool
+    {
+        if ($left === null || $right === null) {
+            return $left === $right;
+        }
+        if (is_bool($left)) {
+            $left = (int) $left;
+        }
+        if (is_bool($right)) {
+            $right = (int) $right;
+        }
+
+        if ((is_int($left) || is_float($left) || is_int($right) || is_float($right)) && is_numeric($left) && is_numeric($right)) {
+            return (float) $left === (float) $right;
+        }
+
+        return (string) $left === (string) $right;
     }
 
     /**
@@ -216,24 +358,82 @@ final class MantencionReportRepository
     }
 
     /** @return array<int,array<string,mixed>> */
-    public function activeMessages(): array
+    public function activeMessages(?array $reportIds = null, bool $statisticsOnly = false, bool $withDatabaseId = false, bool $withoutDescription = false): array
     {
-        return $this->messagesByStatuses(['pendiente', 'procesado', 'error']);
+        return $this->messagesByStatuses(['pendiente', 'procesado', 'error'], $reportIds, $statisticsOnly, false, $withDatabaseId, $withoutDescription);
+    }
+
+    /** Minimal scope/state input; retain the database ID independently of fuente_id. */
+    public function dashboardCandidates(): array
+    {
+        return $this->messagesByStatuses(['pendiente', 'procesado', 'error'], null, false, true);
+    }
+
+    /**
+     * Internal input for selected dashboard POSTs. Unselected, unprocessed
+     * rows carry scope/count/identity metadata; every possible writer target and
+     * every retention candidate retains its complete original report.
+     */
+    public function bulkActionMessages(array $publicIds, bool $includeProcessed = true): array
+    {
+        try {
+            return DB::transaction(function () use ($publicIds, $includeProcessed): array {
+                $candidates = $this->dashboardCandidates();
+                if ($candidates === []) {
+                    return $this->activeMessages();
+                }
+                $selected = array_fill_keys(array_map('trim', $publicIds), true);
+                $detailIds = [];
+                foreach ($candidates as $candidate) {
+                    if (isset($selected[$candidate['id']]) || ($includeProcessed && strtolower($candidate['estado']) === 'procesado')) {
+                        $detailIds[] = $candidate['_dashboard_id'];
+                    }
+                }
+                if (count($detailIds) === count($candidates)) {
+                    return $this->activeMessages();
+                }
+
+                $details = $this->messagesByStatuses(['pendiente', 'procesado', 'error'], $detailIds, false, false, true);
+                if (count($details) !== count($detailIds)) {
+                    return $this->activeMessages();
+                }
+                // Public fuente_id values can repeat. Join by the actual DB ID,
+                // preserving every occurrence and the original fecha/ID order.
+                $details = array_column($details, null, '_dashboard_id');
+
+                return array_map(static function (array $candidate) use ($details): array {
+                    $message = $details[$candidate['_dashboard_id']] ?? $candidate;
+                    unset($message['_dashboard_id']);
+
+                    return $message;
+                }, $candidates);
+            });
+        } catch (\Throwable) {
+            return $this->activeMessages();
+        }
     }
 
     /** @return array<int,array<string,mixed>> */
-    public function archivedMessages(): array
+    public function archivedMessages(?array $reportIds = null, bool $statisticsOnly = false): array
     {
-        return $this->messagesByStatuses(['archivado']);
+        return $this->messagesByStatuses(['archivado'], $reportIds, $statisticsOnly);
+    }
+
+    /** Fields consumed by the existing statistics normalizer/filter, without report text. */
+    public static function statisticsColumns(): array
+    {
+        return ['r.id', 'r.fuente', 'r.fuente_id', 'r.fecha_reporte', 'r.fecha_inicio',
+            'r.hora_reporte', 'r.id_redmine_asignado', 'r.asignado_nombre', 'r.unidad_texto',
+            'r.estado', 'r.tiempo_estimado', 'c.nombre as categoria_nombre'];
     }
 
     /**
      * @param  array<int,string>  $statuses
      * @return array<int,array<string,mixed>>
      */
-    private function messagesByStatuses(array $statuses): array
+    private function messagesByStatuses(array $statuses, ?array $reportIds = null, bool $statisticsOnly = false, bool $dashboardOnly = false, bool $withDatabaseId = false, bool $withoutDescription = false): array
     {
-        if (! $this->tableReady() || $statuses === []) {
+        if (! $this->tableReady() || $statuses === [] || $reportIds === []) {
             return [];
         }
 
@@ -243,18 +443,53 @@ final class MantencionReportRepository
         }
 
         try {
+            $columns = $statisticsOnly ? self::statisticsColumns() : ['r.*', 'c.nombre as categoria_nombre'];
+            if ($dashboardOnly) {
+                $columns = ['r.id', 'r.fuente', 'r.fuente_id', 'r.estado', 'r.id_redmine_asignado', 'r.asignado_nombre', 'r.tiempo_estimado',
+                    'r.actualizado_at', 'r.fecha_reporte', 'r.fecha_inicio', 'r.hora_reporte'];
+            } elseif ($withoutDescription && ! $statisticsOnly) {
+                try {
+                    $availableColumns = Schema::getColumnListing('redmine_mantencion_reportes');
+                    if ($availableColumns !== []) {
+                        $columns = array_map(static fn (string $column): string => 'r.'.$column,
+                            array_values(array_diff($availableColumns, ['descripcion'])));
+                        $columns[] = 'c.nombre as categoria_nombre';
+                    }
+                } catch (\Throwable) {
+                    // Keep the complete projection on unsupported schema metadata.
+                }
+            }
             $rows = DB::table('redmine_mantencion_reportes as r')
                 ->leftJoin('categorias as c', 'c.id', '=', 'r.categoria_id')
                 ->where('r.modulo_id', $moduleId)
                 ->whereIn('r.estado', $statuses)
+                ->when($reportIds !== null, function ($query) use ($reportIds): void {
+                    // Keep BIGINT IDs as strings and avoid the prepared-statement
+                    // parameter limit for large filtered result sets.
+                    $pdo = DB::connection()->getPdo();
+                    $ids = array_map(fn ($id): string => $pdo->quote((string) $id), $reportIds);
+                    $query->whereRaw('r.id IN ('.implode(',', $ids).')');
+                })
                 ->orderByDesc('r.fecha_reporte')
                 ->orderByDesc('r.id')
-                ->get([
-                    'r.*',
-                    'c.nombre as categoria_nombre',
-                ]);
+                ->get($columns);
 
-            return $rows->map(fn (object $row): array => $this->rowToMessage($row))->all();
+            return $rows->map(function (object $row) use ($statisticsOnly, $dashboardOnly, $withDatabaseId): array {
+                $message = $this->rowToMessage($row);
+                if ($dashboardOnly) {
+                    return array_intersect_key($message, array_flip(['id', 'estado', 'asignado_a', 'asignado_nombre', 'core_usuario_asignado',
+                        'procesado_ts', 'fecha', 'fecha_inicio', 'hora', 'fuente', 'fuente_id']))
+                        + ['_dashboard_id' => (string) $row->id];
+                }
+                if ($statisticsOnly) {
+                    $message['_statistics_id'] = (string) $row->id;
+                }
+                if ($withDatabaseId) {
+                    $message['_dashboard_id'] = (string) $row->id;
+                }
+
+                return $message;
+            })->all();
         } catch (\Throwable) {
             return [];
         }
@@ -326,43 +561,44 @@ final class MantencionReportRepository
     }
 
     /** @param array<string,mixed> $message */
-    public function markArchived(array $message): void
+    public function markArchived(array $message): bool
     {
-        if (! $this->tableReady()) {
-            return;
-        }
-
         $moduleId = $this->resolveModuleId();
-        if ($moduleId === null) {
-            return;
+        if ($moduleId === null || ! $this->tableReady()) {
+            return false;
         }
 
-        $fuente = trim((string) ($message['fuente'] ?? ''));
-        $fuenteId = trim((string) ($message['fuente_id'] ?? $message['id'] ?? ''));
-        if ($fuenteId === '') {
-            return;
+        $sourceId = trim((string) ($message['fuente_id'] ?? $message['id'] ?? ''));
+        if ($sourceId === '') {
+            return false;
         }
 
-        $values = $this->filterColumns([
-            'estado' => 'archivado',
-            'actualizado_at' => now(),
-        ]);
-
-        if ($values === []) {
-            return;
-        }
-
+        // updateMessage() compares only changed columns. Archiving changes
+        // estado and actualizado_at; all other payload fields are identical.
+        $beforeStatus = trim((string) ($message['estado'] ?? 'pendiente')) ?: 'pendiente';
         try {
-            $query = DB::table('redmine_mantencion_reportes')
-                ->where('modulo_id', $moduleId)
-                ->where('fuente_id', $fuenteId);
+            return DB::transaction(function () use ($moduleId, $message, $sourceId, $beforeStatus): bool {
+                $row = DB::table('redmine_mantencion_reportes')
+                    ->where('modulo_id', $moduleId)
+                    ->where('fuente', trim((string) ($message['fuente'] ?? '')) ?: null)
+                    ->where('fuente_id', $sourceId)
+                    ->lockForUpdate()
+                    ->first(['id', 'estado']);
+                if ($row === null) {
+                    return false;
+                }
+                if ($beforeStatus !== 'archivado' && ! $this->sameStoredValue($row->estado, $beforeStatus)) {
+                    return false;
+                }
+                if ($beforeStatus !== 'archivado') {
+                    DB::table('redmine_mantencion_reportes')->where('id', $row->id)
+                        ->update(['estado' => 'archivado', 'actualizado_at' => now()]);
+                }
 
-            if ($fuente !== '') {
-                $query->where('fuente', $fuente);
-            }
-
-            $query->update($values);
+                return true;
+            });
         } catch (\Throwable) {
+            return false;
         }
     }
 
@@ -402,6 +638,7 @@ final class MantencionReportRepository
             'asunto' => trim((string) ($row->asunto ?? '')),
             'mensaje' => trim((string) ($row->asunto ?? '')),
             'descripcion' => trim((string) ($row->descripcion ?? '')),
+            '_core_detalle_stored' => $row->core_detalle ?? null,
             'estado' => $estado,
             'estado_redmine' => $estadoRedmine,
             'core_estado' => $estadoRedmine,
@@ -433,7 +670,10 @@ final class MantencionReportRepository
             'numero_ticket_redmine' => $redmineId,
             'procesado_ts' => $procesadoTs,
             'actualizado_at' => $this->formatDateTimeForLegacy($row->actualizado_at ?? null),
-        ];
+        ] + ($fuenteId !== '' && trim((string) ($row->fuente ?? '')) === 'core'
+            ? CoreReportDetail::decode($row->core_detalle ?? null)
+                + CoreReportDetail::fromDescription((string) ($row->descripcion ?? ''))
+            : []);
     }
 
     /** @return array<string,mixed> */
@@ -462,6 +702,7 @@ final class MantencionReportRepository
             'tipo_id' => $trackerId !== '' ? $trackerId : null,
             'asunto' => trim((string) ($message['asunto'] ?? $message['mensaje'] ?? '')) ?: null,
             'descripcion' => trim((string) ($message['descripcion'] ?? '')) ?: null,
+            'core_detalle' => $fuente === 'core' ? CoreReportDetail::encode($message) : null,
             'estado' => $estado,
             'estado_redmine' => trim((string) ($message['estado_redmine'] ?? $message['core_estado'] ?? '')) ?: null,
             'estado_id' => $statusId !== '' ? $statusId : null,
@@ -517,7 +758,10 @@ final class MantencionReportRepository
     private function filterColumns(array $values): array
     {
         foreach (array_keys($values) as $column) {
-            if (! Schema::hasColumn('redmine_mantencion_reportes', $column)) {
+            if (! array_key_exists($column, $this->columnAvailableCache)) {
+                $this->columnAvailableCache[$column] = Schema::hasColumn('redmine_mantencion_reportes', $column);
+            }
+            if (! $this->columnAvailableCache[$column]) {
                 unset($values[$column]);
             }
         }

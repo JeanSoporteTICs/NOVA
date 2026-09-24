@@ -2,6 +2,7 @@
 
 namespace App\Modulos\RedmineMantencion\Services;
 
+use App\Modulos\RedmineMantencion\Repositories\MantencionActivityRepository;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -59,6 +60,14 @@ class MantencionSecurityService
             }
             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
                 $query->where('registrado_at', '<=', $to . ' 23:59:59');
+            }
+
+            if (DB::connection()->getDriverName() === 'mysql') {
+                return app(MantencionActivityRepository::class)->page(
+                    $query, $page, $perPage, $viewerId, $canViewAll,
+                    fn ($row): array => $this->operationalEvent($row),
+                    fn (array $event): bool => $this->actorMatches((string) ($event['user'] ?? ''), $viewerName, (string) ($event['user_id'] ?? ''), $viewerId)
+                );
             }
 
             $scopedEvents = $query->orderByDesc('registrado_at')->orderByDesc('id')->get()

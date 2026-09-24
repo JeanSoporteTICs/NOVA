@@ -15,6 +15,8 @@ function est_save_cfg($cfg) {
     $repo = function_exists('config_mantencion_repository') ? config_mantencion_repository() : null;
     if ($repo !== null) {
         $repo->saveAll($cfg);
+    } else {
+        throw new \App\Modulos\RedmineMantencion\Exceptions\ConfigurationWriteException;
     }
 }
 

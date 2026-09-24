@@ -4,8 +4,12 @@ namespace App\Modulos\RedmineMantencion\Services;
 
 class MantencionRetentionService
 {
-    public function apply_retention_archive(array &$messages): bool {
-        $threshold = (new \DateTimeImmutable())->modify('-' . $this->get_retencion_horas() . ' hours');
+    public function retention_threshold(): \DateTimeImmutable {
+        return (new \DateTimeImmutable())->modify('-' . $this->get_retencion_horas() . ' hours');
+    }
+
+    public function apply_retention_archive(array &$messages, ?\DateTimeImmutable $threshold = null): bool {
+        $threshold ??= $this->retention_threshold();
         $removed = [];
         foreach ($messages as $key => $message) {
             $estado = strtolower($message['estado'] ?? '');
@@ -16,26 +20,31 @@ class MantencionRetentionService
             if ($ts === null || $ts > $threshold) {
                 continue;
             }
-            $removed[] = $message;
-            unset($messages[$key]);
+            if ($this->archive_message_record($message)) {
+                $removed[] = $message;
+                unset($messages[$key]);
+            }
         }
         if (empty($removed)) {
             return false;
         }
         $messages = array_values($messages);
-        foreach ($removed as $item) {
-            $this->archive_message_record($item);
-        }
         return true;
     }
 
-    public function archive_message_record(array $message, string $archivedBy = 'retencion'): void {
+    public function archive_message_record(array $message, string $archivedBy = 'retencion'): bool {
         $repo = function_exists('mantencion_report_repository') ? mantencion_report_repository() : null;
         if ($repo !== null && $repo->tableReady()) {
-            $message['estado'] = 'archivado';
-            $repo->markArchived($message);
-            append_hours_extra_record($message);
+            try {
+                return \Illuminate\Support\Facades\DB::transaction(function () use ($repo, $message): bool {
+                    if (!$repo->markArchived($message)) return false;
+                    $message['estado'] = 'archivado';
+                    if (!append_hours_extra_record($message)) throw new \RuntimeException('No se pudo guardar la jornada de horas extra.');
+                    return true;
+                }, 3);
+            } catch (\Throwable) { return false; }
         }
+        return false;
     }
 
     public function archive_selected_messages(array &$messages, array $ids): int {
@@ -43,21 +52,24 @@ class MantencionRetentionService
         if (empty($ids)) {
             return 0;
         }
+        $selected = array_fill_keys($ids, true);
         $archived = 0;
         foreach ($messages as $key => $message) {
-            if (!in_array(($message['id'] ?? ''), $ids, true)) {
+            $id = $message['id'] ?? '';
+            if (!is_string($id) || !isset($selected[$id])) {
                 continue;
             }
             if (strtolower(trim((string)($message['estado'] ?? ''))) !== 'procesado') {
                 continue;
             }
-            $this->archive_message_record($message, 'manual');
+            if (!$this->archive_message_record($message, 'manual')) {
+                continue;
+            }
             unset($messages[$key]);
             $archived++;
         }
         if ($archived > 0) {
             $messages = array_values($messages);
-            save_messages($messages);
         }
         return $archived;
     }

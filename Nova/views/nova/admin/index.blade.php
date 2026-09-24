@@ -847,9 +847,9 @@
                                 $novaRoleBadge = in_array($novaRole, ['root', 'admin'], true) ? 'is-admin' : 'is-usuario';
                                 $userStatus = $user['status'] ?? 'activo';
                                 $emachCredentials = is_array($user['emach_credentials'] ?? null) ? $user['emach_credentials'] : [];
-                                $hasEmachCredentials = trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '';
+                                $hasEmachCredentials = $user['has_emach_credentials'] ?? (trim((string) ($emachCredentials['user'] ?? '')) !== '' && trim((string) ($emachCredentials['password'] ?? '')) !== '');
                                 $nextcloudCredentials = is_array($user['nextcloud_credentials'] ?? null) ? $user['nextcloud_credentials'] : [];
-                                $hasNextcloudCredentials = trim((string) ($nextcloudCredentials['user'] ?? '')) !== '' && trim((string) ($nextcloudCredentials['password'] ?? '')) !== '';
+                                $hasNextcloudCredentials = $user['has_nextcloud_credentials'] ?? (trim((string) ($nextcloudCredentials['user'] ?? '')) !== '' && trim((string) ($nextcloudCredentials['password'] ?? '')) !== '');
                                 $telegramSettings = is_array($user['telegram_settings'] ?? null) ? $user['telegram_settings'] : [];
                                 $telegramChatId = trim((string) ($user['telegram_id_chat'] ?? ($telegramSettings['chat_id'] ?? '')));
                                 $hasTelegramSettings = preg_match('/^-?[1-9]\d{4,}$/', $telegramChatId) === 1;

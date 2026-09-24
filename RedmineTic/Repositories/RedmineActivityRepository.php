@@ -2,6 +2,8 @@
 
 namespace RedmineTic\Repositories;
 
+use App\Repositories\Database\SqlText;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -67,6 +69,10 @@ class RedmineActivityRepository
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $query->where('creado_at', '>=', $from . ' 00:00:00');
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) $query->where('creado_at', '<=', $to . ' 23:59:59');
 
+        if (DB::connection()->getDriverName() === 'mysql') {
+            return DB::transaction(fn (): array => $this->searchSql($query, $page, $perPage, $viewerId, $canViewAll));
+        }
+
         $scopedEntries = $query->orderByDesc('creado_at')->orderByDesc('id')->get()
             ->map(fn($row): array => $this->operationalEntry($row))
             ->filter(static fn(array $entry): bool => $canViewAll || ($viewerId !== '' && (string)($entry['user_id'] ?? '') === $viewerId))
@@ -76,6 +82,52 @@ class RedmineActivityRepository
         $page = min($page, $pages);
         $events = $scopedEntries->pluck('event')->filter()->unique()->sort()->values()->all();
         $entries = $scopedEntries->slice(($page - 1) * $perPage, $perPage)->values()->all();
+
+        return ['entries' => $entries, 'total' => $total, 'page' => $page, 'per_page' => $perPage, 'pages' => $pages, 'events' => $events];
+    }
+
+    private function searchSql(Builder $query, int $page, int $perPage, string $viewerId, bool $canViewAll): array
+    {
+        if (! $canViewAll) {
+            if ($viewerId === '') {
+                $query->whereRaw('1 = 0');
+            } else {
+                $json = "JSON_EXTRACT(CASE WHEN JSON_VALID(contexto) THEN contexto ELSE '{}' END, '$.user_id')";
+                $text = SqlText::trim("JSON_UNQUOTE($json)");
+                // PHP keeps the last duplicate JSON key; MariaDB extracts the first.
+                // Escaped keys, deep JSON and non-string IDs also retain PHP's decoder
+                // and casts, without hydrating every ordinary log entry.
+                $exceptional = "(NOT JSON_VALID(contexto) OR JSON_TYPE($json) <> 'STRING'"
+                    ." OR LOCATE(CONCAT(CHAR(92), 'u'), contexto) > 0"
+                    ." OR LOCATE('\"user_id\"', contexto, LOCATE('\"user_id\"', contexto) + 1) > 0"
+                    ." OR JSON_DEPTH(CASE WHEN JSON_VALID(contexto) THEN contexto ELSE '{}' END) >= 512)";
+                $exceptionIds = [];
+                foreach ((clone $query)->whereRaw($exceptional)->select(['id', 'contexto'])->cursor() as $row) {
+                    $context = json_decode((string) $row->contexto, true);
+                    $value = is_array($context) ? ($context['user_id'] ?? '') : '';
+                    $owner = is_array($value) ? 'Array' : trim((string) $value);
+                    if ($owner === $viewerId) {
+                        $exceptionIds[] = DB::connection()->getPdo()->quote((string) $row->id);
+                    }
+                }
+                $query->where(function (Builder $scope) use ($json, $text, $viewerId, $exceptionIds, $exceptional): void {
+                    $scope->whereRaw("NOT $exceptional AND JSON_TYPE($json) = 'STRING' AND BINARY $text = BINARY ?", [$viewerId]);
+                    if ($exceptionIds !== []) {
+                        $scope->orWhereRaw('id IN ('.implode(',', $exceptionIds).')');
+                    }
+                });
+            }
+        }
+        $total = (clone $query)->count();
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $pages);
+        $eventsQuery = (clone $query)->select(['evento', 'creado_at', 'id'])
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY BINARY evento ORDER BY creado_at DESC, id DESC) AS event_rank');
+        $events = DB::query()->fromSub($eventsQuery, 'visible_events')->where('event_rank', 1)
+            ->orderByDesc('creado_at')->orderByDesc('id')->pluck('evento')->filter()->unique()->sort()->values()->all();
+        $entries = (clone $query)->orderByDesc('creado_at')->orderByDesc('id')
+            ->offset(($page - 1) * $perPage)->limit($perPage)->get(['evento', 'contexto', 'creado_at'])
+            ->map(fn ($row): array => $this->operationalEntry($row))->all();
 
         return ['entries' => $entries, 'total' => $total, 'page' => $page, 'per_page' => $perPage, 'pages' => $pages, 'events' => $events];
     }

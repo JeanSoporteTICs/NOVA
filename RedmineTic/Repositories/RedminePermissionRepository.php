@@ -124,59 +124,46 @@ class RedminePermissionRepository
     public function saveRolesToRelational(array $roles): void
     {
         if (! $this->rolPermissionsTableAvailable()) {
-            return;
+            throw new \RuntimeException('La tabla de permisos de roles no esta disponible.');
         }
 
         $moduleId = $this->moduleId();
         if ($moduleId === null) {
-            return;
+            throw new \RuntimeException('No fue posible resolver el modulo de los permisos.');
         }
 
-        foreach ($roles as $rol => $permissions) {
-            $rol = trim((string) $rol);
-            if ($rol === '' || ! is_array($permissions)) {
-                continue;
-            }
-
-            $savedClaves = [];
-            foreach ($permissions as $clave => $valor) {
-                $clave = trim((string) $clave);
-                if ($clave === '') {
+        DB::transaction(function () use ($roles, $moduleId): void {
+            DB::table('modulos_nova')->where('id', $moduleId)->lockForUpdate()->first();
+            foreach ($roles as $rol => $permissions) {
+                $rol = trim((string) $rol);
+                if ($rol === '' || ! is_array($permissions)) {
                     continue;
                 }
-                try {
+
+                $values = $this->encodedPermissions($permissions);
+                foreach ($values as $clave => $valor) {
                     DB::table('redmine_tic_permisos_rol')->updateOrInsert(
                         ['modulo_id' => $moduleId, 'rol' => $rol, 'clave' => $clave],
-                        ['valor' => $this->encodeValue($clave, $valor), 'actualizado_at' => now()]
+                        ['valor' => $valor, 'actualizado_at' => now()]
                     );
-                    $savedClaves[] = $clave;
-                } catch (\Throwable) {
-                    continue;
                 }
-            }
-
-            if (! empty($savedClaves)) {
-                try {
+                if ($values !== []) {
                     DB::table('redmine_tic_permisos_rol')
                         ->where('modulo_id', $moduleId)
                         ->where('rol', $rol)
-                        ->whereNotIn('clave', $savedClaves)
+                        ->whereNotIn('clave', array_keys($values))
                         ->delete();
-                } catch (\Throwable) {
                 }
             }
-        }
 
-        $roleNames = array_values(array_filter(array_map('trim', array_keys($roles))));
-        if (! empty($roleNames)) {
-            try {
+            $roleNames = array_values(array_filter(array_map('trim', array_keys($roles))));
+            if ($roleNames !== []) {
                 DB::table('redmine_tic_permisos_rol')
                     ->where('modulo_id', $moduleId)
                     ->whereNotIn('rol', $roleNames)
                     ->delete();
-            } catch (\Throwable) {
             }
-        }
+        });
     }
 
     /** @param array<string,mixed> $permissions */
@@ -211,27 +198,32 @@ class RedminePermissionRepository
         }
 
         try {
-            DB::table('redmine_tic_permisos_rol')->upsert(
-                $rows,
-                ['modulo_id', 'rol', 'clave'],
-                ['valor', 'actualizado_at']
-            );
+            return DB::transaction(function () use ($rows, $moduleId, $role, $permissions): bool {
+                DB::table('modulos_nova')->where('id', $moduleId)->lockForUpdate()->first();
+                DB::table('redmine_tic_permisos_rol')->upsert(
+                    $rows,
+                    ['modulo_id', 'rol', 'clave'],
+                    ['valor', 'actualizado_at']
+                );
 
-            $savedKeys = array_column($rows, 'clave');
-            DB::table('redmine_tic_permisos_rol')
-                ->where('modulo_id', $moduleId)
-                ->where('rol', $role)
-                ->whereNotIn('clave', $savedKeys)
-                ->delete();
+                DB::table('redmine_tic_permisos_rol')
+                    ->where('modulo_id', $moduleId)
+                    ->where('rol', $role)
+                    ->whereNotIn('clave', array_column($rows, 'clave'))
+                    ->delete();
 
-            $persisted = $this->rolesFromRelational()[$role] ?? null;
-            if (! is_array($persisted)) {
-                return false;
-            }
-            ksort($persisted);
-            ksort($permissions);
+                $persisted = $this->rolesFromRelational()[$role] ?? null;
+                if (! is_array($persisted)) {
+                    throw new \RuntimeException('No fue posible verificar los permisos guardados.');
+                }
+                ksort($persisted);
+                ksort($permissions);
+                if ($persisted !== $permissions) {
+                    throw new \RuntimeException('Los permisos guardados no coinciden con los solicitados.');
+                }
 
-            return $persisted === $permissions;
+                return true;
+            });
         } catch (\Throwable) {
             return false;
         }
@@ -265,14 +257,16 @@ class RedminePermissionRepository
      *
      * @return array<int,array<string,mixed>>|null
      */
-    public function allPermissionsFromRelational(): ?array
+    public function allPermissionsFromRelational(?array $profileIds = null): ?array
     {
-        if (! $this->userPermissionsTableAvailable()) {
+        if ($profileIds === [] || ! $this->userPermissionsTableAvailable()) {
             return null;
         }
 
         try {
-            $rows = DB::table('redmine_tic_permisos_usuario')->get(['perfil_id', 'clave', 'valor']);
+            $rows = DB::table('redmine_tic_permisos_usuario')
+                ->when($profileIds !== null, fn ($query) => $query->whereIntegerInRaw('perfil_id', $profileIds))
+                ->get(['perfil_id', 'clave', 'valor']);
             if ($rows->isEmpty()) {
                 return null;
             }
@@ -297,36 +291,45 @@ class RedminePermissionRepository
      */
     public function savePermissionsToRelational(int $perfilId, array $permissions): void
     {
-        if (! $this->userPermissionsTableAvailable() || $perfilId <= 0) {
+        if ($perfilId <= 0) {
             return;
         }
 
-        $savedClaves = [];
-        foreach ($permissions as $clave => $valor) {
-            $clave = trim((string) $clave);
-            if ($clave === '') {
-                continue;
-            }
-            try {
+        $values = $this->encodedPermissions($permissions);
+        if ($values === []) {
+            return;
+        }
+        if (! $this->userPermissionsTableAvailable()) {
+            throw new \RuntimeException('La tabla de permisos de usuario no esta disponible.');
+        }
+
+        DB::transaction(function () use ($perfilId, $values): void {
+            DB::table('redmine_tic_perfiles_usuario')->where('id', $perfilId)->lockForUpdate()->first();
+            foreach ($values as $clave => $valor) {
                 DB::table('redmine_tic_permisos_usuario')->updateOrInsert(
                     ['perfil_id' => $perfilId, 'clave' => $clave],
-                    ['valor' => $this->encodeValue($clave, $valor), 'actualizado_at' => now()]
+                    ['valor' => $valor, 'actualizado_at' => now()]
                 );
-                $savedClaves[] = $clave;
-            } catch (\Throwable) {
-                continue;
+            }
+            DB::table('redmine_tic_permisos_usuario')
+                ->where('perfil_id', $perfilId)
+                ->whereNotIn('clave', array_keys($values))
+                ->delete();
+        });
+    }
+
+    /** @return array<string,string> */
+    private function encodedPermissions(array $permissions): array
+    {
+        $values = [];
+        foreach ($permissions as $clave => $valor) {
+            $clave = trim((string) $clave);
+            if ($clave !== '') {
+                $values[$clave] = $this->encodeValue($clave, $valor);
             }
         }
 
-        if (! empty($savedClaves)) {
-            try {
-                DB::table('redmine_tic_permisos_usuario')
-                    ->where('perfil_id', $perfilId)
-                    ->whereNotIn('clave', $savedClaves)
-                    ->delete();
-            } catch (\Throwable) {
-            }
-        }
+        return $values;
     }
 
     public function userPermissionsTableAvailable(): bool

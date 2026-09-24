@@ -50,10 +50,7 @@ class HorasExtraController extends Controller
         ];
         $dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
-        $grupos = $this->horasExtra->loadAll();
-        $grupos = $this->horasExtra->deduplicateGroupsBySharedDate($grupos);
         $uid = auth_get_user_id();
-        $grupos = $this->horasExtra->filterGroupsForUser($grupos, (string) $uid);
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_extra') {
             if (!$canEditHours) {
@@ -73,7 +70,6 @@ class HorasExtraController extends Controller
             } else {
                 $flash = 'No se encontraron registros para esa fecha';
             }
-            $grupos = $this->horasExtra->filterGroupsForUser($this->horasExtra->deduplicateGroupsBySharedDate($this->horasExtra->loadAll()), (string) $uid);
             if ($fecha !== '' && $selMes === '' && $selAnio === '') {
                 $dtTmp = DateTime::createFromFormat('Y-m-d', $fecha) ?: DateTime::createFromFormat('d-m-Y', $fecha);
                 if ($dtTmp instanceof DateTime) {
@@ -83,58 +79,9 @@ class HorasExtraController extends Controller
             }
         }
 
-        $aniosDisponibles = [];
-        foreach ($grupos as $g) {
-            $fechaBase = $g['fecha'] ?? '';
-            if ($fechaBase) {
-                $dt = DateTime::createFromFormat('Y-m-d', $fechaBase) ?: DateTime::createFromFormat('d-m-Y', $fechaBase);
-                if ($dt instanceof DateTime) {
-                    $aniosDisponibles[$dt->format('Y')] = true;
-                }
-            }
-        }
-        $aniosDisponibles = array_keys($aniosDisponibles);
-        $aniosDisponibles[] = $anioActual;
-        if ($selAnio !== '') {
-            $aniosDisponibles[] = $selAnio;
-        }
-        $aniosDisponibles = array_values(array_unique(array_map('strval', $aniosDisponibles)));
-        $aniosDisponibles ? sort($aniosDisponibles, SORT_NUMERIC) : [];
-
-        $grupos = array_values(array_filter($grupos, function ($g) use ($selMes, $selAnio) {
-            $fechaBase = $g['fecha'] ?? '';
-            if ($fechaBase) {
-                $dt = DateTime::createFromFormat('Y-m-d', $fechaBase) ?: DateTime::createFromFormat('d-m-Y', $fechaBase);
-                if ($dt instanceof DateTime) {
-                    $mesNum = (int) $dt->format('n');
-                    $anioNum = $dt->format('Y');
-                    if ($selMes !== '' && (int) $selMes !== $mesNum) {
-                        return false;
-                    }
-                    if ($selAnio !== '' && $selAnio !== $anioNum) {
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        }));
-
-        usort($grupos, function ($a, $b) {
-            $fa = $this->horasExtra->normalizeDateKey($a['fecha'] ?? '');
-            $fb = $this->horasExtra->normalizeDateKey($b['fecha'] ?? '');
-            if ($fa === $fb) {
-                return 0;
-            }
-            if ($fa === '') {
-                return 1;
-            }
-            if ($fb === '') {
-                return -1;
-            }
-
-            return $fa <=> $fb; // mostrar primero las fechas más antiguas
-        });
+        $hoursData = $this->horasExtra->screenData((string) $uid, $selMes, $selAnio, $anioActual);
+        $grupos = $hoursData['grupos'];
+        $aniosDisponibles = $hoursData['aniosDisponibles'];
 
         $emachSuggestions = $this->horasExtra->emachOvertimeSuggestions($grupos);
 

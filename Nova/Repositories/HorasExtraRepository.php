@@ -2,6 +2,7 @@
 
 namespace App\Modulos\Nova\Repositories;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -29,10 +30,48 @@ final class HorasExtraRepository
         }
     }
 
+    /** Group/pivot changes share the caller transaction; no external calls inside it. */
+    public function atomic(callable $operation): mixed
+    {
+        return DB::transaction($operation, DB::transactionLevel() === 0 ? 3 : 1);
+    }
+
+    private function write(callable $operation, mixed $failure): mixed
+    {
+        $nested = DB::transactionLevel() > 0;
+        try {
+            return $this->atomic($operation);
+        } catch (\Throwable $exception) {
+            // A surrounding operation must roll back instead of committing a partial result.
+            if ($nested) {
+                throw $exception;
+            }
+
+            return $failure;
+        }
+    }
+
+    /** Lock owner before groups, then old and destination groups in ascending PK order. */
+    public function lockTransition(string $origen, int $reporteId, ?int $usuarioId, ?string $fecha): void
+    {
+        if ($usuarioId !== null) {
+            DB::table('usuarios_nova')->where('id', $usuarioId)->lockForUpdate()->first();
+        }
+        $ids = DB::table('horas_extra_grupo_reportes')->where('origen', $origen)->where('reporte_id', $reporteId)->pluck('grupo_id')->all();
+        if ($fecha !== null) {
+            $query = DB::table('horas_extra_grupos')->where('fecha', $fecha);
+            $usuarioId !== null ? $query->where('usuario_id', $usuarioId) : $query->whereNull('usuario_id');
+            $ids = array_merge($ids, $query->pluck('id')->all());
+        }
+        if ($ids !== []) {
+            DB::table('horas_extra_grupos')->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get(['id']);
+        }
+    }
+
     public function resolveUsuarioId(?string $redmineId): ?int
     {
         $redmineId = trim((string) $redmineId);
-        if ($redmineId === '' || !$this->tableReady()) {
+        if ($redmineId === '' || ! $this->tableReady()) {
             return null;
         }
 
@@ -40,7 +79,11 @@ final class HorasExtraRepository
             $id = DB::table('usuarios_nova')->where('redmine_id', $redmineId)->value('id');
 
             return $id !== null ? (int) $id : null;
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                throw $exception;
+            }
+
             return null;
         }
     }
@@ -54,7 +97,7 @@ final class HorasExtraRepository
      */
     public function groupsForOrigen(string $origen): array
     {
-        if (!$this->tableReady()) {
+        if (! $this->tableReady()) {
             return [];
         }
 
@@ -105,7 +148,7 @@ final class HorasExtraRepository
     public function reporteIdsPorOrigenYFecha(string $origen, string $fecha): array
     {
         $fecha = trim($fecha);
-        if (!$this->tableReady() || $fecha === '') {
+        if (! $this->tableReady() || $fecha === '') {
             return [];
         }
 
@@ -125,77 +168,115 @@ final class HorasExtraRepository
     public function findOrCreateGroup(?int $usuarioId, string $fecha, ?string $horaInicio = null, ?string $horaFin = null): ?int
     {
         $fecha = trim($fecha);
-        if (!$this->tableReady() || $fecha === '') {
+        if (! $this->tableReady() || $fecha === '') {
             return null;
         }
 
-        try {
+        return $this->write(function () use ($usuarioId, $fecha, $horaInicio, $horaFin): int {
+            if ($usuarioId !== null) {
+                DB::table('usuarios_nova')->where('id', $usuarioId)->lockForUpdate()->first();
+            }
             $query = DB::table('horas_extra_grupos')->where('fecha', $fecha);
             $usuarioId !== null ? $query->where('usuario_id', $usuarioId) : $query->whereNull('usuario_id');
-            $id = $query->value('id');
+            $id = (clone $query)->lockForUpdate()->value('id');
             if ($id !== null) {
                 return (int) $id;
             }
-
-            return (int) DB::table('horas_extra_grupos')->insertGetId([
-                'usuario_id' => $usuarioId,
-                'fecha' => $fecha,
-                'hora_inicio' => $horaInicio,
-                'hora_fin' => $horaFin,
-                'total_minutos' => $this->minutesDiff($horaInicio, $horaFin),
-                'creado_at' => now(),
-                'actualizado_at' => now(),
-            ]);
-        } catch (\Throwable) {
-            return null;
-        }
+            try {
+                return (int) DB::table('horas_extra_grupos')->insertGetId([
+                    'usuario_id' => $usuarioId, 'fecha' => $fecha, 'hora_inicio' => $horaInicio, 'hora_fin' => $horaFin,
+                    'total_minutos' => $this->minutesDiff($horaInicio, $horaFin), 'creado_at' => now(), 'actualizado_at' => now(),
+                ]);
+            } catch (QueryException $exception) {
+                // Only recover the same non-null identity after a genuine duplicate-key race.
+                if ($usuarioId !== null && (int) ($exception->errorInfo[1] ?? 0) === 1062) {
+                    $winner = (clone $query)->lockForUpdate()->value('id');
+                    if ($winner !== null) {
+                        return (int) $winner;
+                    }
+                }
+                throw $exception;
+            }
+        }, null);
     }
 
     public function attachReporte(int $grupoId, string $origen, int $reporteId): void
     {
-        if (!$this->tableReady()) {
-            return;
+        if (! $this->tableReady()) {
+            throw new \RuntimeException('No se pudo guardar el vínculo de horas extra.');
         }
-
-        try {
+        $this->atomic(function () use ($grupoId, $origen, $reporteId): void {
+            if (! DB::table('horas_extra_grupos')->where('id', $grupoId)->lockForUpdate()->first()) {
+                throw new \RuntimeException('La jornada fue modificada o eliminada. Recarga antes de continuar.');
+            }
             DB::table('horas_extra_grupo_reportes')->updateOrInsert(
-                ['grupo_id' => $grupoId, 'origen' => $origen, 'reporte_id' => $reporteId],
-                ['actualizado_at' => now()],
+                ['grupo_id' => $grupoId, 'origen' => $origen, 'reporte_id' => $reporteId], ['actualizado_at' => now()]
             );
-        } catch (\Throwable) {
-        }
+        });
     }
 
-    /**
-     * Quita un reporte de su grupo (por origen, para no tocar reportes del
-     * otro módulo con el mismo reporte_id numérico). Si el grupo queda sin
-     * ningún reporte de ningún origen, se elimina.
-     */
+    /** Only the selected origin/report is detached; unrelated empty groups are retained. */
     public function detachReporte(string $origen, int $reporteId): bool
     {
-        if (!$this->tableReady()) {
-            return false;
+        if (! $this->tableReady()) {
+            throw new \RuntimeException('No se pudieron consultar los vínculos de horas extra.');
         }
 
-        try {
-            $grupoIds = DB::table('horas_extra_grupo_reportes')
-                ->where('origen', $origen)
-                ->where('reporte_id', $reporteId)
-                ->pluck('grupo_id');
-
-            $deleted = DB::table('horas_extra_grupo_reportes')
-                ->where('origen', $origen)
-                ->where('reporte_id', $reporteId)
-                ->delete();
-
+        return $this->write(function () use ($origen, $reporteId): bool {
+            $grupoIds = DB::table('horas_extra_grupo_reportes')->where('origen', $origen)->where('reporte_id', $reporteId)
+                ->orderBy('grupo_id')->pluck('grupo_id');
+            DB::table('horas_extra_grupos')->whereIn('id', $grupoIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            // Re-read current links after waiting for locks, even under REPEATABLE READ.
+            $grupoIds = DB::table('horas_extra_grupo_reportes')->where('origen', $origen)->where('reporte_id', $reporteId)
+                ->orderBy('grupo_id')->lockForUpdate()->pluck('grupo_id');
+            DB::table('horas_extra_grupos')->whereIn('id', $grupoIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            $deleted = DB::table('horas_extra_grupo_reportes')->where('origen', $origen)->where('reporte_id', $reporteId)->delete();
             foreach ($grupoIds as $grupoId) {
                 $this->deleteIfEmpty((int) $grupoId);
             }
 
             return $deleted > 0;
-        } catch (\Throwable) {
-            return false;
+        }, false);
+    }
+
+    /**
+     * Detach several reports using one lock/read/delete sequence. Callers that
+     * delete report rows already hold those rows, so no new hours link can be
+     * committed for the selected reports while this operation is in flight.
+     *
+     * @param  iterable<int|string>  $reporteIds
+     */
+    public function detachReportes(string $origen, iterable $reporteIds): int
+    {
+        if (! $this->tableReady()) {
+            throw new \RuntimeException('No se pudieron consultar los vínculos de horas extra.');
         }
+
+        $reporteIds = array_values(array_unique(array_filter(
+            array_map(static fn ($id): int => (int) $id, is_array($reporteIds) ? $reporteIds : iterator_to_array($reporteIds)),
+            static fn (int $id): bool => $id > 0
+        )));
+        if ($reporteIds === []) {
+            return 0;
+        }
+
+        return $this->write(function () use ($origen, $reporteIds): int {
+            $links = DB::table('horas_extra_grupo_reportes')
+                ->where('origen', $origen)
+                ->whereIn('reporte_id', $reporteIds);
+            $grupoIds = (clone $links)->orderBy('grupo_id')->pluck('grupo_id')->unique()->values();
+            DB::table('horas_extra_grupos')->whereIn('id', $grupoIds)->orderBy('id')->lockForUpdate()->get(['id']);
+
+            // Re-read after waiting for group locks, matching detachReporte().
+            $grupoIds = (clone $links)->orderBy('grupo_id')->lockForUpdate()->pluck('grupo_id')->unique()->values();
+            DB::table('horas_extra_grupos')->whereIn('id', $grupoIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            $deleted = (clone $links)->delete();
+            foreach ($grupoIds as $grupoId) {
+                $this->deleteIfEmpty((int) $grupoId);
+            }
+
+            return $deleted;
+        }, 0);
     }
 
     /**
@@ -210,7 +291,7 @@ final class HorasExtraRepository
     public function updateGroupsByOrigenAndFecha(string $origen, string $fecha, ?string $horaInicio, ?string $horaFin): bool
     {
         $fecha = trim($fecha);
-        if (!$this->tableReady() || $fecha === '') {
+        if (! $this->tableReady() || $fecha === '') {
             Log::warning('HorasExtraRepository::updateGroupsByOrigenAndFecha — tabla no lista o fecha vacia', [
                 'origen' => $origen, 'fecha' => $fecha, 'table_ready' => $this->tableReady(),
             ]);
@@ -218,87 +299,55 @@ final class HorasExtraRepository
             return false;
         }
 
-        try {
+        return $this->write(function () use ($origen, $fecha, $horaInicio, $horaFin): bool {
             $grupoIds = DB::table('horas_extra_grupo_reportes as p')
                 ->join('horas_extra_grupos as g', 'g.id', '=', 'p.grupo_id')
-                ->where('p.origen', $origen)
-                ->where('g.fecha', $fecha)
-                ->distinct()
-                ->pluck('p.grupo_id');
-
+                ->where('p.origen', $origen)->where('g.fecha', $fecha)->distinct()->orderBy('p.grupo_id')->pluck('p.grupo_id');
             if ($grupoIds->isEmpty()) {
-                Log::warning('HorasExtraRepository::updateGroupsByOrigenAndFecha — no se encontro ningun grupo para ese origen+fecha', [
-                    'origen' => $origen, 'fecha' => $fecha,
-                ]);
-
                 return false;
             }
-
-            $updated = 0;
+            DB::table('horas_extra_grupos')->whereIn('id', $grupoIds)->orderBy('id')->lockForUpdate()->get(['id']);
             foreach ($grupoIds as $grupoId) {
-                if ($this->updateGroupTime((int) $grupoId, $horaInicio, $horaFin)) {
-                    $updated++;
+                if (! $this->updateGroupTime((int) $grupoId, $horaInicio, $horaFin)) {
+                    throw new \RuntimeException('No se pudo actualizar la jornada completa.');
                 }
             }
 
-            return $updated > 0;
-        } catch (\Throwable $e) {
-            Log::error('HorasExtraRepository::updateGroupsByOrigenAndFecha — excepcion', [
-                'origen' => $origen, 'fecha' => $fecha, 'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
+            return true;
+        }, false);
     }
 
     public function updateGroupTime(int $grupoId, ?string $horaInicio, ?string $horaFin): bool
     {
-        if (!$this->tableReady()) {
+        if (! $this->tableReady()) {
             Log::warning('HorasExtraRepository::updateGroupTime — tabla no lista', ['grupo_id' => $grupoId]);
 
             return false;
         }
 
-        try {
-            $current = DB::table('horas_extra_grupos')->where('id', $grupoId)->first(['hora_inicio', 'hora_fin']);
+        return $this->write(function () use ($grupoId, $horaInicio, $horaFin): bool {
+            $current = DB::table('horas_extra_grupos')->where('id', $grupoId)->lockForUpdate()->first(['hora_inicio', 'hora_fin']);
             if ($current === null) {
-                Log::warning('HorasExtraRepository::updateGroupTime — grupo_id no existe', ['grupo_id' => $grupoId]);
-
                 return false;
             }
-
             $finalInicio = $horaInicio !== null && trim($horaInicio) !== '' ? $horaInicio : $current->hora_inicio;
             $finalFin = $horaFin !== null && trim($horaFin) !== '' ? $horaFin : $current->hora_fin;
-
             if ($finalInicio === $current->hora_inicio && $finalFin === $current->hora_fin) {
-                // Nada que cambiar: el grupo ya tiene exactamente estos valores.
-                // No es un fallo — se evita el UPDATE innecesario y se reporta éxito.
                 return true;
             }
 
             return DB::table('horas_extra_grupos')->where('id', $grupoId)->update([
-                'hora_inicio' => $finalInicio,
-                'hora_fin' => $finalFin,
-                'total_minutos' => $this->minutesDiff($finalInicio, $finalFin),
-                'actualizado_at' => now(),
+                'hora_inicio' => $finalInicio, 'hora_fin' => $finalFin,
+                'total_minutos' => $this->minutesDiff($finalInicio, $finalFin), 'actualizado_at' => now(),
             ]) > 0;
-        } catch (\Throwable $e) {
-            Log::error('HorasExtraRepository::updateGroupTime — excepcion', [
-                'grupo_id' => $grupoId, 'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
+        }, false);
     }
 
     private function deleteIfEmpty(int $grupoId): void
     {
-        try {
-            $hasAny = DB::table('horas_extra_grupo_reportes')->where('grupo_id', $grupoId)->exists();
-            if (!$hasAny) {
-                DB::table('horas_extra_grupos')->where('id', $grupoId)->delete();
-            }
-        } catch (\Throwable) {
+        // The group row remains locked through EXISTS + DELETE. Attach takes that same lock.
+        if (! DB::table('horas_extra_grupo_reportes')->where('grupo_id', $grupoId)->lockForUpdate()->first(['id'])) {
+            DB::table('horas_extra_grupos')->where('id', $grupoId)->delete();
         }
     }
 
@@ -310,8 +359,8 @@ final class HorasExtraRepository
             return null;
         }
 
-        $start = strtotime('1970-01-01 ' . $horaInicio);
-        $end = strtotime('1970-01-01 ' . $horaFin);
+        $start = strtotime('1970-01-01 '.$horaInicio);
+        $end = strtotime('1970-01-01 '.$horaFin);
         if ($start === false || $end === false) {
             return null;
         }

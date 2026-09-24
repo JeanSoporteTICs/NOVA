@@ -15,7 +15,7 @@ final class RedmineTicStaleNewReportNotifierTest extends TestCase
 
         $this->assertIsString($repository);
         $this->assertStringContainsString('function staleNewIssueIdsForAssignee(', $repository);
-        $this->assertStringContainsString("->where('asignado_a', (int) \$assigneeId)", $repository);
+        $this->assertStringContainsString("->where('asignado_a', \$assigneeId)", $repository);
         $this->assertStringContainsString("->where('estado_redmine', 'Nueva')", $repository);
         $this->assertStringContainsString("->where('creado_at', '>=', \$start)", $repository);
         $this->assertStringContainsString("->where('creado_at', '<', \$end)", $repository);
@@ -68,7 +68,7 @@ final class RedmineTicStaleNewReportNotifierTest extends TestCase
         $this->assertStringContainsString('data-report-dirty-bar', $recipientsView);
         $this->assertStringContainsString('data-report-schedule-form', $view);
         $this->assertStringContainsString('value="sync_redmine_statuses"', $historyView);
-        $this->assertStringContainsString('$redmine->persistIssueStatuses($statuses)', $controller);
+        $this->assertStringContainsString("\$redmine->persistIssueStatuses(\$result['statuses'])", $controller);
         $this->assertStringContainsString("\$report['estado_redmine'] = trim((string) data_get(\$decoded, 'issue.status.name', ''))", $repository);
         $this->assertStringContainsString('telegram_run_tic_daily_reports', $listener);
         $this->assertStringContainsString("redmine:notify-stale-new')->everyFiveMinutes()", $schedule);
