@@ -467,9 +467,9 @@
                             <td><span class="historico-date"><i class="bi bi-calendar3"></i>{{ $fmtDate($row['_history_date_norm'] ?? $row['fecha_inicio'] ?? $row['fecha'] ?? '') }}</span></td>
                             <td>
                                 @if ($redmineId !== '' && $issueUrl !== '')
-                                    <a class="historico-redmine-link" href="{{ $issueUrl }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i>{{ $redmineId }}</a>
+                                    <a class="historico-redmine-link" href="{{ $issueUrl }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i>#{{ $redmineId }}</a>
                                 @else
-                                    <span class="text-muted">{{ $redmineId !== '' ? $redmineId : '-' }}</span>
+                                    <span class="text-muted">{{ $redmineId !== '' ? '#'.$redmineId : '-' }}</span>
                                 @endif
                             </td>
                             <td>
@@ -959,7 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chat_id_telegram: ['Chat ID Telegram', 'bi-telegram'],
         };
         body.innerHTML = Object.entries(labels).map(([key, meta]) => `
-            <div><dt><i class="bi ${escapeHtml(meta[1])}"></i>${escapeHtml(meta[0])}</dt><dd>${escapeHtml(detail[key] || '-')}</dd></div>
+            <div><dt><i class="bi ${escapeHtml(meta[1])}"></i>${escapeHtml(meta[0])}</dt><dd>${escapeHtml(key === 'redmine_id' && detail[key] ? '#' + detail[key] : (detail[key] || '-'))}</dd></div>
         `).join('');
     });
 });

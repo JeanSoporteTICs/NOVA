@@ -166,7 +166,6 @@
                     <col class="rm-dashboard-col-category">
                     <col class="rm-dashboard-col-unit">
                     <col class="rm-dashboard-col-request-unit">
-                    <col class="rm-dashboard-col-status">
                     <col class="rm-dashboard-col-actions">
                 </colgroup>
                 <thead>
@@ -183,7 +182,6 @@
                         <th>Categorías</th>
                         <th>Unidad</th>
                         <th>Unidad solicitante</th>
-                        <th>Estado local</th>
                         <th class="nova-col-actions text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -193,6 +191,7 @@
                         $reportId = (string) ($report['id'] ?? '');
                         $hasHoursExtra = in_array(strtolower($report['hora_extra'] ?? ''), ['si','1','true'], true);
                         $estadoLocal = strtolower(trim((string) ($report['estado'] ?? '')));
+                        $redmineId = trim((string) ($report['redmine_id'] ?? ''));
                         $errorLogText = (string) (($errorLogsByReport ?? [])[$reportId] ?? 'Sin registros de error para este reporte.');
                         $errorLogTarget = 'dashboard-error-log-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $reportId);
                         $reportOrigin = strtolower(trim((string) ($report['origen'] ?? '')));
@@ -219,7 +218,7 @@
                                 @endif
                             </div>
                         </td>
-                        <td>{{ $report['redmine_id'] ?? '-' }}</td>
+                        <td>{{ $redmineId !== '' ? '#'.$redmineId : '-' }}</td>
                         <td>
                             <div class="rm-dashboard-subject" title="{{ $report['asunto'] ?? $report['mensaje'] ?? '-' }}">
                                 {{ $report['asunto'] ?? $report['mensaje'] ?? '-' }}
@@ -230,11 +229,6 @@
                         <td>{{ $report['categoria'] ?? '-' }}</td>
                         <td>{{ $report['unidad'] ?? '-' }}</td>
                         <td>{{ $report['unidad_solicitante'] ?? '-' }}</td>
-                        <td class="text-center">
-                            <span class="rm-dashboard-status {{ $estadoLocal === 'procesado' ? 'is-processed' : ($estadoLocal === 'error' ? 'is-error' : 'is-pending') }}" title="{{ $estadoLocal ?: 'sin estado' }}">
-                                <i class="bi {{ $estadoLocal === 'procesado' ? 'bi-check2' : ($estadoLocal === 'error' ? 'bi-exclamation-triangle' : 'bi-hourglass-split') }}"></i>
-                            </span>
-                        </td>
                         <td class="nova-col-actions">
                             <div class="nova-row-actions">
                                 @if ($estadoLocal === 'error')
@@ -306,7 +300,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="nova-empty"><i class="bi bi-inboxes" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes activas en la cola.</td></tr>
+                    <tr><td colspan="9" class="nova-empty"><i class="bi bi-inboxes" style="font-size:1.4rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes activas en la cola.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -672,7 +666,7 @@
             // The clicked button is disabled during the wait; preserve its action in the POST.
             bulkForm.querySelector('input[name="dashboard_action"]').value = 'archive_selected';
             if (!window.NovaArchiveFeedback.start(bulkForm, submitter, count)) return;
-            window.setTimeout(() => HTMLFormElement.prototype.submit.call(bulkForm), 50);
+            window.NovaArchiveFeedback.waitMinimum(bulkForm).then(() => HTMLFormElement.prototype.submit.call(bulkForm));
             return;
         }
         if (!(submitter instanceof HTMLButtonElement) || submitter.value !== 'process_selected') {

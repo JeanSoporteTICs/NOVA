@@ -1464,6 +1464,7 @@ window.NovaScrollTop = NovaScrollTop;
 // Shared feedback for dashboard archive requests (AJAX and normal POST).
 window.NovaArchiveFeedback = (() => {
     const pending = new Map();
+    const minimumDuration = 2000;
 
     function start(form, button, count, controls = []) {
         if (!form || pending.has(form) || count < 1) return false;
@@ -1473,6 +1474,7 @@ window.NovaArchiveFeedback = (() => {
             label: button?.innerHTML,
             busy: form.getAttribute('aria-busy'),
             buttons: buttons.map(control => [control, control.disabled]),
+            startedAt: performance.now(),
         });
         form.dataset.archivePending = '1';
         form.setAttribute('aria-busy', 'true');
@@ -1480,11 +1482,34 @@ window.NovaArchiveFeedback = (() => {
         if (button) button.innerHTML = '<span class="nova-spinner" aria-hidden="true"></span> Archivando…';
         window.appUi?.setLoading?.(true);
         window.appUi?.setIntegrationLoading?.(true, {
-            title: 'Archivando reportes',
-            detail: `${count === 1 ? 'Se está archivando 1 reporte' : `Se están archivando ${count} reportes`}. Espera a que termine; puede tardar unos segundos.`,
+            title: 'Archivando procesados',
+            detail: 'Espera a que finalice el archivado. La lista se actualizará al terminar.',
             icon: 'bi-archive',
         });
+        const overlay = document.getElementById('nova-integration-overlay');
+        if (overlay) {
+            overlay.classList.add('is-archive');
+            const bar = overlay.querySelector('.nova-integration-bar');
+            bar?.setAttribute('role', 'progressbar');
+            bar?.setAttribute('aria-label', 'Archivado en curso');
+            bar?.removeAttribute('aria-hidden');
+            const marker = document.createElement('span');
+            marker.className = 'nova-archive-bar-icon bi bi-archive-fill';
+            marker.setAttribute('aria-hidden', 'true');
+            bar?.querySelector('i')?.append(marker);
+            const summary = document.createElement('div');
+            summary.className = 'nova-archive-progress-summary';
+            summary.innerHTML = '<span class="nova-archive-progress-count"></span><span class="nova-archive-progress-state"><i aria-hidden="true"></i>En curso</span>';
+            summary.querySelector('.nova-archive-progress-count').textContent = `${count} ${count === 1 ? 'reporte seleccionado' : 'reportes seleccionados'}`;
+            bar?.before(summary);
+        }
         return true;
+    }
+
+    function waitMinimum(form) {
+        const state = pending.get(form);
+        if (!state) return Promise.resolve();
+        return new Promise(resolve => window.setTimeout(resolve, Math.max(0, minimumDuration - (performance.now() - state.startedAt))));
     }
 
     function finish(form) {
@@ -1496,11 +1521,19 @@ window.NovaArchiveFeedback = (() => {
         else form.setAttribute('aria-busy', state.busy);
         state.buttons.forEach(([control, disabled]) => { control.disabled = disabled; });
         if (state.button) state.button.innerHTML = state.label;
+        const overlay = document.getElementById('nova-integration-overlay');
+        overlay?.classList.remove('is-archive');
+        overlay?.querySelector('.nova-archive-progress-summary')?.remove();
+        const bar = overlay?.querySelector('.nova-integration-bar');
+        bar?.querySelector('.nova-archive-bar-icon')?.remove();
+        bar?.removeAttribute('role');
+        bar?.removeAttribute('aria-label');
+        bar?.setAttribute('aria-hidden', 'true');
         window.appUi?.setIntegrationLoading?.(false);
         window.appUi?.setLoading?.(false);
     }
 
     // A POST page can be restored by the browser's back/forward cache.
     window.addEventListener('pageshow', () => [...pending.keys()].forEach(finish));
-    return { start, finish };
+    return { start, waitMinimum, finish };
 })();

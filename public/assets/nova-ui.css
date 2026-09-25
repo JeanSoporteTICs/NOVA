@@ -2630,6 +2630,91 @@ button.nova-metric:hover {
   font-size: 0;
 }
 
+/* Archive feedback: a clear indeterminate state, never a fabricated percentage. */
+.nova-integration-overlay.is-archive .nova-integration-card {
+  border: 1px solid #bfd7f4;
+  box-shadow: 0 24px 70px rgba(15, 38, 75, .28);
+}
+
+.nova-integration-overlay.is-archive .nova-integration-icon {
+  color: #1d4ed8;
+  background: #e8f1ff;
+  box-shadow: none;
+}
+
+.nova-archive-progress-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 20px;
+  font-size: .78rem;
+  font-weight: 800;
+  color: #34506f;
+}
+
+.nova-archive-progress-summary span {
+  margin-top: 0;
+}
+
+.nova-archive-progress-state {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  margin: 0 !important;
+  color: #1d4ed8 !important;
+}
+
+.nova-archive-progress-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 0 4px #dbeafe;
+}
+
+.nova-integration-overlay.is-archive .nova-integration-bar {
+  height: 24px;
+  margin-top: 10px;
+  background: #dbeafe;
+  box-shadow: inset 0 1px 2px rgba(26, 72, 126, .12);
+}
+
+.nova-integration-overlay.is-archive .nova-integration-bar i {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  padding-right: 10px;
+  width: 48%;
+  background: linear-gradient(90deg, #2563eb, #38bdf8 65%, #22c55e);
+  box-shadow: 0 0 16px rgba(37, 99, 235, .3);
+  animation: nova-archive-progress-sweep 1.5s ease-in-out infinite;
+}
+
+.nova-integration-overlay.is-archive .nova-archive-bar-icon {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  color: #fff;
+  font-size: .88rem;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(15, 38, 75, .28);
+}
+
+@keyframes nova-archive-progress-sweep {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(215%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-integration-overlay.is-archive .nova-integration-bar i {
+    width: 100%;
+    animation: none;
+  }
+}
+
 /* Nextcloud loading sequence: circular draw, side pop and staggered wordmark. */
 .nova-nextcloud-loader {
   box-sizing: border-box;
@@ -6345,14 +6430,13 @@ nav.sb-navbar .container-fluid {
 }
 
 .rm-dashboard-table--tic .rm-dashboard-col-select { width: 4.25rem; }
-.rm-dashboard-table--tic .rm-dashboard-col-redmine { width: 5rem; }
-.rm-dashboard-table--tic .rm-dashboard-col-subject { width: 29%; }
+.rm-dashboard-table--tic .rm-dashboard-col-redmine { width: 6rem; }
+.rm-dashboard-table--tic .rm-dashboard-col-subject { width: 31%; }
 .rm-dashboard-table--tic .rm-dashboard-col-requester { width: 11%; }
 .rm-dashboard-table--tic .rm-dashboard-col-date { width: 9rem; }
 .rm-dashboard-table--tic .rm-dashboard-col-category { width: 9%; }
 .rm-dashboard-table--tic .rm-dashboard-col-unit { width: 11%; }
 .rm-dashboard-table--tic .rm-dashboard-col-request-unit { width: 15%; }
-.rm-dashboard-table--tic .rm-dashboard-col-status { width: 5rem; }
 .rm-dashboard-table--tic .rm-dashboard-col-actions { width: 6.4rem; }
 
 .rm-dashboard-table--tic th:first-child,
@@ -15521,11 +15605,11 @@ nav.sb-navbar > .container-fluid,
 
   .rm-dashboard-table--tic .rm-dashboard-col-redmine,
   .rm-dashboard-table--tic th:nth-child(2),
-  .rm-dashboard-table--tic td:nth-child(2) { width: 4.5%; }
+  .rm-dashboard-table--tic td:nth-child(2) { width: 6%; }
 
   .rm-dashboard-table--tic .rm-dashboard-col-subject,
   .rm-dashboard-table--tic th:nth-child(3),
-  .rm-dashboard-table--tic td:nth-child(3) { width: 21%; }
+  .rm-dashboard-table--tic td:nth-child(3) { width: 23%; }
 
   .rm-dashboard-table--tic .rm-dashboard-col-requester,
   .rm-dashboard-table--tic th:nth-child(4),
@@ -15547,13 +15631,9 @@ nav.sb-navbar > .container-fluid,
   .rm-dashboard-table--tic th:nth-child(8),
   .rm-dashboard-table--tic td:nth-child(8) { width: 12%; }
 
-  .rm-dashboard-table--tic .rm-dashboard-col-status,
-  .rm-dashboard-table--tic th:nth-child(9),
-  .rm-dashboard-table--tic td:nth-child(9) { width: 5%; }
-
   .rm-dashboard-table--tic .rm-dashboard-col-actions,
-  .rm-dashboard-table--tic th:nth-child(10),
-  .rm-dashboard-table--tic td:nth-child(10) { width: 14%; }
+  .rm-dashboard-table--tic th:nth-child(9),
+  .rm-dashboard-table--tic td:nth-child(9) { width: 15.5%; }
 
   .rm-dashboard-table--tic tbody td:nth-child(3),
   .rm-dashboard-table--tic tbody td:nth-child(4),

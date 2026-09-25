@@ -288,7 +288,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
                 </div>
               </td>
               <?php endif; ?>
-              <td><?= $h($m['redmine_id'] ?? '') ?></td>
+              <td><?= trim((string)($m['redmine_id'] ?? '')) !== '' ? '#' . $h(trim((string)$m['redmine_id'])) : '' ?></td>
 
               <td>
                 <div class="dashboard-table__subject" title="<?= $h($asunto) ?>"><?= $h($asunto) ?></div>
@@ -1716,9 +1716,11 @@ async function submitDashboardBulkAction(form) {
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.message || 'No se pudo completar la acción.');
     }
+    if (archiving) await window.NovaArchiveFeedback.waitMinimum(form);
     applyDashboardActionResult(payload, form, null);
     showDashboardToast(payload.message || 'Acción completada.');
   } catch (error) {
+    if (archiving) await window.NovaArchiveFeedback.waitMinimum(form);
     ids.forEach(id => document.querySelector(`tr[data-id="${escapeDashboardId(id)}"]`)?.classList.remove('is-row-updating'));
     showDashboardToast(error.message || 'No se pudo completar la acción.', 'danger');
   } finally {
@@ -2277,7 +2279,7 @@ refreshDashboardCounters();
     if (action === 'archive_selected') {
       if (!window.NovaArchiveFeedback.start(processForm, archiveBtn, ids.length,
         [processBtn, deleteSelectedBtn, resetErrorsBtn])) return;
-      window.setTimeout(() => HTMLFormElement.prototype.submit.call(processForm), 50);
+      window.NovaArchiveFeedback.waitMinimum(processForm).then(() => HTMLFormElement.prototype.submit.call(processForm));
       return;
     }
     processForm.submit();

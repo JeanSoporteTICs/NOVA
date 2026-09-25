@@ -261,10 +261,10 @@
                   <td>
                     <?php if ($redmineId !== '' && $redmineIssueUrl !== ''): ?>
                       <a class="historico-redmine-link" href="<?= $h($redmineIssueUrl) ?>" target="_blank" rel="noopener">
-                        <i class="bi bi-box-arrow-up-right"></i> <?= $h($redmineId) ?>
+                        <i class="bi bi-box-arrow-up-right"></i> #<?= $h($redmineId) ?>
                       </a>
                     <?php else: ?>
-                      <span class="text-muted"><?= $h($redmineId !== '' ? $redmineId : '-') ?></span>
+                      <span class="text-muted"><?= $h($redmineId !== '' ? '#' . $redmineId : '-') ?></span>
                     <?php endif; ?>
                   </td>
                   <td>
@@ -834,7 +834,7 @@
           document.querySelectorAll('#historico-detail-facts [data-history-fact]').forEach(field => {
             const key = field.dataset.historyFact || '';
             const value = triggerBtn.dataset[key] || '';
-            field.textContent = value.trim() || '-';
+            field.textContent = key === 'redmineId' && value.trim() ? `#${value.trim()}` : (value.trim() || '-');
           });
 
           const renderDescription = () => {
