@@ -16,8 +16,46 @@
       include base_path('RedmineMantencion/views/partials/hero.php');
     ?>
 
-    <?php if ($flash): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
-    <?php if ($error): ?><div data-nova-flash="error" data-nova-flash-message="<?= $h($error) ?>" hidden></div><?php endif; ?>
+    <?php if ($flash && !$plantillaModalOpen): ?><div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div><?php endif; ?>
+    <?php if ($error && !$plantillaModalOpen): ?><div data-nova-flash="error" data-nova-flash-message="<?= $h($error) ?>" hidden></div><?php endif; ?>
+
+    <div class="modal fade" id="manualPlantillasModal" data-maintenance="<?= $maintenanceMode ? '1' : '0' ?>" data-reopen="<?= $plantillaModalOpen ? '1' : '0' ?>" tabindex="-1" aria-labelledby="manualPlantillasModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+          <div class="modal-header"><h2 class="modal-title fs-5" id="manualPlantillasModalTitle"><i class="bi bi-lightning-charge me-2"></i>Gestionar plantillas</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+          <div class="modal-body">
+            <p class="text-muted">Crea una plantilla con nombre, asunto y una categoría vigente. Solo tú puedes ver y modificar tus plantillas.</p>
+            <?php if ($plantillaModalOpen && $flash): ?><div class="alert alert-success" role="status"><?= $h($flash) ?></div><?php endif; ?>
+            <?php if ($plantillaModalOpen && $error): ?><div class="alert alert-danger" role="alert"><?= $h($error) ?></div><?php endif; ?>
+            <div id="manual-plantilla-mensaje" class="alert d-none" role="status" aria-live="polite"></div>
+            <form id="manual-plantilla-form" data-app-no-loading method="post" action="<?= $h($manualPendingUrl) ?>" class="row g-3 mb-4">
+              <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+              <input type="hidden" name="_token" value="<?= $h($laravelCsrf) ?>">
+              <input type="hidden" name="plantilla_accion" id="plantilla-accion" value="guardar">
+              <input type="hidden" name="plantilla_id" id="plantilla-id" value="">
+              <div class="col-md-4"><label for="plantilla-nombre" class="form-label">Nombre</label><input id="plantilla-nombre" name="plantilla_nombre" class="form-control" maxlength="120" placeholder="Ej.: Reactivar" required></div>
+              <div class="col-md-8"><label for="plantilla-asunto" class="form-label">Asunto</label><textarea id="plantilla-asunto" name="plantilla_asunto" class="form-control manual-plantilla-asunto-input" rows="2" maxlength="255" placeholder="Ej.: Reactivar usuario CORE bloqueado por intentos fallidos" required></textarea></div>
+              <div class="col-md-6"><label for="plantilla-categoria" class="form-label">Categoría</label><select id="plantilla-categoria" name="plantilla_categoria" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Buscar categoría" required><option value=""></option><?php foreach ($categoryOptions as $categoryOption): ?><option value="<?= $h($categoryOption) ?>"><?= $h($categoryOption) ?></option><?php endforeach; ?></select></div>
+              <div class="col-md-6 d-flex align-items-end gap-2"><button type="submit" id="plantilla-submit" class="btn btn-primary" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-save me-1"></i>Crear plantilla</button><button type="button" id="plantilla-nueva" class="btn btn-outline-secondary d-none" title="Descartar la edición y preparar una plantilla nueva">Cancelar edición</button></div>
+            </form>
+            <h3 class="h6 mb-2">Mis plantillas</h3>
+            <div class="table-responsive"><table class="table table-sm align-middle mb-0 manual-plantillas-table"><thead><tr><th>Nombre</th><th>Asunto</th><th>Categoría</th><th class="text-end">Acciones</th></tr></thead><tbody id="manual-plantillas-lista">
+              <?php foreach ($plantillasManuales as $plantilla): ?>
+                <tr><td><?= $h($plantilla['nombre']) ?></td><td><?= $h($plantilla['asunto']) ?></td><td><?= $h($plantilla['categoria']) ?></td><td class="text-end text-nowrap">
+                  <button type="button" class="btn btn-outline-primary btn-sm manual-plantilla-editar" data-id="<?= (int)$plantilla['id'] ?>" data-nombre="<?= $h($plantilla['nombre']) ?>" data-asunto="<?= $h($plantilla['asunto']) ?>" data-categoria="<?= $h($plantilla['categoria']) ?>" aria-label="Editar <?= $h($plantilla['nombre']) ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-pencil-square"></i></button>
+                  <form method="post" action="<?= $h($manualPendingUrl) ?>" data-app-no-loading class="d-inline manual-plantilla-eliminar" data-nombre="<?= $h($plantilla['nombre']) ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>"><input type="hidden" name="_token" value="<?= $h($laravelCsrf) ?>"><input type="hidden" name="plantilla_accion" value="eliminar"><input type="hidden" name="plantilla_id" value="<?= (int)$plantilla['id'] ?>">
+                    <button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Eliminar <?= $h($plantilla['nombre']) ?>" <?= $maintenanceMode ? 'disabled' : '' ?>><i class="bi bi-trash"></i></button>
+                  </form>
+                </td></tr>
+              <?php endforeach; ?>
+              <?php if (!$plantillasManuales): ?><tr><td colspan="4" class="text-muted">Aún no tienes plantillas.</td></tr><?php endif; ?>
+            </tbody></table></div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button></div>
+        </div>
+      </div>
+    </div>
 
     <div class="card manual-card">
       <div class="card-body manual-grid">
@@ -46,13 +84,28 @@
                 <?php endforeach; ?>
               </select>
             </div>
-            <div></div>
-            <div></div>
+            <div class="field-label"><label for="manual-plantilla-buscar">Plantilla</label></div>
+            <div class="manual-plantilla-control">
+              <div class="manual-plantilla-search">
+                <select id="manual-plantilla-buscar" class="form-select mantencion-select2" data-mantencion-select2 data-placeholder="Buscar plantilla por nombre">
+                  <option value=""></option>
+                  <option value="__blank__" aria-label="Plantilla en blanco">&nbsp;</option>
+                  <?php foreach ($plantillasManuales as $plantilla): ?>
+                    <option value="<?= (int)$plantilla['id'] ?>" data-asunto="<?= $h($plantilla['asunto']) ?>" data-categoria="<?= $h($plantilla['categoria']) ?>"><?= $h($plantilla['nombre']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#manualPlantillasModal"><i class="bi bi-gear me-1"></i>Gestionar</button>
+              <div id="manual-plantilla-aplicada" class="manual-plantilla-aplicada d-none" role="status" aria-live="polite">
+                <i class="bi bi-check-circle-fill"></i><span>Aplicada: <strong id="manual-plantilla-nombre"></strong> · <span id="manual-plantilla-categoria"></span></span>
+                <button type="button" id="manual-plantilla-quitar" class="btn btn-link btn-sm p-0">Quitar</button>
+              </div>
+            </div>
           </div>
 
           <div class="field-row single">
             <div class="field-label">Asunto *</div>
-            <div><input name="asunto" class="form-control" value="<?= $h($form['asunto'] ?? '') ?>" required></div>
+            <div><input name="asunto" id="manual-asunto" class="form-control" value="<?= $h($form['asunto'] ?? '') ?>" required></div>
           </div>
 
           <div class="field-row single">
@@ -181,6 +234,185 @@
 <?php include base_path('RedmineMantencion/views/partials/bootstrap-scripts.php'); ?>
 <script data-partial-nav-script>
   (() => {
+    const quickTemplate = document.getElementById('manual-plantilla-buscar');
+    const templateModal = document.getElementById('manualPlantillasModal');
+    const templateForm = document.getElementById('manual-plantilla-form');
+    const templateCategory = document.getElementById('plantilla-categoria');
+    const templateRows = document.getElementById('manual-plantillas-lista');
+    const templateMessage = document.getElementById('manual-plantilla-mensaje');
+    const appliedTemplate = document.getElementById('manual-plantilla-aplicada');
+    const asunto = document.getElementById('manual-asunto');
+    const categoria = document.getElementById('manual-categoria');
+    const setCategory = value => {
+      categoria.value = value;
+      if (window.jQuery?.fn?.select2) window.jQuery(categoria).trigger('change');
+      else categoria.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const clearAppliedTemplate = () => {
+      quickTemplate.value = '';
+      if (window.jQuery?.fn?.select2) window.jQuery(quickTemplate).trigger('change.select2');
+      asunto.value = '';
+      asunto.dispatchEvent(new Event('input', { bubbles: true }));
+      setCategory('');
+      appliedTemplate.classList.add('d-none');
+    };
+    const applyQuickTemplate = option => {
+      if (!option?.value) return;
+      if (option.value === '__blank__') {
+        clearAppliedTemplate();
+        return;
+      }
+      asunto.value = option.dataset.asunto || '';
+      asunto.dispatchEvent(new Event('input', { bubbles: true }));
+      const categoryOption = [...categoria.options].find(item =>
+        item.value.trim().toLocaleLowerCase('es') === (option.dataset.categoria || '').trim().toLocaleLowerCase('es')
+      );
+      setCategory(categoryOption?.value || '');
+      document.getElementById('manual-plantilla-nombre').textContent = option.textContent;
+      document.getElementById('manual-plantilla-categoria').textContent = categoryOption?.value || 'Categoría pendiente';
+      appliedTemplate.classList.remove('d-none');
+      if (!categoryOption) window.NovaToast?.warning?.('La categoría de esta plantilla ya no está disponible. Selecciona una categoría vigente.');
+    };
+    quickTemplate?.addEventListener('change', () => applyQuickTemplate(quickTemplate.selectedOptions[0]));
+    if (quickTemplate && window.jQuery?.fn?.select2) {
+      window.jQuery(quickTemplate).on('select2:select', event =>
+        applyQuickTemplate(event.params?.data?.element || quickTemplate.selectedOptions[0])
+      );
+    }
+    document.getElementById('manual-plantilla-quitar')?.addEventListener('click', clearAppliedTemplate);
+
+    const showTemplateMessage = (message, success) => {
+      templateMessage.textContent = message || '';
+      templateMessage.className = `alert ${success ? 'alert-success' : 'alert-danger'}`;
+    };
+    const resetTemplateForm = () => {
+      templateForm.reset();
+      document.getElementById('plantilla-accion').value = 'guardar';
+      document.getElementById('plantilla-id').value = '';
+      document.getElementById('plantilla-submit').innerHTML = '<i class="bi bi-save me-1"></i>Crear plantilla';
+      document.getElementById('plantilla-nueva').classList.add('d-none');
+      templateCategory.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const appendHidden = (form, name, value) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    };
+    const renderTemplates = templates => {
+      templateRows.replaceChildren();
+      [...quickTemplate.options].slice(2).forEach(option => option.remove());
+      quickTemplate.value = '';
+      appliedTemplate.classList.add('d-none');
+      if (window.jQuery?.fn?.select2) window.jQuery(quickTemplate).trigger('change.select2');
+      if (!templates.length) {
+        const row = templateRows.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 4;
+        cell.className = 'text-muted';
+        cell.textContent = 'Aún no tienes plantillas.';
+        return;
+      }
+      templates.forEach(template => {
+        const option = new Option(template.nombre, String(template.id));
+        option.dataset.asunto = template.asunto;
+        option.dataset.categoria = template.categoria;
+        quickTemplate.add(option);
+
+        const row = templateRows.insertRow();
+        [template.nombre, template.asunto, template.categoria].forEach(value => {
+          row.insertCell().textContent = value;
+        });
+        const actions = row.insertCell();
+        actions.className = 'text-end text-nowrap';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'btn btn-outline-primary btn-sm manual-plantilla-editar';
+        edit.dataset.id = template.id;
+        edit.dataset.nombre = template.nombre;
+        edit.dataset.asunto = template.asunto;
+        edit.dataset.categoria = template.categoria;
+        edit.setAttribute('aria-label', `Editar ${template.nombre}`);
+        edit.innerHTML = '<i class="bi bi-pencil-square"></i>';
+        edit.disabled = templateModal.dataset.maintenance === '1';
+        actions.appendChild(edit);
+        actions.append(' ');
+
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = templateForm.action;
+        form.className = 'd-inline manual-plantilla-eliminar';
+        form.dataset.nombre = template.nombre;
+        form.setAttribute('data-app-no-loading', '');
+        appendHidden(form, 'csrf_token', templateForm.elements.namedItem('csrf_token').value);
+        appendHidden(form, '_token', templateForm.elements.namedItem('_token').value);
+        appendHidden(form, 'plantilla_accion', 'eliminar');
+        appendHidden(form, 'plantilla_id', String(template.id));
+        const remove = document.createElement('button');
+        remove.type = 'submit';
+        remove.className = 'btn btn-outline-danger btn-sm';
+        remove.setAttribute('aria-label', `Eliminar ${template.nombre}`);
+        remove.innerHTML = '<i class="bi bi-trash"></i>';
+        remove.disabled = templateModal.dataset.maintenance === '1';
+        form.appendChild(remove);
+        actions.appendChild(form);
+      });
+    };
+    const sendTemplateForm = async form => {
+      const submit = form.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const result = await response.json();
+        if (!result.ok) {
+          showTemplateMessage(result.message || 'No se pudo guardar la plantilla.', false);
+          return;
+        }
+        renderTemplates(result.plantillas || []);
+        resetTemplateForm();
+        showTemplateMessage(result.message || 'Plantillas actualizadas.', true);
+      } catch (error) {
+        showTemplateMessage('No se pudo conectar para guardar la plantilla. Intenta nuevamente.', false);
+      } finally {
+        submit.disabled = false;
+      }
+    };
+    templateForm?.addEventListener('submit', event => {
+      event.preventDefault();
+      void sendTemplateForm(templateForm);
+    });
+    templateRows?.addEventListener('click', event => {
+      const button = event.target.closest('.manual-plantilla-editar');
+      if (!button) return;
+      document.getElementById('plantilla-accion').value = 'actualizar';
+      document.getElementById('plantilla-id').value = button.dataset.id;
+      document.getElementById('plantilla-nombre').value = button.dataset.nombre || '';
+      document.getElementById('plantilla-asunto').value = button.dataset.asunto || '';
+      const option = [...templateCategory.options].find(item => item.value === button.dataset.categoria);
+      templateCategory.value = option?.value || '';
+      templateCategory.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('plantilla-submit').innerHTML = '<i class="bi bi-save me-1"></i>Guardar cambios';
+      document.getElementById('plantilla-nueva').classList.remove('d-none');
+      document.getElementById('plantilla-nombre').focus();
+    });
+    templateRows?.addEventListener('submit', event => {
+      const form = event.target.closest('.manual-plantilla-eliminar');
+      if (!form) return;
+      event.preventDefault();
+      if (window.confirm(`¿Eliminar la plantilla "${form.dataset.nombre}"?`)) void sendTemplateForm(form);
+    });
+    document.getElementById('plantilla-nueva')?.addEventListener('click', resetTemplateForm);
+    templateModal?.addEventListener('hidden.bs.modal', () => {
+      resetTemplateForm();
+      templateMessage.classList.add('d-none');
+    });
+
     const hoursExtra = document.getElementById('manual-hora-extra');
     const estimatedTime = document.getElementById('manual-tiempo-estimado');
     const syncEstimatedTime = (useDefault = false) => {
@@ -200,6 +432,7 @@
           width: '100%',
           allowClear: false,
           dropdownCssClass: 'tic-select2-dropdown',
+          dropdownParent: select.closest('.modal').length ? select.closest('.modal') : window.jQuery(document.body),
           placeholder: this.dataset.placeholder || 'Seleccionar',
           language: {
             noResults: () => 'No se encontraron resultados',
@@ -209,6 +442,13 @@
       });
     };
     initMantencionManualSelect2();
+
+    if (templateModal?.dataset.reopen === '1' && window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(templateModal).show();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('plantillas');
+      window.history.replaceState({}, document.title, url.toString());
+    }
 
     const currentUrl = new URL(window.location.href);
     if (currentUrl.searchParams.get('created') === '1') {

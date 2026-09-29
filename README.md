@@ -88,6 +88,8 @@ C:/xampp/php/php.exe artisan migrate
 C:/xampp/php/php.exe artisan test
 ```
 
+Las plantillas personales del formulario manual de Redmine Mantención (nombre, asunto y categoría del catálogo) se guardan en `redmine_mantencion_plantillas_manuales`. Ejecute las migraciones antes de usar la opción «Plantillas / accesos rápidos».
+
 En este entorno Linux/XAMPP el equivalente habitual es:
 
 ```bash

@@ -24,3 +24,50 @@
       .manual-grid .field-label { min-width: 0; text-align: left; padding-top: 0; }
     }
   
+
+/* Gestión de plantillas del pendiente manual. */
+#manualPlantillasModal .modal-dialog { --bs-modal-width: 1140px; }
+.manual-plantilla-asunto-input { min-height: 5.5rem; resize: vertical; }
+.manual-plantillas-table { width: 100%; min-width: 680px; table-layout: fixed; }
+.manual-plantillas-table th:nth-child(1), .manual-plantillas-table td:nth-child(1) { width: 18%; }
+.manual-plantillas-table th:nth-child(2), .manual-plantillas-table td:nth-child(2) { width: 47%; }
+.manual-plantillas-table th:nth-child(3), .manual-plantillas-table td:nth-child(3) { width: 20%; }
+.manual-plantillas-table th:nth-child(4), .manual-plantillas-table td:nth-child(4) { width: 15%; }
+.manual-plantillas-table td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.manual-plantillas-table td:last-child { white-space: nowrap; }
+
+.manual-plantilla-control { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; }
+.manual-plantilla-search { flex: 1 1 220px; min-width: 0; }
+.manual-plantilla-control .btn { white-space: nowrap; }
+
+.manual-plantilla-aplicada {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: .45rem .7rem;
+  border: 1px solid #bfdbfe;
+  border-radius: .5rem;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: .875rem;
+}
+.manual-plantilla-aplicada .btn { color: #1d4ed8; }
+@media (max-width: 575.98px) {
+  #manualPlantillasModal .modal-dialog.modal-fullscreen-sm-down {
+    width: 100vw;
+    max-width: none;
+    min-height: 100vh;
+    max-height: none;
+    height: 100vh;
+    margin: 0;
+  }
+  #manualPlantillasModal .modal-content {
+    min-height: 100vh;
+    max-height: none;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+}
