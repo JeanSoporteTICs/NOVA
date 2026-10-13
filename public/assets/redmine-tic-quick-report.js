@@ -108,7 +108,7 @@
       if (select.hasClass('select2-hidden-accessible')) return;
       select.select2({
         width: '100%',
-        allowClear: false,
+        allowClear: this.dataset.allowClear === '1',
         dropdownCssClass: 'tic-select2-dropdown',
         placeholder: this.dataset.placeholder || 'Seleccionar',
         language: {
@@ -152,7 +152,8 @@
       const name = control.dataset.quickSource;
       const target = output(name);
       if (!target) return;
-      const fallback = name === 'descripcion' ? 'Sin descripción adicional' : 'Sin indicar';
+      const fallback = name === 'descripcion' ? 'Sin descripción adicional'
+        : (name === 'responsable' ? 'Sin asignar' : 'Sin indicar');
       target.textContent = textValue(control, fallback);
     });
 
@@ -160,6 +161,12 @@
     const state = editor.querySelector('[data-telegram-state]');
     if (!assignee || !state) return;
     const option = assignee.selectedOptions[0];
+    if (!assignee.value) {
+      state.classList.remove('is-ready');
+      state.classList.add('is-warning');
+      state.querySelector('span').textContent = 'Sin responsable: el ticket se creará sin asignar y sin notificación.';
+      return;
+    }
     const name = option?.dataset.assigneeName || 'El responsable';
     const hasChat = Boolean(option?.dataset.chatId);
     state.classList.toggle('is-ready', hasChat);

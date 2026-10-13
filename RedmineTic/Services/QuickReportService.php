@@ -72,12 +72,9 @@ final class QuickReportService
             return null;
         }
 
+        // $users ya viene filtrado por acceso al modulo; el estado (baneado)
+        // no impide asignar, solo se exige un Redmine ID real.
         foreach ($users as $user) {
-            $projectState = strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo')));
-            $novaState = strtolower(trim((string) ($user['estado_nova'] ?? 'activo')));
-            if ($projectState !== 'activo' || $novaState !== 'activo') {
-                continue;
-            }
             $redmineId = trim((string) ($user['redmine_id'] ?? ''));
             if (! ctype_digit($redmineId) || $assigneeId !== $redmineId) {
                 continue;

@@ -6,15 +6,11 @@
         ->map(fn ($row) => trim((string) ($row['nombre'] ?? $row['id'] ?? '')))
         ->filter()->unique()->values();
     // RedmineDataRepository::users() solo devuelve usuarios con acceso
-    // permitido al modulo TIC. Aqui se exige, ademas, que tanto la cuenta
-    // NOVA como el perfil TIC esten activos y que exista un Redmine ID real.
-    $activeUsers = collect($users ?? [])->filter(function ($user) {
-        $projectState = strtolower(trim((string) ($user['estado_usuario'] ?? $user['estado'] ?? 'activo')));
-        $novaState = strtolower(trim((string) ($user['estado_nova'] ?? 'activo')));
-        $redmineId = trim((string) ($user['redmine_id'] ?? ''));
-
-        return $projectState === 'activo' && $novaState === 'activo' && ctype_digit($redmineId);
-    })->values();
+    // permitido al modulo TIC. Se listan todos (incluidos baneados) siempre
+    // que tengan un Redmine ID real.
+    $activeUsers = collect($users ?? [])
+        ->filter(fn ($user) => ctype_digit(trim((string) ($user['redmine_id'] ?? ''))))
+        ->values();
     $assigneeOptions = $activeUsers->map(function ($user) {
         $userId = trim((string) ($user['redmine_id'] ?? ''));
         $displayName = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['apellido'] ?? '')));
@@ -47,7 +43,9 @@
                 <h2>Reporte Redmine #{{ $quickResult['redmine_id'] ?? '' }}</h2>
                 <p>
                     Responsable: {{ $quickResult['responsable'] ?? 'Sin identificar' }}.
-                    @if (!empty($quickResult['telegram_sent']))
+                    @if (!empty($quickResult['sin_responsable']))
+                        No se envió notificación Telegram.
+                    @elseif (!empty($quickResult['telegram_sent']))
                         La notificación Telegram fue enviada.
                     @elseif (empty($quickResult['telegram_configured']))
                         El responsable no tiene Chat ID configurado.
@@ -91,9 +89,9 @@
                         </div>
                     </div>
                     <div>
-                        <label class="form-label" for="tic-quick-assignee">Responsable</label>
-                        <select class="form-select tic-webhook-select2" id="tic-quick-assignee" name="asignado_a" required
-                                data-tic-webhook-select2 data-placeholder="Seleccionar responsable">
+                        <label class="form-label" for="tic-quick-assignee">Responsable <span class="text-muted fw-normal">(opcional)</span></label>
+                        <select class="form-select tic-webhook-select2" id="tic-quick-assignee" name="asignado_a"
+                                data-tic-webhook-select2 data-allow-clear="1" data-placeholder="Sin asignar">
                             <option value=""></option>
                             @foreach ($assigneeOptions as $option)
                                 <option value="{{ $option['value'] }}" data-chat-id="{{ $option['chat_id'] }}"
@@ -226,9 +224,9 @@
                                             </select>
                                         </div>
                                         <div class="col-12">
-                                            <label class="form-label" for="quick-asignado">Responsable</label>
-                                            <select class="form-select tic-webhook-select2" id="quick-asignado" name="asignado_a" required
-                                                    data-tic-webhook-select2 data-placeholder="Seleccionar responsable" data-quick-source="responsable">
+                                            <label class="form-label" for="quick-asignado">Responsable <span class="text-muted fw-normal">(opcional)</span></label>
+                                            <select class="form-select tic-webhook-select2" id="quick-asignado" name="asignado_a"
+                                                    data-tic-webhook-select2 data-allow-clear="1" data-placeholder="Sin asignar" data-quick-source="responsable">
                                                 <option value=""></option>
                                                 @foreach ($assigneeOptions as $option)
                                                     <option value="{{ $option['value'] }}" data-chat-id="{{ $option['chat_id'] }}" data-assignee-name="{{ $option['label'] }}"
@@ -276,7 +274,7 @@
                                 <i class="bi bi-telegram"></i><span>Revisando Telegram del responsable…</span>
                             </div>
                             <button class="btn-nova btn-nova-success" type="submit"
-                                    data-app-confirm="Se creará este reporte directamente en Redmine y se notificará al responsable asignado."
+                                    data-app-confirm="Se creará este reporte directamente en Redmine y se notificará al responsable, si hay uno asignado."
                                     data-app-confirm-title="Enviar reporte a Redmine" data-app-confirm-text="Enviar a Redmine"
                                     data-app-confirm-preview="#tic-quick-confirm-summary"
                                     data-app-confirm-tone="primary">

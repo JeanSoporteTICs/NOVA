@@ -93,16 +93,24 @@ final class RedmineTicQuickReportTest extends TestCase
         ], $recipient);
     }
 
-    public function test_inactive_or_non_redmine_users_cannot_be_assigned(): void
+    public function test_banned_users_with_access_can_be_assigned(): void
+    {
+        $recipient = app(QuickReportService::class)->assignedRecipient([[
+            'id' => '44',
+            'redmine_id' => '44',
+            'nombre' => 'Diego',
+            'apellido' => 'Soto',
+            'estado_usuario' => 'baneado',
+            'estado_nova' => 'baneado',
+        ]], '44');
+
+        $this->assertSame('44', $recipient['id'] ?? null);
+    }
+
+    public function test_non_redmine_users_cannot_be_assigned(): void
     {
         $service = app(QuickReportService::class);
 
-        $this->assertNull($service->assignedRecipient([[
-            'id' => '44',
-            'redmine_id' => '44',
-            'estado_usuario' => 'activo',
-            'estado_nova' => 'inactivo',
-        ]], '44'));
         $this->assertNull($service->assignedRecipient([[
             'id' => '55',
             'redmine_id' => '',
@@ -159,7 +167,8 @@ final class RedmineTicQuickReportTest extends TestCase
         $this->assertStringNotContainsString('class="tic-quick-workspace"', $view);
         $this->assertStringContainsString('Enviar directamente a Redmine', $view);
         $this->assertStringContainsString('data-telegram-state', $view);
-        $this->assertStringContainsString("\$projectState === 'activo' && \$novaState === 'activo' && ctype_digit(\$redmineId)", $view);
+        $this->assertStringContainsString("ctype_digit(trim((string) (\$user['redmine_id'] ?? '')))", $view);
+        $this->assertStringNotContainsString('$novaState', $view);
         $this->assertSame(4, substr_count($view, 'data-tic-webhook-select2'));
         $this->assertMatchesRegularExpression('/name="unidad_solicitante"\s+required/', $view);
         $this->assertStringContainsString("@include('redmine_tic::native-sections.quick-report')", $layout);

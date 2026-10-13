@@ -112,7 +112,7 @@
                             <label class="form-label" for="manual-asignado">Asignar a</label>
                             <div class="rm-assignee-row">
                                 <div class="rm-assignee-select">
-                                    <select class="form-select tic-webhook-select2" id="manual-asignado" name="asignado_a" data-tic-webhook-select2 data-placeholder="Seleccionar usuario activo">
+                                    <select class="form-select tic-webhook-select2" id="manual-asignado" name="asignado_a" data-tic-webhook-select2 data-allow-clear="1" data-placeholder="Sin asignar">
                                         <option value="">Sin asignar</option>
                                         @foreach ($assigneeOptions as $userOption)
                                             <option value="{{ $userOption['value'] }}" @selected((string) $userOption['value'] === $currentAssigneeId)>{{ $userOption['label'] }}</option>
@@ -218,7 +218,7 @@
             if (select.hasClass('select2-hidden-accessible')) return;
             select.select2({
                 width: '100%',
-                allowClear: false,
+                allowClear: this.dataset.allowClear === '1',
                 dropdownCssClass: 'tic-select2-dropdown',
                 placeholder: this.dataset.placeholder || 'Seleccionar',
                 language: {

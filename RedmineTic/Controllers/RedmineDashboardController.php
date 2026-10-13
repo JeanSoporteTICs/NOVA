@@ -749,10 +749,9 @@ class RedmineDashboardController extends Controller
             $payload['chat_id_telegram'] = trim((string) $payload['numero']);
         }
         unset($payload['numero']);
+        // "Sin asignar" es una opcion valida: el formulario preselecciona al
+        // usuario logueado, pero aqui no se fuerza un responsable.
         $user = $request->session()->get('redmine_project_user', $request->session()->get('nova_user', []));
-        if (is_array($user) && trim((string) ($payload['asignado_a'] ?? '')) === '') {
-            $payload['asignado_a'] = (string) ($user['redmine_id'] ?? $user['id'] ?? '');
-        }
         $payload['origen'] = 'manual';
         $report = $redmine->createSimulatedReport($payload);
         $redmine->recordActivity('reporte_manual_creado', [
@@ -787,20 +786,20 @@ class RedmineDashboardController extends Controller
             $validated = $request->validate([
                 'quick_input' => ['required', 'string', 'max:700'],
                 'quick_description' => ['nullable', 'string', 'max:4000'],
-                'asignado_a' => ['required', 'integer', 'min:1', 'max:4294967295'],
+                'asignado_a' => ['nullable', 'integer', 'min:1', 'max:4294967295'],
             ]);
             $this->storeQuickReportNotes($request, (string) ($validated['quick_description'] ?? ''));
-            $recipient = $quickReports->assignedRecipient($redmine->users(), (string) $validated['asignado_a']);
-            if ($recipient === null) {
+            $assigneeId = trim((string) ($validated['asignado_a'] ?? ''));
+            if ($assigneeId !== '' && $quickReports->assignedRecipient($redmine->users(), $assigneeId) === null) {
                 return redirect($route)
                     ->withInput()
-                    ->withErrors(['asignado_a' => 'Selecciona un responsable activo de Redmine TIC.']);
+                    ->withErrors(['asignado_a' => 'Selecciona un responsable con acceso a Redmine TIC.']);
             }
             $preview = $quickReports->createDraft(
                 (string) $validated['quick_input'],
                 $redmine->categories(),
                 $redmine->units(),
-                (string) $validated['asignado_a']
+                $assigneeId
             );
             if (! $preview['ok']) {
                 return redirect($route)
@@ -827,7 +826,7 @@ class RedmineDashboardController extends Controller
             'categoria' => ['nullable', 'string', 'max:180'],
             'prioridad' => ['nullable', 'string', 'max:80'],
             'tipo' => ['nullable', 'string', 'max:80'],
-            'asignado_a' => ['required', 'integer', 'min:1', 'max:4294967295'],
+            'asignado_a' => ['nullable', 'integer', 'min:1', 'max:4294967295'],
             'fecha_inicio' => ['nullable', 'date'],
             'fecha_fin' => ['nullable', 'date'],
             'fecha' => ['nullable', 'date'],
@@ -840,12 +839,16 @@ class RedmineDashboardController extends Controller
         ], [
             'unidad_solicitante.in' => 'La unidad solicitante seleccionada ya no existe en la lista vigente.',
         ]);
-        $recipient = $quickReports->assignedRecipient($redmine->users(), (string) $payload['asignado_a']);
-        if ($recipient === null) {
+        // Sin responsable el ticket se crea sin asignar y sin notificar por Telegram.
+        $payload['asignado_a'] = trim((string) ($payload['asignado_a'] ?? ''));
+        $recipient = $payload['asignado_a'] !== ''
+            ? $quickReports->assignedRecipient($redmine->users(), $payload['asignado_a'])
+            : null;
+        if ($payload['asignado_a'] !== '' && $recipient === null) {
             return redirect($route)
                 ->withInput($payload + ['quick_preview' => '1'])
                 ->with('redmine_quick_preview', $payload)
-                ->withErrors(['asignado_a' => 'El responsable seleccionado ya no esta activo en Redmine TIC.']);
+                ->withErrors(['asignado_a' => 'El responsable seleccionado ya no tiene acceso a Redmine TIC.']);
         }
 
         $payload['origen'] = 'manual_rapido';
@@ -856,7 +859,7 @@ class RedmineDashboardController extends Controller
         $redmine->recordActivity('reporte_rapido_creado', [
             'user_id' => $userId,
             'message_id' => (string) ($report['id'] ?? ''),
-            'asignado_a' => $recipient['id'],
+            'asignado_a' => $recipient['id'] ?? '',
             'asunto' => (string) ($report['asunto'] ?? ''),
         ]);
         $sent = $redmine->sendReportsToRedmine([(string) ($report['id'] ?? '')], $userId !== '' ? $userId : null);
@@ -873,10 +876,11 @@ class RedmineDashboardController extends Controller
 
         $issueUrl = $redmine->redmineIssueUrl($redmineId);
         $telegramSent = false;
-        if ($recipient['chat_id'] !== '') {
+        $chatId = (string) ($recipient['chat_id'] ?? '');
+        if ($chatId !== '') {
             try {
                 $telegramSent = $telegram->sendToChat(
-                    $recipient['chat_id'],
+                    $chatId,
                     $quickReports->notificationMessage($report, $redmineId, $issueUrl)
                 );
             } catch (\Throwable) {
@@ -887,14 +891,16 @@ class RedmineDashboardController extends Controller
             'user_id' => $userId,
             'message_id' => (string) ($report['id'] ?? ''),
             'redmine_id' => $redmineId,
-            'asignado_a' => $recipient['id'],
-            'telegram_configurado' => $recipient['chat_id'] !== '',
+            'asignado_a' => $recipient['id'] ?? '',
+            'telegram_configurado' => $chatId !== '',
         ]);
 
         $status = 'Reporte Redmine #'.$redmineId.' creado correctamente.';
-        if ($telegramSent) {
+        if ($recipient === null) {
+            $status .= ' Quedo sin responsable asignado.';
+        } elseif ($telegramSent) {
             $status .= ' Notificacion enviada a '.$recipient['name'].'.';
-        } elseif ($recipient['chat_id'] === '') {
+        } elseif ($chatId === '') {
             $status .= ' El responsable no tiene Chat ID de Telegram configurado.';
         } else {
             $status .= ' No fue posible enviar la notificacion Telegram.';
@@ -906,9 +912,10 @@ class RedmineDashboardController extends Controller
             ->with('redmine_quick_result', [
                 'redmine_id' => $redmineId,
                 'url' => $issueUrl,
-                'responsable' => $recipient['name'],
+                'responsable' => $recipient['name'] ?? 'Sin asignar',
+                'sin_responsable' => $recipient === null,
                 'telegram_sent' => $telegramSent,
-                'telegram_configured' => $recipient['chat_id'] !== '',
+                'telegram_configured' => $chatId !== '',
             ]);
     }
 

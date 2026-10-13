@@ -620,9 +620,14 @@ class RedmineReportRepository
         }
 
         try {
-            $id = (int) DB::table('redmine_tic_reportes')->insertGetId($this->payload($moduleId, $report, $archived));
+            $payload = $this->payload($moduleId, $report, $archived);
+            // Un reporte nuevo nace en Redmine con estado "Nueva".
+            if (! $archived) {
+                $payload['estado_redmine'] ??= 'Nueva';
+            }
+            $id = (int) DB::table('redmine_tic_reportes')->insertGetId($payload);
 
-            return array_merge($report, ['id' => (string) $id]);
+            return array_merge($report, ['id' => (string) $id, 'estado_redmine' => (string) ($payload['estado_redmine'] ?? '')]);
         } catch (\Throwable) {
             return null;
         }

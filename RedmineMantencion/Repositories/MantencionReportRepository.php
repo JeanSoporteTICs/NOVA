@@ -545,6 +545,10 @@ final class MantencionReportRepository
             }
 
             $values['creado_at'] = now();
+            // Un reporte nuevo nace en Redmine con estado "Nueva".
+            if (array_key_exists('estado_redmine', $values) && ($values['estado_redmine'] ?? null) === null) {
+                $values['estado_redmine'] = 'Nueva';
+            }
             DB::table('redmine_mantencion_reportes')->insert($values);
 
             return true;
