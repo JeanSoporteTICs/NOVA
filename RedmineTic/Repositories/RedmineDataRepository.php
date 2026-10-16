@@ -2319,6 +2319,7 @@ final class RedmineDataRepository
         $report = [
             'chat_id_telegram' => $chatId,
             'mensaje' => $text,
+            'descripcion' => '',
             'fecha' => $now->format('d-m-Y'),
             'hora' => $now->format('H:i:s'),
             'fecha_inicio' => $now->format('d-m-Y'),

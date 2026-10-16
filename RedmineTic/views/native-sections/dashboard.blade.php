@@ -791,7 +791,7 @@
                 })
                 .then((detail) => {
                     if (detailRequest !== dashboardDetailRequest) return;
-                    form.elements.mensaje.value = detail.mensaje || detail.descripcion || '';
+                    form.elements.mensaje.value = detail.descripcion || '';
                     form.elements.descripcion.value = detail.descripcion || '';
                     form.dataset.detailReady = '1';
                     if (saveButton) saveButton.disabled = false;

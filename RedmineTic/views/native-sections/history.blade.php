@@ -428,7 +428,7 @@
                             $detail = [
                                 'asunto' => $row['asunto'] ?? $row['mensaje'] ?? '',
                                 'solicitante' => $row['solicitante'] ?? '',
-                                'descripcion' => $row['descripcion'] ?? $row['mensaje'] ?? '',
+                                'descripcion' => $row['descripcion'] ?? '',
                                 'fecha' => $fmtDate($row['_history_date_norm'] ?? $row['fecha_inicio'] ?? $row['fecha'] ?? ''),
                                 'redmine_id' => $redmineId,
                                 'estado_redmine' => $row['estado_redmine'] ?? '',
