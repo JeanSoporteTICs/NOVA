@@ -29,4 +29,5 @@ $themeVersion = @filemtime($themePath) ?: time();
   <?php $novaUiPath = function_exists('base_path') ? base_path('public/assets/nova-ui.css') : __DIR__ . '/../../../public/assets/nova-ui.css'; ?>
   <?php $novaUiVersion = @filemtime($novaUiPath) ?: time(); ?>
   <link href="<?= $h(function_exists('asset') ? asset('assets/nova-ui.css') : '/NOVA/public/assets/nova-ui.css') ?>?v=<?= (int) $novaUiVersion ?>" rel="stylesheet">
+  <?php include (function_exists('base_path') ? base_path('resources/views/partials') : __DIR__ . '/../../../resources/views/partials') . '/nova-v2-assets.php'; ?>
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

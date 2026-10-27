@@ -1,0 +1,2699 @@
+/*
+ * NOVA v2: sistema visual común de NOVA (tokens --nova-v2-*, componentes y
+ * modo claro/oscuro).
+ *
+ * Se activa con <body class="nova-v2"> y el contenido de la página dentro de
+ * #page-content. Lo carga resources/views/partials/nova-v2-assets.php.
+ * Las reglas de página usan :is(#page-content, .modal) porque appUi.openModal()
+ * mueve los modales al <body>; toasts y overlays también viven fuera de
+ * #page-content. ":not(#_)" solo suma especificidad de id para ganar a reglas de
+ * nova-ui.css escritas con #id. Los !important son necesarios donde los temas de
+ * cada módulo y nova-ui.css ya los usan. Lo exclusivo de Reportes de Mantención
+ * vive en RedmineMantencion/assets/css/dashboard-v2.css.
+ */
+
+body.nova-v2 {
+  --nova-v2-font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --nova-v2-bg: #ffffff;
+  --nova-v2-bg-subtle: #f7f8fc;
+  --nova-v2-bg-page: #f0f2f5;
+
+  --nova-v2-border: #dfe3e8;
+  --nova-v2-border-light: #eef0f4;
+
+  --nova-v2-primary: #2563eb;
+  --nova-v2-primary-light: #eff6ff;
+  --nova-v2-primary-dark: #1d4ed8;
+  --nova-v2-success: #059669;
+  --nova-v2-success-light: #ecfdf5;
+  --nova-v2-danger: #dc2626;
+  --nova-v2-danger-light: #fef2f2;
+  --nova-v2-warning: #d97706;
+  --nova-v2-warning-light: #fffbeb;
+  --nova-v2-info: #0ea5e9;
+  --nova-v2-info-light: #e0f2fe;
+
+  --nova-v2-text: #1e293b;
+  --nova-v2-text-secondary: #475569;
+  /* El gris original #94a3b8 da (contraste 2.6:1 sobre blanco); #64748b cumple WCAG AA (4.8:1). */
+  --nova-v2-text-muted: #64748b;
+
+  --nova-v2-radius: 0.625rem;
+  --nova-v2-radius-sm: 0.375rem;
+  --nova-v2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --nova-v2-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --nova-v2-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+  --nova-font: var(--nova-v2-font-family);
+}
+
+/* La barra superior oscura necesita un icono visible en el acceso al menú lateral. */
+body.nova-v2 :is(.rm-navbar, .sb-navbar, .emach-navbar, .telegram-navbar, .nova-topbar, .telegram-topbar) .nova-sidebar-toggle,
+body.nova-v2 :is(.rm-navbar, .sb-navbar, .emach-navbar, .telegram-navbar, .nova-topbar, .telegram-topbar) .nova-sidebar-toggle:hover,
+body.nova-v2 :is(.rm-navbar, .sb-navbar, .emach-navbar, .telegram-navbar, .nova-topbar, .telegram-topbar) .nova-sidebar-toggle:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, .1);
+}
+
+body.nova-v2 :is(.rm-navbar, .sb-navbar, .emach-navbar, .telegram-navbar, .nova-topbar, .telegram-topbar) .nova-sidebar-toggle:hover,
+body.nova-v2 :is(.rm-navbar, .sb-navbar, .emach-navbar, .telegram-navbar, .nova-topbar, .telegram-topbar) .nova-sidebar-toggle:focus-visible {
+  background: rgba(255, 255, 255, .2);
+}
+
+/* Select2 oculta el select original; las reglas globales de formulario no deben
+   mantenerlo con ancho completo fuera del viewport o de un drawer. */
+body.nova-v2 select.select2-hidden-accessible {
+  width: 1px !important;
+  min-width: 1px !important;
+}
+
+/* ── Página y tipografía ───────────────────────────────────────────── */
+
+body.nova-v2 {
+  background: var(--nova-v2-bg-page) !important;
+}
+
+body.nova-v2::before {
+  background: var(--nova-v2-bg-page);
+}
+
+/* Contenedores de página de NOVA con fondo degradado propio (Home, Horas extra, Monitor, Módulos). */
+body.nova-v2 :is(.nova-shell, .telegram-page) {
+  background: var(--nova-v2-bg-page) !important;
+}
+
+body.nova-v2,
+body.nova-v2 .modal,
+body.nova-v2 .tooltip,
+body.nova-v2 .select2-container,
+body.nova-v2 button,
+body.nova-v2 input,
+body.nova-v2 select,
+body.nova-v2 textarea {
+  font-family: var(--nova-v2-font-family) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) {
+  color: var(--nova-v2-text);
+}
+
+/* ── Encabezado de página (reemplaza al hero azul) ─────────────────── */
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--nova-v2-bg);
+  border: 1px solid var(--nova-v2-border-light);
+  border-radius: var(--nova-v2-radius);
+  box-shadow: var(--nova-v2-shadow-sm);
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.15rem;
+  color: var(--nova-v2-text);
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-subtitle {
+  margin: 0;
+  color: var(--nova-v2-text-muted);
+  font-size: 1.05rem;
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 0;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+  box-shadow: none !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-chip i {
+  color: var(--nova-v2-primary);
+}
+
+/* Etiqueta superior opcional del encabezado (Home, Monitor, registros). */
+body.nova-v2 :is(#page-content, .modal) .nova-v2-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+  color: var(--nova-v2-primary-dark);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Chips de estado y chip como botón (p. ej. "en mantención" del Home). */
+body.nova-v2 :is(#page-content, .modal) button.nova-v2-chip { cursor: pointer; }
+body.nova-v2 :is(#page-content, .modal) button.nova-v2-chip:hover { border-color: var(--nova-v2-border) !important; color: var(--nova-v2-text) !important; }
+body.nova-v2 :is(#page-content, .modal) .nova-v2-chip.is-success { background: var(--nova-v2-success-light) !important; color: var(--nova-v2-success) !important; }
+body.nova-v2 :is(#page-content, .modal) .nova-v2-chip.is-warning { background: var(--nova-v2-warning-light) !important; color: var(--nova-v2-warning) !important; }
+body.nova-v2 :is(#page-content, .modal) .nova-v2-chip.is-danger { background: var(--nova-v2-danger-light) !important; color: var(--nova-v2-danger) !important; }
+body.nova-v2 :is(#page-content, .modal) .nova-v2-chip:is(.is-success, .is-warning, .is-danger) i { color: currentColor; }
+
+/* ── Formularios ───────────────────────────────────────────────────── */
+
+body.nova-v2 :is(#page-content, .modal) .form-label {
+  margin-bottom: 0.4rem;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+body.nova-v2 :is(#page-content, .modal) .form-control,
+body.nova-v2 :is(#page-content, .modal) .form-select,
+body.nova-v2 :is(#page-content, .modal) .input-group-text {
+  min-height: 2.5rem;
+  border: 1px solid var(--nova-v2-border) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background-color: var(--nova-v2-bg);
+  color: var(--nova-v2-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.nova-v2 :is(#page-content, .modal) .input-group-text {
+  background: var(--nova-v2-bg-subtle);
+  color: var(--nova-v2-text-muted);
+}
+
+body.nova-v2 :is(#page-content, .modal) .input-group > :not(:first-child) {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .input-group > :not(:last-child) {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .input-group-sm > .form-control,
+body.nova-v2 :is(#page-content, .modal) .input-group-sm > .form-select,
+body.nova-v2 :is(#page-content, .modal) .input-group-sm > .input-group-text {
+  min-height: 2.25rem;
+  font-size: 0.86rem;
+}
+
+body.nova-v2 :is(#page-content, .modal) .form-control::placeholder {
+  color: var(--nova-v2-text-muted);
+}
+
+body.nova-v2 :is(#page-content, .modal) .form-control:focus,
+body.nova-v2 :is(#page-content, .modal) .form-select:focus {
+  border-color: var(--nova-v2-primary) !important;
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light) !important;
+  outline: none;
+}
+
+body.nova-v2 :is(#page-content, .modal) .form-control:disabled,
+body.nova-v2 :is(#page-content, .modal) .form-select:disabled,
+body.nova-v2 :is(#page-content, .modal) .form-control[readonly] {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  opacity: 1;
+}
+
+body.nova-v2 :is(#page-content, .modal) .form-check-input:checked {
+  background-color: var(--nova-v2-primary);
+  border-color: var(--nova-v2-primary);
+}
+
+body.nova-v2 :is(#page-content, .modal) .form-check-input:focus {
+  border-color: var(--nova-v2-primary);
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light);
+}
+
+body.nova-v2 :is(#page-content, .modal) .select2-container--default .select2-selection--single,
+body.nova-v2 :is(#page-content, .modal) .select2-container--default .select2-selection--multiple {
+  min-height: 2.5rem;
+  border: 1px solid var(--nova-v2-border) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .select2-container--default.select2-container--focus .select2-selection,
+body.nova-v2 :is(#page-content, .modal) .select2-container--default.select2-container--open .select2-selection {
+  border-color: var(--nova-v2-primary) !important;
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light) !important;
+}
+
+body.nova-v2 .select2-results__option--highlighted {
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* ── Botones (rectangulares, radio pequeño, peso 600) ─────────── */
+
+body.nova-v2 :is(#page-content, .modal) .btn-nova,
+body.nova-v2 :is(#page-content, .modal) .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: auto;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.9rem !important;
+  border: 1px solid transparent;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  font-family: var(--nova-v2-font-family);
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.3;
+  text-transform: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-sm {
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem !important;
+  font-size: 0.82rem !important;
+}
+
+/* El círculo de icono de los botones "pill" de NOVA no se usa en NOVA v2. */
+body.nova-v2 :is(#page-content, .modal) .btn-nova > i:first-child {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  font-size: 1rem !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-nova:focus-visible,
+body.nova-v2 :is(#page-content, .modal) .btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light) !important;
+}
+
+/* Primario / éxito / info → azul corporativo. */
+body.nova-v2 :is(#page-content, .modal) .btn-nova-primary,
+body.nova-v2 :is(#page-content, .modal) .btn-nova-success,
+body.nova-v2 :is(#page-content, .modal) .btn-nova-info,
+body.nova-v2 :is(#page-content, .modal) .btn-primary,
+body.nova-v2 :is(#page-content, .modal) .btn-success {
+  background: var(--nova-v2-primary) !important;
+  border-color: var(--nova-v2-primary) !important;
+  color: #fff !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-nova-primary:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-nova-success:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-nova-info:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-primary:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-success:hover {
+  background: var(--nova-v2-primary-dark) !important;
+  border-color: var(--nova-v2-primary-dark) !important;
+  color: #fff !important;
+}
+
+/* Secundario / peligro → gris pizarra sólido. */
+body.nova-v2 :is(#page-content, .modal) .btn-nova-secondary,
+body.nova-v2 :is(#page-content, .modal) .btn-nova-danger,
+body.nova-v2 :is(#page-content, .modal) .btn-secondary,
+body.nova-v2 :is(#page-content, .modal) .btn-danger {
+  background: var(--nova-v2-text-secondary) !important;
+  border-color: var(--nova-v2-text-secondary) !important;
+  color: #fff !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-nova-secondary:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-nova-danger:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-secondary:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-danger:hover {
+  background: var(--nova-v2-text) !important;
+  border-color: var(--nova-v2-text) !important;
+  color: #fff !important;
+}
+
+/* Advertencia → neutro suave. */
+body.nova-v2 :is(#page-content, .modal) .btn-nova-warning,
+body.nova-v2 :is(#page-content, .modal) .btn-warning {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-nova-warning:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-warning:hover {
+  border-color: var(--nova-v2-text-secondary) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-outline-primary {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-primary) !important;
+  color: var(--nova-v2-primary) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-outline-primary:hover {
+  background: var(--nova-v2-primary) !important;
+  color: #fff !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-outline-secondary,
+body.nova-v2 :is(#page-content, .modal) .btn-outline-danger,
+body.nova-v2 :is(#page-content, .modal) .btn-outline-warning {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-outline-secondary:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-outline-danger:hover,
+body.nova-v2 :is(#page-content, .modal) .btn-outline-warning:hover {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-text-secondary) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-nova:disabled,
+body.nova-v2 :is(#page-content, .modal) .btn-nova[disabled],
+body.nova-v2 :is(#page-content, .modal) .btn:disabled,
+body.nova-v2 :is(#page-content, .modal) .btn.disabled {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-muted) !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+}
+
+/* ── Botones de acción por fila ────────────────── */
+
+body.nova-v2 :is(#page-content, .modal) .btn-action {
+  --nova-v2-action-bg: #e9eef6;
+  --nova-v2-action-border: #d4dce8;
+  --nova-v2-action-color: var(--nova-v2-text-secondary);
+  width: 1.85rem !important;
+  height: 1.85rem !important;
+  min-width: 1.85rem !important;
+  min-height: 1.85rem !important;
+  padding: 0 !important;
+  border: 1px solid var(--nova-v2-action-border) !important;
+  border-radius: 50% !important;
+  background: var(--nova-v2-action-bg) !important;
+  color: var(--nova-v2-action-color) !important;
+  font-size: 0.95rem !important;
+  line-height: 1;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action i {
+  margin: 0 !important;
+  color: currentColor !important;
+  -webkit-text-stroke: 0.4px currentColor;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action:hover {
+  border-color: var(--nova-v2-action-color) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light) !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action:disabled,
+body.nova-v2 :is(#page-content, .modal) .btn-action[disabled] {
+  opacity: 0.5;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action-view {
+  --nova-v2-action-bg: #dbeafe;
+  --nova-v2-action-border: #bfdbfe;
+  --nova-v2-action-color: var(--nova-v2-primary);
+}
+
+/* Editar: ámbar suave. */
+body.nova-v2 :is(#page-content, .modal) .btn-action-edit {
+  --nova-v2-action-bg: #ffedd5;
+  --nova-v2-action-border: #fdba74;
+  --nova-v2-action-color: #b45309;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action-view.log-btn {
+  --nova-v2-action-bg: #e9eef6;
+  --nova-v2-action-border: #d4dce8;
+  --nova-v2-action-color: var(--nova-v2-text-secondary);
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action-delete {
+  --nova-v2-action-bg: #ffe4e6;
+  --nova-v2-action-border: #fda4af;
+  --nova-v2-action-color: var(--nova-v2-danger);
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action.btn-hora-extra--on {
+  --nova-v2-action-bg: var(--nova-v2-primary);
+  --nova-v2-action-border: var(--nova-v2-primary);
+  --nova-v2-action-color: #fff;
+}
+
+body.nova-v2 :is(#page-content, .modal) .btn-action.btn-hora-extra--off {
+  --nova-v2-action-bg: #e9eef6;
+  --nova-v2-action-border: #d4dce8;
+  --nova-v2-action-color: var(--nova-v2-text-secondary);
+}
+
+/* ── Drawer Detalle / Editar ────────── */
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-content {
+  border: 0 !important;
+  border-left: 1px solid var(--nova-v2-border) !important;
+  border-radius: 0 !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18) !important;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-header {
+  padding: 1rem 1.25rem;
+  background: var(--nova-v2-bg) !important;
+  border-bottom: 1px solid var(--nova-v2-border-light) !important;
+}
+
+body.nova-v2 .detail-drawer-kicker {
+  color: var(--nova-v2-primary-dark);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-title {
+  gap: 0.75rem;
+  color: var(--nova-v2-text);
+  font-size: 1.28rem;
+  font-weight: 800;
+}
+
+body.nova-v2 .detail-drawer-icon {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  margin-right: 0 !important;
+  border-radius: 50% !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 .detail-drawer-subtitle {
+  color: var(--nova-v2-text-muted);
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-body {
+  background: var(--nova-v2-bg-subtle) !important;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-body .row,
+body.nova-v2 .detail-drawer-table-header,
+body.nova-v2 .detail-preview-wrap {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-drawer-section-heading {
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--nova-v2-border-light);
+  color: var(--nova-v2-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-drawer-section-heading::before {
+  content: '';
+  width: 3px;
+  height: 1.1em;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--nova-v2-primary);
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-drawer-section-heading i {
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--nova-v2-primary);
+  font-size: 1rem;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .form-control,
+body.nova-v2 .detail-drawer-modal:not(#_) .form-select {
+  min-height: 2.7rem;
+  font-weight: 500;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-footer {
+  background: var(--nova-v2-bg) !important;
+  border-top: 1px solid var(--nova-v2-border-light) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-footer .btn,
+body.nova-v2 .detail-drawer-modal:not(#_) .modal-footer .btn-nova {
+  min-width: 7rem;
+}
+
+body.nova-v2 .detail-drawer-table-title {
+  color: var(--nova-v2-text);
+  font-weight: 700;
+}
+
+body.nova-v2 .detail-preview-wrap thead th {
+  background: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--nova-v2-border) !important;
+}
+
+body.nova-v2 .detail-preview-wrap tbody td {
+  border-bottom: 1px solid var(--nova-v2-border-light);
+  color: var(--nova-v2-text);
+  font-weight: 500;
+}
+
+/* ── Resto de modales ──────────────────────────────────── */
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-content {
+  border: 0 !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-md) !important;
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header {
+  padding: 1rem 1.25rem;
+  background: var(--nova-v2-bg) !important;
+  border-bottom: 1px solid var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-title {
+  color: var(--nova-v2-text) !important;
+  font-weight: 700;
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--nova-v2-border-light) !important;
+  background: var(--nova-v2-bg) !important;
+}
+
+/* Cabeceras con tono (aviso/confirmación, mantención): fondo plano suave
+   según el tono (info/success/warning/danger). */
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header[data-app-modal-tone="info"] {
+  background: var(--nova-v2-info-light) !important;
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header[data-app-modal-tone="success"] {
+  background: var(--nova-v2-success-light) !important;
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header[data-app-modal-tone="warning"],
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header.bg-warning-subtle {
+  background: var(--nova-v2-warning-light) !important;
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header[data-app-modal-tone="danger"] {
+  background: var(--nova-v2-danger-light) !important;
+}
+
+body.nova-v2 .app-modal-kicker {
+  color: var(--nova-v2-primary-dark);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* El texto superior toma el color del tono de la cabecera. */
+body.nova-v2 .modal-header[data-app-modal-tone="success"] .app-modal-kicker {
+  color: var(--nova-v2-success);
+}
+
+body.nova-v2 .modal-header[data-app-modal-tone="warning"] .app-modal-kicker {
+  color: var(--nova-v2-warning);
+}
+
+body.nova-v2 .modal-header[data-app-modal-tone="danger"] .app-modal-kicker {
+  color: var(--nova-v2-danger);
+}
+
+body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-header[data-app-modal-tone="danger"] {
+  border-bottom-color: rgba(220, 38, 38, 0.16) !important;
+}
+
+/* Confirmación destructiva: rojo sólido (en el resto de la página el
+   peligro sigue en gris). */
+body.nova-v2 #appFeedbackModal .app-modal-confirm.btn-danger {
+  background: var(--nova-v2-danger) !important;
+  border-color: var(--nova-v2-danger) !important;
+  color: #fff !important;
+}
+
+body.nova-v2 #appFeedbackModal .app-modal-confirm.btn-danger:hover {
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+body.nova-v2 #appFeedbackModal .app-modal-confirm.btn-danger:focus-visible {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25) !important;
+}
+
+body.nova-v2 .app-feedback-modal .modal-body {
+  color: var(--nova-v2-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+body.nova-v2 .modal .btn-close {
+  opacity: 0.55;
+  box-shadow: none !important;
+}
+
+body.nova-v2 .modal .btn-close:hover {
+  opacity: 0.9;
+}
+
+body.nova-v2 .modal-backdrop.show {
+  background: #0f172a;
+  opacity: 0.38;
+}
+
+/* ── Mensajes flotantes (NovaToast) ────────── */
+
+body.nova-v2 .nova-toast-item {
+  --nova-v2-toast-accent: var(--nova-v2-info);
+  --nova-v2-toast-tint: var(--nova-v2-info-light);
+  gap: 0.7rem;
+  padding: 0.85rem 0.85rem 1rem 1rem;
+  border: 1px solid var(--nova-v2-border-light);
+  border-left: 3px solid var(--nova-v2-toast-accent);
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  color: var(--nova-v2-text) !important;
+  box-shadow: var(--nova-v2-shadow-md), 0 12px 28px rgba(15, 23, 42, 0.12) !important;
+  font-weight: 600;
+}
+
+body.nova-v2 .nova-toast-item.is-success {
+  --nova-v2-toast-accent: var(--nova-v2-success);
+  --nova-v2-toast-tint: var(--nova-v2-success-light);
+}
+
+body.nova-v2 .nova-toast-item.is-error,
+body.nova-v2 .nova-toast-item.is-danger {
+  --nova-v2-toast-accent: var(--nova-v2-danger);
+  --nova-v2-toast-tint: var(--nova-v2-danger-light);
+}
+
+body.nova-v2 .nova-toast-item.is-warning,
+body.nova-v2 .nova-toast-item.is-core {
+  --nova-v2-toast-accent: var(--nova-v2-warning);
+  --nova-v2-toast-tint: var(--nova-v2-warning-light);
+}
+
+body.nova-v2 .nova-toast-item.is-loading,
+body.nova-v2 .nova-toast-item.is-redmine {
+  --nova-v2-toast-accent: var(--nova-v2-primary);
+  --nova-v2-toast-tint: var(--nova-v2-primary-light);
+}
+
+body.nova-v2 .nova-toast-item.is-neutral {
+  --nova-v2-toast-accent: var(--nova-v2-text-secondary);
+  --nova-v2-toast-tint: var(--nova-v2-bg-subtle);
+}
+
+body.nova-v2 .nova-toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 0;
+  border-radius: 50%;
+  background: var(--nova-v2-toast-tint);
+  color: var(--nova-v2-toast-accent) !important;
+  font-size: 1rem;
+}
+
+body.nova-v2 .nova-toast-body {
+  align-self: center;
+}
+
+body.nova-v2 .nova-toast-title {
+  color: var(--nova-v2-toast-accent);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  opacity: 1;
+}
+
+body.nova-v2 .nova-toast-message {
+  color: var(--nova-v2-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+body.nova-v2 .nova-toast-close {
+  border-radius: var(--nova-v2-radius-sm);
+  background: transparent;
+  color: var(--nova-v2-text-muted);
+}
+
+body.nova-v2 .nova-toast-close:hover {
+  background: var(--nova-v2-bg-subtle);
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 .nova-toast-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light);
+}
+
+body.nova-v2 .nova-toast-progress {
+  height: 2px;
+  background: var(--nova-v2-toast-accent);
+  opacity: 0.45;
+}
+
+/* ── Overlays de carga (importación CORE, integraciones, archivado) ── */
+
+body.nova-v2 .core-import-overlay,
+body.nova-v2 .nova-integration-overlay {
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: none;
+}
+
+body.nova-v2 .core-import-card,
+body.nova-v2 .nova-integration-card {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-md), 0 18px 45px rgba(15, 23, 42, 0.18) !important;
+}
+
+body.nova-v2 .core-import-card__icon,
+body.nova-v2 .nova-integration-icon {
+  border-radius: 50%;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 .core-import-card__icon {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+body.nova-v2 .nova-integration-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.5rem;
+}
+
+body.nova-v2 .core-import-card__title,
+body.nova-v2 .nova-integration-card strong {
+  color: var(--nova-v2-text);
+  font-weight: 700;
+}
+
+body.nova-v2 .core-import-card__text,
+body.nova-v2 .nova-integration-card span,
+body.nova-v2 .core-import-card__meta {
+  color: var(--nova-v2-text-secondary);
+  font-weight: 500;
+}
+
+body.nova-v2 .core-import-card__meta span:last-child {
+  color: var(--nova-v2-primary-dark);
+  font-weight: 700;
+}
+
+body.nova-v2 .core-import-progress,
+body.nova-v2 .nova-integration-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--nova-v2-border-light);
+}
+
+body.nova-v2 .core-import-progress__bar,
+body.nova-v2 .nova-integration-bar i {
+  background: var(--nova-v2-primary) !important;
+}
+
+/* ── Archivado (NovaArchiveFeedback): ámbar como el botón Archivar ─── */
+
+body.nova-v2 .nova-integration-overlay.is-archive {
+  --archive-accent: #f59e0b;
+  --archive-accent-dark: #b45309;
+  --archive-tint: #fef3c7;
+  --archive-ring: rgba(245, 158, 11, 0.35);
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-card {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-top: 4px solid var(--archive-accent) !important;
+  padding: 1.75rem 1.5rem 1.5rem;
+}
+
+/* Ícono: caja de archivo con una hoja que cae dentro y un anillo que late. */
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon {
+  position: relative;
+  width: 4.5rem;
+  height: 4.5rem;
+  margin-top: 0.75rem;
+  overflow: visible;
+  background: var(--archive-tint) !important;
+  color: var(--archive-accent-dark) !important;
+  font-size: 1.85rem;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon i {
+  position: relative;
+  z-index: 2;
+  animation: mnt-archive-box 1.8s ease-in-out infinite;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -0.35rem;
+  left: 50%;
+  width: 1.05rem;
+  height: 1.3rem;
+  margin-left: -0.525rem;
+  border: 2px solid var(--archive-accent);
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--archive-accent), var(--archive-accent)) 3px 4px / 9px 2px no-repeat,
+    linear-gradient(var(--archive-accent), var(--archive-accent)) 3px 8px / 9px 2px no-repeat,
+    linear-gradient(var(--archive-accent), var(--archive-accent)) 3px 12px / 6px 2px no-repeat,
+    #fff;
+  box-shadow: 0 2px 4px rgba(180, 83, 9, 0.2);
+  animation: mnt-archive-sheet 1.8s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon::after {
+  content: '';
+  position: absolute;
+  inset: -0.4rem;
+  border: 2px solid var(--archive-accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: mnt-archive-ring 1.8s ease-out infinite;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-card strong {
+  color: var(--nova-v2-text);
+}
+
+/* Resumen: "N reportes seleccionados" + "En curso" con punto que palpita. */
+body.nova-v2 .nova-integration-overlay.is-archive .nova-archive-progress-summary {
+  margin-top: 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-archive-progress-count {
+  color: var(--nova-v2-text-secondary) !important;
+  font-weight: 600;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-archive-progress-state {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--archive-tint);
+  color: var(--archive-accent-dark) !important;
+  font-weight: 700;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-archive-progress-state i {
+  background: var(--archive-accent);
+  box-shadow: none;
+  animation: mnt-archive-dot 1.2s ease-in-out infinite;
+}
+
+/* Barra: carril ámbar suave y relleno rayado que avanza y se desplaza. */
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-bar {
+  height: 1.1rem;
+  margin-top: 0.6rem;
+  border-radius: 999px;
+  background: var(--archive-tint) !important;
+  box-shadow: inset 0 1px 2px rgba(180, 83, 9, 0.15);
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-bar i {
+  width: 45%;
+  padding-right: 0.5rem;
+  background-color: var(--archive-accent) !important;
+  background-image: linear-gradient(45deg,
+    rgba(255, 255, 255, 0.3) 25%, transparent 25%, transparent 50%,
+    rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0.3) 75%, transparent 75%, transparent) !important;
+  background-size: 1rem 1rem;
+  box-shadow: 0 0 10px var(--archive-ring);
+  animation:
+    nova-archive-progress-sweep 1.8s ease-in-out infinite,
+    mnt-archive-stripes 0.6s linear infinite;
+}
+
+body.nova-v2 .nova-integration-overlay.is-archive .nova-archive-bar-icon {
+  font-size: 0.72rem;
+  text-shadow: none;
+}
+
+@keyframes mnt-archive-sheet {
+  0%   { transform: translateY(-0.9rem) rotate(-8deg); opacity: 0; }
+  15%  { opacity: 1; }
+  55%  { transform: translateY(1.45rem) rotate(0deg) scale(0.85); opacity: 1; }
+  70%  { transform: translateY(1.7rem) scale(0.7); opacity: 0; }
+  100% { transform: translateY(1.7rem) scale(0.7); opacity: 0; }
+}
+
+@keyframes mnt-archive-box {
+  0%, 50%, 100% { transform: translateY(0) scale(1); }
+  60% { transform: translateY(2px) scale(1.06, 0.94); }
+  72% { transform: translateY(-1px) scale(1); }
+}
+
+@keyframes mnt-archive-ring {
+  0%, 50% { transform: scale(0.9); opacity: 0; }
+  58% { opacity: 0.55; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+@keyframes mnt-archive-dot {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--archive-ring); }
+  50% { transform: scale(1.15); box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
+}
+
+@keyframes mnt-archive-stripes {
+  from { background-position: 1rem 0; }
+  to   { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon i,
+body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon::after,
+body.nova-v2 .nova-integration-overlay.is-archive .nova-archive-progress-state i {
+    animation: none;
+  }
+
+  body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-icon::before {
+    display: none;
+  }
+
+  body.nova-v2 .nova-integration-overlay.is-archive .nova-integration-bar i {
+    width: 100%;
+    animation: none;
+  }
+}
+
+/* ── Resto de vistas del módulo: superficies, tablas y navegación ───── */
+
+/* El tema quita el padding superior del contenedor y el hero antiguo lo
+   compensaba con su propio margen: el encabezado .nova-v2-head hace lo mismo. */
+body.nova-v2 #page-content :is(.container-fluid, .container) > .nova-v2-head:first-child {
+  margin-top: 18px;
+}
+
+/* Etiquetas del encabezado (antes badges blancas sobre el hero azul). */
+body.nova-v2 :is(#page-content, .modal) .nova-v2-head__meta .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: normal;
+  text-align: left;
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-head__meta .badge i {
+  color: var(--nova-v2-primary);
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-title i {
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-head-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.nova-v2 :is(#page-content, .modal) .nova-v2-head-list li {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--nova-v2-border-light);
+  border-radius: var(--nova-v2-radius-sm);
+  background: var(--nova-v2-bg-subtle);
+  color: var(--nova-v2-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* Superficies de sección: tarjetas, paneles y resúmenes. */
+body.nova-v2 #page-content :is(.card, .rm-panel-card, .rm-summary-card, .stat-card,
+  .nova-user-summary-card, .rm-config-field-card, .nova-card, .nova-alert-card) {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+  transform: none !important;
+}
+
+body.nova-v2 #page-content :is(.card, .rm-panel-card, .rm-summary-card, .stat-card,
+  .nova-user-summary-card, .nova-card):hover {
+  transform: none !important;
+  box-shadow: var(--nova-v2-shadow) !important;
+}
+
+body.nova-v2 #page-content :is(.card, .rm-panel-card, .rm-summary-card, .stat-card, .nova-user-summary-card)::after {
+  display: none !important;
+}
+
+/* Títulos de sección con la barra de acento. */
+body.nova-v2 #page-content :is(.rm-panel-title, .nova-table-toolbar-title, .card-title) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--nova-v2-text) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.nova-v2 #page-content :is(.rm-panel-title, .nova-table-toolbar-title)::before {
+  content: '';
+  width: 3px;
+  height: 1.1em;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--nova-v2-primary);
+}
+
+/* Íconos de tarjetas resumen: baldosa suave como dashboard-kpi-icon. */
+body.nova-v2 #page-content :is(.nova-user-summary-icon, .nextcloud-requester-summary-icon, .stat-icon) {
+  border-radius: 1.05rem !important;
+  box-shadow: none !important;
+}
+
+/* Tablas genéricas. Reportes tiene su propia versión. */
+/* La consola de auditoría (Actividad) es oscura a propósito: queda fuera. */
+body.nova-v2 :is(#page-content, .modal) .table-responsive:not(.dashboard-table-wrap):not(.security-console-wrap .table-responsive) {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) :is(.table, .nova-user-table):not(.dashboard-table):not(.security-console) {
+  --bs-table-striped-bg: transparent;
+  --bs-table-hover-bg: var(--nova-v2-bg-subtle);
+  --bs-table-bg: var(--nova-v2-bg);
+  margin-bottom: 0;
+}
+
+body.nova-v2 :is(#page-content, .modal) :is(.table, .nova-user-table):not(.dashboard-table):not(.security-console) > thead > tr > th {
+  padding: 0.65rem 0.6rem !important;
+  border-bottom: 1px solid var(--nova-v2-border) !important;
+  background: linear-gradient(180deg, var(--nova-v2-bg-subtle) 0%, var(--nova-v2-border-light) 100%) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Tabla densa de Reportes TIC: columnas angostas, el encabezado baja de línea en vez de montarse sobre el siguiente. */
+body.nova-v2 #page-content .rm-dashboard-table > thead > tr > th {
+  white-space: normal !important;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.25;
+  letter-spacing: 0.02em !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) :is(.table, .nova-user-table):not(.dashboard-table):not(.security-console) > tbody > tr > td {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--nova-v2-border-light) !important;
+  background: var(--nova-v2-bg) !important;
+  color: var(--nova-v2-text);
+  font-size: 0.84rem;
+  box-shadow: none !important;
+}
+
+body.nova-v2 :is(#page-content, .modal) :is(.table, .nova-user-table):not(.dashboard-table):not(.security-console) > tbody > tr:hover > td {
+  background: var(--nova-v2-bg-subtle) !important;
+}
+
+/* Modo compacto de cada vista (.is-compact en la tarjeta de la tabla).
+   nova-ui.css fija el relleno de toda celda de .table con !important, por eso
+   las reglas compactas propias de cada vista no tenían efecto. */
+body.nova-v2 #page-content .is-compact :is(.table, .nova-user-table):not(.dashboard-table):not(.security-console) > tbody > tr > td {
+  padding-top: 0.3rem !important;
+  padding-bottom: 0.3rem !important;
+}
+
+/* Histórico ajusta su letra al ancho en escritorio (nova-ui.css); no fijarla. */
+body.nova-v2 #page-content #historico-table-card .historico-table > tbody > tr > td {
+  font-size: inherit;
+}
+
+/* Histórico tiene 11 columnas: con este espaciado "DEPARTAMENTO" no cabía
+   y se montaba sobre "ASUNTO". */
+body.nova-v2 #page-content #historico-table-card .historico-table > thead > tr > th {
+  font-size: 0.68rem !important;
+  letter-spacing: 0 !important;
+}
+
+/* Paginación. */
+body.nova-v2 #page-content .pagination {
+  gap: 0.35rem;
+}
+
+body.nova-v2 #page-content .pagination .page-link {
+  min-width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.55rem;
+  border: 1px solid var(--nova-v2-border) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background: var(--nova-v2-bg) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.86rem;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content .pagination .page-link:hover {
+  border-color: var(--nova-v2-primary) !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+body.nova-v2 #page-content .pagination .page-item.active .page-link {
+  border-color: var(--nova-v2-primary) !important;
+  background: var(--nova-v2-primary) !important;
+  color: #fff !important;
+}
+
+body.nova-v2 #page-content .pagination .page-item.disabled .page-link {
+  border-color: var(--nova-v2-border-light) !important;
+  background: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text-muted) !important;
+}
+
+/* Navegación lateral de Configuración. */
+body.nova-v2 #page-content .rm-config-nav-link {
+  border-radius: var(--nova-v2-radius-sm) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content .rm-config-nav-link i {
+  color: var(--nova-v2-text-muted) !important;
+}
+
+body.nova-v2 #page-content .rm-config-nav-link:hover,
+body.nova-v2 #page-content .rm-config-nav-link.active {
+  border-color: transparent !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+body.nova-v2 #page-content .rm-config-nav-link:hover i,
+body.nova-v2 #page-content .rm-config-nav-link.active i {
+  color: var(--nova-v2-primary) !important;
+}
+
+/* Listas. */
+body.nova-v2 #page-content .list-group-item {
+  border-color: var(--nova-v2-border-light);
+  color: var(--nova-v2-text);
+}
+
+/* Alertas (acento izquierdo y fondo suave). */
+body.nova-v2 :is(#page-content, .modal) .alert {
+  border: 0 !important;
+  border-left: 3px solid currentColor !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  box-shadow: none !important;
+  font-size: 0.92rem;
+}
+
+body.nova-v2 :is(#page-content, .modal) .alert-info { background: var(--nova-v2-info-light) !important; color: #0369a1 !important; }
+body.nova-v2 :is(#page-content, .modal) .alert-success { background: var(--nova-v2-success-light) !important; color: #047857 !important; }
+body.nova-v2 :is(#page-content, .modal) .alert-warning { background: var(--nova-v2-warning-light) !important; color: #b45309 !important; }
+body.nova-v2 :is(#page-content, .modal) .alert-danger { background: var(--nova-v2-danger-light) !important; color: #b91c1c !important; }
+
+/* Drawers laterales (offcanvas) como consulta-admin-drawer. */
+body.nova-v2 #page-content .offcanvas {
+  border-left: 1px solid var(--nova-v2-border) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18) !important;
+}
+
+body.nova-v2 #page-content .offcanvas-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--nova-v2-border-light) !important;
+  background: var(--nova-v2-bg) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+body.nova-v2 #page-content .offcanvas-title {
+  color: var(--nova-v2-text) !important;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+body.nova-v2 #page-content .offcanvas-body {
+  background: var(--nova-v2-bg-subtle);
+}
+
+body.nova-v2 #page-content .offcanvas-footer {
+  border-top: 1px solid var(--nova-v2-border-light) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: none !important;
+}
+
+/* Chips informativos (p. ej. grupos de Nextcloud en Configuración): el texto
+   text-info de Bootstrap sobre fondo info-subtle no alcanza contraste AA. */
+body.nova-v2 #page-content .badge.text-bg-info-subtle.text-info {
+  color: #075985 !important;
+}
+
+/* Estados vacíos. */
+body.nova-v2 #page-content :is(.nova-empty-state, .nova-table-empty, .nova-empty) {
+  color: var(--nova-v2-text-muted) !important;
+}
+
+/* ── Configuración (riel, paneles, resumen, informes y permisos) ────── */
+
+/* Las reglas de nova-ui.css para Configuración se apoyan en estas variables. */
+body.nova-v2 #page-content .rm-config-shell {
+  --tic-config-navy: var(--nova-v2-text);
+  --tic-config-blue: var(--nova-v2-primary);
+  --tic-config-cyan: var(--nova-v2-primary-dark);
+  --tic-config-green: var(--nova-v2-success);
+  --tic-config-ice: var(--nova-v2-bg-subtle);
+  --tic-config-line: var(--nova-v2-border-light);
+  border-radius: var(--nova-v2-radius) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content :is(.rm-config-rail, .rm-permissions-page, .rm-permissions-list-panel,
+  .rm-permissions-editor-panel, .rm-config-view-panel .rm-panel-shell, .nova-report-recipients) {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+/* Navegación: el ícono activo quedaba azul sobre fondo azul (invisible). */
+body.nova-v2 #page-content .rm-config-shell .rm-config-nav-link {
+  transform: none !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-config-nav-link.active {
+  box-shadow: inset 3px 0 0 var(--nova-v2-primary) !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-config-nav-link.active > i:first-child {
+  background: transparent !important;
+}
+
+/* Baldosas de ícono (antes azul marino sólido) → baldosa suave. */
+body.nova-v2 #page-content :is(.rm-config-rail-head > span, .rm-feature-head-icon, .rm-selected-user-avatar,
+  .rm-config-shell .rm-summary-kpi > span) {
+  border-radius: 1.05rem !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-summary-kpi > span.is-cyan {
+  background: var(--nova-v2-info-light) !important;
+  color: #0369a1 !important;
+}
+
+body.nova-v2 #page-content :is(.rm-config-shell .rm-summary-kpi > span.is-green, .rm-feature-head-icon.is-green) {
+  background: var(--nova-v2-success-light) !important;
+  color: var(--nova-v2-success) !important;
+}
+
+body.nova-v2 #page-content :is(.rm-config-shell .rm-summary-kpi > span.is-orange, .rm-feature-head-icon.is-orange) {
+  background: var(--nova-v2-warning-light) !important;
+  color: var(--nova-v2-warning) !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-summary-kpi > span.is-slate {
+  background: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+/* Cabeceras de panel y de función: planas, sin degradado. */
+body.nova-v2 #page-content :is(.rm-config-view-panel .rm-panel-head, .rm-maint-config-shell .rm-panel-head,
+  .nova-report-recipients-head) {
+  background: var(--nova-v2-bg) !important;
+  border-bottom: 1px solid var(--nova-v2-border-light) !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-feature-head {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-feature-head small {
+  color: var(--nova-v2-primary-dark) !important;
+  letter-spacing: 0.06em;
+}
+
+body.nova-v2 #page-content :is(.rm-config-shell .rm-feature-head h2, .rm-maint-config-shell .rm-panel-title,
+  .rm-maint-config-shell .rm-panel-head h5, .rm-config-rail-head strong) {
+  color: var(--nova-v2-text) !important;
+  font-weight: 700 !important;
+}
+
+body.nova-v2 #page-content .rm-config-shell .rm-summary-kpi {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+@media (min-width: 576px) and (max-width: 991.98px) {
+  body.nova-v2 #page-content .rm-config-summary-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Sombras fuertes restantes → --nova-v2-shadow-sm. */
+body.nova-v2 #page-content :is(.rm-permission-group, .rm-role-permission-item, .rm-config-view-panel .p-3.border) {
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+body.nova-v2 #page-content .nova-report-recipients-icon {
+  border-radius: 1.05rem !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+  box-shadow: none !important;
+}
+
+/* Informes: franja izquierda multicolor → acento primario; cabecera de la
+   lista de destinatarios igual que las tablas NOVA v2. */
+body.nova-v2 #page-content .nova-report-recipients::before {
+  width: 3px;
+  background: var(--nova-v2-primary) !important;
+}
+
+body.nova-v2 #page-content .nova-report-recipient-row.is-header {
+  background: linear-gradient(180deg, var(--nova-v2-bg-subtle) 0%, var(--nova-v2-border-light) 100%) !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* Opción predeterminada (Trackers, Prioridades, Estados): la casilla es un
+   .btn-check oculto y la etiqueta muestra una estrella vacía o rellena. */
+body.nova-v2 #page-content .mnt-default-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.25rem 0.45rem;
+  border-radius: var(--nova-v2-radius-sm);
+  color: var(--nova-v2-text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+body.nova-v2 #page-content .mnt-default-toggle .bi {
+  font-size: 1.15rem;
+}
+
+body.nova-v2 #page-content .mnt-default-toggle .bi-star-fill {
+  display: none;
+  color: #f59e0b;
+}
+
+body.nova-v2 #page-content .mnt-default-toggle:hover {
+  background: var(--nova-v2-warning-light);
+  color: #b45309;
+}
+
+body.nova-v2 #page-content .btn-check:checked + .mnt-default-toggle {
+  color: #b45309;
+}
+
+body.nova-v2 #page-content .btn-check:checked + .mnt-default-toggle .bi-star {
+  display: none;
+}
+
+body.nova-v2 #page-content .btn-check:checked + .mnt-default-toggle .bi-star-fill {
+  display: inline-block;
+}
+
+body.nova-v2 #page-content .btn-check:focus-visible + .mnt-default-toggle {
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light);
+}
+
+/* Estrella en la tabla de solo lectura: fija en la predeterminada; en las demás
+   es un botón que la marca como predeterminada (acción set_default). */
+body.nova-v2 #page-content .mnt-default-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nova-v2-text-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+body.nova-v2 #page-content button.mnt-default-star:hover {
+  background: var(--nova-v2-warning-light);
+  color: #b45309;
+}
+
+body.nova-v2 #page-content button.mnt-default-star:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light);
+}
+
+body.nova-v2 #page-content .mnt-default-star.is-default {
+  color: #f59e0b;
+}
+
+/* Fila de la opción predeterminada: fondo ámbar suave (gana a la regla genérica de celdas). */
+body.nova-v2 :is(#page-content, .modal) :is(.table, .nova-user-table):not(.dashboard-table):not(.security-console) > tbody > tr.is-default > td {
+  background: var(--nova-v2-warning-light) !important;
+}
+
+/* Descripción de cada grupo de permisos: #64748b no alcanzaba 4.5:1 sobre su fondo. */
+body.nova-v2 #page-content .rm-permission-group-copy small {
+  color: #536274 !important;
+}
+
+/* Acciones masivas con color propio (Mantención y TIC): Archivar en ámbar y Eliminar en rojo.
+   Desactivados (sin selección) quedan en versión pálida del mismo color. */
+body.nova-v2 #page-content :is(#archive-btn, button[value="archive_selected"]) {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #1f2937 !important;
+}
+
+body.nova-v2 #page-content :is(#archive-btn, button[value="archive_selected"]):not(:disabled):hover {
+  background: #d97706 !important;
+  border-color: #d97706 !important;
+  color: #fff !important;
+}
+
+body.nova-v2 #page-content :is(#delete-selected-btn, button[data-dashboard-delete-selected]) {
+  background: var(--nova-v2-danger) !important;
+  border-color: var(--nova-v2-danger) !important;
+  color: #fff !important;
+}
+
+body.nova-v2 #page-content :is(#delete-selected-btn, button[data-dashboard-delete-selected]):not(:disabled):hover {
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+body.nova-v2 #page-content :is(#archive-btn, button[value="archive_selected"]):disabled {
+  background: #fef3c7 !important;
+  border-color: #fde68a !important;
+  color: #b45309 !important;
+}
+
+body.nova-v2 #page-content :is(#delete-selected-btn, button[data-dashboard-delete-selected]):disabled {
+  background: #fee2e2 !important;
+  border-color: #fecaca !important;
+  color: #b91c1c !important;
+}
+
+body.nova-v2 #page-content :is(#archive-btn, button[value="archive_selected"]):focus-visible {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3) !important;
+}
+
+body.nova-v2 #page-content :is(#delete-selected-btn, button[data-dashboard-delete-selected]):focus-visible {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25) !important;
+}
+
+/* Bloque "Fechas y tiempo" de los drawers (Mantención y TIC): plano, con el botón
+   "Actualizar fechas a hoy" como botón suave. */
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-top: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg-subtle) !important;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-actions__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-actions__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--nova-v2-text) !important;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-actions__title i { color: var(--nova-v2-primary); }
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-actions__hint {
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.8rem;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-today-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--nova-v2-primary) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-today-btn:hover {
+  background: var(--nova-v2-primary) !important;
+  color: #fff !important;
+}
+
+html.nova-v2-dark body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-today-btn:hover { color: var(--nova-v2-bg) !important; }
+
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-today-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--nova-v2-primary-light) !important;
+}
+
+/* Select2 deshabilitado (campos de solo lectura del drawer), igual que .form-select:disabled. */
+body.nova-v2 .detail-drawer-modal:not(#_) .select2-container--disabled .select2-selection {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary);
+  cursor: not-allowed;
+}
+
+/* Pestañas Editar/Previsualizar de la descripción en los drawers: texto inactivo con contraste AA. */
+body.nova-v2 .detail-drawer-modal:not(#_) .nova-description-tab:not(.is-active) { color: var(--nova-v2-text-secondary) !important; }
+html.nova-v2-dark body.nova-v2 .detail-drawer-modal:not(#_) .nova-description-tabs {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border-light) !important;
+}
+html.nova-v2-dark body.nova-v2 .detail-drawer-modal:not(#_) .nova-description-tab.is-active {
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Indicador de origen (Telegram, manual, estado CORE) en la primera columna de Reportes, TIC y Mantención:
+   círculo de 2.2rem con ícono de 1rem; la columna se ensancha para que el checkbox no quede encima. */
+body.nova-v2 #page-content :is(.dashboard-table, .rm-dashboard-table) > * > tr > :first-child {
+  width: 5rem !important;
+  min-width: 5rem !important;
+}
+
+body.nova-v2 #page-content :is(.dashboard-select-control, .rm-dashboard-select-control) {
+  grid-template-columns: 1rem 2.2rem !important;
+  gap: 0.4rem !important;
+  width: 3.6rem !important;
+  min-width: 3.6rem !important;
+}
+
+body.nova-v2 #page-content :is(.dashboard-select-control, .rm-dashboard-select-control) > .badge.rounded-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0 !important;
+  font-size: 1rem !important;
+  line-height: 1;
+}
+
+body.nova-v2 #page-content :is(.dashboard-select-control, .rm-dashboard-select-control) > .badge.rounded-circle .bi {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* El glifo bi-telegram ya es un círculo relleno y se ve más chico que el lápiz: se agranda aparte. */
+body.nova-v2 #page-content .rm-dashboard-select-control > .rm-dashboard-source-indicator.is-telegram .bi {
+  font-size: 1.5rem;
+}
+
+/* ── Redmine TIC: componentes propios ───────────────────────────────── */
+
+/* Tarjetas de estado del dashboard (enlaces de filtro): mismo patrón que las de
+   Mantención; el color sale del ícono de cada tarjeta. */
+body.nova-v2 #page-content .rm-stat-card {
+  --stat-accent: var(--nova-v2-primary);
+  --stat-tint: var(--nova-v2-primary-light);
+  --stat-ring: rgba(37, 99, 235, 0.18);
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-left: 4px solid var(--stat-accent) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: linear-gradient(135deg, var(--stat-tint) 0%, var(--nova-v2-bg) 75%) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+  color: var(--nova-v2-text) !important;
+  text-decoration: none;
+  transform: none !important;
+}
+
+body.nova-v2 #page-content .rm-stat-card:has(.rm-stat-icon.is-pending) { --stat-accent: var(--nova-v2-warning); --stat-tint: #fef3c7; --stat-ring: rgba(217, 119, 6, 0.2); }
+body.nova-v2 #page-content .rm-stat-card:has(.rm-stat-icon.is-success) { --stat-accent: var(--nova-v2-success); --stat-tint: #d1fae5; --stat-ring: rgba(5, 150, 105, 0.2); }
+body.nova-v2 #page-content .rm-stat-card:has(.rm-stat-icon.is-danger) { --stat-accent: var(--nova-v2-danger); --stat-tint: #fee2e2; --stat-ring: rgba(220, 38, 38, 0.2); }
+
+body.nova-v2 #page-content .rm-stat-card:hover,
+body.nova-v2 #page-content .rm-stat-card.active {
+  border-color: var(--stat-accent) !important;
+  box-shadow: 0 0 0 3px var(--stat-ring), var(--nova-v2-shadow) !important;
+}
+
+body.nova-v2 #page-content .rm-stat-card .rm-stat-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1.05rem;
+  background: var(--stat-accent) !important;
+  color: #fff;
+  font-size: 1.35rem;
+  box-shadow: 0 6px 14px var(--stat-ring);
+}
+
+/* Etiqueta en mayúscula arriba, número abajo en el color del estado. */
+body.nova-v2 #page-content .rm-stat-card .card-body > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.35rem;
+}
+
+body.nova-v2 #page-content .rm-stat-card .card-body > div > strong {
+  color: var(--stat-accent) !important;
+  font-size: 1.8rem !important;
+}
+
+body.nova-v2 #page-content .rm-stat-card .card-body > div > .fw-bold {
+  margin: 0 !important;
+  color: var(--nova-v2-text-secondary) !important;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Cabecera de sección (rm-module-head) y su medidor. */
+body.nova-v2 #page-content .rm-module-head {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+body.nova-v2 #page-content .rm-module-head small {
+  color: var(--nova-v2-primary-dark) !important;
+  letter-spacing: 0.06em;
+}
+
+body.nova-v2 #page-content .rm-module-head h2 {
+  color: var(--nova-v2-text) !important;
+  font-weight: 700 !important;
+}
+
+body.nova-v2 #page-content .rm-module-head p {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+body.nova-v2 #page-content :is(.rm-module-head-icon, .historico-filter-heading__icon, .tic-quick-command-mark,
+  .tic-quick-draft-launch-icon, .tic-quick-result-icon) {
+  border-radius: 1.05rem !important;
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content .rm-module-head-icon.is-green { background: var(--nova-v2-success-light) !important; color: var(--nova-v2-success) !important; }
+body.nova-v2 #page-content .rm-module-head-icon.is-cyan { background: var(--nova-v2-info-light) !important; color: #0369a1 !important; }
+body.nova-v2 #page-content .rm-module-head-icon.is-red { background: var(--nova-v2-danger-light) !important; color: var(--nova-v2-danger) !important; }
+body.nova-v2 #page-content .rm-module-head-icon.is-orange { background: var(--nova-v2-warning-light) !important; color: var(--nova-v2-warning) !important; }
+
+body.nova-v2 #page-content .rm-module-meter {
+  border: 1px solid var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius-sm) !important;
+  background: var(--nova-v2-bg-subtle) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content .rm-module-meter strong { color: var(--nova-v2-text) !important; }
+body.nova-v2 #page-content .rm-module-meter span { color: var(--nova-v2-text-secondary) !important; }
+
+/* Cabeceras internas y paneles con degradado o sombra fuerte. */
+body.nova-v2 #page-content :is(.rm-section-head, .tic-quick-intake, .tic-quick-report) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  box-shadow: none !important;
+}
+
+body.nova-v2 #page-content :is(.rm-stats-rank-card, .rm-interactive-chart, .rm-config-catalog-card, .rm-config-side-card,
+  .rm-catalog-action-head, .rm-catalog-panel, .historico-filter-card) {
+  border-color: var(--nova-v2-border-light) !important;
+  border-radius: var(--nova-v2-radius) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+/* Filtros de Histórico: franja superior multicolor → acento primario. */
+body.nova-v2 #page-content .historico-filter-card::before {
+  height: 3px !important;
+  background: var(--nova-v2-primary) !important;
+}
+
+body.nova-v2 #page-content .historico-filter-heading h3 { color: var(--nova-v2-text) !important; font-weight: 700 !important; }
+
+/* Panel lateral de estado OK en Configuración: texto con contraste sobre el verde. */
+body.nova-v2 #page-content .rm-config-side-card.is-ok > span { color: rgba(255, 255, 255, 0.92) !important; }
+
+/* Texto de ejemplo y metadatos grises: contraste AA. */
+body.nova-v2 :is(#page-content, .modal, .offcanvas) .select2-selection__placeholder { color: var(--nova-v2-text-muted) !important; }
+body.nova-v2 #page-content :is(.nova-date-meta, .nova-user-meta, #tic-manual-description-preview-tab) { color: var(--nova-v2-text-secondary) !important; }
+body.nova-v2 #page-content .pagination .page-item.disabled .page-link { color: var(--nova-v2-text-secondary) !important; }
+
+/* Contraste justo en el límite (4.48-4.49): un tono más. */
+body.nova-v2 #page-content .rm-config-side-card.is-ok > span { color: #ffffff !important; }
+body.nova-v2 #page-content .security-activity-pagination .disabled { color: var(--nova-v2-text-secondary) !important; }
+body.nova-v2 #page-content .dashboard-toolbar { box-shadow: none !important; }
+
+/* Modo oscuro de los componentes de TIC. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.dashboard-toolbar, .tic-quick-command, .historico-filter-head,
+  .historico-search-strip, .rm-stats-panel-head, .rm-stats-rank-card, .rm-interactive-chart, .rm-config-catalog-card,
+  .rm-config-side-card:not(.is-ok), .rm-maintenance-switch, .rm-config-readonly-card, .rm-catalog-action-head, .rm-catalog-panel,
+  .rm-catalog-panel-head, .nova-description-tabs) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text);
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.rm-config-value, .rm-config-catalog-default, .historico-filter-toggle,
+  .historico-active-filter-count, .rm-timeline-months button:not(.active):not(.is-range-start):not(.is-range-end)) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.rm-config-field-icon, .rm-config-catalog-card .bi, .rm-maintenance-switch .bi,
+  .nova-description-tab.is-active) {
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Tabla de catálogos (categorías/unidades) y estados de Redmine en Histórico. */
+html.nova-v2-dark body.nova-v2 #page-content .rm-catalog-table :is(th, td) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content .rm-catalog-table th { background: var(--nova-v2-bg-subtle) !important; color: var(--nova-v2-text-secondary) !important; }
+html.nova-v2-dark body.nova-v2 #page-content .rm-catalog-table td span { background: transparent !important; color: inherit !important; }
+html.nova-v2-dark body.nova-v2 #page-content .historico-redmine-status { filter: invert(1) hue-rotate(180deg); }
+html.nova-v2-dark body.nova-v2 #page-content :is(label[for="tic-quick-input"], .rm-donut-list span, .rm-donut span, .rm-timeline-header span,
+  .rm-timeline-footer span, .rm-catalog-action-head > div > span, .rm-interactive-chart-title span, .rm-category-axis span) {
+  color: var(--nova-v2-text-secondary) !important;
+}
+html.nova-v2-dark body.nova-v2 #page-content .rm-stat-card:has(.rm-stat-icon.is-pending) { --stat-tint: rgba(217, 119, 6, 0.2); }
+html.nova-v2-dark body.nova-v2 #page-content .rm-stat-card:has(.rm-stat-icon.is-success) { --stat-tint: rgba(5, 150, 105, 0.2); }
+html.nova-v2-dark body.nova-v2 #page-content .rm-stat-card:has(.rm-stat-icon.is-danger) { --stat-tint: rgba(220, 38, 38, 0.2); }
+html.nova-v2-dark body.nova-v2 #page-content .rm-stat-card .rm-stat-icon { color: var(--nova-v2-bg) !important; }
+html.nova-v2-dark body.nova-v2 #page-content .rm-module-head-icon.is-cyan { color: var(--nova-v2-info) !important; }
+
+/* Estadísticas TIC: el resumen era un hero con degradado y texto blanco; como .nova-card pasa a
+   superficie NOVA v2, sus textos toman los tokens. */
+body.nova-v2 #page-content .rm-stats-hero { color: var(--nova-v2-text); }
+body.nova-v2 #page-content .rm-stats-hero .rm-stats-eyebrow { color: var(--nova-v2-primary-dark); }
+body.nova-v2 #page-content .rm-stats-hero h2 { color: var(--nova-v2-text); }
+body.nova-v2 #page-content .rm-stats-hero p,
+body.nova-v2 #page-content .rm-stats-kpis span { color: var(--nova-v2-text-secondary); }
+body.nova-v2 #page-content .rm-stats-kpis strong { color: var(--nova-v2-text); }
+body.nova-v2 #page-content .rm-stats-kpis > div {
+  border: 1px solid var(--nova-v2-border-light);
+  background: var(--nova-v2-bg-subtle);
+}
+
+/* ── Resto de NOVA: Home, Administración, EMACH, Telegram, Monitor, login ── */
+
+/* Monitor: estado del servicio Docker dentro del encabezado (antes, sobre el hero oscuro). */
+body.nova-v2 #page-content .monitor-head .monitor-worker {
+  flex: 0 0 auto;
+  min-width: 215px;
+  border: 1px solid var(--nova-v2-border-light);
+  border-radius: var(--nova-v2-radius-sm);
+  background: var(--nova-v2-bg-subtle);
+  color: var(--nova-v2-text);
+  backdrop-filter: none;
+}
+
+body.nova-v2 #page-content .monitor-head .monitor-worker small { color: var(--nova-v2-text-muted); }
+body.nova-v2 #page-content .monitor-head .monitor-worker strong { color: var(--nova-v2-text); }
+body.nova-v2 #page-content .monitor-head .monitor-worker span:last-child { color: var(--nova-v2-text-secondary); }
+body.nova-v2 #page-content .monitor-head .monitor-worker-pulse { border-color: var(--nova-v2-border); }
+
+/* Monitor: hora de cada transición con contraste AA (nova-ui.css usa #8a99a8). */
+body.nova-v2 #page-content .monitor-event small { color: var(--nova-v2-text-muted); }
+
+/* Paginador del log de módulo: vive en la consola oscura de Actividad; los botones blancos
+   por defecto del paginador de Laravel pasan al estilo de la consola. */
+body.nova-v2 #page-content .security-console-wrap .module-log-pagination :is(a, span.inline-flex, span.relative) {
+  border-color: rgba(34, 197, 94, 0.28) !important;
+  background: transparent !important;
+  color: #86efac !important;
+}
+
+body.nova-v2 #page-content .security-console-wrap .module-log-pagination :is(span[aria-disabled] > span, span.inline-flex.cursor-default) { background: transparent !important; color: rgba(134, 239, 172, 0.55) !important; }
+
+/* Login: tarjeta y campos con tokens NOVA v2; conserva el panel de marca azul. Sin interruptor,
+   sigue la preferencia guardada o la del sistema (nova-v2-theme-head.php). */
+body.nova-v2.nova-login-page #page-content.login {
+  border-color: var(--nova-v2-border-light);
+  border-radius: var(--nova-v2-radius);
+  background: var(--nova-v2-bg);
+  box-shadow: var(--nova-v2-shadow-md);
+}
+
+body.nova-v2.nova-login-page #page-content .login-body { background: var(--nova-v2-bg); }
+body.nova-v2.nova-login-page #page-content .login-body__heading h2 { color: var(--nova-v2-text); }
+body.nova-v2.nova-login-page #page-content :is(.login-body__heading p, .field label) { color: var(--nova-v2-text-secondary); }
+body.nova-v2.nova-login-page #page-content .login-input .form-control { padding-left: 2.5rem; }
+body.nova-v2.nova-login-page #page-content .login-input:has(.login-password-toggle) .form-control { padding-right: 2.75rem; }
+
+/* Tarjeta centrada (páginas de error y welcome); los tokens cubren claro y oscuro. */
+body.nova-v2 #page-content.nova-v2-notice {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 1.5rem 1rem;
+}
+
+body.nova-v2 #page-content .nova-v2-notice__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 480px;
+  padding: 2.25rem 2rem;
+  border: 1px solid var(--nova-v2-border-light);
+  border-radius: var(--nova-v2-radius);
+  background: var(--nova-v2-bg);
+  box-shadow: var(--nova-v2-shadow-md);
+  text-align: center;
+}
+
+body.nova-v2 #page-content .nova-v2-notice__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 0.5rem;
+  border-radius: 50%;
+  font-size: 1.6rem;
+}
+
+body.nova-v2 #page-content .nova-v2-notice__icon.is-info { background: var(--nova-v2-primary-light); color: var(--nova-v2-primary); }
+body.nova-v2 #page-content .nova-v2-notice__icon.is-warning { background: var(--nova-v2-warning-light); color: var(--nova-v2-warning); }
+body.nova-v2 #page-content .nova-v2-notice__icon.is-danger { background: var(--nova-v2-danger-light); color: var(--nova-v2-danger); }
+body.nova-v2 #page-content .nova-v2-notice .nova-v2-title { justify-content: center; }
+body.nova-v2 #page-content .nova-v2-notice .nova-v2-subtitle { margin: 0; }
+
+body.nova-v2 #page-content .nova-v2-notice__detail {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--nova-v2-radius-sm);
+  background: var(--nova-v2-bg-subtle);
+  color: var(--nova-v2-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+body.nova-v2 #page-content .nova-v2-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* Editor OnlyOffice: barra superior con la superficie NOVA v2 (el iframe trae su propio tema). */
+body.nova-v2.onlyoffice-editor-page .onlyoffice-editor-nav {
+  background: var(--nova-v2-bg);
+  border-bottom: 1px solid var(--nova-v2-border-light);
+}
+
+body.nova-v2.onlyoffice-editor-page .onlyoffice-editor-back {
+  border-color: var(--nova-v2-border);
+  border-radius: 50%;
+  background: var(--nova-v2-bg);
+  color: var(--nova-v2-text-secondary);
+}
+
+body.nova-v2.onlyoffice-editor-page .onlyoffice-editor-back:is(:hover, :focus-visible) {
+  border-color: var(--nova-v2-primary);
+  background: var(--nova-v2-primary-light);
+  color: var(--nova-v2-primary-dark);
+}
+
+/* ── Interruptor claro/oscuro ─────────────── */
+
+body.nova-v2 .nova-theme-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+}
+
+body.nova-v2 .nova-theme-toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 32px;
+  border: 1px solid #dbe4ef;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #bfdbfe, #eff6ff);
+  box-shadow: inset 0 1px 3px rgb(15 23 42 / 12%);
+  transition: background .3s ease, border-color .3s ease, box-shadow .3s ease;
+}
+
+body.nova-v2 .nova-theme-toggle.is-dark .nova-theme-toggle-track {
+  border-color: rgb(129 140 248 / 45%);
+  background: linear-gradient(135deg, #1e293b, #312e81);
+}
+
+body.nova-v2 .nova-theme-toggle-glyph {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  font-size: .85rem;
+  line-height: 1;
+  transform: translateY(-50%);
+  transition: color .3s ease, opacity .3s ease;
+}
+
+body.nova-v2 .nova-theme-toggle-sun { left: 9px; color: #f59e0b; }
+body.nova-v2 .nova-theme-toggle-moon { right: 9px; color: #c7d2fe; opacity: .5; }
+body.nova-v2 .nova-theme-toggle.is-dark .nova-theme-toggle-sun { opacity: .4; }
+body.nova-v2 .nova-theme-toggle.is-dark .nova-theme-toggle-moon { opacity: 1; }
+
+body.nova-v2 .nova-theme-toggle-thumb {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  left: 3px;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgb(15 23 42 / 30%);
+  color: #f59e0b;
+  font-size: .85rem;
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), background .3s ease, color .3s ease;
+}
+
+body.nova-v2 .nova-theme-toggle.is-dark .nova-theme-toggle-thumb {
+  background: #0f172a;
+  color: #c7d2fe;
+  transform: translateX(32px);
+}
+
+body.nova-v2 .nova-theme-toggle:hover .nova-theme-toggle-track,
+body.nova-v2 .nova-theme-toggle:focus-visible .nova-theme-toggle-track {
+  border-color: #93c5fd;
+  box-shadow: inset 0 1px 3px rgb(15 23 42 / 12%), 0 0 0 3px rgba(147, 197, 253, .35);
+}
+
+body.nova-v2 .nova-theme-toggle:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body.nova-v2 .nova-theme-icon-swap {
+    animation: nova-theme-icon-swap .45s cubic-bezier(.34, 1.56, .64, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.nova-v2 :is(.nova-theme-toggle-track, .nova-theme-toggle-glyph, .nova-theme-toggle-thumb) { transition: none; }
+}
+
+@keyframes nova-theme-icon-swap {
+  0% { opacity: 0; transform: rotate(-120deg) scale(.4); }
+  60% { opacity: 1; transform: rotate(12deg) scale(1.15); }
+  100% { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+/* ── Modo oscuro ──────────────────────── */
+
+html.nova-v2-dark:has(body.nova-v2) {
+  color-scheme: dark;
+  background: #0f172a !important;
+}
+
+html.nova-v2-dark body.nova-v2 {
+  --nova-v2-bg: #111827;
+  --nova-v2-bg-subtle: #1e293b;
+  --nova-v2-bg-page: #0f172a;
+  --nova-v2-border: #334155;
+  --nova-v2-border-light: #243244;
+  --nova-v2-primary: #60a5fa;
+  --nova-v2-primary-light: rgba(37, 99, 235, 0.22);
+  --nova-v2-primary-dark: #93c5fd;
+  --nova-v2-success: #34d399;
+  --nova-v2-success-light: rgba(5, 150, 105, 0.18);
+  --nova-v2-danger: #f87171;
+  --nova-v2-danger-light: rgba(220, 38, 38, 0.18);
+  --nova-v2-warning: #fbbf24;
+  --nova-v2-warning-light: rgba(217, 119, 6, 0.18);
+  --nova-v2-info: #38bdf8;
+  --nova-v2-info-light: rgba(14, 165, 233, 0.2);
+  --nova-v2-text: #f8fafc;
+  --nova-v2-text-secondary: #cbd5e1;
+  --nova-v2-text-muted: #94a3b8;
+  --nova-v2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --nova-v2-shadow: 0 1px 3px rgba(0, 0, 0, 0.48), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --nova-v2-shadow-md: 0 8px 18px rgba(0, 0, 0, 0.36);
+  color: var(--nova-v2-text);
+}
+
+/* Botones: texto oscuro sobre los fondos claros del modo oscuro. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) :is(.btn-nova-primary, .btn-nova-success, .btn-nova-info,
+  .btn-primary, .btn-success, .btn-nova-secondary, .btn-nova-danger, .btn-secondary, .btn-danger),
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) :is(.btn-nova-primary, .btn-nova-success, .btn-nova-info,
+  .btn-primary, .btn-success, .btn-nova-secondary, .btn-nova-danger, .btn-secondary, .btn-danger):hover {
+  color: var(--nova-v2-bg) !important;
+}
+
+/* Deshabilitados: texto apagado legible (la regla anterior pondría el color del fondo). */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) :is(.btn-nova, .btn):is(:disabled, [disabled], .disabled),
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) :is(.btn-nova, .btn):is(:disabled, [disabled], .disabled) :is(span, i) {
+  color: var(--nova-v2-text-muted) !important;
+}
+
+/* Textos con color fijo oscuro heredado de nova-ui.css / redmine-tic-native.css. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.dashboard-selection, .rm-dashboard-table .rm-dashboard-subject,
+  .dashboard-table .dashboard-table__subject, .rm-donut strong) {
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) :is(.btn-outline-primary:hover) {
+  color: var(--nova-v2-bg) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(#archive-btn, button[value="archive_selected"]):disabled {
+  background: rgba(245, 158, 11, 0.16) !important;
+  border-color: rgba(245, 158, 11, 0.36) !important;
+  color: #fbbf24 !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(#delete-selected-btn, button[data-dashboard-delete-selected]):disabled {
+  background: rgba(248, 113, 113, 0.16) !important;
+  border-color: rgba(248, 113, 113, 0.36) !important;
+  color: #f87171 !important;
+}
+
+/* Botones de acción redondos: variantes oscuras. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .btn-action {
+  --nova-v2-action-bg: #263449;
+  --nova-v2-action-border: #475569;
+  --nova-v2-action-color: #cbd5e1;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .btn-action-view:not(.log-btn) {
+  --nova-v2-action-bg: rgba(96, 165, 250, 0.18);
+  --nova-v2-action-border: rgba(96, 165, 250, 0.36);
+  --nova-v2-action-color: #93c5fd;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .btn-action-edit {
+  --nova-v2-action-bg: rgba(251, 191, 36, 0.16);
+  --nova-v2-action-border: rgba(251, 191, 36, 0.36);
+  --nova-v2-action-color: #fbbf24;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .btn-action-delete {
+  --nova-v2-action-bg: rgba(248, 113, 113, 0.16);
+  --nova-v2-action-border: rgba(248, 113, 113, 0.36);
+  --nova-v2-action-color: #f87171;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .btn-action.btn-hora-extra--on {
+  --nova-v2-action-bg: #2563eb;
+  --nova-v2-action-border: #3b82f6;
+  --nova-v2-action-color: #ffffff;
+}
+
+/* Tarjetas de estado: tintes translúcidos y número en el color del estado. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .dashboard-stat--pending { --stat-tint: rgba(217, 119, 6, 0.2); }
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .dashboard-stat--processed { --stat-tint: rgba(5, 150, 105, 0.2); }
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .dashboard-stat--error { --stat-tint: rgba(220, 38, 38, 0.2); }
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) .dashboard-stat__icon {
+  color: var(--nova-v2-bg) !important;
+}
+
+/* Estrellas y textos ámbar: #b45309 no se lee sobre fondo oscuro. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.btn-check:checked + .mnt-default-toggle, .mnt-default-toggle:hover,
+  button.mnt-default-star:hover) {
+  color: #fbbf24;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-integration-overlay.is-archive {
+  --archive-accent-dark: #fbbf24;
+  --archive-tint: rgba(245, 158, 11, 0.18);
+}
+
+/* Campos de formulario y selects (theme.css fija #fff con alta especificidad). */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.form-control, .form-select, textarea, .input-group-text,
+  .select2-selection, .select2-container--default .select2-selection--single) {
+  background-color: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) .input-group-text {
+  background-color: var(--nova-v2-bg-subtle) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .select2-container--default .select2-selection__rendered {
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(.select2-dropdown, .select2-results__option, .dropdown-menu) {
+  background-color: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(.select2-search__field) {
+  background-color: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+/* Select2: la franja del buscador (#f4f8fd en nova-ui.css / nextcloud-usuarios.css) y los estados de
+   las opciones; la regla anterior pinta todas las opciones igual y anulaba el resaltado. */
+html.nova-v2-dark body.nova-v2 .select2-container .select2-search--dropdown {
+  background: var(--nova-v2-bg) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .select2-search--dropdown .select2-search__field {
+  border-color: var(--nova-v2-border) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .select2-container .select2-results__option[aria-selected="true"],
+html.nova-v2-dark body.nova-v2 .select2-container .select2-results__option--selected {
+  background-color: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .select2-container .select2-results__option--highlighted,
+html.nova-v2-dark body.nova-v2 .select2-container .select2-results__option--highlighted[aria-selected] {
+  background-color: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Buscador con lista propia (Accesos de Administración) y combobox de permisos (Mantención). */
+html.nova-v2-dark body.nova-v2 .nova-search-select__menu {
+  border-color: var(--nova-v2-border) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-md) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-search-select__option { color: var(--nova-v2-text) !important; }
+html.nova-v2-dark body.nova-v2 .nova-search-select__empty { color: var(--nova-v2-text-muted) !important; }
+
+html.nova-v2-dark body.nova-v2 :is(.nova-search-select__option:hover, .nova-search-select__option.is-active,
+  .rm-picker-combobox-option.is-highlighted, .rm-picker-combobox-option:hover) {
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-search-select__clear { color: var(--nova-v2-text-muted) !important; }
+html.nova-v2-dark body.nova-v2 :is(.nova-search-select__clear:hover, .nova-search-select__clear:focus-visible) {
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Menú de usuario de la barra superior. */
+html.nova-v2-dark body.nova-v2 .nova-user-menu-panel {
+  border-color: var(--nova-v2-border) !important;
+  background: var(--nova-v2-bg) !important;
+  box-shadow: var(--nova-v2-shadow-md) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-user-menu-action { color: var(--nova-v2-text-secondary) !important; }
+html.nova-v2-dark body.nova-v2 .nova-user-menu-divider { background: var(--nova-v2-border) !important; }
+html.nova-v2-dark body.nova-v2 .nova-user-menu-action > i,
+html.nova-v2-dark body.nova-v2 .nova-user-menu-action > small { color: var(--nova-v2-text-muted) !important; }
+html.nova-v2-dark body.nova-v2 .nova-user-menu-action:not(:disabled):hover { background: var(--nova-v2-bg-subtle) !important; color: var(--nova-v2-text) !important; }
+html.nova-v2-dark body.nova-v2 :is(.nova-user-menu-action.is-danger:hover, .nova-user-menu-action.is-danger:focus-visible),
+html.nova-v2-dark body.nova-v2 :is(.nova-user-menu-action.is-danger:hover, .nova-user-menu-action.is-danger:focus-visible) > i {
+  background: var(--nova-v2-danger-light) !important;
+  color: var(--nova-v2-danger) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .dropdown-item { color: var(--nova-v2-text-secondary); }
+html.nova-v2-dark body.nova-v2 .dropdown-item:hover { background: var(--nova-v2-bg-subtle); color: var(--nova-v2-text); }
+
+/* Filas: el fondo lo dan las celdas (tokens); la fila no debe pintar blanco. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal) :is(table, .table) > :is(tbody, thead) > tr {
+  background-color: transparent !important;
+}
+
+/* Menú lateral de NOVA. */
+html.nova-v2-dark body.nova-v2 :is(.nova-sidebar, .nova-sidebar-footer) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-sidebar-link {
+  color: var(--nova-v2-text-secondary) !important;
+  background: transparent !important;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-sidebar-link:hover,
+html.nova-v2-dark body.nova-v2 .nova-sidebar-link.active {
+  background: var(--nova-v2-primary-light) !important;
+  border-color: rgba(96, 165, 250, 0.36) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+html.nova-v2-dark body.nova-v2 .nova-sidebar-collapse-toggle {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+/* Utilidades de Bootstrap con color fijo. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.bg-white, .bg-light) { background-color: var(--nova-v2-bg-subtle) !important; }
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) .text-dark { color: var(--nova-v2-text) !important; }
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.text-muted, .text-secondary, .form-text) { color: var(--nova-v2-text-muted) !important; }
+html.nova-v2-dark body.nova-v2 #page-content .border { border-color: var(--nova-v2-border) !important; }
+
+/* Superficies propias de cada vista → tokens NOVA v2. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.rm-panel-body, .rm-summary-kpi, .rm-role-permission-item, .rm-toggle-line,
+  .rm-permission-group, .nova-table-card, .nextcloud-credential-gate, .nextcloud-requester-fields, .nextcloud-users-switcher,
+  .security-activity-filters, .security-activity-total, .nova-report-recipient-row, .rm-feature-meter, .rm-section-head,
+  .integration-card, .nova-user-summary-card, .rm-config-field-card, .timeline-box, .historico-summary, .historico-redmine-sync,
+  .nextcloud-history-head, .manual-description-tabs, .nova-description-preview, .rm-summary-card,
+  .rm-picker-combobox-menu, .nova-report-recipient-stats, .rm-role-delete-state, .rm-role-delete-form, .rm-create-role-form) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text);
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.rm-permission-group > summary, .historico-summary, .nextcloud-history-head,
+  .nova-report-recipient-stats, .manual-description-tabs, .rm-feature-meter, .rm-permission-savebar,
+  .nova-report-recipient-row.has-configuration-warning) {
+  background: var(--nova-v2-bg-subtle) !important;
+}
+
+/* procedimientos.css usa #94a3b8 (2.6:1 sobre blanco) en textos secundarios del navegador. */
+body.nova-v2 #page-content :is(.nc-file-size, .nc-empty, .nc-breadcrumb .nc-sep) {
+  color: var(--nova-v2-text-muted);
+}
+
+/* Directorio de usuarios Nextcloud (Integraciones → administrar) y navegador de archivos de
+   Procedimientos: solo aparecen con datos de Nextcloud, por eso van aparte. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-directory-shell, .nextcloud-directory-head, .nextcloud-group-toolbar,
+  .nextcloud-group-card, .nextcloud-group-toggle, .nextcloud-group-user-table-toolbar, .nc-file-item, .nc-destination-picker,
+  .nc-item-actions button) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text);
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-group-directory, .nextcloud-group-panel, .nextcloud-group-users-head,
+  .nextcloud-group-card.is-open .nextcloud-group-toggle, .nextcloud-group-state, .nc-destination-head) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border-light) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-group-selector .form-select, .nextcloud-directory-search-field input) {
+  background-color: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-directory-count, .nextcloud-group-mark, .nextcloud-group-user-avatar) {
+  background: var(--nova-v2-primary-light) !important;
+  border-color: transparent !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content .nextcloud-group-card.is-loaded .nextcloud-group-state {
+  background: var(--nova-v2-success-light) !important;
+  color: var(--nova-v2-success) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-directory-head h2, .nextcloud-group-copy strong, .nextcloud-group-user-name strong,
+  .nextcloud-group-user-account code, .nc-file-name, .nc-breadcrumb .nc-cur, .nc-destination-path, .nc-destination-folder) {
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-group-copy small, .nextcloud-group-chevron, .nextcloud-group-users-head,
+  .nextcloud-group-placeholder, .nextcloud-group-empty, .nc-file-size, .nc-breadcrumb .nc-sep, .nc-empty, .nc-loading) {
+  color: var(--nova-v2-text-muted) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nc-file-item:hover, .nextcloud-group-toggle:hover, .nextcloud-group-user:hover,
+  .nc-destination-folder:hover) {
+  background: var(--nova-v2-primary-light) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Textos con color oscuro fijo (navy/slate) en los componentes de cada vista.
+   Se excluyen alertas, botones, chips invertidos y avisos, que tienen color propio. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(h1, h2, h3, h4, h5, h6, dt, label, legend, strong, b,
+  .form-label, .field-label, .form-check-label, .fw-semibold, .rm-panel-title, .nova-table-toolbar-title):not(.btn, .btn-nova, .btn-action):not(:is(.alert, .btn, .btn-nova, .btn-action, .badge, .nova-badge, .integration-status, .nextcloud-history-status,
+    .nova-status-badge, .nova-toast-item, .dashboard-stat__value) *) {
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(small, p, dd, .small, .nova-user-meta,
+  [class*="eyebrow"], [class*="-kicker"], [class*="subtitle"], .rm-chart-axis span, .timeline-header span):not(:is(.alert, .btn, .btn-nova, .badge, .nova-badge, .integration-status, .nextcloud-history-status, .nova-status-badge,
+    .nova-toast-item, .nova-v2-head__meta, .dashboard-stat__label) *) {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+/* Textos con clases propias de cada vista. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.historico-date, .historico-count, .nova-user-name, .nextcloud-history-total,
+  .nextcloud-history-requester, .rm-create-role-disclosure > summary span) {
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-history-date span, .nextcloud-history-contact span, .timeline-footer span,
+  .security-activity-total span, .rm-feature-meter span, #user-filter-count, .nova-user-summary-card span,
+  .nextcloud-users-switcher-link small) {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is([class*="eyebrow"], [class*="-kicker"],
+  .rm-role-template-bar > div > small, .rm-feature-head small) {
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content [data-redmine-sync-title] {
+  color: var(--nova-v2-success) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.nextcloud-history-metrics > *, .nextcloud-history-detail,
+  .security-activity-resultbar > div, .rm-summary-operation-grid span, .rm-inline-field > span, #description-preview-tab,
+  .historico-page-size-form > span, .historico-pagination__meta, .rm-summary-list > div > span) {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content .security-activity-filtered {
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Pastillas sin clase propia (grupos, contadores, estado guardado): se invierten como los chips. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-history-groups > span, .rm-stats-panel-head > span,
+  .rm-permissions-list-head > span, .rm-permission-save-state > span, .nextcloud-requester-head > span,
+  .rm-summary-card-head > span) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.rm-summary-list > div, .nova-report-filter-tabs button:not(.is-active):not(.active),
+  .nova-table-search input) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+/* Panel de sincronización con Redmine (Histórico): estado verde claro → tinte oscuro. */
+html.nova-v2-dark body.nova-v2 #page-content .historico-redmine-sync,
+html.nova-v2-dark body.nova-v2 #page-content .historico-redmine-sync__header > strong {
+  background: var(--nova-v2-success-light) !important;
+  border-color: rgba(52, 211, 153, 0.36) !important;
+  color: var(--nova-v2-success) !important;
+}
+
+/* Superficies concretas que quedaban claras. */
+html.nova-v2-dark body.nova-v2 #page-content :is(.table, table) {
+  --bs-table-bg: var(--nova-v2-bg);
+  background-color: transparent !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.rm-role-template-bar, .rm-create-role-disclosure, .historico-pagination,
+  .dashboard-selection, .security-activity-filtered, .nextcloud-history-total, .rm-summary-operation-grid div,
+  .rm-summary-list li, .rm-feature-selection-identity) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content :is(.nextcloud-users-switcher-link.is-active, .rm-config-shell .rm-role-permission-main strong i,
+  .rm-role-permission-main strong i) {
+  background: var(--nova-v2-primary-light) !important;
+  border-color: rgba(96, 165, 250, 0.36) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content .timeline-months button:not(.active) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content .nova-alert-card {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+/* Resto de NOVA (Home, Administración, Módulos, EMACH, Telegram, Monitor, Horas extra): superficies → tokens. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.monitor-server-card, .monitor-stat, .monitor-server-overview,
+  .monitor-recipient, .control-card, .module-order-item, .emach-schedule-row, .telegram-message-picker, .telegram-message-editor,
+  .access-view-card, .nova-card, .emach-card, .telegram-card, .emach-stat-card, .monitor-fleet,
+  .monitor-detail-metrics > article) {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text);
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.command-row, .telegram-command, .nova-table-search,
+  .access-user-summary, .access-panel-head, .monitor-card-actions, .monitor-pagination-footer, .monitor-switches, .monitor-drawer-actions,
+  .module-toolbar, .emach-table-head, .telegram-message-editor-head, .telegram-message-context, .nova-user-pagination,
+  .monitor-recipient-option, .monitor-recipient-actions, .onlyoffice-enabled-switch, .module-switch, .telegram-listener-metric,
+  .telegram-message-option, .emach-credential-status, .he-action-copy, .monitor-test-destination-btn,
+  .telegram-command-message-toggle, .telegram-save-bar) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.telegram-message-option.is-active, .module-order-rank) {
+  background: var(--nova-v2-primary-light) !important;
+  border-color: rgba(96, 165, 250, 0.36) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Hover con fondo claro fijo (nova-admin.css): opción de acceso, mensajes de Telegram y filas. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.access-user-option:hover, .telegram-message-option:hover,
+  .rm-table-wrap .table tbody tr:hover, .monitor-detail-back:hover, .nextcloud-users-switcher-link:hover) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 #page-content .monitor-detail-back { color: var(--nova-v2-primary-dark) !important; }
+html.nova-v2-dark body.nova-v2 #page-content .monitor-detail-back i {
+  border-color: var(--nova-v2-border) !important;
+  background: var(--nova-v2-bg-subtle) !important;
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Enlace a Redmine del Histórico: está invertido; en hover vuelve al pastel (que invertido queda azul oscuro)
+   en vez del azul sólido, que invertido se veía como una pastilla clara. */
+html.nova-v2-dark body.nova-v2 #page-content .historico-redmine-link:hover {
+  background: #dbeafe !important;
+  color: #172554 !important;
+}
+
+/* Superficies con degradado claro: el shorthand anula el background-image. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.monitor-panel-head, .nova-system-head, .telegram-chat-summary,
+  .he-toolbar, .he-month-total, .he-day-total, .monitor-maintenance-form, .monitor-bulk-check-btn, .monitor-drawer-cancel-btn) {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+/* Textos con color oscuro fijo en el resto de NOVA. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.module-name, .access-view-title, .he-report-detail) {
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.control-card span, .emach-stat-card span, .emach-card span:not([class]),
+  .module-label-field > span, .module-toolbar-summary span, .telegram-message-editor span:not([class]), .telegram-save-bar span) {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(code, .he-ticket-id, .telegram-chat-summary span:not([class])) {
+  color: var(--nova-v2-primary-dark) !important;
+}
+
+/* Dentro de pastillas invertidas el texto debe conservar su color original (la inversión lo aclara). */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.nova-system-meter, .monitor-count-badge,
+  .emach-count-pill) :is(strong, small, span) {
+  color: inherit !important;
+}
+
+html.nova-v2-dark body.nova-v2.nova-login-page {
+  background: var(--nova-v2-bg-page) !important;
+}
+
+html.nova-v2-dark body.nova-v2.nova-login-page #page-content .login-input .form-control {
+  background: var(--nova-v2-bg-subtle) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text) !important;
+}
+
+html.nova-v2-dark body.nova-v2.nova-login-page #page-content :is(.login-password-toggle:hover, .login-password-toggle:focus-visible) {
+  background: var(--nova-v2-primary-light);
+  color: var(--nova-v2-primary-dark);
+}
+
+html.nova-v2-dark body.nova-v2.nova-login-page #page-content .login-security-note {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Pastillas e íconos pastel del resto de NOVA: misma inversión que los chips de Mantención/TIC. */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.monitor-server-icon, .monitor-state, .monitor-server-overview-icon,
+  .nova-system-icon, .nova-system-meter, .command-alias, .emach-count-pill, .nova-empty-state-icon, .telegram-chat-summary-icon,
+  .he-visible-count, .he-project-badge, .monitor-count-badge, .monitor-telegram-status, .config-status,
+  .integration-user-badge, .access-source, .telegram-message-command, .telegram-listener-metric > i, .monitor-stat > span,
+  .monitor-detail-metrics > article > span, .telegram-panel-head > span, .telegram-aliases > span, .health-dot,
+  .monitor-action-button, .monitor-page-button, .module-icon-btn) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Chips, estados, avatares e íconos en tonos pastel: se invierte la luminosidad
+   conservando el tono (verde claro con texto oscuro → verde oscuro con texto claro). */
+html.nova-v2-dark body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.nova-badge, .integration-status, .nextcloud-history-status,
+  .nova-status-badge, .badge.text-bg-info-subtle, .badge.text-bg-light, .badge.bg-light, .nova-user-avatar, .nova-report-user-avatar,
+  .rm-picker-user-avatar, .integration-icon, .integration-card-open, .rm-permission-group-icon, .rm-permission-group-count,
+  .nova-user-summary-icon, .historico-source-badge, .historico-redmine-link, .nextcloud-requester-summary-icon,
+  .stat-icon, .manual-description-tab.is-active, .badge.text-bg-primary, .bg-opacity-10) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ── Responsive ────────────────────────────── */
+
+@media (max-width: 767.98px) {
+  body.nova-v2 :is(#page-content, .modal) .nova-v2-head {
+    padding: 1rem;
+  }
+
+  body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-actions {
+    align-items: stretch;
+  }
+
+  body.nova-v2 .detail-drawer-modal:not(#_) .nova-date-today-btn {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+@media (max-width: 575.98px) {
+  body.nova-v2 :is(#page-content, .modal) .nova-v2-title {
+    font-size: 1.35rem;
+  }
+
+  body.nova-v2 :is(#page-content, .modal) .nova-v2-subtitle {
+    font-size: 0.95rem;
+  }
+}

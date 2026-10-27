@@ -3,7 +3,7 @@
 <head>
   <?php $pageTitle = 'Pendiente Manual'; $includeTheme = true; include base_path('RedmineMantencion/views/partials/bootstrap-head.php'); ?>
 </head>
-<body>
+<body class="nova-v2">
 <?php $activeNav = 'manual'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 <div id="page-content">
   <?php $pendienteManualCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/pendiente-manual.css')) ?: time(); ?>

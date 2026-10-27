@@ -48,20 +48,17 @@ $storageDir = telegram_storage_path();
 <head>
   <?php include __DIR__ . '/views/partials/bootstrap-head.php'; ?>
 </head>
-<body class="telegram-page">
+<body class="telegram-page nova-v2">
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
-  <main class="nova-content"><div class="container-fluid py-4">
-    <section class="card telegram-hero nova-system-hero mb-4">
-      <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-        <div class="d-flex align-items-center gap-3">
-          <span class="telegram-hero-icon"><i class="bi bi-telegram"></i></span>
-          <div>
-            <h1 class="h3 mb-1 text-white fw-black">Mensajes Telegram</h1>
-            <p class="mb-0 text-white-50 fw-semibold">Servicio central para enviar mensajes desde proyectos NOVA.</p>
-          </div>
-        </div>
-        <span class="telegram-status-pill"><i class="bi <?= $configured ? 'bi-check-circle' : 'bi-exclamation-triangle' ?>"></i><?= $configured ? 'Configurado' : 'Pendiente' ?></span>
+  <main class="nova-content"><div class="container-fluid py-4" id="page-content">
+    <section class="nova-v2-head mb-4">
+      <div>
+        <h1 class="nova-v2-title"><i class="bi bi-telegram" aria-hidden="true"></i> Mensajes Telegram</h1>
+        <p class="nova-v2-subtitle">Servicio central para enviar mensajes desde proyectos NOVA.</p>
+      </div>
+      <div class="nova-v2-head__meta">
+        <span class="nova-v2-chip <?= $configured ? 'is-success' : 'is-warning' ?>"><i class="bi <?= $configured ? 'bi-check-circle' : 'bi-exclamation-triangle' ?>" aria-hidden="true"></i> <?= $configured ? 'Configurado' : 'Pendiente' ?></span>
       </div>
     </section>
 

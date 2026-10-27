@@ -18,9 +18,10 @@
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
         <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+        <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
     @endif
 </head>
-<body class="{{ $moduleKey === 'emach' ? 'emach-page' : 'nova-page' }} integration-page integration-page-{{ $moduleConfig['theme'] ?? $moduleKey }}">
+<body class="{{ $moduleKey === 'emach' ? 'emach-page' : 'nova-page' }} nova-v2 integration-page integration-page-{{ $moduleConfig['theme'] ?? $moduleKey }}">
 @php
     $activeNav = 'configuracion';
     $configuredCount = collect($integrations)->filter(fn ($item) => !empty($item['stored']))->count();
@@ -98,6 +99,7 @@
             </button>
             <div class="collapse navbar-collapse" id="integrationTopbar">
                 <div class="rm-top-actions integration-top-actions mt-3 mt-lg-0">
+                    <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                     @include('nova.partials.session-control')
                     <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                     <a class="btn btn-outline-light" href="{{ $homeUrl }}"><i class="bi bi-arrow-left"></i>Modulo</a>
@@ -135,20 +137,15 @@
 @endif
 
     <main class="{{ $moduleKey === 'emach' ? 'nova-content' : ($moduleKey === 'redmine_tic' ? 'nova-content rm-main' : 'rm-layout') }}">
-        <div class="{{ $moduleKey === 'emach' ? 'container-fluid py-4' : '' }}">
-        <section class="card card-hero sb-page-hero {{ $moduleKey === 'emach' ? 'emach-hero' : 'rm-hero' }} integration-hero nova-system-hero mb-3">
-            <div class="card-body d-flex align-items-center justify-content-between gap-3 flex-wrap">
-                <div class="d-flex align-items-center gap-3">
-                    <span class="{{ $moduleKey === 'emach' ? 'emach-hero-icon' : 'rm-hero-icon' }}"><i class="bi bi-person-lock"></i></span>
-                    <div>
-                        <h1 class="rm-page-title text-white">{{ $moduleKey === 'emach' ? 'Configuracion EMACH' : 'Mis integraciones' }}</h1>
-                        <p class="mb-0 text-white-50 fw-semibold">{{ $moduleConfig['subtitle'] }}</p>
-                    </div>
-                </div>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="{{ $moduleKey === 'emach' ? 'emach-status-pill' : 'rm-hero-retention' }}"><i class="bi bi-shield-check"></i> Solo tu usuario</span>
-                    <span class="{{ $moduleKey === 'emach' ? 'emach-status-pill' : 'rm-hero-retention' }}"><i class="bi bi-key"></i> {{ $configuredCount }} activa(s)</span>
-                </div>
+        <div class="{{ $moduleKey === 'emach' ? 'container-fluid py-4' : '' }}" id="page-content">
+        <section class="nova-v2-head mb-3">
+            <div>
+                <h1 class="nova-v2-title"><i class="bi bi-person-lock" aria-hidden="true"></i> {{ $moduleKey === 'emach' ? 'Configuracion EMACH' : 'Mis integraciones' }}</h1>
+                <p class="nova-v2-subtitle">{{ $moduleConfig['subtitle'] }}</p>
+            </div>
+            <div class="nova-v2-head__meta">
+                <span class="nova-v2-chip"><i class="bi bi-shield-check" aria-hidden="true"></i> Solo tu usuario</span>
+                <span class="nova-v2-chip"><i class="bi bi-key" aria-hidden="true"></i> {{ $configuredCount }} activa(s)</span>
             </div>
         </section>
 

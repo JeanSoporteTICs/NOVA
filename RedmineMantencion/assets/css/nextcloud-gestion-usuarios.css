@@ -27,6 +27,31 @@
   font-size: 1.75rem;
 }
 
+/* Logo animado de Nextcloud (mismo partial que el overlay de carga), en vez
+   del ícono en burbuja. Se escala para caber en la primera columna. */
+.nextcloud-credential-gate-mark.is-nextcloud-logo {
+  width: 11rem;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.nextcloud-credential-gate-mark.is-nextcloud-logo .nova-nextcloud-loader {
+  width: 100%;
+  padding: 0;
+}
+
+.nextcloud-credential-gate-mark.is-nextcloud-logo .nova-nextcloud-loader-mark {
+  height: 3.9rem;
+}
+
+.nextcloud-credential-gate-mark.is-nextcloud-logo .nova-nextcloud-loader-word {
+  min-height: 1.4rem;
+  font-size: 1.05rem !important;
+}
+
 .nextcloud-credential-gate h2,
 .nextcloud-directory-head h2 {
   margin: .15rem 0 .25rem;
@@ -46,7 +71,7 @@
 }
 
 .nextcloud-directory-eyebrow {
-  color: #0082c9;
+  color: #006aa3; /* azul Nextcloud oscurecido: #0082c9 no cumplía contraste AA */
   font-size: .67rem;
   font-weight: 850;
   letter-spacing: .085em;
@@ -602,6 +627,7 @@
   .nextcloud-password-drawer { --bs-offcanvas-width: 100vw; }
   .nextcloud-credential-gate { grid-template-columns: 1fr; padding: 1.2rem; }
   .nextcloud-credential-gate-mark { width: 3.8rem; height: 3.8rem; }
+  .nextcloud-credential-gate-mark.is-nextcloud-logo { width: 10rem; height: auto; margin-inline: auto; }
   .nextcloud-directory-head { align-items: flex-start; flex-direction: column; padding: 1.15rem; }
   .nextcloud-directory-head > .btn-nova { width: 100%; justify-content: center; }
   .nextcloud-directory-title-row { align-items: flex-start; flex-direction: column; gap: .3rem; }

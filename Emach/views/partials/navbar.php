@@ -49,6 +49,7 @@ if (in_array($currentRole, config('nova.module_admin_roles', []), true)) {
       <i class="bi bi-list"></i>
     </button>
     <div class="d-flex align-items-center gap-2 ms-auto emach-nav-actions">
+      <?php include (function_exists('base_path') ? base_path('resources/views/partials') : __DIR__ . '/../../../resources/views/partials') . '/nova-v2-theme-toggle.php'; ?>
       <span class="emach-session-badge badge bg-light text-dark d-inline-flex align-items-center gap-1" id="session-timer" data-remaining="<?= $h($remaining) ?>" data-timeout="<?= $h($sessionTimeout) ?>">
         <i class="bi bi-clock"></i><span id="session-timer-text">--:--</span>
       </span>

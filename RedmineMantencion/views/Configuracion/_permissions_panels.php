@@ -248,22 +248,32 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
     </div>
 
     <?php if ($selUserData): ?>
-      <div class="rm-permissions-layout">
-        <aside class="rm-permissions-list-panel">
-          <div class="rm-permissions-list-head">
-            <div>
-              <h3>Seleccionar usuario</h3>
-              <p><?= count($usuariosSelectableData) ?> usuario(s) activo(s)</p>
-            </div>
-            <span><strong data-active-permission-count><?= $mantencionActivePermissionCount($uCfg) ?></strong>&nbsp;permisos</span>
-          </div>
-          <form method="get" action="<?= $h($configBaseUrl) ?>" class="rm-user-combobox rm-picker-combobox" data-navigation-picker data-editor-target="mantencion-user-permissions-form">
-            <input type="hidden" name="panel" value="usuarios">
-            <input type="hidden" name="user_id" value="<?= $h($selectedUser) ?>" data-picker-value>
+      <!-- El selector de usuario vive en la barra del rol (dentro del formulario de permisos);
+           sus campos pertenecen a este formulario GET mediante el atributo form="". -->
+      <form method="get" action="<?= $h($configBaseUrl) ?>" id="mantencion-user-picker-form" hidden></form>
+      <div class="rm-permissions-layout is-single">
+
+        <div class="rm-permissions-editor-panel">
+          <form method="post" action="<?= $h($configPanelUrl('usuarios') . '&user_id=' . rawurlencode((string) $selectedUser)) ?>" id="mantencion-user-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="user">
+            <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+            <input type="hidden" name="action" value="save_user_perms">
+            <input type="hidden" name="user_select" value="<?= $h($selectedUser) ?>">
+
+            <section class="rm-role-template-bar has-user-picker">
+              <div>
+                <small>Usuario y plantilla de acceso</small>
+                <strong>Rol asignado</strong>
+                <p><strong data-active-permission-count><?= $mantencionActivePermissionCount($uCfg) ?></strong> permisos activos · cambia el rol sin reemplazar los ajustes personalizados.</p>
+              </div>
+              <div class="rm-inline-field">
+                <span>Usuario</span>
+<div class="rm-user-combobox rm-picker-combobox" data-navigation-picker data-navigation-form="mantencion-user-picker-form" data-editor-target="mantencion-user-permissions-form">
+            <input type="hidden" name="panel" value="usuarios" form="mantencion-user-picker-form">
+            <input type="hidden" name="user_id" value="<?= $h($selectedUser) ?>" data-picker-value form="mantencion-user-picker-form">
             <div class="rm-picker-combobox-control">
               <label>
                 <i class="bi bi-search"></i>
-                <input class="form-control" type="search" value="<?= $h($selectedUserName . ' · ' . $selUserRole . ' · ID ' . $selectedUser) ?>" placeholder="Buscar usuario activo" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" data-picker-search>
+                <input class="form-control" type="search" value="<?= $h($selectedUserName . ' · ' . $selUserRole . ' · ID ' . $selectedUser) ?>" placeholder="Buscar usuario activo" aria-label="Usuario" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" data-picker-search>
               </label>
               <button type="button" class="rm-picker-combobox-toggle" aria-label="Mostrar usuarios activos" aria-expanded="false" data-picker-toggle><i class="bi bi-chevron-down"></i></button>
             </div>
@@ -283,20 +293,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
               <?php endforeach; ?>
               <div class="rm-picker-combobox-empty" data-picker-empty hidden>No se encontraron usuarios activos.</div>
             </div>
-          </form>
-        </aside>
-
-        <div class="rm-permissions-editor-panel">
-          <form method="post" action="<?= $h($configBaseUrl) ?>" id="mantencion-user-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="user">
-            <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-            <input type="hidden" name="action" value="save_user_perms">
-            <input type="hidden" name="user_select" value="<?= $h($selectedUser) ?>">
-
-            <section class="rm-role-template-bar">
-              <div>
-                <small>Plantilla de acceso</small>
-                <strong>Rol asignado</strong>
-                <p>Cambia el rol sin reemplazar los ajustes personalizados.</p>
+          </div>
               </div>
               <div class="rm-inline-field">
                 <span>Rol</span>
@@ -400,7 +397,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
 
         <details class="rm-create-role-disclosure">
           <summary><span><i class="bi bi-plus-circle"></i>Crear un rol</span><i class="bi bi-chevron-down"></i></summary>
-          <form class="rm-create-role-form" method="post" action="<?= $h($configBaseUrl) ?>">
+          <form class="rm-create-role-form" method="post" action="<?= $h($configPanelUrl('roles')) ?>">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="save_roles">
             <input type="hidden" name="role_select" value="<?= $h($selectedRole) ?>">
@@ -418,7 +415,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
             <span><strong>Rol base protegido</strong><small><?= $h(ucfirst($selectedRole)) ?> es necesario para el funcionamiento del módulo.</small></span>
           </div>
         <?php else: ?>
-          <form class="rm-role-delete-form" method="post" action="<?= $h($configBaseUrl) ?>" data-app-confirm="¿Eliminar el rol <?= $h(ucfirst($selectedRole)) ?>? Se eliminarán sus permisos y la acción no se puede deshacer." data-app-confirm-title="Eliminar rol" data-app-confirm-text="Eliminar rol" data-app-confirm-tone="danger">
+          <form class="rm-role-delete-form" method="post" action="<?= $h($configPanelUrl('roles')) ?>" data-app-confirm="¿Eliminar el rol <?= $h(ucfirst($selectedRole)) ?>? Se eliminarán sus permisos y la acción no se puede deshacer." data-app-confirm-title="Eliminar rol" data-app-confirm-text="Eliminar rol" data-app-confirm-tone="danger">
             <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
             <input type="hidden" name="action" value="delete_role">
             <input type="hidden" name="role_select" value="<?= $h($selectedRole) ?>">
@@ -429,7 +426,7 @@ if ($selectedUserName === '' && $selUserData) $selectedUserName = (string)($selU
       </aside>
 
       <div class="rm-permissions-editor-panel">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" id="mantencion-role-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="role">
+        <form method="post" action="<?= $h($configPanelUrl('roles') . '&role=' . rawurlencode((string) $selectedRole)) ?>" id="mantencion-role-permissions-form" class="rm-permissions-inline-form" data-permission-editor-form data-permission-kind="role">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" value="save_roles">
           <input type="hidden" name="role_select" value="<?= $h($selectedRole) ?>">

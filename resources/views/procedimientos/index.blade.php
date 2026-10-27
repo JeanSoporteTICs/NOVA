@@ -10,9 +10,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ url('/redmine-mantencion/assets/theme.css') }}" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
     <script defer src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>
 </head>
-<body class="nova-page bg-light procedimientos-page">
+<body class="nova-page procedimientos-page nova-v2">
     <nav class="navbar rm-navbar">
         <div class="container-fluid px-3 px-lg-4">
             <a class="navbar-brand text-white fw-bold d-flex align-items-center gap-3" href="{{ route('procedimientos.index') }}">
@@ -20,6 +21,7 @@
                 <span>Procedimientos</span>
             </a>
             <div class="rm-top-actions">
+                <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                 @include('nova.partials.session-control')
                 <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
@@ -27,17 +29,16 @@
             </div>
         </div>
     </nav>
-    <main class="rm-layout">
-        <section class="card rm-hero mb-4">
-            <div class="card-body p-3 p-lg-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-                <div class="d-flex align-items-center gap-3">
-                    <span class="rm-hero-icon"><i class="bi bi-cloud"></i></span>
-                    <div><h1 class="rm-page-title">Procedimientos</h1><p class="rm-page-subtitle">Archivos Nextcloud con edicion en linea mediante OnlyOffice.</p></div>
-                </div>
-                @php $onlyOfficeOnline = ($onlyOfficeHealth['status'] ?? '') === 'online'; @endphp
-                <span class="rm-hero-retention onlyoffice-status {{ $onlyOfficeOnline ? 'is-online' : 'is-offline' }}" title="{{ $onlyOfficeHealth['detail'] ?? '' }}">
-                    <i class="bi bi-circle-fill" aria-hidden="true"></i>
-                    OnlyOffice
+    <main class="rm-layout" id="page-content">
+        <section class="nova-v2-head mb-4">
+            <div>
+                <h1 class="nova-v2-title"><i class="bi bi-cloud" aria-hidden="true"></i> Procedimientos</h1>
+                <p class="nova-v2-subtitle">Archivos Nextcloud con edicion en linea mediante OnlyOffice.</p>
+            </div>
+            @php $onlyOfficeOnline = ($onlyOfficeHealth['status'] ?? '') === 'online'; @endphp
+            <div class="nova-v2-head__meta">
+                <span class="nova-v2-chip onlyoffice-status {{ $onlyOfficeOnline ? 'is-success' : 'is-danger' }}" title="{{ $onlyOfficeHealth['detail'] ?? '' }}">
+                    <i class="bi bi-circle-fill" aria-hidden="true"></i> OnlyOffice
                 </span>
             </div>
         </section>

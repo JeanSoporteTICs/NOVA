@@ -8,14 +8,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="{{ $module === 'emach' ? 'emach-page' : '' }}">
+<body class="{{ $module === 'emach' ? 'emach-page ' : '' }}nova-v2">
 @if($module === 'emach')
     @php
         $activeNav = 'actividad';
     @endphp
     <?php include base_path('Emach/views/partials/navbar.php'); ?>
-    <main class="nova-content"><div class="container-fluid py-4">
+    <main class="nova-content"><div class="container-fluid py-4" id="page-content">
 @else
     <main class="telegram-page">
     @php
@@ -23,14 +24,16 @@
         $mode = 'user';
     @endphp
     @include('nova.telegram.navigation')
-    <div class="nova-content telegram-content">
+    <div class="nova-content telegram-content" id="page-content">
 @endif
-    <section class="nova-system-hero module-log-hero mb-4">
-        <div class="nova-system-head">
-            <span class="nova-system-icon"><i class="bi bi-activity"></i></span>
-            <div><small>REGISTRO OPERACIONAL</small><h1>Actividad {{ $moduleName }}</h1></div>
+    <section class="nova-v2-head mb-4">
+        <div>
+            <span class="nova-v2-eyebrow">Registro operacional</span>
+            <h1 class="nova-v2-title"><i class="bi bi-activity" aria-hidden="true"></i> Actividad {{ $moduleName }}</h1>
         </div>
-        <a class="btn btn-outline-light" href="{{ $module === 'telegram' ? route('telegram.index') : route('emach.index') }}"><i class="bi bi-arrow-left"></i> Volver</a>
+        <div class="nova-v2-head__meta">
+            <a class="btn btn-outline-secondary" href="{{ $module === 'telegram' ? route('telegram.index') : route('emach.index') }}"><i class="bi bi-arrow-left"></i> Volver</a>
+        </div>
     </section>
 
     <section class="security-console-wrap">

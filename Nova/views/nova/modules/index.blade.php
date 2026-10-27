@@ -12,8 +12,9 @@
         $novaUiVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1';
     @endphp
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ $novaUiVersion }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page">
+<body class="nova-page nova-v2">
     <main class="shell nova-shell">
         <nav class="navbar navbar-expand-lg navbar-dark rm-navbar">
             <div class="container-fluid px-4">
@@ -22,6 +23,7 @@
                     <span>Modulos NOVA</span>
                 </a>
                 <div class="rm-top-actions">
+                    <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                     @include('nova.partials.session-control')
                     <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                     <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
@@ -38,10 +40,11 @@
             <a class="nav-link" href="{{ route('home') }}"><i class="bi bi-grid"></i>Inicio</a>
         </nav>
 
-        <section class="card rm-hero mb-4">
-            <div class="card-body p-3 p-lg-4 d-flex align-items-center gap-3 flex-wrap">
-                <span class="rm-hero-icon"><i class="bi bi-sliders"></i></span>
-                <h1 class="rm-page-title">Modulos</h1>
+        <div id="page-content">
+        <section class="nova-v2-head mb-4">
+            <div>
+                <h1 class="nova-v2-title"><i class="bi bi-sliders" aria-hidden="true"></i> Modulos</h1>
+                <p class="nova-v2-subtitle">Orden, visibilidad y nombres de los módulos de NOVA.</p>
             </div>
         </section>
 
@@ -120,6 +123,7 @@
                 </div>
             </section>
         </form>
+        </div><!-- /#page-content -->
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>

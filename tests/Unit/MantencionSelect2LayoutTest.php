@@ -73,7 +73,7 @@ final class MantencionSelect2LayoutTest extends TestCase
             $previousPosition = $position;
         }
 
-        self::assertMatchesRegularExpression('/col-md-6[^>]*>\s*<label class="form-label">Estado Redmine/', $form);
+        self::assertMatchesRegularExpression('/col-md-6[^>]*>\s*<label class="form-label"[^>]*>Estado Redmine/', $form);
     }
 
     public function test_manual_assignee_and_category_use_select2_without_the_old_search_widget(): void

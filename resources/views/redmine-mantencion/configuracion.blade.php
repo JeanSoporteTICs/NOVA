@@ -5,7 +5,7 @@
 <?php $configuracionCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/configuracion.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/configuracion.css?v=<?= (int)$configuracionCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = $isNextcloudGroupsPanel ? 'integraciones_nextcloud_grupos' : 'configuracion'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">
@@ -146,7 +146,7 @@
   <?php endif; ?>
 
 <!-- Modal Nextcloud -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'nextcloud' ? 'is-active' : '' ?>" id="nextcloudConfigModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'nextcloud' ? 'is-active' : '' ?>" id="nextcloudConfigModal" tabindex="-1" <?= $activeConfigPanel === 'nextcloud' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-xl">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -164,31 +164,31 @@
               <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
               <h6 class="fw-bold mb-3"><i class="bi bi-sliders text-primary"></i> Parámetros</h6>
               <div class="mb-3">
-                <label class="form-label">URL Nextcloud</label>
-                <input name="nextcloud_url" class="form-control" value="<?= $h($nextcloudCfg['url'] ?? 'https://www.coresalud.cl/nextcloud') ?>" placeholder="https://www.coresalud.cl/nextcloud" required>
+                <label class="form-label" for="nextcloud-url">URL Nextcloud</label>
+                <input name="nextcloud_url" id="nextcloud-url" class="form-control" value="<?= $h($nextcloudCfg['url'] ?? 'https://www.coresalud.cl/nextcloud') ?>" placeholder="https://www.coresalud.cl/nextcloud" required>
               </div>
               <!-- <div class="nova-alert-card is-nextcloud py-2 small">
                 <i class="bi bi-cloud-fill"></i>
                 <span>Las credenciales de Nextcloud se administran desde <strong>Cuentas conectadas</strong>, junto a las credenciales CORE de cada usuario.</span>
               </div> -->
               <div class="mb-3">
-                <label class="form-label">Grupo por defecto</label>
+                <label class="form-label" for="nextcloud-default-group">Grupo por defecto</label>
                 <?php if (!empty($nextcloudGroups)): ?>
-                  <select name="nextcloud_default_group" class="form-select">
+                  <select name="nextcloud_default_group" id="nextcloud-default-group" class="form-select">
                     <option value="">Sin grupo por defecto</option>
                     <?php foreach ($nextcloudGroups as $group): ?>
                       <option value="<?= $h($group) ?>" <?= (string)($nextcloudCfg['default_group'] ?? '') === (string)$group ? 'selected' : '' ?>><?= $h($group) ?></option>
                     <?php endforeach; ?>
                   </select>
                 <?php else: ?>
-                  <input name="nextcloud_default_group" class="form-control" value="<?= $h($nextcloudCfg['default_group'] ?? '') ?>" placeholder="Consulta grupos o escribe uno manualmente">
+                  <input name="nextcloud_default_group" id="nextcloud-default-group" class="form-control" value="<?= $h($nextcloudCfg['default_group'] ?? '') ?>" placeholder="Consulta grupos o escribe uno manualmente">
                 <?php endif; ?>
               </div>
               <div class="row g-2">
                 <div class="col-md-6">
-                  <label class="form-label">Cuota por defecto</label>
+                  <label class="form-label" for="nextcloud-default-quota">Cuota por defecto</label>
                   <?php $quotaDefault = (string)($nextcloudCfg['default_quota'] ?? ''); ?>
-                  <select name="nextcloud_default_quota" class="form-select">
+                  <select name="nextcloud_default_quota" id="nextcloud-default-quota" class="form-select">
                     <option value="" <?= $quotaDefault === '' ? 'selected' : '' ?>>Predeterminada</option>
                     <option value="none" <?= $quotaDefault === 'none' ? 'selected' : '' ?>>Ilimitado</option>
                     <option value="1 GB" <?= $quotaDefault === '1 GB' ? 'selected' : '' ?>>1 GB</option>
@@ -197,8 +197,8 @@
                   </select>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Idioma</label>
-                  <input name="nextcloud_default_language" class="form-control" value="<?= $h($nextcloudCfg['default_language'] ?? 'es') ?>" placeholder="es">
+                  <label class="form-label" for="nextcloud-default-language">Idioma</label>
+                  <input name="nextcloud_default_language" id="nextcloud-default-language" class="form-control" value="<?= $h($nextcloudCfg['default_language'] ?? 'es') ?>" placeholder="es">
                 </div>
               </div>
               <button class="btn-nova btn-nova-primary w-100 mt-3" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>>
@@ -231,7 +231,7 @@
                 <?php endif; ?>
               </div>
               <?php if (!empty($nextcloudGroups)): ?>
-                <div class="border rounded-4 p-3 bg-light" style="max-height:360px;overflow:auto;">
+                <div class="border rounded-4 p-3 bg-light rm-nextcloud-groups-scroll" tabindex="0" role="region" aria-label="Grupos consultados de Nextcloud">
                   <div class="d-flex flex-wrap gap-2">
                     <?php foreach ($nextcloudGroups as $group): ?>
                       <span class="badge rounded-pill text-bg-info-subtle text-info border border-info-subtle"><i class="bi bi-folder2"></i> <?= $h($group) ?></span>
@@ -254,7 +254,7 @@
 </div>
 
 <!-- Modal Mantención -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'mantencion' ? 'is-active' : '' ?>" id="maintenanceModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'mantencion' ? 'is-active' : '' ?>" id="maintenanceModal" tabindex="-1" <?= $activeConfigPanel === 'mantencion' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-lg">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -265,7 +265,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="p-3 border rounded-4 bg-white mb-3">
+        <form method="post" action="<?= $h($configPanelUrl('mantencion')) ?>" class="p-3 border rounded-4 bg-white mb-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" value="maintenance_settings">
           <div class="row g-3 align-items-end">
@@ -277,8 +277,8 @@
               </div>
             </div>
             <div class="col-md-5">
-              <label class="form-label">Hora estimada de t&eacute;rmino</label>
-              <input type="datetime-local" name="maintenance_until" class="form-control" value="<?= $h($maintenanceSettings['until'] ?? '') ?>">
+              <label class="form-label" for="cfg-maintenance-until">Hora estimada de t&eacute;rmino</label>
+              <input id="cfg-maintenance-until" type="datetime-local" name="maintenance_until" class="form-control" value="<?= $h($maintenanceSettings['until'] ?? '') ?>">
             </div>
             <div class="col-md-2">
               <button class="btn-nova btn-nova-primary w-100" type="submit">Guardar</button>
@@ -294,68 +294,116 @@
   </div>
 </div>
 
-<?php $renderOptionsTable = function($id, $title, $items, $type, $h) use ($csrf, $activeConfigPanel, $configBaseUrl) { ?>
-<div class="rm-config-view-panel <?= $activeConfigPanel === $type ? 'is-active' : '' ?>" id="<?= $h($id) ?>" tabindex="-1" aria-hidden="true">
+<?php $renderOptionsTable = function($id, $title, $items, $type, $h) use ($csrf, $activeConfigPanel, $configBaseUrl, $configPanelUrl) { ?>
+<?php
+  // Singular para textos del drawer (Trackers → tracker, etc.).
+  $optionNoun = ['trackers' => 'tracker', 'prioridades' => 'prioridad', 'estados' => 'estado'][$type] ?? 'opción';
+  $drawerId = $type . '-option-drawer';
+?>
+<div class="rm-config-view-panel <?= $activeConfigPanel === $type ? 'is-active' : '' ?>" id="<?= $h($id) ?>" tabindex="-1" <?= $activeConfigPanel === $type ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-xl">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
         <h5 class="rm-panel-title"><?= $h($title) ?></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-nova btn-nova-primary"
+                data-bs-toggle="offcanvas" data-bs-target="#<?= $h($drawerId) ?>" data-opt-mode="create">
+          <i class="bi bi-plus-lg"></i> Agregar <?= $h($optionNoun) ?>
+        </button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-2 mb-3">
-          <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-          <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
-          <input type="hidden" name="opt_action" value="create">
-          <div class="col-md-3"><input name="opt_id" class="form-control form-control-sm" placeholder="ID" required></div>
-          <div class="col-md-7"><input name="opt_nombre" class="form-control form-control-sm" placeholder="Nombre" required></div>
-          <div class="col-md-2 d-flex align-items-center gap-2">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="opt_default" id="optdef-<?= $h($type) ?>">
-              <label class="form-check-label" for="optdef-<?= $h($type) ?>">Default</label>
-            </div>
-            <button class="btn-nova btn-nova-success">Agregar</button>
-          </div>
-        </form>
         <div class="table-responsive">
           <table class="table table-sm align-middle">
-            <thead class="table-light"><tr><th>ID</th><th>Nombre</th><th>Default</th><th>Acciones</th></tr></thead>
+            <thead class="table-light"><tr><th>ID</th><th>Nombre</th><th class="text-center">Predeterminado</th><th>Acciones</th></tr></thead>
             <tbody>
+            <?php if (empty($items)): ?>
+              <tr><td colspan="4" class="nova-empty">Sin opciones registradas. Usa "Agregar <?= $h($optionNoun) ?>".</td></tr>
+            <?php endif; ?>
             <?php foreach ($items as $index => $o): ?>
-              <?php $rowFormId = $type . '-edit-' . $index . '-' . preg_replace('/[^a-zA-Z0-9_-]/', '-', (string)($o['id'] ?? '')); ?>
               <?php $deleteFormId = $type . '-delete-' . $index . '-' . preg_replace('/[^a-zA-Z0-9_-]/', '-', (string)($o['id'] ?? '')); ?>
-              <tr>
-                  <td style="width:120px">
-                    <input form="<?= $h($rowFormId) ?>" name="opt_id" class="form-control form-control-sm" value="<?= $h($o['id']) ?>">
-                  </td>
-                  <td>
-                    <input form="<?= $h($rowFormId) ?>" name="opt_nombre" class="form-control form-control-sm" value="<?= $h($o['nombre']) ?>">
-                  </td>
+              <?php $isDefaultOption = !empty($o['default']); ?>
+              <tr<?= $isDefaultOption ? ' class="is-default"' : '' ?>>
+                  <td style="width:120px" class="fw-semibold"><?= $h($o['id']) ?></td>
+                  <td><?= $h($o['nombre']) ?></td>
                   <td class="text-center">
-                    <input form="<?= $h($rowFormId) ?>" class="form-check-input" type="checkbox" name="opt_default" <?= !empty($o['default']) ? 'checked' : '' ?>>
+                    <?php if ($isDefaultOption): ?>
+                      <span class="mnt-default-star is-default" title="Predeterminado">
+                        <i class="bi bi-star-fill" aria-hidden="true"></i>
+                        <span class="visually-hidden"><?= $h($o['nombre']) ?> es el predeterminado</span>
+                      </span>
+                    <?php else: ?>
+                      <!-- Un clic en la estrella marca esta opción como predeterminada. -->
+                      <form method="post" action="<?= $h($configPanelUrl($type)) ?>" class="m-0 d-inline">
+                        <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+                        <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
+                        <input type="hidden" name="opt_action" value="set_default">
+                        <input type="hidden" name="opt_id" value="<?= $h($o['id']) ?>">
+                        <button type="submit" class="mnt-default-star" title="Marcar como predeterminado">
+                          <i class="bi bi-star" aria-hidden="true"></i>
+                          <span class="visually-hidden">Marcar <?= $h($o['nombre']) ?> como predeterminado</span>
+                        </button>
+                      </form>
+                    <?php endif; ?>
                   </td>
-                  <td class="d-flex gap-2">
-                    <form method="post" action="<?= $h($configBaseUrl) ?>" id="<?= $h($rowFormId) ?>" class="m-0">
-                      <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
-                      <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
-                      <input type="hidden" name="opt_action" value="update">
-                      <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
-                      <button class="btn-action btn-action-edit" type="submit" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>
-                    </form>
-                    <form method="post" action="<?= $h($configBaseUrl) ?>" id="<?= $h($deleteFormId) ?>" data-app-confirm="Eliminar?" class="m-0">
+                  <td><div class="d-flex gap-2">
+                    <button type="button" class="btn-action btn-action-edit"
+                            data-bs-toggle="offcanvas" data-bs-target="#<?= $h($drawerId) ?>"
+                            data-opt-mode="update"
+                            data-opt-id="<?= $h($o['id']) ?>"
+                            data-opt-nombre="<?= $h($o['nombre']) ?>"
+                            data-opt-default="<?= $isDefaultOption ? '1' : '0' ?>"
+                            title="Editar" aria-label="Editar <?= $h($o['nombre']) ?>"><i class="bi bi-pencil"></i></button>
+                    <form method="post" action="<?= $h($configPanelUrl($type)) ?>" id="<?= $h($deleteFormId) ?>" data-app-confirm="¿Eliminar <?= $h($o['nombre']) ?>?" class="m-0">
                       <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
                       <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
                       <input type="hidden" name="opt_action" value="delete">
                       <input type="hidden" name="opt_id_original" value="<?= $h($o['id']) ?>">
-                      <button class="btn-action btn-action-delete" type="submit" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>
+                      <button class="btn-action btn-action-delete" type="submit" title="Eliminar" aria-label="Eliminar <?= $h($o['nombre']) ?>"><i class="bi bi-trash"></i></button>
                     </form>
-                  </td>
+                  </div></td>
               </tr>
             <?php endforeach; ?>
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Drawer de alta/edición. Envía los mismos campos que antes el formulario en línea. -->
+  <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="<?= $h($drawerId) ?>" aria-labelledby="<?= $h($drawerId) ?>-title" data-option-drawer>
+    <div class="offcanvas-header">
+      <div class="integration-drawer-title">
+        <span class="integration-icon"><i class="bi bi-list-check"></i></span>
+        <div><small><?= $h($title) ?></small><h2 class="offcanvas-title" id="<?= $h($drawerId) ?>-title" data-option-drawer-title>Agregar <?= $h($optionNoun) ?></h2></div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body">
+      <form id="<?= $h($drawerId) ?>-form" class="rm-config-drawer-form" method="post" action="<?= $h($configPanelUrl($type)) ?>"
+            data-option-noun="<?= $h($optionNoun) ?>">
+        <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+        <input type="hidden" name="opt_type" value="<?= $h($type) ?>">
+        <input type="hidden" name="opt_action" value="create" data-option-action>
+        <input type="hidden" name="opt_id_original" value="" data-option-original>
+        <div class="mb-3">
+          <label class="form-label" for="<?= $h($drawerId) ?>-id">ID en Redmine</label>
+          <input class="form-control" id="<?= $h($drawerId) ?>-id" name="opt_id" required inputmode="numeric" data-option-id>
+          <div class="form-text">Debe coincidir con el ID de la opción en Redmine.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="<?= $h($drawerId) ?>-nombre">Nombre</label>
+          <input class="form-control" id="<?= $h($drawerId) ?>-nombre" name="opt_nombre" required data-option-nombre>
+        </div>
+        <input class="btn-check" type="checkbox" name="opt_default" id="<?= $h($drawerId) ?>-default" data-option-default>
+        <label class="mnt-default-toggle" for="<?= $h($drawerId) ?>-default">
+          <i class="bi bi-star" aria-hidden="true"></i><i class="bi bi-star-fill" aria-hidden="true"></i>
+          <span>Usar como predeterminado</span>
+        </label>
+      </form>
+    </div>
+    <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
+      <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg"></i>Cancelar</button>
+      <button class="btn-nova btn-nova-primary" type="submit" form="<?= $h($drawerId) ?>-form" data-option-submit><i class="bi bi-save"></i>Guardar</button>
     </div>
   </div>
 </div>
@@ -365,9 +413,37 @@
 <?php $renderOptionsTable('trackersModal', 'Trackers', $opts['trackers'], 'trackers', $h); ?>
 <?php $renderOptionsTable('prioridadesModal', 'Prioridades', $opts['prioridades'], 'prioridades', $h); ?>
 <?php $renderOptionsTable('estadosModal', 'Estados', $opts['estados'], 'estados', $h); ?>
+<script>
+// Drawers de Trackers / Prioridades / Estados: el botón que abre el drawer
+// indica si es alta (create) o edición (update) y trae los datos de la fila.
+document.querySelectorAll('[data-option-drawer]').forEach(drawer => {
+  const form = drawer.querySelector('form');
+  const noun = form.dataset.optionNoun || 'opción';
+  const title = drawer.querySelector('[data-option-drawer-title]');
+  const action = form.querySelector('[data-option-action]');
+  const original = form.querySelector('[data-option-original]');
+  const idInput = form.querySelector('[data-option-id]');
+  const nameInput = form.querySelector('[data-option-nombre]');
+  const defaultInput = form.querySelector('[data-option-default]');
+  const submit = drawer.querySelector('[data-option-submit]');
+
+  drawer.addEventListener('show.bs.offcanvas', event => {
+    const trigger = event.relatedTarget;
+    const editing = trigger?.dataset.optMode === 'update';
+    action.value = editing ? 'update' : 'create';
+    original.value = editing ? (trigger.dataset.optId || '') : '';
+    idInput.value = editing ? (trigger.dataset.optId || '') : '';
+    nameInput.value = editing ? (trigger.dataset.optNombre || '') : '';
+    defaultInput.checked = editing && trigger.dataset.optDefault === '1';
+    title.textContent = editing ? `Editar ${noun}` : `Agregar ${noun}`;
+    submit.lastChild.textContent = editing ? 'Guardar cambios' : 'Agregar';
+  });
+  drawer.addEventListener('shown.bs.offcanvas', () => (idInput.value ? nameInput : idInput).focus());
+});
+</script>
 
 <!-- Modal Categorías -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'categorias' ? 'is-active' : '' ?>" id="categoriasModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'categorias' ? 'is-active' : '' ?>" id="categoriasModal" tabindex="-1" <?= $activeConfigPanel === 'categorias' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-xl">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -385,7 +461,7 @@
             <span class="badge bg-light text-dark border">Total: <?= $h(is_array($categoriasData) ? count($categoriasData) : 0) ?></span>
           </div>
           <div class="d-flex gap-2">
-            <form action="<?= $h($configPanelUrl('categorias')) ?>" method="post" class="m-0 d-inline" id="sync-cat-form">
+            <form action="<?= $h($configPanelUrl('categorias')) ?>" method="post" class="m-0 d-inline" id="sync-cat-form" data-app-no-loading="1" data-no-page-loader="true">
               <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
               <input type="hidden" name="action" value="sync_remote">
               <button class="btn-nova btn-nova-info btn-icon" type="submit" <?= $maintenanceMode ? 'disabled title="Plataforma en mantención"' : '' ?>><i class="bi bi-arrow-repeat"></i> Actualizar desde API</button>
@@ -415,8 +491,85 @@
   </div>
 </div>
 
+<!-- Progreso de "Actualizar desde API": mismo overlay que Reportes al enviar a Redmine. -->
+<div class="core-import-overlay" id="categorias-sync-overlay" role="status" aria-live="polite" aria-hidden="true">
+  <div class="core-import-card">
+    <div class="core-import-card__media">
+      <img class="core-import-card__gif" src="<?= $h($mantencionBaseUrl) ?>/assets/img/redmine.gif" alt="">
+    </div>
+    <div class="core-import-card__header">
+      <div class="core-import-card__icon">
+        <i class="bi bi-tags"></i>
+      </div>
+      <div>
+        <h3 class="core-import-card__title">Actualizando categorías desde Redmine</h3>
+        <p class="core-import-card__text" data-sync-text>Conectando con Redmine...</p>
+      </div>
+    </div>
+    <div class="core-import-progress" aria-label="Progreso de la actualización">
+      <div class="core-import-progress__bar" data-sync-bar></div>
+    </div>
+    <div class="core-import-card__meta">
+      <span data-sync-step>Preparando consulta</span>
+      <span data-sync-percent>0%</span>
+    </div>
+  </div>
+</div>
+<script>
+// Avance estimado mientras el servidor sincroniza (igual que Reportes): sube por
+// etapas hasta 94% y la página se recarga con la respuesta.
+(function () {
+  const form = document.getElementById('sync-cat-form');
+  const overlay = document.getElementById('categorias-sync-overlay');
+  if (!form || !overlay) return;
+  if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+  const bar = overlay.querySelector('[data-sync-bar]');
+  const text = overlay.querySelector('[data-sync-text]');
+  const stepLabel = overlay.querySelector('[data-sync-step]');
+  const percent = overlay.querySelector('[data-sync-percent]');
+  const steps = [
+    { at: 12, text: 'Conectando con Redmine...', step: 'Abriendo conexión' },
+    { at: 38, text: 'Consultando categorías...', step: 'Leyendo el proyecto' },
+    { at: 62, text: 'Comparando con las categorías locales...', step: 'Detectando cambios' },
+    { at: 84, text: 'Guardando categorías...', step: 'Actualizando el catálogo' },
+    { at: 94, text: 'Finalizando...', step: 'Esperando respuesta' }
+  ];
+  form.addEventListener('submit', () => {
+    form.querySelectorAll('button[type="submit"]').forEach(button => {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+    });
+    let progress = 0;
+    let index = 0;
+    const setProgress = value => {
+      progress = Math.min(94, Math.max(progress, value));
+      bar.style.width = `${progress}%`;
+      percent.textContent = `${Math.round(progress)}%`;
+    };
+    const setStep = item => { text.textContent = item.text; stepLabel.textContent = item.step; };
+    overlay.classList.add('is-visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    setStep(steps[0]);
+    setProgress(6);
+    window.setInterval(() => {
+      const target = steps[Math.min(index, steps.length - 1)];
+      if (progress < target.at) { setProgress(progress + Math.max(1, (target.at - progress) * 0.18)); return; }
+      if (index < steps.length - 1) { index += 1; setStep(steps[index]); return; }
+      setProgress(progress + 0.35);
+    }, 420);
+  });
+  // Al volver con el botón "atrás" del navegador no debe quedar el overlay abierto.
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    overlay.classList.remove('is-visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    form.querySelectorAll('button[type="submit"]').forEach(button => { button.disabled = false; button.removeAttribute('aria-busy'); });
+  });
+})();
+</script>
+
 <!-- Modal Conexión -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'conexion' ? 'is-active' : '' ?>" id="ConexionModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'conexion' ? 'is-active' : '' ?>" id="ConexionModal" tabindex="-1" <?= $activeConfigPanel === 'conexion' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-lg">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -427,25 +580,25 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar" onclick="(function(){var el=document.getElementById('rolesModal');if(!el)return;el.classList.remove('show');el.style.display='none';el.setAttribute('aria-hidden','true');var bd=document.getElementById('backdrop-roles');if(bd)bd.remove();document.body.classList.remove('modal-open');})();"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3">
+        <form method="post" action="<?= $h($configPanelUrl('conexion')) ?>" class="row g-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="col-12"><h6 class="fw-bold mb-0">CORE</h6></div>
           <div class="col-12">
-            <label class="form-label">URL administrador CORE</label>
-            <input name="core_admin_url" class="form-control" value="<?= $h($cfg['core_admin_url'] ?? 'https://www.hbvaldivia.cl/core/solicitudes/administrador') ?>">
+            <label class="form-label" for="cfg-core-admin-url">URL administrador CORE</label>
+            <input id="cfg-core-admin-url" name="core_admin_url" class="form-control" value="<?= $h($cfg['core_admin_url'] ?? 'https://www.hbvaldivia.cl/core/solicitudes/administrador') ?>">
           </div>
           <div class="col-12">
-            <label class="form-label">URL histórico CORE</label>
-            <input name="core_historico_url" class="form-control" value="<?= $h($cfg['core_historico_url'] ?? 'https://www.hbvaldivia.cl/core/solicitudes/administrador/obtener_solicitudes_historicas') ?>">
+            <label class="form-label" for="cfg-core-historico-url">URL histórico CORE</label>
+            <input id="cfg-core-historico-url" name="core_historico_url" class="form-control" value="<?= $h($cfg['core_historico_url'] ?? 'https://www.hbvaldivia.cl/core/solicitudes/administrador/obtener_solicitudes_historicas') ?>">
           </div>
           <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">Redmine</h6></div>
           <div class="col-12">
-            <label class="form-label">URL issues.json</label>
-            <input name="platform_url" class="form-control" value="<?= $h($cfg['platform_url'] ?? '') ?>" required>
+            <label class="form-label" for="cfg-platform-url">URL issues.json</label>
+            <input id="cfg-platform-url" name="platform_url" class="form-control" value="<?= $h($cfg['platform_url'] ?? '') ?>" required>
           </div>
           <div class="col-12">
-            <label class="form-label">URL categor&iacute;as (opcional)</label>
-            <input name="categories_url" class="form-control" value="<?= $h($cfg['categories_url'] ?? '') ?>" placeholder="Ej: https://tu-host/projects/xxx/settings/categories">
+            <label class="form-label" for="cfg-categories-url">URL categor&iacute;as (opcional)</label>
+            <input id="cfg-categories-url" name="categories_url" class="form-control" value="<?= $h($cfg['categories_url'] ?? '') ?>" placeholder="Ej: https://tu-host/projects/xxx/settings/categories">
           </div>
           <div class="col-12">
            <div class="nova-alert-card is-info mb-0">
@@ -455,24 +608,24 @@
           </div>
           <div class="col-12"><hr class="my-1"><h6 class="fw-bold mb-0">Campos personalizados</h6></div>
           <div class="col-md-4">
-            <label class="form-label">CF Solicitante (ID)</label>
-            <input name="cf_solicitante" class="form-control" value="<?= $h($cfg['cf_solicitante'] ?? '') ?>" placeholder="Ej: 3">
+            <label class="form-label" for="cfg-cf-solicitante">CF Solicitante (ID)</label>
+            <input id="cfg-cf-solicitante" name="cf_solicitante" class="form-control" value="<?= $h($cfg['cf_solicitante'] ?? '') ?>" placeholder="Ej: 3">
           </div>
           <div class="col-md-4">
-            <label class="form-label">CF Unidad (ID)</label>
-            <input name="cf_unidad" class="form-control" value="<?= $h($cfg['cf_unidad'] ?? '') ?>" placeholder="Ej: 5">
+            <label class="form-label" for="cfg-cf-unidad">CF Unidad (ID)</label>
+            <input id="cfg-cf-unidad" name="cf_unidad" class="form-control" value="<?= $h($cfg['cf_unidad'] ?? '') ?>" placeholder="Ej: 5">
           </div>
           <div class="col-md-4">
-            <label class="form-label">CF Unidad solicitante (ID)</label>
-            <input name="cf_unidad_solicitante" class="form-control" value="<?= $h($cfg['cf_unidad_solicitante'] ?? '') ?>" placeholder="Ej: 11">
+            <label class="form-label" for="cfg-cf-unidad-solicitante">CF Unidad solicitante (ID)</label>
+            <input id="cfg-cf-unidad-solicitante" name="cf_unidad_solicitante" class="form-control" value="<?= $h($cfg['cf_unidad_solicitante'] ?? '') ?>" placeholder="Ej: 11">
           </div>
           <div class="col-md-4">
-            <label class="form-label">CF Horas extra (ID)</label>
-            <input name="cf_hora_extra" class="form-control" value="<?= $h($cfg['cf_hora_extra'] ?? '') ?>" placeholder="Ej: 12">
+            <label class="form-label" for="cfg-cf-hora-extra">CF Horas extra (ID)</label>
+            <input id="cfg-cf-hora-extra" name="cf_hora_extra" class="form-control" value="<?= $h($cfg['cf_hora_extra'] ?? '') ?>" placeholder="Ej: 12">
           </div>
           <div class="col-md-4">
-            <label class="form-label">Tiempo estimado HE</label>
-            <input name="hora_extra_tiempo_estimado" class="form-control" value="<?= $h($cfg['hora_extra_tiempo_estimado'] ?? '1') ?>" placeholder="Ej: 1">
+            <label class="form-label" for="cfg-hora-extra-tiempo-estimado">Tiempo estimado HE</label>
+            <input id="cfg-hora-extra-tiempo-estimado" name="hora_extra_tiempo_estimado" class="form-control" value="<?= $h($cfg['hora_extra_tiempo_estimado'] ?? '1') ?>" placeholder="Ej: 1">
           </div>
           <div class="col-12 d-flex justify-content-end">
             <button class="btn-nova btn-nova-primary">Guardar</button>
@@ -484,7 +637,7 @@
 </div>
 
 <!-- Modal Proyecto -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'proyecto' ? 'is-active' : '' ?>" id="proyectoModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'proyecto' ? 'is-active' : '' ?>" id="proyectoModal" tabindex="-1" <?= $activeConfigPanel === 'proyecto' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-md">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -495,15 +648,15 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar" onclick="(function(){var el=document.getElementById('usuariosModal');if(!el)return;el.classList.remove('show');el.style.display='none';el.setAttribute('aria-hidden','true');var bd=document.getElementById('backdrop-usuarios');if(bd)bd.remove();document.body.classList.remove('modal-open');})();"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3">
+        <form method="post" action="<?= $h($configPanelUrl('proyecto')) ?>" class="row g-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="col-12">
-            <label class="form-label">Project ID</label>
-            <input name="project_id" class="form-control" value="<?= $h($cfg['project_id'] ?? '') ?>">
+            <label class="form-label" for="cfg-project-id">Project ID</label>
+            <input id="cfg-project-id" name="project_id" class="form-control" value="<?= $h($cfg['project_id'] ?? '') ?>">
           </div>
           <div class="col-12">
-            <label class="form-label">Nombre del proyecto</label>
-            <input name="project_name" class="form-control" value="<?= $h($cfg['project_name'] ?? '') ?>" placeholder="Solo referencia visual">
+            <label class="form-label" for="cfg-project-name">Nombre del proyecto</label>
+            <input id="cfg-project-name" name="project_name" class="form-control" value="<?= $h($cfg['project_name'] ?? '') ?>" placeholder="Solo referencia visual">
           </div>
           <div class="col-12 d-flex justify-content-end">
             <button class="btn-nova btn-nova-primary">Guardar</button>
@@ -515,7 +668,7 @@
 </div>
 
 <!-- Modal Retención -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'retencion' ? 'is-active' : '' ?>" id="RetencionModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'retencion' ? 'is-active' : '' ?>" id="RetencionModal" tabindex="-1" <?= $activeConfigPanel === 'retencion' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-md">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -526,11 +679,11 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3">
+        <form method="post" action="<?= $h($configPanelUrl('retencion')) ?>" class="row g-3">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <div class="col-12">
-            <label class="form-label">Horas antes de borrar procesados</label>
-            <input type="number" min="1" name="retencion_horas" class="form-control" value="<?= $h($cfg['retencion_horas'] ?? 24) ?>">
+            <label class="form-label" for="cfg-retencion-horas">Horas antes de borrar procesados</label>
+            <input id="cfg-retencion-horas" type="number" min="1" name="retencion_horas" class="form-control" value="<?= $h($cfg['retencion_horas'] ?? 24) ?>">
           </div>
           <div class="col-12 d-flex justify-content-end">
             <button class="btn-nova btn-nova-primary">Guardar</button>
@@ -660,7 +813,7 @@
 ?>
 <?php if ($canManageUsers): ?>
 <!-- Modal Usuarios y permisos -->
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'usuarios' ? 'is-active' : '' ?>" id="usuariosModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'usuarios' ? 'is-active' : '' ?>" id="usuariosModal" tabindex="-1" <?= $activeConfigPanel === 'usuarios' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-xl">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -671,7 +824,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3 roles-modal-shell">
+        <form method="post" action="<?= $h($configPanelUrl('usuarios')) ?>" class="row g-3 roles-modal-shell">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" id="user-action" value="save_user_perms">
           <div class="col-md-8">
@@ -697,7 +850,7 @@
             </div>
           </div>
           <div class="col-md-6">
-            <label class="form-label">Cambiar rol</label>
+            <label class="form-label" for="u-role">Cambiar rol</label>
             <select name="u_role" class="form-select" id="u-role">
               <option value="">(mantener)</option>
               <?php foreach ($rolesList as $r): ?>
@@ -709,22 +862,22 @@
             <label class="form-label mb-1">Alcance</label>
             <div class="row g-3">
               <div class="col-md-4">
-                <label class="form-label small mb-1">Reportes</label>
-                <select name="u_mensajes_scope" class="form-select">
+                <label class="form-label small mb-1" for="cfg-u-mensajes-scope">Reportes</label>
+                <select id="cfg-u-mensajes-scope" name="u_mensajes_scope" class="form-select">
                   <option value="todos" <?= $uScopeMsg === 'todos' ? 'selected' : '' ?>>Ver todos</option>
                   <option value="asignados" <?= $uScopeMsg === 'asignados' ? 'selected' : '' ?>>Solo asignados</option>
                 </select>
               </div>
               <div class="col-md-4">
-                <label class="form-label small mb-1">Horas extra</label>
-                <select name="u_horas_scope" class="form-select">
+                <label class="form-label small mb-1" for="cfg-u-horas-scope">Horas extra</label>
+                <select id="cfg-u-horas-scope" name="u_horas_scope" class="form-select">
                   <option value="todos" <?= $uScopeHoras === 'todos' ? 'selected' : '' ?>>Ver todas</option>
                   <option value="asignados" <?= $uScopeHoras === 'asignados' ? 'selected' : '' ?>>Solo asignadas</option>
                 </select>
               </div>
               <div class="col-md-4">
-                <label class="form-label small mb-1">Hist&oacute;rico</label>
-                <select name="u_historico_scope" class="form-select">
+                <label class="form-label small mb-1" for="cfg-u-historico-scope">Hist&oacute;rico</label>
+                <select id="cfg-u-historico-scope" name="u_historico_scope" class="form-select">
                   <option value="todos" <?= $uScopeHist === 'todos' ? 'selected' : '' ?>>Ver todos</option>
                   <option value="asignados" <?= $uScopeHist === 'asignados' ? 'selected' : '' ?>>Solo asignados</option>
                 </select>
@@ -895,7 +1048,7 @@
 <?php endif; ?>
 
 <?php if ($canManageRoles): ?>
-<div class="rm-config-view-panel <?= $activeConfigPanel === 'roles' ? 'is-active' : '' ?>" id="rolesModal" tabindex="-1" aria-hidden="true">
+<div class="rm-config-view-panel <?= $activeConfigPanel === 'roles' ? 'is-active' : '' ?>" id="rolesModal" tabindex="-1" <?= $activeConfigPanel === 'roles' ? '' : 'aria-hidden="true"' ?>>
   <div class="rm-panel-shell rm-panel-xl">
     <div class="rm-panel-card">
       <div class="rm-panel-head">
@@ -906,11 +1059,11 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="rm-panel-body">
-        <form method="post" action="<?= $h($configBaseUrl) ?>" class="row g-3 roles-modal-shell">
+        <form method="post" action="<?= $h($configPanelUrl('roles')) ?>" class="row g-3 roles-modal-shell">
           <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
           <input type="hidden" name="action" id="roles-action" value="save_roles">
           <div class="col-md-6">
-            <label class="form-label">Rol</label>
+            <label class="form-label" for="role-select">Rol</label>
             <select name="role_select" class="form-select" id="role-select">
               <?php foreach ($rolesList as $r): ?>
                 <option value="<?= $h($r) ?>" <?= $selectedRole === $r ? 'selected' : '' ?>><?= ucfirst($h($r)) ?></option>
@@ -923,22 +1076,22 @@
             <label class="form-label mb-1">Alcance</label>
             <div class="row g-3">
               <div class="col-md-4">
-                <label class="form-label small mb-1">Reportes</label>
-                <select name="mensajes_scope" class="form-select">
+                <label class="form-label small mb-1" for="cfg-mensajes-scope">Reportes</label>
+                <select id="cfg-mensajes-scope" name="mensajes_scope" class="form-select">
                   <option value="todos" <?= $scopeMsg === 'todos' ? 'selected' : '' ?>>Ver todos</option>
                   <option value="asignados" <?= $scopeMsg === 'asignados' ? 'selected' : '' ?>>Solo asignados</option>
                 </select>
               </div>
               <div class="col-md-4">
-                <label class="form-label small mb-1">Horas extra</label>
-                <select name="horas_scope" class="form-select">
+                <label class="form-label small mb-1" for="cfg-horas-scope">Horas extra</label>
+                <select id="cfg-horas-scope" name="horas_scope" class="form-select">
                   <option value="todos" <?= $scopeHoras === 'todos' ? 'selected' : '' ?>>Ver todas</option>
                   <option value="asignados" <?= $scopeHoras === 'asignados' ? 'selected' : '' ?>>Solo asignadas</option>
                 </select>
               </div>
               <div class="col-md-4">
-                <label class="form-label small mb-1">Hist&oacute;rico</label>
-                <select name="historico_scope" class="form-select">
+                <label class="form-label small mb-1" for="cfg-historico-scope">Hist&oacute;rico</label>
+                <select id="cfg-historico-scope" name="historico_scope" class="form-select">
                   <option value="todos" <?= $scopeHist === 'todos' ? 'selected' : '' ?>>Ver todos</option>
                   <option value="asignados" <?= $scopeHist === 'asignados' ? 'selected' : '' ?>>Solo asignados</option>
                 </select>
@@ -1448,7 +1601,12 @@ document.addEventListener('DOMContentLoaded', () => {
       syncPermissionPickerSelection(picker);
       closePermissionPicker(picker);
       if (picker.matches('[data-navigation-picker]')) {
-        picker.requestSubmit();
+        // El selector de usuario está dentro del formulario de permisos, así que no
+        // es un <form>: envía el formulario GET indicado en data-navigation-form.
+        const navigationForm = picker.tagName === 'FORM'
+          ? picker
+          : document.getElementById(picker.dataset.navigationForm || '');
+        navigationForm?.requestSubmit();
       }
     };
 
@@ -1474,11 +1632,11 @@ document.addEventListener('DOMContentLoaded', () => {
         options[next]?.classList.add('is-highlighted');
         options[next]?.scrollIntoView({ block: 'nearest' });
       } else if (event.key === 'Enter') {
+        // Siempre se cancela: los selectores están dentro del formulario de permisos
+        // y un Enter sin coincidencias lo enviaría (guardando sin querer).
+        event.preventDefault();
         const highlighted = options.find(option => option.classList.contains('is-highlighted')) || options[0];
-        if (highlighted) {
-          event.preventDefault();
-          chooseOption(highlighted);
-        }
+        if (highlighted) chooseOption(highlighted);
       } else if (event.key === 'Escape') {
         closePermissionPicker(picker);
       }
@@ -1494,6 +1652,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const permissionFormState = (form) => {
     const data = new FormData(form);
     data.delete('csrf_token');
+    // El token CSRF de Laravel se inyecta en los formularios POST después de este
+    // script; si no se ignora, cualquier evento "input" marca cambios sin guardar.
+    data.delete('_token');
     data.delete('action');
     return new URLSearchParams(data).toString();
   };

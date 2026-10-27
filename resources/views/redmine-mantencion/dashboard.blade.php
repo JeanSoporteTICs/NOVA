@@ -36,24 +36,31 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
 </head>
 
-<body class="bg-light">
+<body class="nova-v2">
 
 <?php $activeNav = 'mensajes'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">
 <?php $dashboardCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/dashboard.css')) ?: time(); ?>
 <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/dashboard.css?v=<?= (int)$dashboardCssVersion ?>">
+<?php
+  // Piezas NOVA v2 propias de Reportes; la base común se carga en bootstrap-head.php.
+  $novaV2DashboardCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/dashboard-v2.css')) ?: time();
+?>
+<link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/dashboard-v2.css?v=<?= (int)$novaV2DashboardCssVersion ?>">
 <div class="container-fluid py-4">
 <div class="dashboard-shell">
 
-  <?php
-    $heroIcon = 'bi-speedometer2';
-    $heroTitle = 'Reportes';
-    $heroSubtitle = 'Panel de estados locales';
-    $heroExtras = '<span class="badge bg-white bg-opacity-25 text-white border border-white"><i class="bi bi-clock-history"></i> Retención automática: ' . $h($retencionHoras) . ' h</span>'
-      . '<span class="badge bg-white bg-opacity-25 text-white border border-white"><i class="bi bi-arrow-repeat"></i> Estado Redmine: ' . $h($estadoRedmineNombre ?: 'No definido') . '</span>';
-    include base_path('RedmineMantencion/views/partials/hero.php');
-  ?>
+  <section class="nova-v2-head">
+    <div>
+      <h1 class="nova-v2-title"><i class="bi bi-speedometer2" aria-hidden="true"></i> Reportes</h1>
+      <p class="nova-v2-subtitle">Panel de estados locales</p>
+    </div>
+    <div class="nova-v2-head__meta">
+      <span class="nova-v2-chip"><i class="bi bi-clock-history" aria-hidden="true"></i> Retención automática: <?= $h($retencionHoras) ?> h</span>
+      <span class="nova-v2-chip"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Estado Redmine: <?= $h($estadoRedmineNombre ?: 'No definido') ?></span>
+    </div>
+  </section>
 
   <?php if ($flash): ?>
     <div data-nova-flash="success" data-nova-flash-message="<?= $h($flash) ?>" hidden></div>
@@ -78,17 +85,17 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
     <div class="dashboard-import-grid">
       <div class="row g-3 align-items-end">
       <div class="col-md-4">
-        <label class="form-label">CORE desde</label>
-        <input type="date" name="core_desde" class="form-control" value="<?= $h($coreDesde) ?>">
+        <label class="form-label" for="core-desde">CORE desde</label>
+        <input type="date" name="core_desde" id="core-desde" class="form-control" value="<?= $h($coreDesde) ?>">
       </div>
       <div class="col-md-4">
-        <label class="form-label">CORE hasta</label>
-        <input type="date" name="core_hasta" class="form-control" value="<?= $h($coreHasta) ?>">
+        <label class="form-label" for="core-hasta">CORE hasta</label>
+        <input type="date" name="core_hasta" id="core-hasta" class="form-control" value="<?= $h($coreHasta) ?>">
       </div>
       <div class="col-md-4">
-        <label class="form-label">Asignado CORE</label>
+        <label class="form-label" for="core-assigned-name">Asignado CORE</label>
         <?php if ($coreImportService->dashboard_can_select_core_assignee()): ?>
-          <select name="core_assigned_name" class="form-select">
+          <select name="core_assigned_name" id="core-assigned-name" class="form-select">
             <?php foreach ($userOptions as $userOption): ?>
               <?php $optionName = trim((string)($userOption['nombre'] ?? '')); ?>
               <?php if ($optionName === '') continue; ?>
@@ -98,7 +105,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
             <?php endforeach; ?>
           </select>
         <?php else: ?>
-          <input type="text" class="form-control" value="<?= $h($coreAssignedName) ?>" readonly>
+          <input type="text" id="core-assigned-name" class="form-control" value="<?= $h($coreAssignedName) ?>" readonly>
           <input type="hidden" name="core_assigned_name" value="<?= $h($coreAssignedName) ?>">
         <?php endif; ?>
       </div>
@@ -170,6 +177,24 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
       <div class="dashboard-active-chips" id="dashboard-active-chips" aria-live="polite"></div>
 
+      <div class="row g-2 px-3 pt-3 dashboard-search" id="dashboard-search">
+        <div class="col-md-10">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <select class="form-select flex-grow-0 w-auto" id="dashboard-search-field" aria-label="Buscar en">
+              <option value="solicitante">Solicitante</option>
+              <option value="descripcion">Descripción</option>
+            </select>
+            <input type="search" class="form-control" id="dashboard-search-input" placeholder="Buscar por solicitante" aria-label="Texto a buscar" autocomplete="off">
+          </div>
+        </div>
+        <div class="col-md-2">
+          <button type="button" class="btn-nova btn-nova-secondary btn-icon w-100" id="dashboard-search-clear">
+            <i class="bi bi-x-circle"></i> Limpiar
+          </button>
+        </div>
+      </div>
+
       <?php if ($canUnlockProcessedActions): ?>
       <div class="dashboard-toolbar px-3 pt-3">
         <div class="dashboard-toolbar__actions">
@@ -214,7 +239,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               <?php if ($canSelectReports): ?>
               <th class="dashboard-select-cell">
                 <div class="dashboard-select-control">
-                  <input type="checkbox" id="sel-all-top">
+                  <input type="checkbox" id="sel-all-top" aria-label="Seleccionar todas las solicitudes visibles">
                 </div>
               </th>
               <?php endif; ?>
@@ -238,6 +263,13 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
           <tbody>
 
+          <tr id="dashboard-search-empty-row" style="display:none">
+            <td colspan="<?= $canSelectReports ? 8 : 7 ?>" class="nova-empty">
+              <i class="bi bi-search dashboard-search-empty-icon" aria-hidden="true"></i>
+              Ninguna solicitud de este estado coincide con la búsqueda.
+              <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-dashboard-search-clear>Limpiar búsqueda</button>
+            </td>
+          </tr>
           <?php if (!$messages): ?>
             <tr id="dashboard-empty-row"><td colspan="<?= $canSelectReports ? 8 : 7 ?>" class="nova-empty"><i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.35"></i>No hay solicitudes disponibles.</td></tr>
           <?php endif; ?>
@@ -254,6 +286,22 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               $coreStatusIndicator = $coreImportService->dashboard_core_status_indicator($m);
               $isManualSource = dashboard_normalize_text((string)($m['fuente'] ?? '')) === 'manual'
                 || str_starts_with((string)($m['id'] ?? ''), 'manual-');
+              // Texto del buscador "Descripción": descripción (el dashboard solo trae
+              // un prefijo, _descripcion_busqueda) + tabla de detalle importada desde CORE.
+              $searchDescripcionParts = [
+                ($m['_descripcion_busqueda'] ?? '') ?: (($m['descripcion'] ?? '') ?: ($m['mensaje'] ?? '')),
+              ];
+              foreach ($m as $searchKey => $searchValue) {
+                if (str_starts_with((string) $searchKey, 'core_') && is_scalar($searchValue)) {
+                  $searchDescripcionParts[] = (string) $searchValue;
+                }
+              }
+              foreach ((array) ($m['core_detalle_items'] ?? []) as $searchItem) {
+                if (is_array($searchItem)) {
+                  $searchDescripcionParts[] = implode(' ', array_filter($searchItem, 'is_scalar'));
+                }
+              }
+              $searchDescripcion = implode(' ', array_filter(array_map('trim', $searchDescripcionParts), 'strlen'));
             ?>
 
             <tr
@@ -264,25 +312,29 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               data-user="<?= $h(strtolower($asignadoNombre)) ?>"
               data-horaextra="<?= $h(strtolower($m['hora_extra'] ?? '')) ?>"
               data-text="<?= $h(strtolower($asunto . ' ' . ($m['solicitante'] ?? '') . ' ' . ($m['numero'] ?? ''))) ?>"
+              data-search-solicitante="<?= $h($m['solicitante'] ?? '') ?>"
+              data-search-descripcion="<?= $h($searchDescripcion) ?>"
             >
 
               <?php if ($canSelectReports): ?>
               <td class="dashboard-select-cell">
                 <div class="dashboard-select-control">
-                  <input type="checkbox" class="msg-check" value="<?= $h($m['id'] ?? '') ?>">
+                  <input type="checkbox" class="msg-check" value="<?= $h($m['id'] ?? '') ?>" aria-label="Seleccionar solicitud <?= $h(trim(($m['redmine_id'] ?? '') !== '' ? '#' . $m['redmine_id'] . ' ' : '') . $asunto) ?>">
                   <?php if ($coreStatusIndicator): ?>
                     <span class="badge rounded-circle text-bg-<?= $h($coreStatusIndicator['badge']) ?> p-2 action-tooltip"
                           data-bs-placement="top"
                           title="CORE: <?= $h($coreStatusIndicator['label']) ?>"
+                          role="img"
                           aria-label="CORE: <?= $h($coreStatusIndicator['label']) ?>">
-                      <i class="bi <?= $h($coreStatusIndicator['icon']) ?>"></i>
+                      <i class="bi <?= $h($coreStatusIndicator['icon']) ?>" aria-hidden="true"></i>
                     </span>
                   <?php elseif ($isManualSource): ?>
                     <span class="badge rounded-circle p-2 action-tooltip dashboard-source-indicator is-manual"
                           data-bs-placement="top"
                           title="Origen: Creación manual"
+                          role="img"
                           aria-label="Origen: Creación manual">
-                      <i class="bi bi-pencil-fill"></i>
+                      <i class="bi bi-pencil-fill" aria-hidden="true"></i>
                     </span>
                   <?php endif; ?>
                 </div>
@@ -523,11 +575,11 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
         </div>
         <div class="row g-3">
           <div class="col-12">
-            <label class="form-label">Usuario CORE</label>
+            <label class="form-label" for="core-runtime-user-input">Usuario CORE</label>
             <input type="text" class="form-control" id="core-runtime-user-input" placeholder="<?= $hasSavedCoreCredentials ? 'Usar usuario guardado' : 'RUT sin DV o email' ?>" autocomplete="username" value="<?= $h($coreRuntimeUserSession) ?>">
           </div>
           <div class="col-12">
-            <label class="form-label">Contraseña CORE</label>
+            <label class="form-label" for="core-runtime-pass-input">Contraseña CORE</label>
             <div class="input-group">
               <input type="password" class="form-control" id="core-runtime-pass-input" placeholder="<?= $hasSavedCoreCredentials ? 'Usar contraseña guardada' : 'Solo se usa para esta consulta' ?>" autocomplete="current-password">
               <button class="btn btn-outline-secondary" type="button" id="core-toggle-password" aria-label="Ver contraseña" title="Ver contraseña">
@@ -622,11 +674,12 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
             <p class="detail-drawer-kicker">Reporte seleccionado</p>
             <h5 class="modal-title">
               <span class="detail-drawer-icon"><i class="bi <?= $canEditReports ? 'bi-pencil-square' : 'bi-eye' ?>"></i></span>
-              <?= $canEditReports ? 'Detalle / Editar' : 'Detalle' ?>
+              <?= $canEditReports ? 'Editar reporte' : 'Detalle del reporte' ?>
             </h5>
+            <p class="detail-drawer-subtitle"><?= $canEditReports ? 'Actualiza los datos del reporte y guarda los cambios.' : 'Consulta la información del reporte.' ?></p>
           </div>
 
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
 
         </div>
 
@@ -641,26 +694,30 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
 
           <div class="row g-3">
 
-            <div class="col-12"><label class="form-label">Asunto</label><textarea name="asunto" id="md-asunto" class="form-control" rows="2"></textarea></div>
+            <div class="col-12 nova-drawer-section-heading"><i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>Datos del reporte</span></div>
+
+            <div class="col-12"><label class="form-label" for="md-asunto">Asunto</label><textarea name="asunto" id="md-asunto" class="form-control" rows="2"></textarea></div>
 
             <div class="col-md-4">
-              <label class="form-label">Tipo</label>
+              <label class="form-label" for="md-tipo">Tipo</label>
               <input id="md-tipo" class="form-control" list="tipo-list" disabled>
               <input type="hidden" name="tipo" id="md-tipo-hidden">
             </div>
 
             <div class="col-md-4 position-relative">
-              <label class="form-label">Estado</label>
+              <label class="form-label" for="md-estado">Estado</label>
               <input id="md-estado" class="form-control" list="estado-list" placeholder="pendiente/procesado/error" disabled>
               <input type="hidden" name="estado" id="md-estado-hidden" value="pendiente">
               <!-- <div class="form-text" id="estado-help"></div> -->
             </div>
 
             <div class="col-md-4">
-              <label class="form-label">Prioridad</label>
+              <label class="form-label" for="md-prioridad">Prioridad</label>
               <input id="md-prioridad" class="form-control" list="prioridad-list" disabled>
               <input type="hidden" name="prioridad" id="md-prioridad-hidden">
             </div>
+
+            <div class="col-12 nova-drawer-section-heading"><i class="bi bi-people" aria-hidden="true"></i><span>Contacto y asignación</span></div>
 
             <div class="col-md-6">
               <label class="form-label" for="md-categoria">Categorías</label>
@@ -683,31 +740,47 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               <div class="form-text" id="md-asignado-help"></div>
             </div>
 
-            <div class="col-md-6"><label class="form-label">Solicitante</label><input name="solicitante" id="md-solicitante" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label" for="md-solicitante">Solicitante</label><input name="solicitante" id="md-solicitante" class="form-control"></div>
 
-            <div class="col-md-6"><label class="form-label">Número</label><input name="numero" id="md-numero" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label" for="md-numero">Número</label><input name="numero" id="md-numero" class="form-control"></div>
 
-            <div class="col-md-6"><label class="form-label">Correo</label><input name="core_email" id="md-core_email" class="form-control" type="email"></div>
+            <div class="col-md-6"><label class="form-label" for="md-core_email">Correo</label><input name="core_email" id="md-core_email" class="form-control" type="email"></div>
 
-            <div class="col-md-6"><label class="form-label">Establecimiento</label><input name="establecimiento" id="md-establecimiento" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label" for="md-establecimiento">Establecimiento</label><input name="establecimiento" id="md-establecimiento" class="form-control"></div>
  
-            <div class="col-md-6"><label class="form-label">Departamento</label><input name="departamento" id="md-departamento" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label" for="md-departamento">Departamento</label><input name="departamento" id="md-departamento" class="form-control"></div>
 
             <div class="col-md-6">
-              <label class="form-label">Estado Redmine</label>
-              <input class="form-control" value="<?= $h($estadoRedmineNombre ?: ($estadoRedmineId ? ('ID ' . $estadoRedmineId) : 'No definido')) ?>" disabled>
+              <label class="form-label" for="md-estado-redmine">Estado Redmine</label>
+              <input class="form-control" id="md-estado-redmine" value="<?= $h($estadoRedmineNombre ?: ($estadoRedmineId ? ('ID ' . $estadoRedmineId) : 'No definido')) ?>" disabled>
             </div>
 
-            <div class="col-md-3"><label class="form-label">Fecha Inicio</label><input type="date" name="fecha_inicio" id="md-fecha_inicio" class="form-control"></div>
+            <div class="col-12 nova-date-actions">
+              <div class="nova-date-actions__copy">
+                <span class="nova-date-actions__title"><i class="bi bi-calendar3" aria-hidden="true"></i> Fechas y tiempo</span>
+                <span class="nova-date-actions__hint">Inicio, fin y fecha del reporte</span>
+              </div>
+              <?php if ($canEditReports): ?>
+              <button type="button" class="nova-date-today-btn action-tooltip" id="md-fechas-hoy-btn" data-bs-placement="top" title="Actualizar Fecha Inicio, Fecha Fin y Fecha con la fecha de hoy" aria-label="Actualizar Fecha Inicio, Fecha Fin y Fecha con la fecha de hoy">
+                <i class="bi bi-calendar-check" aria-hidden="true"></i>
+                <span>Actualizar fechas a hoy</span>
+              </button>
+              <?php endif; ?>
+            </div>
 
-            <div class="col-md-3"><label class="form-label">Fecha Fin</label><input type="date" name="fecha_fin" id="md-fecha_fin" class="form-control"></div>
+            <div class="col-md-4">
+              <label class="form-label" for="md-fecha_inicio">Fecha Inicio</label>
+              <input type="date" name="fecha_inicio" id="md-fecha_inicio" class="form-control">
+            </div>
 
-            <div class="col-md-3"><label class="form-label">Fecha</label><input type="date" name="fecha" id="md-fecha" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label" for="md-fecha_fin">Fecha Fin</label><input type="date" name="fecha_fin" id="md-fecha_fin" class="form-control"></div>
 
-            <div class="col-md-3"><label class="form-label">Hora</label><input name="hora" id="md-hora" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label" for="md-fecha">Fecha</label><input type="date" name="fecha" id="md-fecha" class="form-control"></div>
 
-            <div class="col-md-6">
-              <label class="form-label">Hora extra</label>
+            <div class="col-md-4"><label class="form-label" for="md-hora">Hora</label><input name="hora" id="md-hora" class="form-control"></div>
+
+            <div class="col-md-4">
+              <label class="form-label" for="md-hora_extra">Hora extra</label>
               <select name="hora_extra" id="md-hora_extra" class="form-select" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>>
                 <option value="0" selected>No</option>
                 <option value="1">Sí</option>
@@ -717,7 +790,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               <?php endif; ?>
             </div>
 
-            <div class="col-md-6"><label class="form-label">Tiempo Estimado</label><input name="tiempo_estimado" id="md-tiempo_estimado" class="form-control" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>></div>
+            <div class="col-md-4"><label class="form-label" for="md-tiempo_estimado">Tiempo Estimado</label><input name="tiempo_estimado" id="md-tiempo_estimado" class="form-control" <?= $canEditReports && $canEditHoursExtra ? '' : 'disabled' ?>></div>
 
             <div class="col-12 d-none" id="md-descripcion-wrap">
               <label class="form-label d-block">Descripción</label>
@@ -727,7 +800,7 @@ if (!function_exists('mantencion_dashboard_format_date_display')) {
               </button>
             </div>
 
-            <div class="col-12">
+            <div class="col-12" id="md-preview-wrap">
               <label class="form-label d-block">Vista previa de la tabla</label>
               <button type="button" class="btn btn-outline-primary" id="open-preview-modal-btn">
                 <i class="bi bi-table"></i> Ver tabla
@@ -871,6 +944,19 @@ function syncMantencionDashboardHours(useDefault = false) {
   else if (useDefault || hours.value.trim() === '') hours.value = '1';
 }
 document.getElementById('md-hora_extra')?.addEventListener('change', () => syncMantencionDashboardHours(true));
+
+// Fecha Inicio, Fecha Fin y Fecha pasan a hoy (hora de Chile, formato del input date).
+document.getElementById('md-fechas-hoy-btn')?.addEventListener('click', () => {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  ['md-fecha_inicio', 'md-fecha_fin', 'md-fecha'].forEach(id => {
+    const input = document.getElementById(id);
+    if (!input || input.disabled || input.readOnly) return;
+    input.value = today;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+});
 
 
   const dashboardMaintenanceMode = <?= $maintenanceMode ? 'true' : 'false' ?>;
@@ -1140,10 +1226,13 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
 
   set('md-core_email', 'data-core_email');
 
+  // Manual: solo descripción editable. CORE/otros: solo la tabla de detalle.
+  const isManualReport = (btn.getAttribute('data-fuente') || '') === 'manual';
   const descripcionWrap = document.getElementById('md-descripcion-wrap');
   if (descripcionWrap) {
-    descripcionWrap.classList.toggle('d-none', (btn.getAttribute('data-fuente') || '') !== 'manual');
+    descripcionWrap.classList.toggle('d-none', !isManualReport);
   }
+  document.getElementById('md-preview-wrap')?.classList.toggle('d-none', isManualReport);
 
   const previewHead = document.getElementById('md-preview-head');
   const previewBody = document.getElementById('md-preview-body');
@@ -1352,7 +1441,8 @@ document.getElementById('md-hora_extra')?.addEventListener('change', () => syncM
 
 
 function getVisibleRows() {
-  return Array.from(document.querySelectorAll('table tbody tr')).filter(tr => tr.style.display !== 'none');
+  return Array.from(document.querySelectorAll('table tbody tr'))
+    .filter(tr => tr.style.display !== 'none' && tr.id !== 'dashboard-search-empty-row');
 }
 
 function getSelectedVisibleChecks() {
@@ -1539,11 +1629,39 @@ if (processForm && processIds) {
 
 }
 
+const dashboardSearchKey = 'nova:mantencion-dashboard:search';
+const dashboardSearchField = document.getElementById('dashboard-search-field');
+const dashboardSearchInput = document.getElementById('dashboard-search-input');
+
+// Minúsculas y sin tildes para que "Gonzalez" encuentre "González".
+function normalizeDashboardSearch(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function dashboardSearchMatches(tr) {
+  const query = normalizeDashboardSearch(dashboardSearchInput?.value);
+  if (!query) return true;
+  const field = dashboardSearchField?.value === 'descripcion' ? 'descripcion' : 'solicitante';
+  return normalizeDashboardSearch(tr.getAttribute('data-search-' + field)).includes(query);
+}
+
 function filterRows(filter) {
+  const searchEmptyRow = document.getElementById('dashboard-search-empty-row');
+  let hiddenBySearch = 0;
+  let shown = 0;
   document.querySelectorAll('table tbody tr').forEach(tr => {
+    if (tr === searchEmptyRow) return;
     const status = (tr.getAttribute('data-status') || '').toLowerCase();
-    tr.style.display = (filter === 'all' || status === filter) ? '' : 'none';
+    const statusMatches = filter === 'all' || status === filter;
+    const searchMatches = dashboardSearchMatches(tr);
+    tr.style.display = statusMatches && searchMatches ? '' : 'none';
+    if (statusMatches && !searchMatches) hiddenBySearch++;
+    if (tr.style.display === '' && tr.hasAttribute('data-status')) shown++;
+    const check = tr.querySelector('.msg-check');
+    if (check && tr.style.display === 'none') check.checked = false;
   });
+  // Sin este aviso, una búsqueda recordada ocultaba filas que sí suman en las tarjetas.
+  if (searchEmptyRow) searchEmptyRow.style.display = shown === 0 && hiddenBySearch > 0 ? '' : 'none';
   refreshDashboardCounters();
 }
 
@@ -1751,7 +1869,7 @@ function applyDashboardActionResult(payload, form, row) {
       const detailBtn = targetRow.querySelector('[data-bs-target="#detalleModal"]');
       detailBtn?.setAttribute('data-estado', 'pendiente');
       const currentFilter = filterNav?.querySelector('[data-filter].is-active')?.getAttribute('data-filter') || 'pendiente';
-      targetRow.style.display = currentFilter === 'pendiente' || currentFilter === 'all' ? '' : 'none';
+      targetRow.style.display = (currentFilter === 'pendiente' || currentFilter === 'all') && dashboardSearchMatches(targetRow) ? '' : 'none';
     });
     refreshDashboardCounters();
   } else {
@@ -1778,6 +1896,44 @@ document.addEventListener('nova-optimistic-toggle:change', (event) => {
   detailBtn?.setAttribute('data-hora_extra', event.detail.active ? '1' : '0');
   detailBtn?.setAttribute('data-tiempo_estimado', event.detail.active ? '1' : '');
 });
+
+(function () {
+  let saved = {};
+  try { saved = JSON.parse(sessionStorage.getItem(dashboardSearchKey) || '{}') || {}; } catch (e) { saved = {}; }
+  const placeholders = { solicitante: 'Buscar por solicitante', descripcion: 'Buscar en la descripción' };
+  const syncPlaceholder = () => {
+    if (dashboardSearchInput) dashboardSearchInput.placeholder = placeholders[dashboardSearchField?.value] || placeholders.solicitante;
+  };
+  if (dashboardSearchField && placeholders[saved.field]) dashboardSearchField.value = saved.field;
+  if (dashboardSearchInput) dashboardSearchInput.value = saved.query || '';
+  syncPlaceholder();
+
+  let searchTimer = null;
+  const runSearch = () => {
+    try {
+      sessionStorage.setItem(dashboardSearchKey, JSON.stringify({
+        field: dashboardSearchField?.value || 'solicitante',
+        query: dashboardSearchInput?.value || '',
+      }));
+    } catch (e) { /* sin persistencia */ }
+    filterRows(currentDashboardFilter || 'pendiente');
+  };
+  dashboardSearchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 150);
+  });
+  dashboardSearchField?.addEventListener('change', () => {
+    syncPlaceholder();
+    runSearch();
+    dashboardSearchInput?.focus();
+  });
+  document.querySelectorAll('#dashboard-search-clear, [data-dashboard-search-clear]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (dashboardSearchInput) dashboardSearchInput.value = '';
+      runSearch();
+    });
+  });
+})();
 
 if (filterNav) {
 

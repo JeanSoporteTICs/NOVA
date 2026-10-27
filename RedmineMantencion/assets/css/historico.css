@@ -81,7 +81,6 @@
       display: inline-flex;
       align-items: center;
       gap: .35rem;
-      min-width: 108px;
       color: #1e3a8a;
       font-weight: 700;
     }
@@ -103,4 +102,18 @@
       font-size: .78rem;
       font-weight: 700;
     }
-  
+
+    /* Fecha (dd-mm-aaaa) e ID de Redmine se cortaban sin "…": se toman de
+       Asunto, que sí se trunca con elipsis (suma 100%). Además se recupera el
+       relleno lateral estrecho que nova-ui.css prevé para esta tabla y que
+       anulaba su regla global ".table > * > * > * { padding: … !important }". */
+    @media (min-width: 992px) {
+      .historico-table .historico-col-date { width: 10.5%; }
+      .historico-table .historico-col-id { width: 10%; }
+      .historico-table .historico-col-subject { width: 11.5%; }
+
+      .historico-table > :not(caption) > * > * {
+        padding-left: clamp(.3rem, .45vw, .65rem) !important;
+        padding-right: clamp(.3rem, .45vw, .65rem) !important;
+      }
+    }

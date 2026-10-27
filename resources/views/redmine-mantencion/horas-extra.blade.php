@@ -5,7 +5,7 @@
   <?php $horasExtraCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/horas-extra.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/horas-extra.css?v=<?= (int)$horasExtraCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'horas'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">

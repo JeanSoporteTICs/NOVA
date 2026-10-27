@@ -47,7 +47,7 @@ final class RedmineTicDashboardDeleteConfirmationTest extends TestCase
         self::assertIsString($dashboard);
         self::assertIsString($layout);
         self::assertIsString($styles);
-        self::assertSame(5, substr_count($dashboard, '<select class="form-select tic-dashboard-select2"'));
+        self::assertSame(5, substr_count($dashboard, 'class="form-select tic-dashboard-select2"'));
         self::assertStringContainsString('name="estado" data-tic-dashboard-select2', $dashboard);
         self::assertStringContainsString('name="hora_extra" data-tic-dashboard-select2', $dashboard);
         self::assertStringContainsString('data-toggle-action-field="dashboard_action" data-toggle-action-value="toggle_hours_extra"', $dashboard);
@@ -111,7 +111,7 @@ final class RedmineTicDashboardDeleteConfirmationTest extends TestCase
 
         self::assertIsString($dashboard);
         self::assertMatchesRegularExpression(
-            '/col-12 col-md-6"><label[^>]*>Unidad<\/label>.*?name="unidad".*?col-12 col-md-3"><label[^>]*>Fecha Inicio<\/label>.*?name="fecha_inicio".*?col-12 col-md-3"><label[^>]*>Fecha Fin<\/label>.*?name="fecha_fin".*?col-12 col-md-3">\s*<label[^>]*>Hora extra<\/label>.*?name="hora_extra".*?col-12 col-md-3"><label[^>]*>Tiempo Estimado<\/label>.*?name="tiempo_estimado".*?col-12 col-md-3"><label[^>]*>Fecha<\/label>.*?name="fecha".*?col-12 col-md-3"><label[^>]*>Hora<\/label>.*?name="hora"/s',
+            '/col-12 col-md-6"><label[^>]*>Unidad<\/label>.*?name="unidad".*?col-12 col-md-3"><label[^>]*>Fecha Inicio<\/label>.*?name="fecha_inicio".*?col-12 col-md-3"><label[^>]*>Fecha Fin<\/label>.*?name="fecha_fin".*?col-12 col-md-3"><label[^>]*>Fecha<\/label>.*?name="fecha".*?col-12 col-md-3"><label[^>]*>Hora<\/label>.*?name="hora".*?col-12 col-md-6">\s*<label[^>]*>Hora extra<\/label>.*?name="hora_extra".*?col-12 col-md-6"><label[^>]*>Tiempo Estimado<\/label>.*?name="tiempo_estimado"/s',
             $dashboard
         );
     }

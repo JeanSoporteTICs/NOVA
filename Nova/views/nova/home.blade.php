@@ -9,8 +9,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page">
+<body class="nova-page nova-v2">
     <main class="nova-home nova-shell">
         <header class="nova-topbar">
             <div class="nova-brand">
@@ -23,6 +24,7 @@
             </div>
 
             <nav class="nova-session" aria-label="Sesión de @include('nova.partials.current-user-name')">
+                <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                 @include('nova.partials.session-control')
                 <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 @if (isset($projects['integraciones']))
@@ -54,16 +56,17 @@
             $availableModules = $homeProjects->count();
         @endphp
 
-        <section class="nova-home-section-head" aria-label="Módulos disponibles">
+        <div id="page-content">
+        <section class="nova-v2-head mb-4" aria-label="Módulos disponibles">
             <div>
-                <span class="nova-home-eyebrow">Tus herramientas</span>
-                <h2>Módulos disponibles</h2>
-                <p>Accede directamente a cada área de trabajo.</p>
+                <span class="nova-v2-eyebrow">Tus herramientas</span>
+                <h1 class="nova-v2-title"><i class="bi bi-grid-1x2" aria-hidden="true"></i> Módulos disponibles</h1>
+                <p class="nova-v2-subtitle">Accede directamente a cada área de trabajo.</p>
             </div>
-            <div class="nova-home-section-actions" aria-label="Resumen de módulos">
-                <span class="nova-home-status-pill"><i class="bi bi-grid"></i><strong>{{ $availableModules }}</strong> accesos</span>
-                <button class="nova-home-status-pill is-warning" type="button" data-nova-modal-open="mantencion-detalle" title="Ver proyectos en mantención">
-                    <i class="bi bi-tools"></i><strong>{{ $maintenanceCount }}</strong> en mantención
+            <div class="nova-v2-head__meta" aria-label="Resumen de módulos">
+                <span class="nova-v2-chip"><i class="bi bi-grid" aria-hidden="true"></i> <strong>{{ $availableModules }}</strong> accesos</span>
+                <button class="nova-v2-chip is-warning" type="button" data-nova-modal-open="mantencion-detalle" title="Ver proyectos en mantención">
+                    <i class="bi bi-tools" aria-hidden="true"></i> <strong>{{ $maintenanceCount }}</strong> en mantención
                 </button>
             </div>
         </section>
@@ -237,6 +240,7 @@
                 </div>
             </div>
         @endif
+        </div><!-- /#page-content -->
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>

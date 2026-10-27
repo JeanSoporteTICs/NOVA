@@ -7,7 +7,7 @@
   <?php $nextcloudGestionCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/nextcloud-gestion-usuarios.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= $h($mantencionBaseUrl) ?>/assets/css/nextcloud-gestion-usuarios.css?v=<?= (int)$nextcloudGestionCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'integraciones_nextcloud_gestion_usuarios'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">
@@ -27,7 +27,9 @@
 
     <?php if (!$hasSavedNextcloudCredentials): ?>
       <section class="nextcloud-credential-gate" aria-labelledby="nextcloud-credential-title">
-        <div class="nextcloud-credential-gate-mark" aria-hidden="true"><i class="bi bi-cloud-lock"></i></div>
+        <div class="nextcloud-credential-gate-mark is-nextcloud-logo" aria-hidden="true">
+          <?php include base_path('resources/views/partials/nextcloud-loader.php'); ?>
+        </div>
         <div>
           <span class="nextcloud-directory-eyebrow">Conexión requerida</span>
           <h2 id="nextcloud-credential-title">Conecta una cuenta administradora</h2>

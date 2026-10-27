@@ -791,26 +791,21 @@ $clockCount = count(array_unique(array_filter(array_map(static fn($row): string 
 <head>
   <?php include __DIR__ . '/views/partials/bootstrap-head.php'; ?>
 </head>
-<body class="emach-page">
+<body class="emach-page nova-v2">
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
-  <main class="nova-content"><div class="container-fluid py-4">
-    <section class="card card-hero sb-page-hero emach-hero nova-system-hero mb-4">
-      <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-        <div class="d-flex align-items-center gap-3">
-          <span class="emach-hero-icon"><i class="bi bi-heart-pulse"></i></span>
-          <div>
-            <h1 class="h3 mb-1 text-white fw-black">EMACH</h1>
-            <p class="mb-0 text-white-50 fw-semibold">Marcaciones del reloj control integradas a NOVA.</p>
-          </div>
-        </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <span class="emach-status-pill"><i class="bi bi-calendar3"></i><?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?></span>
-          <span class="emach-status-pill <?= $hasSavedEmachCredentials ? 'is-emach-credentials-ok' : 'is-emach-credentials-missing' ?>">
-            <i class="bi <?= $hasSavedEmachCredentials ? 'bi-key-fill' : 'bi-key' ?>"></i><?= $hasSavedEmachCredentials ? 'Credenciales guardadas' : 'Sin credenciales guardadas' ?>
-          </span>
-          <span class="emach-status-pill"><i class="bi bi-router"></i>Servidor 10.6.206.19</span>
-        </div>
+  <main class="nova-content"><div class="container-fluid py-4" id="page-content">
+    <section class="nova-v2-head mb-4">
+      <div>
+        <h1 class="nova-v2-title"><i class="bi bi-heart-pulse" aria-hidden="true"></i> EMACH</h1>
+        <p class="nova-v2-subtitle">Marcaciones del reloj control integradas a NOVA.</p>
+      </div>
+      <div class="nova-v2-head__meta">
+        <span class="nova-v2-chip"><i class="bi bi-calendar3" aria-hidden="true"></i> <?= $h($selectedMonthName) ?> <?= $h($selectedYear) ?></span>
+        <span class="nova-v2-chip <?= $hasSavedEmachCredentials ? 'is-success' : 'is-warning' ?>">
+          <i class="bi <?= $hasSavedEmachCredentials ? 'bi-key-fill' : 'bi-key' ?>" aria-hidden="true"></i> <?= $hasSavedEmachCredentials ? 'Credenciales guardadas' : 'Sin credenciales guardadas' ?>
+        </span>
+        <span class="nova-v2-chip"><i class="bi bi-router" aria-hidden="true"></i> Servidor 10.6.206.19</span>
       </div>
     </section>
 

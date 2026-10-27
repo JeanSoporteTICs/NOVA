@@ -5,7 +5,7 @@
   <?php $usuariosCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/usuarios.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/usuarios.css?v=<?= (int)$usuariosCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'usuarios'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">

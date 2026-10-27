@@ -15,6 +15,7 @@
         <i class="bi bi-list"></i>
     </button>
     <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+        <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
         @include('nova.partials.session-control')
         <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i> NOVA</a>

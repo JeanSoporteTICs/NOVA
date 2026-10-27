@@ -1493,8 +1493,11 @@ nav.sb-navbar,
   border-radius: 6px !important;
 }
 
+/* "backwards" y no "both": al terminar no debe quedar un transform aplicado,
+   porque convierte a #page-content en el contenedor de todo lo position:fixed
+   (drawers, fondos de modal) y los encierra en el área de contenido. */
 #page-content {
-  animation: pageEnterSoft var(--motion-slow) var(--motion-ease) both;
+  animation: pageEnterSoft var(--motion-slow) var(--motion-ease) backwards;
 }
 
 #page-content.is-loading {
@@ -2361,4 +2364,13 @@ button.is-submitting.btn-outline-secondary::after {
   color: #1d4ed8;
   font-size: .82rem;
   font-weight: 800;
+}
+
+/* Móvil: los controles de sesión pasan a una segunda línea dentro del navbar.
+   Con el alto fijo de 60px se salían y tapaban el título de la página; el
+   navbar es sticky, así que puede crecer sin desplazar nada indebidamente. */
+@media (max-width: 991.98px) {
+  nav.sb-navbar {
+    height: auto !important;
+  }
 }

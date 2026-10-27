@@ -919,7 +919,9 @@
 .rm-role-delete-form .btn-nova { width: 100%; min-height: 42px; justify-content: center; }
 .rm-role-delete-form > small { margin: 0; color: #8b4a4a; }
 
-@media (max-width: 1199.98px) {
+/* Con el menú lateral (270px) el área útil es ~870px a 1440px: el editor de
+   permisos no cabía al lado del selector y se salía ~175px. Se apila antes. */
+@media (max-width: 1599.98px) {
   .rm-permissions-layout { grid-template-columns: 1fr; }
   .rm-permissions-list-panel { position: static; }
 }
@@ -945,3 +947,25 @@
   .rm-permission-scope-inline { grid-template-columns: 1fr; }
 }
   
+
+/* Usuarios y permisos: el selector de usuario va en la barra del rol (una sola
+   fila: texto · Usuario · Rol · Aplicar) y el editor ocupa todo el ancho. */
+.rm-permissions-layout.is-single { grid-template-columns: minmax(0, 1fr); }
+.rm-role-template-bar.has-user-picker {
+  grid-template-columns: minmax(200px, 1fr) minmax(260px, 1.4fr) minmax(170px, 240px) auto;
+}
+@media (max-width: 1399.98px) {
+  .rm-role-template-bar.has-user-picker { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; }
+  .rm-role-template-bar.has-user-picker > div:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 767.98px) {
+  .rm-role-template-bar.has-user-picker { grid-template-columns: minmax(0, 1fr); }
+}
+/* El editor es una grilla de columna automática: sin esto crecía al ancho mínimo de la
+   barra (usuario + rol + botón) y se salía ~45px del panel a 1440px. */
+.rm-permissions-editor-panel { grid-template-columns: minmax(0, 1fr); }
+.rm-permissions-inline-form,
+.rm-role-template-bar.has-user-picker > * { min-width: 0; }
+
+/* Lista de grupos consultados de Nextcloud: alto acotado con scroll propio. */
+.rm-nextcloud-groups-scroll { max-height: 360px; overflow: auto; }

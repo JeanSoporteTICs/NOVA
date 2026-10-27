@@ -14,34 +14,34 @@
         $novaUiVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1';
     @endphp
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ $novaUiVersion }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body>
+<body class="nova-v2">
 <main class="telegram-page">
     @php
         $telegramActiveNav = 'inicio';
     @endphp
     @include('nova.telegram.navigation')
-    <div class="nova-content telegram-content">
+    <div class="nova-content telegram-content" id="page-content">
 
-    <section class="card telegram-hero nova-system-hero mb-4">
-        <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-            <div>
-                <h2 class="h3 fw-black mb-1">{{ $mode === 'admin' ? 'Telegram Admin' : 'Mi Telegram' }}</h2>
-            </div>
-            <div class="telegram-hero-actions">
+    <section class="nova-v2-head mb-4">
+        <div>
+            <h1 class="nova-v2-title"><i class="bi bi-telegram" aria-hidden="true"></i> {{ $mode === 'admin' ? 'Telegram Admin' : 'Mi Telegram' }}</h1>
+            <p class="nova-v2-subtitle">{{ $mode === 'admin' ? 'Administración global del bot' : 'Configuración personal' }}</p>
+        </div>
+        <div class="nova-v2-head__meta">
                 @if ($mode === 'user')
-                    <button class="btn btn-outline-light telegram-help-trigger" type="button" data-bs-toggle="modal" data-bs-target="#telegramChatIdHelp">
+                    <button class="btn btn-outline-secondary telegram-help-trigger" type="button" data-bs-toggle="modal" data-bs-target="#telegramChatIdHelp">
                         <i class="bi bi-question-circle"></i>
                         Cómo obtener mi Chat ID
                     </button>
                 @endif
-                <span class="telegram-status-pill">
+                <span class="nova-v2-chip {{ ($mode === 'admin' ? $configured : ($configured && ($userTelegram['stored'] ?? false))) ? 'is-success' : 'is-warning' }}">
                     <i class="bi {{ ($mode === 'admin' ? $configured : ($configured && ($userTelegram['stored'] ?? false))) ? 'bi-check-circle' : 'bi-exclamation-triangle' }}"></i>
                     {{ $mode === 'admin'
                         ? ($configured ? 'Bot configurado' : 'Bot pendiente')
                         : (($configured && ($userTelegram['stored'] ?? false)) ? 'Listo' : 'Pendiente') }}
                 </span>
-            </div>
         </div>
     </section>
 

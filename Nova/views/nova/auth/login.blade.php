@@ -8,9 +8,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page nova-login-page">
-    <main class="login" aria-labelledby="login-title">
+<body class="nova-page nova-login-page nova-v2">
+    <main class="login" id="page-content" aria-labelledby="login-title">
         <section class="login-hero" aria-label="Plataforma NOVA">
             <div class="login-hero__content">
                 <p class="login-product-name">NOVA</p>

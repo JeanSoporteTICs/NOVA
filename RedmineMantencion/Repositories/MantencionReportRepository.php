@@ -12,6 +12,9 @@ final class MantencionReportRepository
 {
     private const MODULE_KEY = 'redmine-mantencion';
 
+    /** Caracteres de descripción que el dashboard expone a su buscador. */
+    private const DESCRIPTION_SEARCH_LENGTH = 1000;
+
     private ?int $moduleId = null;
 
     private bool $moduleIdResolved = false;
@@ -454,6 +457,8 @@ final class MantencionReportRepository
                         $columns = array_map(static fn (string $column): string => 'r.'.$column,
                             array_values(array_diff($availableColumns, ['descripcion'])));
                         $columns[] = 'c.nombre as categoria_nombre';
+                        // Prefijo acotado para el buscador "Descripción" del dashboard.
+                        $columns[] = DB::raw('SUBSTR(r.descripcion, 1, '.self::DESCRIPTION_SEARCH_LENGTH.') as descripcion_busqueda');
                     }
                 } catch (\Throwable) {
                     // Keep the complete projection on unsupported schema metadata.
@@ -642,6 +647,8 @@ final class MantencionReportRepository
             'asunto' => trim((string) ($row->asunto ?? '')),
             'mensaje' => trim((string) ($row->asunto ?? '')),
             'descripcion' => trim((string) ($row->descripcion ?? '')),
+            '_descripcion_busqueda' => trim((string) ($row->descripcion_busqueda
+                ?? mb_substr((string) ($row->descripcion ?? ''), 0, self::DESCRIPTION_SEARCH_LENGTH))),
             '_core_detalle_stored' => $row->core_detalle ?? null,
             'estado' => $estado,
             'estado_redmine' => $estadoRedmine,

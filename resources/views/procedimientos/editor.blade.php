@@ -5,9 +5,10 @@
     <title>{{ $fileName }} · Procedimientos</title>
     @include('nova.partials.favicon')
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
     <script src="{{ rtrim($onlyOfficeUrl, '/') }}/web-apps/apps/api/documents/api.js"></script>
 </head>
-<body class="nova-page onlyoffice-editor-page">
+<body class="nova-page onlyoffice-editor-page nova-v2">
     <nav class="onlyoffice-editor-nav" aria-label="Navegación del editor">
         <a class="onlyoffice-editor-back" href="{{ route('procedimientos.index') }}" aria-label="Volver a Procedimientos" title="Volver a Procedimientos">
             <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">

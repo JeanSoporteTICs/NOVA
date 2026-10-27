@@ -12,8 +12,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     @php $monitorCssVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1'; @endphp
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ $monitorCssVersion }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page monitor-page">
+<body class="nova-page monitor-page nova-v2">
     <main class="nova-shell nova-shell-fluid">
         <header class="nova-topbar">
             <div class="nova-brand">
@@ -28,6 +29,7 @@
                 </div>
             </div>
             <nav class="nova-session" aria-label="Sesión">
+                <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                 @include('nova.partials.session-control')
                 <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 <a class="btn btn-outline-light" href="{{ route('home') }}" title="NOVA">
@@ -76,12 +78,11 @@
                 @include('nova.partials.sidebar-compact-control', ['sidebarId' => 'monitorSidebar'])
             </aside>
 
-            <div class="nova-content monitor-content">
-                <section class="monitor-hero">
-            <div class="monitor-hero-copy">
-                <span class="monitor-eyebrow"><i class="bi bi-broadcast-pin"></i> Centro de disponibilidad</span>
-                <h1>Estado de la infraestructura</h1>
-                <!-- <p>El contenedor comprueba cada destino y Telegram avisa únicamente cuando se confirma una caída o una recuperación.</p> -->
+            <div class="nova-content monitor-content" id="page-content">
+                <section class="nova-v2-head monitor-head mb-4">
+            <div>
+                <span class="nova-v2-eyebrow"><i class="bi bi-broadcast-pin" aria-hidden="true"></i> Centro de disponibilidad</span>
+                <h1 class="nova-v2-title">Estado de la infraestructura</h1>
             </div>
             <div class="monitor-worker {{ $workerHealthy ? 'is-online' : 'is-offline' }}" data-monitor-worker>
                 <span class="monitor-worker-pulse" aria-hidden="true"></span>

@@ -34,6 +34,7 @@ $navItems = [
       <i class="bi bi-list"></i>
     </button>
     <div class="d-flex align-items-center gap-2 ms-auto telegram-nav-actions">
+      <?php include (function_exists('base_path') ? base_path('resources/views/partials') : __DIR__ . '/../../../resources/views/partials') . '/nova-v2-theme-toggle.php'; ?>
       <?php include __DIR__ . '/session-control.php'; ?>
       <span class="text-white-50 fw-bold d-none d-md-inline"><i class="bi bi-person-circle"></i> <?= $h($navDisplayName) ?></span>
       <a class="btn btn-outline-light" href="<?= $h($homeUrl) ?>"><i class="bi bi-house-door"></i>NOVA</a>

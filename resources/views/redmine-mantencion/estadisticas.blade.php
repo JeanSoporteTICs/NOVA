@@ -7,7 +7,7 @@
   <?php $estadisticasCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/estadisticas.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/estadisticas.css?v=<?= (int)$estadisticasCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'estadisticas'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">

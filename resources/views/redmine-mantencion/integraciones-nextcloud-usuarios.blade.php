@@ -6,7 +6,7 @@
   <?php $nextcloudUsuariosCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/nextcloud-usuarios.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/nextcloud-usuarios.css?v=<?= (int)$nextcloudUsuariosCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'integraciones_nextcloud_usuarios'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">
@@ -75,12 +75,12 @@
 
             <div class="mb-3">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                <label class="form-label mb-0">Archivo CSV o XLSX</label>
+                <label class="form-label mb-0" for="nextcloud-file-input">Archivo CSV o XLSX</label>
                 <a class="btn-nova btn-nova-success" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/templates/plantilla-usuarios-nextcloud-v2.xlsx" download>
                   <i class="bi bi-file-earmark-excel"></i> Descargar plantilla
                 </a>
               </div>
-              <input type="file" name="nextcloud_file" class="form-control" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+              <input type="file" name="nextcloud_file" id="nextcloud-file-input" class="form-control" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
               <!-- <div class="form-text">CSV funciona de inmediato. XLSX requiere la extensión ZIP habilitada en PHP.</div> -->
             </div>
 

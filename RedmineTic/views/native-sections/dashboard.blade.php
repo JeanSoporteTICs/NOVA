@@ -77,7 +77,7 @@
 </section>
 
 <section class="row g-3 mb-4" aria-label="Indicadores">
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-md-4">
         <a class="card nova-card rm-stat-card rm-filter-card {{ $activeDashboardFilter === 'pendientes' ? 'active' : '' }}" href="{{ $dashboardRoute('pendientes') }}">
             <div class="card-body d-flex align-items-center gap-3">
                 <span class="rm-stat-icon is-pending"><i class="bi bi-hourglass-split"></i></span>
@@ -88,7 +88,7 @@
             </div>
         </a>
     </div>
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-md-4">
         <a class="card nova-card rm-stat-card rm-filter-card {{ $activeDashboardFilter === 'procesados' ? 'active' : '' }}" href="{{ $dashboardRoute('procesados') }}">
             <div class="card-body d-flex align-items-center gap-3">
                 <span class="rm-stat-icon is-success"><i class="bi bi-check-circle"></i></span>
@@ -99,7 +99,7 @@
             </div>
         </a>
     </div>
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-md-4">
         <a class="card nova-card rm-stat-card rm-filter-card {{ $activeDashboardFilter === 'errores' ? 'active' : '' }}" href="{{ $dashboardRoute('errores') }}">
             <div class="card-body d-flex align-items-center gap-3">
                 <span class="rm-stat-icon is-danger"><i class="bi bi-exclamation-octagon"></i></span>
@@ -206,14 +206,16 @@
                                 @if ($reportSource === 'telegram')
                                     <span class="badge rounded-circle p-2 action-tooltip rm-dashboard-source-indicator is-telegram"
                                         title="Origen: Telegram"
+                                        role="img"
                                         aria-label="Origen: Telegram">
-                                        <i class="bi bi-telegram"></i>
+                                        <i class="bi bi-telegram" aria-hidden="true"></i>
                                     </span>
                                 @else
                                     <span class="badge rounded-circle p-2 action-tooltip rm-dashboard-source-indicator is-manual"
                                         title="Origen: Creación manual"
+                                        role="img"
                                         aria-label="Origen: Creación manual">
-                                        <i class="bi bi-pencil-fill"></i>
+                                        <i class="bi bi-pencil-fill" aria-hidden="true"></i>
                                     </span>
                                 @endif
                             </div>
@@ -351,8 +353,9 @@
                     <p class="detail-drawer-kicker">Reporte seleccionado</p>
                     <h2 class="modal-title" id="editar-solicitud-title">
                         <span class="detail-drawer-icon"><i class="bi bi-pencil-square"></i></span>
-                        Detalle / Editar
+                        Editar reporte
                     </h2>
+                    <p class="detail-drawer-subtitle">Actualiza los datos del reporte y guarda los cambios.</p>
                 </div>
                 <button type="button" class="btn-close" data-nova-modal-close aria-label="Cerrar"></button>
             </div>
@@ -361,40 +364,34 @@
                 <div class="detail-drawer-view is-active" id="drawer-detail-view">
                     <div class="row g-3">
                         <input type="hidden" name="id">
-                        <div class="col-12"><label class="form-label">Asunto</label><input class="form-control" name="asunto"></div>
 
-                        <div class="col-12 col-md-3"><label class="form-label">Tipo</label><input class="form-control" name="tipo"></div>
+                        <div class="col-12 nova-drawer-section-heading"><i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>Datos del reporte</span></div>
+                        <div class="col-12"><label class="form-label" for="te-asunto">Asunto</label><input class="form-control" id="te-asunto" name="asunto"></div>
+                        <div class="col-12 col-md-3"><label class="form-label" for="te-tipo">Tipo</label><input class="form-control" id="te-tipo" name="tipo"></div>
                         <div class="col-12 col-md-3">
-                            <label class="form-label">Estado</label>
-                            <select class="form-select tic-dashboard-select2" name="estado" data-tic-dashboard-select2 data-placeholder="Seleccionar estado">
+                            <label class="form-label" for="te-estado">Estado</label>
+                            <select id="te-estado" class="form-select tic-dashboard-select2" name="estado" data-tic-dashboard-select2 data-placeholder="Seleccionar estado">
                                 <option value="pendiente">pendiente</option>
                                 <option value="procesado">procesado</option>
                                 <option value="error">error</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">Unidad Solicitante</label>
-                            <select class="form-select tic-dashboard-select2" name="unidad_solicitante" data-tic-dashboard-select2 data-placeholder="Seleccionar unidad solicitante">
-                                <option value=""></option>
-                                @foreach ($unitOptions as $unitOption)
-                                    <option value="{{ $unitOption }}">{{ $unitOption }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="col-12 col-md-3"><label class="form-label">Prioridad</label><input class="form-control" name="prioridad"></div>
+                        <div class="col-12 col-md-3"><label class="form-label" for="te-prioridad">Prioridad</label><input class="form-control" id="te-prioridad" name="prioridad"></div>
                         <div class="col-12 col-md-3">
-                            <label class="form-label">Categorias</label>
-                            <select class="form-select tic-dashboard-select2" name="categoria" data-tic-dashboard-select2 data-placeholder="Seleccionar categoria">
+                            <label class="form-label" for="te-categoria">Categorias</label>
+                            <select id="te-categoria" class="form-select tic-dashboard-select2" name="categoria" data-tic-dashboard-select2 data-placeholder="Seleccionar categoria">
                                 <option value=""></option>
                                 @foreach ($categoryOptions as $categoryOption)
                                     <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-12 col-md-3">
-                            <label class="form-label">Asignado a</label>
-                            <select class="form-select tic-dashboard-select2" name="asignado_a" data-tic-dashboard-select2 data-placeholder="Seleccionar usuario activo">
+
+                        <div class="col-12 nova-drawer-section-heading"><i class="bi bi-people" aria-hidden="true"></i><span>Solicitante y asignación</span></div>
+                        <div class="col-12 col-md-6"><label class="form-label" for="te-solicitante">Solicitante</label><input class="form-control" id="te-solicitante" name="solicitante"></div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="te-asignado">Asignado a</label>
+                            <select id="te-asignado" class="form-select tic-dashboard-select2" name="asignado_a" data-tic-dashboard-select2 data-placeholder="Seleccionar usuario activo">
                                 <option value="">Sin asignar</option>
                                 @foreach ($assigneeOptions as $userOption)
                                     <option value="{{ $userOption['value'] }}">{{ $userOption['label'] }}</option>
@@ -402,15 +399,34 @@
                             </select>
                             <div class="form-text fw-semibold" data-current-assignee></div>
                         </div>
-                        <div class="col-12 col-md-3"><label class="form-label">Solicitante</label><input class="form-control" name="solicitante"></div>
+                        <div class="col-12 col-md-6"><label class="form-label" for="te-unidad">Unidad</label><input class="form-control" id="te-unidad" name="unidad"></div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="te-unidad-solicitante">Unidad Solicitante</label>
+                            <select id="te-unidad-solicitante" class="form-select tic-dashboard-select2" name="unidad_solicitante" data-tic-dashboard-select2 data-placeholder="Seleccionar unidad solicitante">
+                                <option value=""></option>
+                                @foreach ($unitOptions as $unitOption)
+                                    <option value="{{ $unitOption }}">{{ $unitOption }}</option>
+                                @endforeach
+                            </select>
+                        </div>
 
-                        <div class="col-12 col-md-6"><label class="form-label">Unidad</label><input class="form-control" name="unidad"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha Inicio</label><input class="form-control" type="date" name="fecha_inicio"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha Fin</label><input class="form-control" type="date" name="fecha_fin"></div>
-
-                        <div class="col-12 col-md-3">
-                            <label class="form-label">Hora extra</label>
-                            <select class="form-select tic-dashboard-select2" name="hora_extra" data-tic-dashboard-select2 data-placeholder="Seleccionar hora extra" @disabled(!$canEditHoursExtra)>
+                        <div class="col-12 nova-date-actions">
+                            <div class="nova-date-actions__copy">
+                                <span class="nova-date-actions__title"><i class="bi bi-calendar3" aria-hidden="true"></i> Fechas y tiempo</span>
+                                <span class="nova-date-actions__hint">Inicio, fin, fecha del reporte y hora extra</span>
+                            </div>
+                            <button type="button" class="nova-date-today-btn" id="tic-fechas-hoy-btn" title="Actualizar Fecha Inicio, Fecha Fin y Fecha con la fecha de hoy" aria-label="Actualizar Fecha Inicio, Fecha Fin y Fecha con la fecha de hoy">
+                                <i class="bi bi-calendar-check" aria-hidden="true"></i>
+                                <span>Actualizar fechas a hoy</span>
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-3"><label class="form-label" for="te-fecha-inicio">Fecha Inicio</label><input class="form-control" type="date" id="te-fecha-inicio" name="fecha_inicio"></div>
+                        <div class="col-12 col-md-3"><label class="form-label" for="te-fecha-fin">Fecha Fin</label><input class="form-control" id="te-fecha-fin" name="fecha_fin" type="date"></div>
+                        <div class="col-12 col-md-3"><label class="form-label" for="te-fecha">Fecha</label><input class="form-control" id="te-fecha" name="fecha" type="date"></div>
+                        <div class="col-12 col-md-3"><label class="form-label" for="te-hora">Hora</label><input class="form-control" id="te-hora" name="hora" type="time" step="1"></div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="te-hora-extra">Hora extra</label>
+                            <select id="te-hora-extra" class="form-select tic-dashboard-select2" name="hora_extra" data-tic-dashboard-select2 data-placeholder="Seleccionar hora extra" @disabled(!$canEditHoursExtra)>
                                 <option value="NO">No</option>
                                 <option value="SI">Si</option>
                             </select>
@@ -418,18 +434,17 @@
                                 <div class="form-text"><i class="bi bi-lock"></i> Requiere el permiso Editar de Horas extra.</div>
                             @endif
                         </div>
-                        <div class="col-12 col-md-3"><label class="form-label">Tiempo Estimado</label><input class="form-control" type="text" name="tiempo_estimado" placeholder="Ej: 1.5" @disabled(!$canEditHoursExtra)></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="fecha"></div>
-                        <div class="col-12 col-md-3"><label class="form-label">Hora</label><input class="form-control" type="time" step="1" name="hora"></div>
+                        <div class="col-12 col-md-6"><label class="form-label" for="te-tiempo-estimado">Tiempo Estimado</label><input class="form-control" type="text" id="te-tiempo-estimado" name="tiempo_estimado" placeholder="Ej: 1.5" @disabled(!$canEditHoursExtra)></div>
 
+                        <div class="col-12 nova-drawer-section-heading"><i class="bi bi-text-paragraph" aria-hidden="true"></i><span>Descripción</span></div>
                         <div class="col-12">
                             <div class="nova-description-tabs" role="tablist" aria-label="Vista de descripción">
                                 <button type="button" class="nova-description-tab is-active" id="tic-dashboard-description-edit-tab" role="tab" aria-selected="true"><i class="bi bi-pencil"></i>Modificar</button>
                                 <button type="button" class="nova-description-tab" id="tic-dashboard-description-preview-tab" role="tab" aria-selected="false"><i class="bi bi-table"></i>Previsualizar</button>
                             </div>
                             <div id="tic-dashboard-description-edit-panel" role="tabpanel" aria-labelledby="tic-dashboard-description-edit-tab">
-                                <label class="form-label">Mensaje</label>
-                                <textarea class="form-control nova-description-editor" name="mensaje" rows="6"></textarea>
+                                <label class="form-label" for="te-mensaje">Mensaje</label>
+                                <textarea id="te-mensaje" class="form-control nova-description-editor" name="mensaje" rows="6"></textarea>
                                 <!-- <div class="form-text">Al pegar celdas desde Excel se convertirán automáticamente en una tabla.</div> -->
                             </div>
                             <div class="nova-description-preview" id="tic-dashboard-description-preview" role="tabpanel" aria-labelledby="tic-dashboard-description-preview-tab" hidden></div>
@@ -448,6 +463,19 @@
 
 <script>
     let ticDashboardDescriptionTabs = null;
+    // Fecha Inicio, Fecha Fin y Fecha pasan a hoy (hora de Chile); se guarda con "Guardar cambios".
+    document.getElementById('tic-fechas-hoy-btn')?.addEventListener('click', () => {
+        const form = document.querySelector('#editar-solicitud form, form#editar-solicitud, #editar-solicitud .modal-content');
+        const today = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(new Date());
+        ['fecha_inicio', 'fecha_fin', 'fecha'].forEach(name => {
+            const input = form?.elements?.[name];
+            if (!input || input.disabled || input.readOnly) return;
+            input.value = today;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
     const currentDashboardAssigneeId = @json($currentAssigneeId);
     const setDashboardSelectValue = (select, value, label = '', preserveMissing = false) => {
         if (!select) return;

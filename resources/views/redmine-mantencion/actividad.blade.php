@@ -3,7 +3,7 @@
 <head>
   <?php $pageTitle = 'Actividad de seguridad'; $includeTheme = true; include base_path('RedmineMantencion/views/partials/bootstrap-head.php'); ?>
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'security'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 <div id="page-content">
   <div class="container-fluid py-4">

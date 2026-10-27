@@ -229,7 +229,7 @@
     }
     .nextcloud-history-modal-kicker {
       margin: 0 0 .15rem;
-      color: #0082c9;
+      color: #006aa3; /* azul Nextcloud oscurecido: #0082c9 no cumplía contraste AA */
       font-size: .65rem;
       font-weight: 850;
       letter-spacing: .06em;
@@ -249,7 +249,7 @@
       background: #fff;
     }
     .nextcloud-history-requester-card > div { display: grid; min-width: 0; gap: .12rem; }
-    .nextcloud-history-requester-card span { color: #718198; font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+    .nextcloud-history-requester-card span { color: #536274; font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
     .nextcloud-history-requester-card strong { overflow: hidden; color: #23446b; font-size: .75rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
     .nextcloud-history-detail-wrap { overflow-x: visible; border: 1px solid #d5e1ee; border-radius: .8rem; background: #fff; }
     .nextcloud-history-detail-table { width: 100%; min-width: 0; table-layout: fixed; }

@@ -5,7 +5,7 @@
   <?php $historicoCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/historico.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/historico.css?v=<?= (int)$historicoCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'historico'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">
@@ -76,8 +76,7 @@
           id="btn-apply"
           class="btn-nova btn-nova-primary w-100"
           data-bs-spinner="true"
-          aria-label="Aplicar filtros"
-          aria-pressed="false">
+          aria-label="Aplicar filtros">
           <i class="bi bi-funnel"></i> Filtrar
         </button>
       </div>
@@ -86,8 +85,7 @@
           class="btn-nova btn-nova-secondary w-100"
           id="btn-clear"
           href="<?= $h($mantencionAppUrl . '/historico') ?>"
-          aria-label="Limpiar filtros"
-          aria-pressed="false">
+          aria-label="Limpiar filtros">
           <i class="bi bi-x-circle"></i> Limpiar
         </a>
       </div>
@@ -504,16 +502,12 @@
       const table = document.querySelector('table[role=\"grid\"]');
       const loader = document.getElementById('table-loader');
       const btnApply = document.getElementById('btn-apply');
-      const btnClear = document.getElementById('btn-clear');
 
       const setLoading = (state) => {
         if (feedback) feedback.classList.toggle('d-none', !state);
         if (loader) loader.classList.toggle('d-none', !state);
         if (table) table.setAttribute('aria-busy', state ? 'true' : 'false');
-        if (btnApply) {
-          btnApply.disabled = state;
-          btnApply.setAttribute('aria-pressed', state ? 'true' : 'false');
-        }
+        if (btnApply) btnApply.disabled = state;
       };
 
       if (form) {
@@ -521,12 +515,6 @@
           event.preventDefault();
           setLoading(true);
           setTimeout(() => form.submit(), 60);
-        });
-      }
-
-      if (btnClear) {
-        btnClear.addEventListener('click', function () {
-          btnClear.setAttribute('aria-pressed', 'true');
         });
       }
 

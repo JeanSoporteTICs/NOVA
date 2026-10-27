@@ -9526,6 +9526,14 @@ nav.sb-navbar {
   }
 }
 
+/* Mobile: el sidebar es un offcanvas de Bootstrap; debe quedar sobre su backdrop (1040)
+   y sobre la navbar (1020). Sin esto hereda 1015 y el backdrop bloquea los enlaces. */
+@media (max-width: 991.98px) {
+  .nova-sidebar.offcanvas-lg {
+    z-index: var(--bs-offcanvas-zindex, 1045);
+  }
+}
+
 /* ── Sidebar header (module name, visible inside offcanvas on mobile) ── */
 .nova-sidebar-header {
   flex: 0 0 auto;
@@ -9681,8 +9689,12 @@ nav.sb-navbar {
     min-height: 0;
   }
 
+  /* En columna, "flex: 1 1 0" dejaba la altura en 0 y, con overflow-x hidden,
+     el contenido quedaba atrapado en una caja de scroll vacía (página en blanco
+     en móvil). Aquí el contenido debe medir lo que mide su contenido. */
   .nova-content {
     width: 100%;
+    flex: 0 0 auto;
   }
 }
 
@@ -11420,9 +11432,10 @@ body:not(.nova-page):not(.emach-page):not(.telegram-page) {
   background: transparent;
 }
 
+/* "backwards": sin transform residual que encierre los drawers del panel. */
 .rm-maint-config-shell .rm-config-view-panel.is-active {
   display: block;
-  animation: rm-config-panel-in .2s ease-out both;
+  animation: rm-config-panel-in .2s ease-out backwards;
 }
 
 .rm-maint-config-shell .rm-panel-shell,

@@ -9,8 +9,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page">
+<body class="nova-page nova-v2">
     <main class="nova-shell nova-shell-fluid">
         <header class="nova-topbar">
             <div class="nova-brand">
@@ -21,6 +22,7 @@
                 </div>
             </div>
             <nav class="nova-session" aria-label="Sesion">
+                <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                 @include('nova.partials.session-control')
                 <span class="nova-navbar-user"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                 <a class="btn btn-outline-light" href="{{ route('home') }}" title="NOVA">
@@ -34,6 +36,14 @@
                 </form>
             </nav>
         </header>
+
+        <div id="page-content">
+        <section class="nova-v2-head mb-4">
+            <div>
+                <h1 class="nova-v2-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Horas extra</h1>
+                <p class="nova-v2-subtitle">Vista global (Mantención + TIC)</p>
+            </div>
+        </section>
 
         @if (session('horas_extra_status'))
             <div data-nova-flash="success" data-nova-flash-message="{{ session('horas_extra_status') }}" hidden></div>
@@ -239,6 +249,7 @@
                 </div>
             </div>
         @endif
+        </div><!-- /#page-content -->
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('assets/nova-ui.js') }}?v={{ @filemtime(public_path('assets/nova-ui.js')) ?: '1' }}"></script>

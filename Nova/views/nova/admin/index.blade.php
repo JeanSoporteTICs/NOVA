@@ -13,8 +13,9 @@
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ @filemtime(public_path('assets/nova-ui.css')) ?: '1' }}" rel="stylesheet">
     @php $novaAdminCssVersion = @filemtime(public_path('assets/nova-admin.css')) ?: '1'; @endphp
     <link href="{{ asset('assets/nova-admin.css') }}?v={{ $novaAdminCssVersion }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page">
+<body class="nova-page nova-v2">
     @php $currentNovaRole = strtolower((string) session('nova_user.role', 'usuario')); @endphp
     <div class="rm-shell">
         <nav class="navbar navbar-expand-lg navbar-dark rm-navbar">
@@ -31,6 +32,7 @@
                 </button>
                 <div class="collapse navbar-collapse" id="novaUsersTopbar">
                     <div class="rm-top-actions mt-3 mt-lg-0">
+                        <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                         @include('nova.partials.session-control')
                         <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
@@ -77,16 +79,14 @@
             </aside>
 
             <main class="nova-content rm-main">
-                <section class="card rm-hero mb-4">
-                    <div class="card-body p-3 p-lg-4 d-flex align-items-center gap-3 flex-wrap">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="rm-hero-icon"><i class="bi {{ $activeAdminSection['icon'] }}"></i></span>
-                            <div>
-                                <h1 class="rm-page-title">{{ $activeAdminSection['label'] }}</h1>
-                                <p class="rm-page-subtitle">{{ $activeAdminSection['description'] }}</p>
-                            </div>
-                        </div>
-                        <span class="rm-hero-retention"><i class="bi bi-shield-check"></i>NOVA global</span>
+                <div id="page-content">
+                <section class="nova-v2-head mb-4">
+                    <div>
+                        <h1 class="nova-v2-title"><i class="bi {{ $activeAdminSection['icon'] }}" aria-hidden="true"></i> {{ $activeAdminSection['label'] }}</h1>
+                        <p class="nova-v2-subtitle">{{ $activeAdminSection['description'] }}</p>
+                    </div>
+                    <div class="nova-v2-head__meta">
+                        <span class="nova-v2-chip"><i class="bi bi-shield-check" aria-hidden="true"></i> NOVA global</span>
                     </div>
                 </section>
 
@@ -1072,6 +1072,7 @@
                         </section>
                     </form>
                 @endif
+                </div><!-- /#page-content -->
             </main><!-- /.nova-content -->
         </div><!-- /.nova-layout -->
     </div><!-- /.rm-shell -->

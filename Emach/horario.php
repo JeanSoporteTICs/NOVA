@@ -199,23 +199,18 @@ foreach ($schedule as $day) {
 <head>
   <?php include __DIR__ . '/views/partials/bootstrap-head.php'; ?>
 </head>
-<body class="emach-page">
+<body class="emach-page nova-v2">
   <?php include __DIR__ . '/views/partials/navbar.php'; ?>
 
-  <main class="nova-content"><div class="container-fluid py-4">
-    <section class="card card-hero sb-page-hero emach-hero nova-system-hero mb-4">
-      <div class="card-body p-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-        <div class="d-flex align-items-center gap-3">
-          <span class="emach-hero-icon"><i class="bi bi-calendar-week"></i></span>
-          <div>
-            <h1 class="h3 mb-1 text-white fw-black">Mi horario EMACH</h1>
-            <p class="mb-0 text-white-50 fw-semibold">Define tu entrada y salida esperada para cada dia de la semana.</p>
-          </div>
-        </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <span class="emach-status-pill"><i class="bi bi-calendar-check"></i><?= $h($activeDays) ?> dias activos</span>
-          <span class="emach-status-pill"><i class="bi bi-clock-history"></i><?= $h(number_format($weeklyHours, 1, ',', '.')) ?> h/semana</span>
-        </div>
+  <main class="nova-content"><div class="container-fluid py-4" id="page-content">
+    <section class="nova-v2-head mb-4">
+      <div>
+        <h1 class="nova-v2-title"><i class="bi bi-calendar-week" aria-hidden="true"></i> Mi horario EMACH</h1>
+        <p class="nova-v2-subtitle">Define tu entrada y salida esperada para cada dia de la semana.</p>
+      </div>
+      <div class="nova-v2-head__meta">
+        <span class="nova-v2-chip"><i class="bi bi-calendar-check" aria-hidden="true"></i> <?= $h($activeDays) ?> dias activos</span>
+        <span class="nova-v2-chip"><i class="bi bi-clock-history" aria-hidden="true"></i> <?= $h(number_format($weeklyHours, 1, ',', '.')) ?> h/semana</span>
       </div>
     </section>
 

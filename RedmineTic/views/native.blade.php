@@ -37,8 +37,9 @@
     <link href="{{ asset('assets/redmine-tic-native.css') }}?v={{ $nativeCssVersion }}" rel="stylesheet">
 @php $novaUiCssVersion = @filemtime(public_path('assets/nova-ui.css')) ?: '1'; @endphp
     <link href="{{ asset('assets/nova-ui.css') }}?v={{ $novaUiCssVersion }}" rel="stylesheet">
+    <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
 </head>
-<body class="nova-page {{ !empty($redmineMaintenance['enabled']) ? 'rm-maintenance-active' : '' }}">
+<body class="nova-page nova-v2 {{ !empty($redmineMaintenance['enabled']) ? 'rm-maintenance-active' : '' }}">
     <div class="rm-shell">
         <nav class="navbar navbar-expand-lg navbar-dark rm-navbar">
             <div class="container-fluid px-4">
@@ -54,6 +55,7 @@
                 </button>
                 <div class="collapse navbar-collapse" id="rmTopbar">
                     <div class="rm-top-actions mt-3 mt-lg-0">
+                        <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
                         @include('nova.partials.session-control')
                         <span class="text-white-50 fw-bold"><i class="bi bi-person-circle"></i> @include('nova.partials.current-user-name')</span>
                         <a class="btn btn-outline-light" href="{{ route('home') }}"><i class="bi bi-house-door"></i>NOVA</a>
@@ -67,7 +69,7 @@
             <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
                 <div class="offcanvas-header d-lg-none border-bottom py-3">
                     <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">{{ $redmineProjectName ?? 'Backlog Soporte TI' }}</strong>
-                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#novaSidebar" aria-label="Cerrar"></button>
                 </div>
                 <nav class="nova-sidebar-body" aria-label="Secciones Redmine">
                     @foreach ($sections as $key => $label)
@@ -89,15 +91,14 @@
             </aside>
 
             <main class="nova-content rm-main">
-                <section class="card card-hero sb-page-hero rm-hero mb-3">
-                    <div class="card-body p-3 p-lg-4 d-flex align-items-center gap-3 flex-wrap">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="rm-hero-icon"><i class="bi bi-speedometer2"></i></span>
-                            <div>
-                                <h1 class="rm-page-title text-white">{{ $sectionLabel }}</h1>
-                            </div>
-                        </div>
-                        <span class="rm-hero-retention"><i class="bi bi-archive"></i>Retencion procesados: {{ $redmineRetentionHours ?? 24 }} hora(s)</span>
+                <div id="page-content">
+                <section class="nova-v2-head mb-3">
+                    <div>
+                        <h1 class="nova-v2-title"><i class="bi {{ $sectionIcons[$section] ?? 'bi-window' }}" aria-hidden="true"></i> {{ $sectionLabel }}</h1>
+                        <p class="nova-v2-subtitle">{{ $redmineProjectName ?? 'Backlog Soporte TI' }}</p>
+                    </div>
+                    <div class="nova-v2-head__meta">
+                        <span class="nova-v2-chip"><i class="bi bi-archive" aria-hidden="true"></i> Retención procesados: {{ $redmineRetentionHours ?? 24 }} hora(s)</span>
                     </div>
                 </section>
 
@@ -127,6 +128,7 @@
                 @else
                     @include('redmine_tic::native-sections.webhook')
                 @endif
+                </div><!-- /#page-content -->
             </main><!-- /.nova-content -->
         </div><!-- /.nova-layout -->
     </div><!-- /.rm-shell -->

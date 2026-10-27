@@ -7,7 +7,7 @@
     @endphp
     <?php include base_path('RedmineMantencion/views/partials/bootstrap-head.php'); ?>
 </head>
-<body class="bg-light integration-page integration-page-mantencion">
+<body class="nova-v2 integration-page integration-page-mantencion">
 @php
     $activeNav = 'mis_integraciones';
     $configuredCount = collect($integrations)->filter(fn ($item) => !empty($item['stored']))->count();
@@ -45,19 +45,14 @@
 
 <div id="page-content">
     <main class="rm-layout">
-        <section class="card card-hero sb-page-hero rm-hero integration-hero mb-3">
-            <div class="card-body">
-                <div class="d-flex align-items-center gap-3">
-                    <span class="rm-hero-icon"><i class="bi bi-person-lock"></i></span>
-                    <div>
-                        <h1 class="rm-page-title text-white">Cuentas conectadas</h1>
-                        <p class="mb-2 text-white-50 fw-semibold">Configure las cuentas personales utilizadas por Redmine Mantencion para conectarse con:</p>
-                        <ul class="integration-hero-list">
-                            <li>Redmine</li>
-                            <li>CORE</li>
-                        </ul>
-                    </div>
-                </div>
+        <section class="nova-v2-head mb-3">
+            <div>
+                <h1 class="nova-v2-title"><i class="bi bi-person-lock" aria-hidden="true"></i> Cuentas conectadas</h1>
+                <p class="nova-v2-subtitle">Configure las cuentas personales utilizadas por Redmine Mantencion para conectarse con:</p>
+                <ul class="nova-v2-head-list">
+                    <li>Redmine</li>
+                    <li>CORE</li>
+                </ul>
             </div>
         </section>
 

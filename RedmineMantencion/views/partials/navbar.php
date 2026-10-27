@@ -66,6 +66,7 @@ $navItems = [
         <i class="bi bi-list"></i>
       </button>
       <div class="sb-nav-actions d-flex align-items-center gap-2">
+        <?php include base_path('resources/views/partials/nova-v2-theme-toggle.php'); ?>
         <span class="sb-session-badge badge bg-light text-dark d-inline-flex align-items-center gap-1" id="session-timer" data-remaining="<?= $h($remaining) ?>" data-timeout="<?= $h($sessionTimeout) ?>">
           <i class="bi bi-clock"></i><span id="session-timer-text">--:--</span>
         </span>
@@ -100,7 +101,7 @@ $navItems = [
   <aside class="nova-sidebar offcanvas-lg offcanvas-start" id="novaSidebar" tabindex="-1" aria-labelledby="novaSidebarLabel">
     <div class="offcanvas-header d-lg-none border-bottom py-3">
       <strong class="offcanvas-title fw-bold" id="novaSidebarLabel">Redmine Mantenci&oacute;n</strong>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#novaSidebar" aria-label="Cerrar"></button>
     </div>
     <nav class="nova-sidebar-body" aria-label="Secciones Redmine Mantenci&oacute;n">
       <?php foreach ($navItems as $item): ?>

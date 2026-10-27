@@ -5,7 +5,7 @@
   <?php $nextcloudHistorialCssVersion = @filemtime(base_path('RedmineMantencion/assets/css/nextcloud-historial.css')) ?: time(); ?>
   <link rel="stylesheet" href="<?= htmlspecialchars($mantencionBaseUrl, ENT_QUOTES, 'UTF-8') ?>/assets/css/nextcloud-historial.css?v=<?= (int)$nextcloudHistorialCssVersion ?>">
 </head>
-<body class="bg-light">
+<body class="nova-v2">
 <?php $activeNav = 'integraciones_nextcloud_historial'; include base_path('RedmineMantencion/views/partials/navbar.php'); ?>
 
 <div id="page-content">

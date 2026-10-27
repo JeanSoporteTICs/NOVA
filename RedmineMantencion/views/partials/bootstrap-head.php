@@ -37,7 +37,8 @@ $novaFaviconVersion = @filemtime($novaFaviconPath) ?: time();
 <?php } ?>
   <?php $novaUiPath = function_exists('base_path') ? base_path('public/assets/nova-ui.css') : __DIR__.'/../../../public/assets/nova-ui.css'; ?>
   <?php $novaUiVersion = is_file($novaUiPath) ? substr((string) sha1_file($novaUiPath), 0, 12) : (string) time(); ?>
-  <link href="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-ui.css') : '/NOVA/public/assets/nova-ui.css', ENT_QUOTES, 'UTF-8') ?>?v=<?= (int) $novaUiVersion ?>" rel="stylesheet">
+  <link href="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-ui.css') : '/NOVA/public/assets/nova-ui.css', ENT_QUOTES, 'UTF-8') ?>?v=<?= htmlspecialchars((string) $novaUiVersion, ENT_QUOTES, 'UTF-8') ?>" rel="stylesheet">
+  <?php include base_path('resources/views/partials/nova-v2-assets.php'); ?>
   <?php $novaUiJsPath = function_exists('base_path') ? base_path('public/assets/nova-ui.js') : __DIR__.'/../../../public/assets/nova-ui.js'; ?>
   <?php $novaUiJsVersion = @filemtime($novaUiJsPath) ?: time(); ?>
   <script defer src="<?= htmlspecialchars(function_exists('asset') ? asset('assets/nova-ui.js') : '/NOVA/public/assets/nova-ui.js', ENT_QUOTES, 'UTF-8') ?>?v=<?= (int) $novaUiJsVersion ?>"></script>
