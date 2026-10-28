@@ -1050,60 +1050,9 @@ document.getElementById('md-fechas-hoy-btn')?.addEventListener('click', () => {
   const descripcionPreview = document.getElementById('dashboard-description-preview');
   let reopenDetalleModalAfterDescripcion = false;
 
-  const descriptionTableCells = line => line.trim()
-    .replace(/^\||\|$/g, '')
-    .split('|')
-    .map(cell => cell.trim().replace(/<br\s*\/?>/gi, '\n').replace(/\\\|/g, '|'));
-
   const renderDescriptionPreview = () => {
     if (!descripcionPreview || !descripcionEditor) return;
-    descripcionPreview.replaceChildren();
-    const value = descripcionEditor.value.trim();
-    if (!value) {
-      const empty = document.createElement('div');
-      empty.className = 'nova-empty-state';
-      empty.innerHTML = '<i class="bi bi-text-paragraph"></i><strong>Sin descripción</strong><p>No hay contenido para previsualizar.</p>';
-      descripcionPreview.appendChild(empty);
-      return;
-    }
-
-    const lines = value.split(/\r?\n/).filter(line => line.trim() !== '');
-    const tableLines = lines.filter(line => line.includes('|'));
-    if (tableLines.length !== lines.length) {
-      const text = document.createElement('div');
-      text.className = 'nova-description-preview__text';
-      text.textContent = value;
-      descripcionPreview.appendChild(text);
-      return;
-    }
-
-    const separatorPattern = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
-    const hasHeader = lines.length > 1 && separatorPattern.test(lines[1]);
-    const wrapper = document.createElement('div');
-    wrapper.className = 'table-responsive';
-    const table = document.createElement('table');
-    table.className = 'table table-sm table-bordered align-middle mb-0 nova-description-table';
-    const tbody = document.createElement('tbody');
-    const appendRow = (target, line, cellTag) => {
-      const row = document.createElement('tr');
-      descriptionTableCells(line).forEach(value => {
-        const cell = document.createElement(cellTag);
-        cell.textContent = value;
-        row.appendChild(cell);
-      });
-      target.appendChild(row);
-    };
-    if (hasHeader) {
-      const thead = document.createElement('thead');
-      appendRow(thead, lines[0], 'th');
-      table.appendChild(thead);
-      lines.slice(2).forEach(line => appendRow(tbody, line, 'td'));
-    } else {
-      lines.forEach(line => appendRow(tbody, line, 'td'));
-    }
-    table.appendChild(tbody);
-    wrapper.appendChild(table);
-    descripcionPreview.appendChild(wrapper);
+    window.NovaDescriptionTables?.render(descripcionEditor, descripcionPreview);
   };
 
   const setDescriptionView = preview => {

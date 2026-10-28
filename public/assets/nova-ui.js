@@ -1044,55 +1044,92 @@ const NovaDescriptionTables = (() => {
         });
     };
 
-    const cells = line => line.trim().replace(/^\||\|$/g, '').split('|')
-        .map(cell => cell.trim().replace(/<br\s*\/?>/gi, '\n').replace(/\\\|/g, '|'));
+    const cells = line => {
+        const source = line.trim().replace(/^\||\|$/g, '');
+        const result = [];
+        let cell = '';
+        for (let index = 0; index < source.length; index += 1) {
+            if (source[index] === '\\' && source[index + 1] === '|') {
+                cell += '|';
+                index += 1;
+            } else if (source[index] === '|') {
+                result.push(cell.trim().replace(/<br\s*\/?>/gi, '\n'));
+                cell = '';
+            } else {
+                cell += source[index];
+            }
+        }
+        result.push(cell.trim().replace(/<br\s*\/?>/gi, '\n'));
+        return result;
+    };
+
+    const isTableRow = line => /^\s*\|.*\|\s*$/.test(line) && cells(line).length > 1;
+    const isSeparator = line => /^\s*\|?\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)+\s*\|?\s*$/.test(line);
 
     const render = (input, preview) => {
         if (!input || !preview) return;
         preview.replaceChildren();
-        const value = input.value.trim();
-        if (!value) {
+        const value = String(input.value ?? '').replace(/\r\n?/g, '\n');
+        if (!value.trim()) {
             const empty = document.createElement('div');
             empty.className = 'nova-empty-state';
             empty.innerHTML = '<i class="bi bi-text-paragraph"></i><strong>Sin descripción</strong><p>No hay contenido para previsualizar.</p>';
             preview.appendChild(empty);
             return;
         }
-        const lines = value.split(/\r?\n/).filter(line => line.trim());
-        if (!lines.length || lines.some(line => !line.includes('|'))) {
+        const lines = value.split('\n');
+        const appendText = textLines => {
+            const content = textLines.join('\n').replace(/^\n+|\n+$/g, '');
+            if (!content) return;
             const text = document.createElement('div');
             text.className = 'nova-description-preview__text';
-            text.textContent = value;
+            text.textContent = content;
             preview.appendChild(text);
-            return;
-        }
-        const separator = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
-        const hasHeader = lines.length > 1 && separator.test(lines[1]);
-        const wrapper = document.createElement('div');
-        wrapper.className = 'table-responsive';
-        const table = document.createElement('table');
-        table.className = 'table table-sm table-bordered align-middle mb-0 nova-description-table';
-        const tbody = document.createElement('tbody');
-        const appendRow = (target, line, tag) => {
-            const row = document.createElement('tr');
-            cells(line).forEach(value => {
-                const cell = document.createElement(tag);
-                cell.textContent = value;
-                row.appendChild(cell);
-            });
-            target.appendChild(row);
         };
-        if (hasHeader) {
-            const thead = document.createElement('thead');
-            appendRow(thead, lines[0], 'th');
-            table.appendChild(thead);
-            lines.slice(2).forEach(line => appendRow(tbody, line, 'td'));
-        } else {
-            lines.forEach(line => appendRow(tbody, line, 'td'));
+        const appendTable = (tableLines, hasHeader) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-responsive nova-description-preview__table';
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-bordered align-middle mb-0 nova-description-table';
+            const head = document.createElement('thead');
+            const body = document.createElement('tbody');
+            const appendRow = (target, line, tag) => {
+                const row = document.createElement('tr');
+                cells(line).forEach(value => {
+                    const cell = document.createElement(tag);
+                    cell.textContent = value;
+                    row.appendChild(cell);
+                });
+                target.appendChild(row);
+            };
+            if (hasHeader) appendRow(head, tableLines[0], 'th');
+            tableLines.slice(hasHeader ? 2 : 0).forEach(line => appendRow(body, line, 'td'));
+            if (hasHeader) table.appendChild(head);
+            table.appendChild(body);
+            wrapper.appendChild(table);
+            preview.appendChild(wrapper);
+        };
+        let textLines = [];
+        for (let index = 0; index < lines.length;) {
+            const nextIsRow = index + 1 < lines.length && isTableRow(lines[index + 1]);
+            const hasHeader = index + 1 < lines.length && isSeparator(lines[index + 1]);
+            if (!isTableRow(lines[index]) || (!nextIsRow && !hasHeader) ||
+                cells(lines[index]).length !== cells(lines[index + 1]).length) {
+                textLines.push(lines[index]);
+                index += 1;
+                continue;
+            }
+            appendText(textLines);
+            textLines = [];
+            const tableLines = [lines[index], lines[index + 1]];
+            index += 2;
+            while (index < lines.length && isTableRow(lines[index])) {
+                tableLines.push(lines[index]);
+                index += 1;
+            }
+            appendTable(tableLines, hasHeader);
         }
-        table.appendChild(tbody);
-        wrapper.appendChild(table);
-        preview.appendChild(wrapper);
+        appendText(textLines);
     };
 
     const bind = ({ input, editTab, previewTab, editPanel, previewPanel }) => {

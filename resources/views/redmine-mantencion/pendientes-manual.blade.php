@@ -602,97 +602,9 @@
       insertDescriptionBlock(markdown);
     });
 
-    const markdownCells = line => {
-      const source = line.trim().replace(/^\||\|$/g, '');
-      const cells = [];
-      let cell = '';
-      for (let index = 0; index < source.length; index += 1) {
-        const character = source[index];
-        if (character === '\\' && source[index + 1] === '|') {
-          cell += '|';
-          index += 1;
-        } else if (character === '|') {
-          cells.push(cell.trim().replace(/<br>/g, '\n'));
-          cell = '';
-        } else {
-          cell += character;
-        }
-      }
-      cells.push(cell.trim().replace(/<br>/g, '\n'));
-      return cells;
-    };
-    const isMarkdownSeparator = line =>
-      /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(line || '');
-    const isMarkdownTableRow = line => {
-      const value = String(line || '').trim();
-      return value.startsWith('|') && value.endsWith('|') && value.slice(1, -1).includes('|');
-    };
     const renderDescriptionPreview = () => {
       if (!descriptionPreview || !descriptionInput) return;
-      descriptionPreview.replaceChildren();
-      const value = descriptionInput.value;
-      if (!value.trim()) {
-        const text = document.createElement('div');
-        text.className = 'manual-description-preview__text';
-        text.textContent = 'Sin descripción.';
-        descriptionPreview.appendChild(text);
-        return;
-      }
-
-      const lines = value.replace(/\r\n?/g, '\n').split('\n');
-      const appendText = textLines => {
-        const content = textLines.join('\n').replace(/^\n+|\n+$/g, '');
-        if (!content) return;
-        const text = document.createElement('div');
-        text.className = 'manual-description-preview__text';
-        text.textContent = content;
-        descriptionPreview.appendChild(text);
-      };
-      const appendTable = tableLines => {
-        const table = document.createElement('table');
-        table.className = 'table table-sm table-bordered align-middle mb-0';
-        const thead = document.createElement('thead');
-        const tbody = document.createElement('tbody');
-        const appendRow = (target, cells, tag) => {
-          const tr = document.createElement('tr');
-          cells.forEach(cellValue => {
-            const cell = document.createElement(tag);
-            cell.textContent = cellValue;
-            tr.appendChild(cell);
-          });
-          target.appendChild(tr);
-        };
-        appendRow(thead, markdownCells(tableLines[0]), 'th');
-        tableLines.slice(2).forEach(line => appendRow(tbody, markdownCells(line), 'td'));
-        table.append(thead, tbody);
-        const wrapper = document.createElement('div');
-        wrapper.className = 'table-responsive manual-description-preview__table';
-        wrapper.appendChild(table);
-        descriptionPreview.appendChild(wrapper);
-      };
-
-      let textLines = [];
-      for (let index = 0; index < lines.length;) {
-        const startsTable = index + 1 < lines.length
-          && isMarkdownTableRow(lines[index])
-          && isMarkdownSeparator(lines[index + 1]);
-        if (!startsTable) {
-          textLines.push(lines[index]);
-          index += 1;
-          continue;
-        }
-
-        appendText(textLines);
-        textLines = [];
-        const tableLines = [lines[index], lines[index + 1]];
-        index += 2;
-        while (index < lines.length && isMarkdownTableRow(lines[index])) {
-          tableLines.push(lines[index]);
-          index += 1;
-        }
-        appendTable(tableLines);
-      }
-      appendText(textLines);
+      window.NovaDescriptionTables?.render(descriptionInput, descriptionPreview);
     };
 
     const showDescriptionMode = preview => {

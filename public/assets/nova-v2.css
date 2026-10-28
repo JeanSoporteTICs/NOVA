@@ -2397,6 +2397,37 @@ html.nova-v2-dark body.nova-v2 #page-content :is(.rm-panel-body, .rm-summary-kpi
   color: var(--nova-v2-text);
 }
 
+body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.nova-description-preview, .manual-description-preview) {
+  background: var(--nova-v2-bg);
+  border-color: var(--nova-v2-border);
+  color: var(--nova-v2-text);
+  overflow-wrap: anywhere;
+}
+
+body.nova-v2 :is(#page-content, .modal, .offcanvas) :is(.nova-description-preview, .manual-description-preview) > * + * {
+  margin-top: .85rem;
+}
+
+body.nova-v2 :is(#page-content, .modal, .offcanvas) .nova-description-preview__table {
+  max-width: 100%;
+}
+
+body.nova-v2 :is(#page-content, .modal, .offcanvas) .nova-description-table {
+  --bs-table-bg: var(--nova-v2-bg);
+  --bs-table-color: var(--nova-v2-text);
+  --bs-table-border-color: var(--nova-v2-border);
+}
+
+body.nova-v2 :is(#page-content, .modal, .offcanvas) .nova-description-table th {
+  background: var(--nova-v2-bg-subtle);
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 :is(#page-content, .modal, .offcanvas) .nova-description-table :is(th, td) {
+  min-width: 8rem;
+  overflow-wrap: anywhere;
+}
+
 html.nova-v2-dark body.nova-v2 #page-content :is(.rm-permission-group > summary, .historico-summary, .nextcloud-history-head,
   .nova-report-recipient-stats, .manual-description-tabs, .rm-feature-meter, .rm-permission-savebar,
   .nova-report-recipient-row.has-configuration-warning) {

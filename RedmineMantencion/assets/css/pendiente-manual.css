@@ -9,13 +9,8 @@
     .manual-description-tabs { display: flex; gap: .25rem; }
     .manual-description-tab { padding: .3rem .55rem; border: 0; border-radius: .4rem; background: transparent; color: #64748b; font-weight: 700; }
     .manual-description-tab:hover, .manual-description-tab.is-active { background: #e8f1ff; color: #1d4ed8; }
-    .manual-grid textarea.editor { min-height: 200px; border-top-left-radius: 0; border-top-right-radius: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; tab-size: 4; }
-    .manual-description-preview { min-height: 200px; padding: .75rem; border: 1px solid #d7deea; border-radius: 0 0 .5rem .5rem; background: #fff; }
-    .manual-description-preview > * + * { margin-top: .85rem; }
-    .manual-description-preview__text { white-space: pre-wrap; }
-    .manual-description-preview__table { margin-block: .25rem; }
-    .manual-description-preview th { background: #eaf2ff; color: #173b5c; white-space: pre-wrap; }
-    .manual-description-preview td { white-space: pre-wrap; }
+    body.nova-v2 #page-content .manual-grid textarea.editor { min-height: 360px; border-top-left-radius: 0; border-top-right-radius: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; tab-size: 4; }
+    .manual-description-preview { min-height: 360px; padding: .75rem; border: 1px solid #d7deea; border-radius: 0 0 .5rem .5rem; background: #fff; }
     .manual-grid .helper-link { font-size: .9rem; text-decoration: none; }
     @media (max-width: 992px) {
       .manual-grid .field-row,
