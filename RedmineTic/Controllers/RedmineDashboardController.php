@@ -534,6 +534,7 @@ class RedmineDashboardController extends Controller
                 $config['maintenance_until'] = '';
             } else {
                 $maintenanceUntil = trim((string) $request->input('maintenance_until', ''));
+                $config['maintenance_until'] = '';
                 if ($maintenanceUntil !== '') {
                     try {
                         $until = Carbon::parse($maintenanceUntil, 'America/Santiago');
@@ -578,7 +579,10 @@ class RedmineDashboardController extends Controller
             $this->syncModuleMaintenanceState($redmine->projectKey(), ! empty($config['maintenance_mode']));
         }
 
-        $response = back()->with('redmine_status', 'Configuracion guardada.');
+        $message = $request->input('config_action') === 'maintenance_settings'
+            ? (! empty($config['maintenance_mode']) ? 'Modo mantención activado.' : 'Modo mantención desactivado.')
+            : 'Configuración guardada.';
+        $response = back()->with('redmine_status', $message);
 
         return $response;
     }
@@ -1048,9 +1052,15 @@ class RedmineDashboardController extends Controller
 
     private function isMaintenanceSettingsRequest(Request $request): bool
     {
-        $allowed = ['_token', 'maintenance_mode', 'maintenance_until'];
+        if ($request->query('panel') !== 'mantencion' || $request->input('config_action') !== 'maintenance_settings' || ! $request->has('maintenance_mode')) {
+            return false;
+        }
 
-        return collect(array_keys($request->except(['_token'])))->every(static fn (string $field): bool => in_array($field, $allowed, true));
+        $allowed = ['config_action', 'maintenance_mode', 'maintenance_until'];
+
+        return collect(array_keys($request->post()))
+            ->reject(static fn (string $field): bool => $field === '_token')
+            ->every(static fn (string $field): bool => in_array($field, $allowed, true));
     }
 
     private function syncModuleMaintenanceState(string $projectKey, bool $enabled): void

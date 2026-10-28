@@ -799,102 +799,42 @@
         $maintenanceEnabled = !empty($config['maintenance_mode']);
         $maintenanceUntil = data_get($config, 'maintenance_until', '');
     @endphp
-    <section class="card nova-card rm-panel rm-config-feature-form">
+    <section class="card nova-card rm-panel rm-config-feature-form rm-config-maintenance-panel">
         <div class="rm-feature-head">
-            <span class="rm-feature-head-icon {{ $maintenanceEnabled ? 'is-orange' : 'is-green' }}"><i class="bi {{ $maintenanceEnabled ? 'bi-tools' : 'bi-check2-circle' }}"></i></span>
+            <span class="rm-feature-head-icon {{ $maintenanceEnabled ? 'is-orange' : 'is-green' }}"><i class="bi bi-tools"></i></span>
             <div>
-                <small>Disponibilidad del modulo</small>
-                <h2>Mantencion</h2>
-                <p>Activa una pausa temporal para proteger datos mientras se realizan ajustes.</p>
+                <small>Disponibilidad del módulo</small>
+                <h2>Mantención</h2>
+                <p>Controla el modo de solo lectura de la plataforma.</p>
             </div>
             <div class="rm-feature-meter {{ $maintenanceEnabled ? 'is-warning' : 'is-ok' }}">
-                <strong>{{ $maintenanceEnabled ? 'Activa' : 'Normal' }}</strong>
+                <strong>{{ $maintenanceEnabled ? 'Activa' : 'Inactiva' }}</strong>
                 <span>estado actual</span>
             </div>
         </div>
-        <div class="rm-maintenance-layout">
-            <div class="rm-maintenance-control-card">
-                <article class="rm-maintenance-switch rm-config-readonly-card">
-                    <span>
-                        <i class="bi bi-power"></i>
-                        <strong>Modo mantenimiento</strong>
-                        <small>{{ !empty($config['maintenance_mode']) ? 'Activo: la edicion esta bloqueada.' : 'Inactivo: el modulo opera normalmente.' }}</small>
-                    </span>
-                    <span class="nova-status-badge {{ $maintenanceEnabled ? 'is-warning' : 'is-success' }}">{{ $maintenanceEnabled ? 'Activa' : 'Inactiva' }}</span>
-                </article>
-                <article class="rm-config-field-card rm-maintenance-date rm-config-readonly-card">
-                    <span class="rm-config-field-icon"><i class="bi bi-calendar2-check"></i></span>
-                    <span class="rm-config-field-copy">
-                        <strong>Mantencion hasta</strong>
-                        <small>Define la fecha de termino visible para usuarios del modulo.</small>
-                    </span>
-                    <span class="rm-config-value">{{ $maintenanceUntil ?: 'Sin fecha definida' }}</span>
-                </article>
+        <form method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'mantencion']) }}" class="rm-config-maintenance-form" data-maintenance-allowed="1">
+            @csrf
+            <input type="hidden" name="config_action" value="maintenance_settings">
+            <input type="hidden" name="maintenance_mode" value="0">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label" for="maintenance-mode-check">Estado de mantención</label>
+                    <div class="form-check form-switch maintenance-mode-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" value="1" id="maintenance-mode-check" @checked($maintenanceEnabled) data-maintenance-mode-switch>
+                        <label class="form-check-label" for="maintenance-mode-check">Mantención activa</label>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label" for="cfg-maintenance-until">Hora estimada de término</label>
+                    <input id="cfg-maintenance-until" class="form-control" type="datetime-local" name="maintenance_until" value="{{ old('maintenance_until', $maintenanceUntil) }}" data-maintenance-until>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn-nova btn-nova-primary w-100" type="submit">Guardar</button>
+                </div>
             </div>
-            <aside class="rm-config-side-card {{ $maintenanceEnabled ? 'is-warning' : 'is-ok' }}">
-                <i class="bi {{ $maintenanceEnabled ? 'bi-shield-lock' : 'bi-shield-check' }}"></i>
-                <strong>{{ $maintenanceEnabled ? 'Edicion bloqueada' : 'Modulo disponible' }}</strong>
-                <span>{{ $maintenanceEnabled ? 'Las acciones de escritura quedan protegidas hasta desactivar la mantencion.' : 'Los usuarios pueden operar reportes, catalogos y configuracion segun permisos.' }}</span>
-            </aside>
-        </div>
-        <div class="rm-feature-actions">
-            <button class="btn-nova btn-nova-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#rm-config-drawer-mantencion" aria-controls="rm-config-drawer-mantencion">
-                <i class="bi bi-pencil-square"></i>Editar mantencion
-            </button>
-        </div>
+            <div class="form-text mt-2">Cuando está activa, la plataforma queda en solo lectura y este formulario permite desactivar la mantención.</div>
+        </form>
     </section>
-    <div class="offcanvas offcanvas-end integration-drawer rm-config-edit-drawer" tabindex="-1" id="rm-config-drawer-mantencion" aria-labelledby="rm-config-drawer-mantencion-title">
-        <div class="offcanvas-header">
-            <div class="integration-drawer-title">
-                <span class="integration-icon"><i class="bi bi-tools"></i></span>
-                <div>
-                    <small>Disponibilidad del modulo</small>
-                    <h2 class="offcanvas-title" id="rm-config-drawer-mantencion-title">Editar mantencion</h2>
-                </div>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
-        </div>
-        <div class="offcanvas-body">
-            <form id="rm-config-form-mantencion" class="rm-config-drawer-form" method="post" action="{{ $redmineRoute('redmine.native.config.action', ['panel' => 'mantencion']) }}" data-maintenance-allowed="1" data-restore-on-close>
-                @csrf
-                <div class="rm-maintenance-control-card">
-                    <input type="hidden" name="maintenance_mode" value="0">
-                    <label class="rm-maintenance-switch">
-                        <span>
-                            <i class="bi bi-power"></i>
-                            <strong>Modo mantenimiento</strong>
-                            <small>{{ !empty($config['maintenance_mode']) ? 'Activo: la edicion esta bloqueada.' : 'Inactivo: el modulo opera normalmente.' }}</small>
-                        </span>
-                        <span class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" role="switch" name="maintenance_mode" value="1" @checked(!empty($config['maintenance_mode'])) aria-label="Activar modo mantenimiento" data-maintenance-mode-switch>
-                        </span>
-                    </label>
-                    <label class="rm-config-field-card rm-maintenance-date">
-                        <span class="rm-config-field-icon"><i class="bi bi-calendar2-check"></i></span>
-                        <span class="rm-config-field-copy">
-                            <strong>Mantencion hasta</strong>
-                            <small>Define la fecha de termino visible para usuarios del modulo.</small>
-                        </span>
-                        <input class="form-control" type="datetime-local" name="maintenance_until" min="{{ now('America/Santiago')->format('Y-m-d\TH:i') }}" value="{{ old('maintenance_until', $maintenanceUntil) }}" data-maintenance-until>
-                    </label>
-                </div>
-            </form>
-        </div>
-        <div class="offcanvas-footer nova-drawer-actions rm-config-drawer-actions">
-            <button class="btn-nova btn-nova-danger" type="button" data-clear-drawer-form="#rm-config-form-mantencion" data-clear-confirm="Eliminar los valores de mantencion?">
-                <span class="btn-nova-icon"><i class="bi bi-trash"></i></span>
-                <span>Eliminar</span>
-            </button>
-            <button class="btn-nova btn-nova-secondary" type="button" data-bs-dismiss="offcanvas">
-                <span class="btn-nova-icon"><i class="bi bi-x-lg"></i></span>
-                <span>Cerrar</span>
-            </button>
-            <button class="btn-nova btn-nova-primary" type="submit" form="rm-config-form-mantencion">
-                <span class="btn-nova-icon"><i class="bi bi-save"></i></span>
-                <span>Guardar</span>
-            </button>
-        </div>
-    </div>
 @endif
 
 @if ($activePanel === 'roles')
@@ -2418,7 +2358,6 @@
         const syncMaintenanceUntil = () => {
             if (!maintenanceSwitch || !maintenanceUntil) return;
             maintenanceUntil.disabled = !maintenanceSwitch.checked;
-            maintenanceUntil.required = maintenanceSwitch.checked;
             if (!maintenanceSwitch.checked) {
                 maintenanceUntil.value = '';
             }

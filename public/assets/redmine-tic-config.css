@@ -95,6 +95,10 @@
     .rm-config-side-card.is-ok { background: linear-gradient(145deg, #14532d, #16a34a); }
     .rm-config-side-card.is-warning { background: linear-gradient(145deg, #7c2d12, #f97316); }
     .rm-maintenance-control-card { display: grid; gap: 12px; }
+    .rm-config-maintenance-form { margin-top: 16px; padding: 16px; border: 1px solid #d8e3f4; border-radius: 14px; background: #fff; }
+    .rm-config-maintenance-form .maintenance-mode-switch { display: flex; align-items: center; min-height: 38px; gap: 12px; margin: 0; }
+    .rm-config-maintenance-form .maintenance-mode-switch .form-check-input { margin-top: 0; cursor: pointer; }
+    .rm-config-maintenance-form .maintenance-mode-switch .form-check-label { cursor: pointer; }
     .rm-maintenance-date { min-height: 128px; }
     .rm-maintenance-box { border: 1px solid #d8e3f4; border-radius: 14px; padding: 16px; background: #f8fbff; box-shadow: 0 10px 22px rgba(15, 23, 42, .035); }
     .rm-maintenance-box h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 1rem; font-weight: 900; }

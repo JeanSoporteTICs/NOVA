@@ -137,6 +137,29 @@ class RedmineDashboardPermissionTest extends TestCase
         $this->assertTrue($payload['reporte_rapido']);
     }
 
+    public function test_only_the_maintenance_settings_form_can_write_during_maintenance(): void
+    {
+        $controller = (new ReflectionClass(RedmineDashboardController::class))
+            ->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(RedmineDashboardController::class, 'isMaintenanceSettingsRequest');
+
+        $disable = Request::create('/redmine_tic/app/configuracion?panel=mantencion', 'POST', [
+            'config_action' => 'maintenance_settings',
+            'maintenance_mode' => '0',
+        ]);
+        $this->assertTrue($method->invoke($controller, $disable));
+
+        $otherPanel = Request::create('/redmine_tic/app/configuracion?panel=conexion', 'POST', $disable->all());
+        $this->assertFalse($method->invoke($controller, $otherPanel));
+
+        $extraField = Request::create('/redmine_tic/app/configuracion?panel=mantencion', 'POST', [
+            'config_action' => 'maintenance_settings',
+            'maintenance_mode' => '0',
+            'platform_url' => 'https://example.test',
+        ]);
+        $this->assertFalse($method->invoke($controller, $extraField));
+    }
+
     /**
      * @param  array<string,mixed>  $permissions
      */

@@ -2390,7 +2390,8 @@ html.nova-v2-dark body.nova-v2 #page-content :is(.rm-panel-body, .rm-summary-kpi
   .security-activity-filters, .security-activity-total, .nova-report-recipient-row, .rm-feature-meter, .rm-section-head,
   .integration-card, .nova-user-summary-card, .rm-config-field-card, .timeline-box, .historico-summary, .historico-redmine-sync,
   .nextcloud-history-head, .manual-description-tabs, .nova-description-preview, .rm-summary-card,
-  .rm-picker-combobox-menu, .nova-report-recipient-stats, .rm-role-delete-state, .rm-role-delete-form, .rm-create-role-form) {
+  .rm-picker-combobox-menu, .nova-report-recipient-stats, .rm-role-delete-state, .rm-role-delete-form, .rm-create-role-form,
+  .rm-config-maintenance-form) {
   background: var(--nova-v2-bg) !important;
   border-color: var(--nova-v2-border-light) !important;
   color: var(--nova-v2-text);
