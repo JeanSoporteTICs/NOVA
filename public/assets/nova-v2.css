@@ -595,6 +595,92 @@ body.nova-v2 .detail-drawer-table-title {
   font-weight: 700;
 }
 
+/* Revisión de Reporte rápido: usa .nova-drawer, no el modal de detalle. */
+body.nova-v2 .tic-quick-preview-drawer .nova-drawer-content,
+body.nova-v2 .tic-quick-preview-drawer .nova-drawer-header,
+body.nova-v2 .tic-quick-preview-drawer .nova-drawer-footer {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border-light) !important;
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .nova-drawer-body {
+  background: var(--nova-v2-bg-subtle) !important;
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-editor,
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-preview {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-drawer-header h2 {
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-drawer-controls button {
+  background: var(--nova-v2-bg-subtle);
+  border-color: var(--nova-v2-border);
+  color: var(--nova-v2-text-secondary);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-drawer-controls button:is(:hover, :focus-visible) {
+  background: var(--nova-v2-primary-light);
+  border-color: var(--nova-v2-primary);
+  color: var(--nova-v2-primary-dark);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-advanced {
+  background: var(--nova-v2-bg-subtle);
+  border-color: var(--nova-v2-border);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-advanced summary {
+  color: var(--nova-v2-text-secondary);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-advanced > .row,
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-send-bar {
+  border-color: var(--nova-v2-border-light);
+}
+
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-telegram-state { color: var(--nova-v2-text-secondary); }
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-telegram-state.is-ready { color: var(--nova-v2-success); }
+body.nova-v2 .tic-quick-preview-drawer .tic-quick-telegram-state.is-warning { color: var(--nova-v2-warning); }
+
+body.nova-v2 #page-content .tic-quick-draft-launch {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+body.nova-v2 #page-content .tic-quick-draft-launch-copy strong {
+  color: var(--nova-v2-text) !important;
+}
+
+body.nova-v2 #page-content .tic-quick-draft-launch-copy > div > span {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+body.nova-v2 #page-content .tic-quick-result {
+  background: var(--nova-v2-success-light) !important;
+  border-color: var(--nova-v2-border) !important;
+  box-shadow: var(--nova-v2-shadow-sm) !important;
+}
+
+body.nova-v2 #page-content .tic-quick-result small,
+body.nova-v2 #page-content .tic-quick-notes-status {
+  color: var(--nova-v2-success);
+}
+
+body.nova-v2 #page-content .tic-quick-notes-status.is-saving { color: var(--nova-v2-text-muted); }
+body.nova-v2 #page-content .tic-quick-notes-status.is-error { color: var(--nova-v2-danger); }
+
+body.nova-v2 .tic-quick-preview-drawer.is-minimized .nova-drawer-content {
+  border-color: var(--nova-v2-border) !important;
+}
+
 body.nova-v2 .detail-preview-wrap thead th {
   background: var(--nova-v2-bg-subtle) !important;
   color: var(--nova-v2-text-secondary) !important;
@@ -636,6 +722,44 @@ body.nova-v2 .modal:not(.detail-drawer-modal):not(#_) .modal-footer {
   justify-content: flex-end;
   border-top: 1px solid var(--nova-v2-border-light) !important;
   background: var(--nova-v2-bg) !important;
+}
+
+/* El resumen de Reporte rápido se clona dentro del modal de confirmación. */
+body.nova-v2 .rm-confirm-modal.has-preview .modal-body {
+  background: var(--nova-v2-bg-subtle) !important;
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview {
+  background: var(--nova-v2-bg) !important;
+  border-color: var(--nova-v2-border) !important;
+  color: var(--nova-v2-text);
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview :is(dl, dl > div) {
+  border-color: var(--nova-v2-border-light);
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview-topline {
+  color: var(--nova-v2-primary-dark);
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-ticket-number,
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview dt {
+  color: var(--nova-v2-text-muted) !important;
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview h3,
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview dd {
+  color: var(--nova-v2-text) !important;
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview-description {
+  color: var(--nova-v2-text-secondary) !important;
+}
+
+body.nova-v2 :is(.rm-confirm-modal, .tic-quick-preview-drawer) .tic-quick-preview-note {
+  background: var(--nova-v2-info-light);
+  color: var(--nova-v2-text-secondary);
 }
 
 /* Cabeceras con tono (aviso/confirmación, mantención): fondo plano suave
